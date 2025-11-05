@@ -1,11 +1,12 @@
-<div align="center">
+# Field Compass QA Platform
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+This repository contains the complete codebase for the Field Compass application, a KoboToolbox Quality Assurance and Data Tracking Platform.
 
-  <h1>Built with AI Studio</h2>
+## Project Structure
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+The project is organized as a monorepo with two primary directories:
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+-   `/frontend`: Contains the React/TypeScript user interface. This is a standalone single-page application that communicates with the backend via a REST API.
+-   `/backend`: Contains the Python/FastAPI backend server. It handles data processing, business logic, and serves the API for the frontend.
 
-</div>
+Please see the `README.md` file inside each directory for specific instructions on how to run and develop that part of the application.
