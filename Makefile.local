@@ -1,0 +1,58 @@
+# Makefile for local development (without Docker for backend)
+# Use this if you prefer to run the backend locally
+
+.PHONY: help db-up db-down db-shell db-setup venv install run
+
+help: ## Show this help message
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Available targets:'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+db-up: ## Start only PostgreSQL in Docker
+	@echo "Checking Docker..."
+	@docker ps > /dev/null 2>&1 || (echo "Error: Docker is not running. Please start Docker Desktop and try again." && exit 1)
+	docker-compose up -d postgres
+	@echo "✓ PostgreSQL started"
+	@echo "  Connection: postgresql://postgres:postgres@localhost:5432/field_compass"
+
+db-down: ## Stop PostgreSQL
+	docker-compose stop postgres
+
+db-shell: ## Open PostgreSQL shell
+	docker-compose exec postgres psql -U postgres -d field_compass
+
+db-setup: ## Initialize database schema
+	@echo "Waiting for PostgreSQL to be ready..."
+	sleep 5
+	docker-compose exec -T postgres psql -U postgres -d field_compass -f /docker-entrypoint-initdb.d/01-schema.sql || echo "Schema may already exist"
+	@echo "✓ Database schema created"
+
+venv: ## Create Python virtual environment
+	cd backend && python -m venv venv
+	@echo "✓ Virtual environment created"
+	@echo "  Activate with: source backend/venv/bin/activate"
+
+install: ## Install Python dependencies
+	cd backend && pip install -r requirements.txt
+	@echo "✓ Dependencies installed"
+
+run: ## Run backend locally (requires venv and install)
+	@echo "Starting backend..."
+	@echo "Make sure you have:"
+	@echo "  1. Activated virtual environment: source backend/venv/bin/activate"
+	@echo "  2. Set DATABASE_URL: export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/field_compass"
+	cd backend && uvicorn main:app --reload
+
+setup-local: db-up venv install db-setup ## Full local setup
+	@echo ""
+	@echo "✓ Setup complete!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Activate virtual environment:"
+	@echo "     source backend/venv/bin/activate"
+	@echo "  2. Set database URL:"
+	@echo "     export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/field_compass"
+	@echo "  3. Run backend:"
+	@echo "     cd backend && uvicorn main:app --reload"
+

@@ -72,6 +72,9 @@ Thumbs.db
 # Docker
 .dockerignore
 
+# Legacy code (for reference only, not part of main codebase)
+hfc/
+
 # Misc
 *.bak
 *.swp
