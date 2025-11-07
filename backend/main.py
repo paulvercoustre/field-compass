@@ -10,7 +10,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 from services.database import init_db
-from routers import submissions, progress
+from routers import submissions, progress, etl
 
 # CORS origins - update for production
 ALLOWED_ORIGINS = [
@@ -59,6 +59,7 @@ app.add_middleware(
 # Include routers
 app.include_router(submissions.router, prefix="/api", tags=["submissions"])
 app.include_router(progress.router, prefix="/api", tags=["progress"])
+app.include_router(etl.router, prefix="/api", tags=["etl"])
 
 
 @app.get("/")

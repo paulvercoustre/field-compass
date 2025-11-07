@@ -125,15 +125,31 @@ Once the backend is running, visit:
 
 ## Environment Variables
 
-Create a `.env` file in the root directory (see `.env.example` for template):
+**Important**: Create a `.env` file in the root directory before starting the services. This file is excluded from git (see `.gitignore`).
 
-```env
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/field_compass
-KOBO_API_TOKEN=your_token_here
-KOBO_API_URL=https://kf.kobotoolbox.org/api/v2
-ENVIRONMENT=development
-LOG_LEVEL=INFO
-```
+1. **Copy the example file**:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Edit `.env` and add your values**:
+   ```env
+   # Database (default works for Docker Compose)
+   DATABASE_URL=postgresql://postgres:postgres@postgres:5432/field_compass
+   
+   # KoboToolbox API (REQUIRED for ETL pipeline)
+   # Get your token from: https://kf.kobotoolbox.org/token/
+   KOBO_API_TOKEN=your_kobo_api_token_here
+   KOBO_API_URL=https://kf.kobotoolbox.org/api/v2
+   
+   # Application settings
+   ENVIRONMENT=development
+   LOG_LEVEL=INFO
+   ```
+
+3. **The Docker container will automatically load these variables** from the `.env` file.
+
+**Security Note**: Never commit your `.env` file to git. It contains sensitive credentials.
 
 ## Testing
 
@@ -160,12 +176,14 @@ Tests will be added in a future update. For now, you can test the API using:
 
 ## Next Steps
 
-- [ ] Implement ETL pipeline components
+- [x] Implement ETL pipeline components ✅
 - [ ] Add Airflow scheduler setup
 - [ ] Connect frontend to real API
 - [ ] Add authentication/authorization
 - [ ] Implement survey configuration management
 - [ ] Add comprehensive tests
+
+See [PROGRESS.md](PROGRESS.md) for detailed status and next steps.
 
 ## License
 

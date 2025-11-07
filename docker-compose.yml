@@ -26,10 +26,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: field-compass-api
+    env_file:
+      - .env  # Load environment variables from .env file
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/field_compass
-      ENVIRONMENT: development
-      LOG_LEVEL: INFO
+      # Database URL (can be overridden in .env)
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/field_compass}
+      # Kobo API settings (must be set in .env)
+      KOBO_API_TOKEN: ${KOBO_API_TOKEN:-}
+      KOBO_API_URL: ${KOBO_API_URL:-https://kf.kobotoolbox.org/api/v2}
+      # Application settings
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "8000:8000"
     volumes:
