@@ -145,20 +145,40 @@
 
 ### Phase 1: Complete Core Functionality (1-2 weeks)
 
-1. **Airflow DAG Setup** (Priority 1)
+1. **Survey Management UI** (Priority 1) ⚠️ NEEDS REFACTORING
+   - ✅ **Survey Selection UI**: Dropdown selector working
+   - ✅ **Basic Survey Setup**: Form for configuring survey settings
+   - ⚠️ **Survey Creation/Edit Flow**: Current flow needs improvement
+     - **Issue**: Creation and editing are mixed in same page, confusing UX
+     - **Solution**: Separate into two distinct pages:
+       - **Survey List Page** (like KoboToolbox):
+         - Table/card view of all surveys
+         - Actions: View, Edit, Delete, Duplicate
+         - Search/filter functionality
+         - Shows survey status, submission count, last updated
+       - **Survey Creation/Edit Form**:
+         - Multi-step wizard or tabbed interface
+         - Step 1: Basic Info (name, Kobo Asset ID)
+         - Step 2: Kobo Tool Upload
+         - Step 3: Core Configuration (identifiers, DK values, global params)
+         - Step 4: Sampling Frame Upload
+         - Step 5: **Data Quality Rules** (integrated rule builder)
+         - Step 6: Review & Save
+   - 🔄 **Integrate Rule Builder**: 
+     - Move rule builder into survey creation/editing flow
+     - Allow creating validation rules during survey setup
+     - Save rules directly to database (validation_rules table)
+     - Show existing rules in survey edit mode
+
+2. **Airflow DAG Setup** (Priority 2)
    - Create DAG for scheduled ETL runs
    - Test locally with Airflow
    - Configure for Cloud Composer
 
-2. **Frontend API Integration** (Priority 2)
-   - Replace mock data with real API calls
+3. **Frontend API Integration** (Priority 3) ✅ Mostly Complete
+   - ✅ Replace mock data with real API calls
    - Add error handling
    - Test end-to-end flow
-
-3. **Survey Configuration UI** (Priority 3)
-   - Build survey setup interface
-   - Add Kobo form import
-   - Field mapping UI
 
 ### Phase 2: Polish & Production Ready (2-3 weeks)
 
@@ -181,23 +201,35 @@
 
 ## 🔧 Technical Debt / Improvements Needed
 
-1. **HFC Engine Expression Evaluator**
+1. **Survey Management UX** ⚠️ HIGH PRIORITY
+   - Current creation/edit flow is confusing
+   - Need to separate survey list from creation form
+   - Should use multi-step wizard approach (like KoboToolbox)
+   - Rule builder should be integrated into survey setup flow
+   - See `SURVEY_UX_IMPROVEMENTS.md` for detailed plan
+
+2. **HFC Engine Expression Evaluator**
    - Current `_safe_eval()` uses `eval()` which is unsafe
    - Should use proper expression parser (e.g., `simpleeval`)
 
-2. **ETL Performance**
+3. **ETL Performance**
    - Currently processes sequentially
    - Could parallelize for large datasets
    - Batch database commits
 
-3. **Error Handling**
+4. **Error Handling**
    - More granular error messages
    - Better logging
    - Retry strategies
 
-4. **Audit Log Processing**
+5. **Audit Log Processing**
    - Currently fetches but doesn't process
    - Need to extract metrics (active time, etc.)
+
+6. **Validation Rules API**
+   - Need CRUD endpoints for validation rules
+   - Link rules to surveys properly
+   - Support rule activation/deactivation
 
 ---
 
@@ -218,6 +250,18 @@
 4. ✅ HFC engine with built-in and custom rules
 5. ✅ Full Docker development environment
 6. ✅ Comprehensive documentation
+
+---
+
+## 📋 Tomorrow's Priorities
+
+### Survey Management UX Refactoring
+1. **Survey List Page**: Create overview page with all surveys (table/cards)
+2. **Survey Wizard**: Convert current form to multi-step wizard
+3. **Rule Builder Integration**: Embed rule builder in survey setup flow
+4. **API Endpoints**: Add delete, duplicate, and rule management endpoints
+
+See `SURVEY_UX_IMPROVEMENTS.md` for detailed implementation plan.
 
 ---
 

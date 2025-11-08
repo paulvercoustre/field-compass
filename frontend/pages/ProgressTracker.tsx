@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { progressApi } from '../services/progressApi';
+import { progressApi, getSurveys } from '../services/progressApi';
 import { ProgressData, PerformanceData } from '../types';
 import { Spinner } from '../components/Spinner';
 import ProgressDataView from '../components/progress-tracker/ProgressDataView';
@@ -20,9 +20,13 @@ const ProgressTracker: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
+        // Get the first survey (or we could add survey selection UI later)
+        const surveys = await getSurveys();
+        const surveyId = surveys.length > 0 ? surveys[0].survey_id : undefined;
+        
         const [progress, performance] = await Promise.all([
-          progressApi.getProgressData(),
-          progressApi.getPerformanceData(),
+          progressApi.getProgressData(surveyId),
+          progressApi.getPerformanceData(surveyId),
         ]);
         setProgressData(progress);
         setPerformanceData(performance);

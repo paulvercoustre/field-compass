@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { progressApi } from '../services/progressApi';
+import { useSurvey } from '../contexts/SurveyContext';
 import { ProgressData } from '../types';
 import { Spinner } from '../components/Spinner';
 import ProgressDataView from '../components/progress-tracker/ProgressDataView';
 
 const DataCollectionProgressPage: React.FC = () => {
+  const { selectedSurvey } = useSurvey();
   const [progressData, setProgressData] = useState<ProgressData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +17,7 @@ const DataCollectionProgressPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const progress = await progressApi.getProgressData();
+        const progress = await progressApi.getProgressData(selectedSurvey?.survey_id);
         setProgressData(progress);
       } catch (e) {
         setError('Failed to fetch tracking data.');
@@ -25,7 +27,7 @@ const DataCollectionProgressPage: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [selectedSurvey]);
 
   if (isLoading) {
     return (

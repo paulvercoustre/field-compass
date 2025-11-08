@@ -34,11 +34,41 @@ def _get_survey_config(db: Session, survey_id: Optional[str]) -> Optional[Survey
     return None
 
 
+def _get_field_value(submission_data: Dict[str, Any], field_name: str) -> Any:
+    """
+    Get field value from submission data, handling Kobo path-based field names.
+    
+    Kobo stores fields with full paths like 'module/variable', but config may only
+    specify 'variable'. This function searches for the field by:
+    1. Direct lookup (exact match)
+    2. Path-based search (field name at end of path)
+    
+    Args:
+        submission_data: Submission data dictionary
+        field_name: Field name from config (may be just the variable name)
+        
+    Returns:
+        Field value or None if not found
+    """
+    # First try direct lookup
+    if field_name in submission_data:
+        return submission_data[field_name]
+    
+    # Search for fields that end with the field name (path-based)
+    # e.g., 'sampling_admin2' should match 'sampling_information/sampling_admin2'
+    for key in submission_data.keys():
+        if key.endswith(f'/{field_name}') or key == field_name:
+            return submission_data[key]
+    
+    # Not found
+    return None
+
+
 def _extract_sampling_cols(submission_data: Dict[str, Any], sampling_cols: List[str]) -> Dict[str, Any]:
     """Extract sampling frame columns from submission data."""
     result = {}
     for col in sampling_cols:
-        result[col] = submission_data.get(col)
+        result[col] = _get_field_value(submission_data, col)
     return result
 
 
@@ -93,7 +123,7 @@ async def get_progress_data(
         district_counts = defaultdict(int)
         
         for sub in submissions:
-            district = sub.submission_data.get(district_col, "Unknown")
+            district = _get_field_value(sub.submission_data, district_col) or "Unknown"
             district_counts[district] += 1
         
         for district, conducted in sorted(district_counts.items()):
@@ -111,7 +141,7 @@ async def get_progress_data(
         livelihood_counts = defaultdict(int)
         
         for sub in submissions:
-            livelihood = sub.submission_data.get(livelihood_col, "Unknown")
+            livelihood = _get_field_value(sub.submission_data, livelihood_col) or "Unknown"
             livelihood_counts[livelihood] += 1
         
         for livelihood, conducted in sorted(livelihood_counts.items()):
@@ -130,8 +160,8 @@ async def get_progress_data(
         combo_counts = defaultdict(int)
         
         for sub in submissions:
-            district = sub.submission_data.get(district_col, "Unknown")
-            livelihood = sub.submission_data.get(livelihood_col, "Unknown")
+            district = _get_field_value(sub.submission_data, district_col) or "Unknown"
+            livelihood = _get_field_value(sub.submission_data, livelihood_col) or "Unknown"
             combo_counts[(district, livelihood)] += 1
         
         for (district, livelihood), conducted in sorted(combo_counts.items()):
@@ -188,7 +218,7 @@ async def get_performance_data(
     })
     
     for sub in submissions:
-        enum_id = sub.submission_data.get(enumerator_field, "Unknown")
+        enum_id = _get_field_value(sub.submission_data, enumerator_field) or "Unknown"
         enum_id = str(enum_id) if enum_id else "Unknown"
         
         enum_collection_stats[enum_id]["total"] += 1

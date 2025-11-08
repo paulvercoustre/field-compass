@@ -1,6 +1,0 @@
-
-{
-  "name": "KoboToolbox QA Platform",
-  "description": "A comprehensive platform for survey data quality assurance. It features a QA Dashboard to review, track, and manage submissions, and a powerful Rule Builder to dynamically create and export high-frequency validation checks.",
-  "requestFramePermissions": []
-}

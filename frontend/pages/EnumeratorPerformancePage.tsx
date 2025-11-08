@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { progressApi } from '../services/progressApi';
+import { useSurvey } from '../contexts/SurveyContext';
 import { PerformanceData } from '../types';
 import { Spinner } from '../components/Spinner';
 import PerformanceDataView from '../components/progress-tracker/PerformanceDataView';
 
 const EnumeratorPerformancePage: React.FC = () => {
+  const { selectedSurvey } = useSurvey();
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +17,7 @@ const EnumeratorPerformancePage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const performance = await progressApi.getPerformanceData();
+        const performance = await progressApi.getPerformanceData(selectedSurvey?.survey_id);
         setPerformanceData(performance);
       } catch (e) {
         setError('Failed to fetch tracking data.');
@@ -25,7 +27,7 @@ const EnumeratorPerformancePage: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [selectedSurvey]);
 
   if (isLoading) {
     return (

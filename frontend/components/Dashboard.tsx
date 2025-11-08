@@ -2,11 +2,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Submission, SubmissionHistory } from '../types';
 import { api } from '../services/api';
+import { useSurvey } from '../contexts/SurveyContext';
 import SubmissionList from './SubmissionList';
 import SubmissionDetail from './SubmissionDetail';
 import { Spinner } from './Spinner';
 
 const Dashboard: React.FC = () => {
+  const { selectedSurvey } = useSurvey();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [history, setHistory] = useState<SubmissionHistory[]>([]);
@@ -18,7 +20,10 @@ const Dashboard: React.FC = () => {
     const fetchSubmissions = async () => {
       try {
         setIsLoadingSubmissions(true);
-        const data = await api.getSubmissions();
+        const data = await api.getSubmissions(
+          undefined, // qaStatus
+          selectedSurvey?.survey_id // surveyId
+        );
         setSubmissions(data);
         setError(null);
       } catch (err) {
@@ -29,7 +34,7 @@ const Dashboard: React.FC = () => {
       }
     };
     fetchSubmissions();
-  }, []);
+  }, [selectedSurvey]);
 
   const handleSelectSubmission = useCallback(async (submissionId: number) => {
     const submission = submissions.find(s => s._id === submissionId);
