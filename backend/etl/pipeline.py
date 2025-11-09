@@ -104,7 +104,8 @@ class ETLPipeline:
                         self.db,
                         parsed,
                         survey_id,
-                        threshold_seconds=300
+                        threshold_seconds=300,
+                        kobo_asset_id=survey_config.kobo_asset_id
                     )
                     
                     if is_new:
@@ -131,9 +132,18 @@ class ETLPipeline:
                         }
                         for issue in issues
                     ]
-                    submission.qa_status = hfc_engine.determine_qa_status(issues)
                     
-                    if submission.qa_status == 'HFC_FLAGGED':
+                    # Determine status based on HFC issues and Kobo validation status
+                    new_status = hfc_engine.determine_qa_status(
+                        issues, 
+                        kobo_validation_status=submission.kobo_validation_status
+                    )
+                    
+                    # If status is None (On Hold), keep current status, otherwise update
+                    if new_status is not None:
+                        submission.qa_status = new_status
+                    
+                    if submission.qa_status == 'FLAGGED':
                         stats['hfc_flagged'] += 1
                     
                     self.db.commit()
@@ -194,7 +204,8 @@ class ETLPipeline:
             self.db,
             parsed,
             survey_id,
-            threshold_seconds=300
+            threshold_seconds=300,
+            kobo_asset_id=survey_config.kobo_asset_id
         )
         
         # Run HFC checks
@@ -214,7 +225,14 @@ class ETLPipeline:
             }
             for issue in issues
         ]
-        submission.qa_status = hfc_engine.determine_qa_status(issues)
+        
+        # Determine status based on HFC issues and Kobo validation status
+        new_status = hfc_engine.determine_qa_status(
+            issues,
+            kobo_validation_status=submission.kobo_validation_status
+        )
+        if new_status is not None:
+            submission.qa_status = new_status
         
         self.db.commit()
         

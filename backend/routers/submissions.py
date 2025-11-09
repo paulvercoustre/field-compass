@@ -32,6 +32,8 @@ def _orm_to_pydantic_submission(orm_submission: SubmissionCurrent) -> Submission
         is_edited=orm_submission.is_edited,
         data_quality_issues=quality_issues,
         qa_status=orm_submission.qa_status,
+        kobo_validation_status=orm_submission.kobo_validation_status,
+        kobo_edit_url=orm_submission.kobo_edit_url,
     )
 
 
@@ -148,3 +150,5 @@ async def get_submission_history(
     history = [_orm_to_pydantic_history(h) for h in orm_history]
     
     return history
+
+

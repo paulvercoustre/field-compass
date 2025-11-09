@@ -223,7 +223,7 @@ async def get_performance_data(
         
         enum_collection_stats[enum_id]["total"] += 1
         
-        if sub.qa_status in ["HFC_FLAGGED", "PENDING_RE_QA"]:
+        if sub.qa_status in ["FLAGGED", "PENDING_RE_QA"]:
             enum_collection_stats[enum_id]["needsReview"] += 1
         elif sub.qa_status == "APPROVED":
             enum_collection_stats[enum_id]["validated"] += 1

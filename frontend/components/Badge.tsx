@@ -3,29 +3,40 @@ import React from 'react';
 import { QAStatus } from '../types';
 
 interface BadgeProps {
-  status: QAStatus;
+  status: QAStatus | string;  // Allow string for backward compatibility with old status values
   size?: 'sm' | 'lg';
 }
 
-const statusStyles: Record<QAStatus, string> = {
-  [QAStatus.HFC_FLAGGED]: 'bg-red-800 text-red-200',
-  [QAStatus.PENDING_RE_QA]: 'bg-yellow-800 text-yellow-200',
-  [QAStatus.PENDING_QA]: 'bg-blue-800 text-blue-200',
+// Extended status map to handle both new and old status values
+const statusStyles: Record<string, string> = {
+  [QAStatus.PENDING_APPROVAL]: 'bg-blue-800 text-blue-200',
+  [QAStatus.FLAGGED]: 'bg-red-800 text-red-200',
   [QAStatus.APPROVED]: 'bg-green-800 text-green-200',
+  [QAStatus.REJECTED]: 'bg-orange-800 text-orange-200',
+  // Backward compatibility with old status values
+  'HFC_FLAGGED': 'bg-red-800 text-red-200',
+  'PENDING_QA': 'bg-blue-800 text-blue-200',
+  'PENDING_RE_QA': 'bg-yellow-800 text-yellow-200',
 };
 
-const statusText: Record<QAStatus, string> = {
-  [QAStatus.HFC_FLAGGED]: 'Flagged',
-  [QAStatus.PENDING_RE_QA]: 'Re-QA Pending',
-  [QAStatus.PENDING_QA]: 'QA Pending',
+const statusText: Record<string, string> = {
+  [QAStatus.PENDING_APPROVAL]: 'Pending Approval',
+  [QAStatus.FLAGGED]: 'Flagged',
   [QAStatus.APPROVED]: 'Approved',
+  [QAStatus.REJECTED]: 'Rejected',
+  // Backward compatibility with old status values
+  'HFC_FLAGGED': 'Flagged',
+  'PENDING_QA': 'Pending Approval',
+  'PENDING_RE_QA': 'Re-QA Pending',
 };
 
 export const Badge: React.FC<BadgeProps> = ({ status, size = 'sm' }) => {
   const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm';
+  const style = statusStyles[status] || 'bg-gray-800 text-gray-200';
+  const text = statusText[status] || status;
   return (
-    <span className={`inline-flex items-center font-semibold rounded-full ${sizeClasses} ${statusStyles[status]}`}>
-      {statusText[status]}
+    <span className={`inline-flex items-center font-semibold rounded-full ${sizeClasses} ${style}`}>
+      {text}
     </span>
   );
 };

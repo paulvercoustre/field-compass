@@ -14,10 +14,11 @@ from pydantic import BaseModel, Field, ConfigDict
 # ============================================================================
 
 class QAStatus(str, Enum):
-    HFC_FLAGGED = "HFC_FLAGGED"
-    PENDING_QA = "PENDING_QA"
-    PENDING_RE_QA = "PENDING_RE_QA"
-    APPROVED = "APPROVED"
+    """Field Compass QA status values."""
+    PENDING_APPROVAL = "PENDING_APPROVAL"  # Passes HFC checks, waiting for approval in Kobo
+    FLAGGED = "FLAGGED"  # Has HFC issues that need to be fixed
+    APPROVED = "APPROVED"  # Approved in KoboToolbox
+    REJECTED = "REJECTED"  # Rejected/Not Approved in KoboToolbox
 
 
 # ============================================================================
@@ -47,6 +48,8 @@ class Submission(BaseModel):
         default_factory=list, description="Array of quality issues found"
     )
     qa_status: str = Field(..., description="Current QA status")
+    kobo_validation_status: Optional[str] = Field(None, description="KoboToolbox validation status (Approved, Not Approved, On Hold, etc.)")
+    kobo_edit_url: Optional[str] = Field(None, description="URL to view/edit this submission in KoboToolbox")
 
     model_config = ConfigDict(
         populate_by_name=True,

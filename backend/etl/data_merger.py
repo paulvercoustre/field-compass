@@ -110,13 +110,27 @@ def parse_kobo_submission(kobo_data: Dict[str, Any]) -> Dict[str, Any]:
     
     submission_data = {k: v for k, v in kobo_data.items() if k not in metadata_fields}
     
+    # Extract Kobo validation status
+    # _validation_status is a dict with format: {'timestamp': ..., 'uid': ..., 'by_whom': ..., 'label': 'Approved'}
+    # We need to extract the 'label' field which contains the actual status
+    kobo_validation_status_raw = kobo_data.get('_validation_status')
+    kobo_validation_status = None
+    if kobo_validation_status_raw:
+        if isinstance(kobo_validation_status_raw, dict):
+            # Extract the label from the validation status dict
+            kobo_validation_status = kobo_validation_status_raw.get('label')
+        elif isinstance(kobo_validation_status_raw, str):
+            # If it's already a string, use it directly
+            kobo_validation_status = kobo_validation_status_raw
+    
     return {
         '_id': submission_id,
         '_uuid': uuid,
         '_submission_time': submission_time,
         'end': end_time,
         'submission_data': submission_data,
-        'audit_url': kobo_data.get('_audit_URL') or kobo_data.get('audit_URL')
+        'audit_url': kobo_data.get('_audit_URL') or kobo_data.get('audit_URL'),
+        'kobo_validation_status': kobo_validation_status
     }
 
 
@@ -124,7 +138,8 @@ def merge_submission(
     db: Session,
     parsed_submission: Dict[str, Any],
     survey_id: str,
-    threshold_seconds: int = 300
+    threshold_seconds: int = 300,
+    kobo_asset_id: Optional[str] = None
 ) -> Tuple[SubmissionCurrent, Optional[SubmissionHistory], bool]:
     """
     Merge a submission into the database (upsert with edit detection).
@@ -142,6 +157,12 @@ def merge_submission(
     new_uuid = parsed_submission['_uuid']
     new_end = parsed_submission['end']
     new_data = parsed_submission['submission_data']
+    kobo_validation_status = parsed_submission.get('kobo_validation_status')
+    
+    # Construct Kobo edit URL
+    kobo_edit_url = None
+    if kobo_asset_id:
+        kobo_edit_url = f"https://kf.kobotoolbox.org/#/forms/{kobo_asset_id}/data/table"
     
     # Check if submission exists (by _id only, since _id is unique across all surveys)
     existing = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == submission_id).first()
@@ -176,6 +197,8 @@ def merge_submission(
             existing.end = new_end
             existing.submission_data = new_data
             existing.is_edited = True
+            existing.kobo_validation_status = kobo_validation_status
+            existing.kobo_edit_url = kobo_edit_url
             existing.updated_at = datetime.utcnow()
             
             logger.info(f"Updated submission {submission_id} (edited, {len(data_delta)} changes)")
@@ -185,6 +208,8 @@ def merge_submission(
                 existing._uuid = new_uuid
             if existing.end != new_end:
                 existing.end = new_end
+            existing.kobo_validation_status = kobo_validation_status
+            existing.kobo_edit_url = kobo_edit_url
             existing.updated_at = datetime.utcnow()
             
             logger.debug(f"Updated submission {submission_id} metadata (no significant edit)")
@@ -203,7 +228,9 @@ def merge_submission(
             submission_data=new_data,
             is_edited=False,
             data_quality_issues=[],
-            qa_status='PENDING_QA'
+            qa_status='PENDING_APPROVAL',  # Will be updated by HFC engine
+            kobo_validation_status=kobo_validation_status,
+            kobo_edit_url=kobo_edit_url
         )
         
         db.add(new_submission)
@@ -218,7 +245,8 @@ def merge_submissions_batch(
     db: Session,
     kobo_submissions: List[Dict[str, Any]],
     survey_id: str,
-    threshold_seconds: int = 300
+    threshold_seconds: int = 300,
+    kobo_asset_id: Optional[str] = None
 ) -> Dict[str, int]:
     """
     Merge a batch of submissions.
@@ -237,7 +265,7 @@ def merge_submissions_batch(
     for kobo_sub in kobo_submissions:
         try:
             parsed = parse_kobo_submission(kobo_sub)
-            existing, history, is_new = merge_submission(db, parsed, survey_id, threshold_seconds)
+            existing, history, is_new = merge_submission(db, parsed, survey_id, threshold_seconds, kobo_asset_id)
             
             if is_new:
                 stats['created'] += 1

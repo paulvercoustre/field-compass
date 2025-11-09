@@ -1,9 +1,9 @@
 
 export enum QAStatus {
-  HFC_FLAGGED = 'HFC_FLAGGED',
-  PENDING_QA = 'PENDING_QA',
-  PENDING_RE_QA = 'PENDING_RE_QA',
-  APPROVED = 'APPROVED',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',  // Passes HFC checks, waiting for approval in Kobo
+  FLAGGED = 'FLAGGED',  // Has HFC issues that need to be fixed
+  APPROVED = 'APPROVED',  // Approved in KoboToolbox
+  REJECTED = 'REJECTED',  // Rejected/Not Approved in KoboToolbox
 }
 
 export interface QualityIssue {
@@ -22,6 +22,8 @@ export interface Submission {
   is_edited: boolean;
   data_quality_issues: QualityIssue[];
   qa_status: QAStatus;
+  kobo_validation_status?: string | null;  // Kobo's validation status (Approved, Not Approved, On Hold, etc.)
+  kobo_edit_url?: string | null;  // URL to view/edit this submission in KoboToolbox
 }
 
 export interface JsonPatch {

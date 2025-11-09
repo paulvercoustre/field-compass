@@ -406,19 +406,46 @@ class HFCEngine:
             logger.warning(f"Error evaluating expression: {e}")
             return False
     
-    def determine_qa_status(self, issues: List[QualityIssue]) -> str:
+    def determine_qa_status(self, issues: List[QualityIssue], kobo_validation_status: Optional[str] = None) -> Optional[str]:
         """
-        Determine QA status based on issues found.
+        Determine QA status based on HFC issues and Kobo validation status.
+        
+        Status priority:
+        1. If Kobo = "Not Approved" or "Flagged for Removal" → REJECTED (highest priority)
+        2. If Kobo = "On Hold" → Don't change (keep current status)
+        3. If HFC finds issues → FLAGGED (unless already rejected in Kobo)
+        4. If Kobo = "Approved" and no HFC issues → APPROVED
+        5. If no Kobo status and no HFC issues → PENDING_APPROVAL
         
         Args:
-            issues: List of quality issues
+            issues: List of quality issues from HFC checks
+            kobo_validation_status: Kobo's validation status (Approved, Not Approved, On Hold, etc.)
             
         Returns:
-            QA status string
+            QA status string: PENDING_APPROVAL, FLAGGED, APPROVED, or REJECTED
         """
-        if not issues:
-            return "PENDING_QA"
+        # First check Kobo validation status (rejection takes highest priority)
+        if kobo_validation_status:
+            kobo_status_lower = kobo_validation_status.lower().strip()
+            
+            # Rejection in Kobo takes priority over everything
+            if kobo_status_lower in ["not approved", "flagged for removal"]:
+                return "REJECTED"
+            
+            # On Hold doesn't change status
+            if kobo_status_lower == "on hold":
+                # Don't change status if On Hold - return None to indicate no change
+                # This will be handled by the caller
+                return None
+            
+            # If Kobo says Approved and no HFC issues, approve
+            if kobo_status_lower == "approved" and not issues:
+                return "APPROVED"
         
-        # If any issues found, flag for review
-        return "HFC_FLAGGED"
+        # If HFC finds issues, flag (unless already rejected in Kobo, which we checked above)
+        if issues:
+            return "FLAGGED"
+        
+        # No Kobo status and no HFC issues = ready for approval
+        return "PENDING_APPROVAL"
 

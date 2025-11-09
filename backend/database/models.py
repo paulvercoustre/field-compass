@@ -65,7 +65,9 @@ class SubmissionCurrent(Base):
     submission_data = Column(JSONB, nullable=False)
     is_edited = Column(Boolean, default=False)
     data_quality_issues = Column(JSONB, default=[])
-    qa_status = Column(String(50), default="PENDING_QA")
+    qa_status = Column(String(50), default="PENDING_APPROVAL")
+    kobo_validation_status = Column(String(50), nullable=True)  # Stores Kobo's _validation_status
+    kobo_edit_url = Column(String(500), nullable=True)  # URL to view/edit in Kobo
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     

@@ -19,7 +19,7 @@ const SubmissionList: React.FC<SubmissionListProps> = ({ submissions, onSelect, 
       return submissions;
     } else if (activeFilter === 'triage') {
       return submissions.filter(s =>
-        s.qa_status === QAStatus.HFC_FLAGGED || s.qa_status === QAStatus.PENDING_RE_QA
+        s.qa_status === QAStatus.FLAGGED
       );
     } else {
       return submissions.filter(s => s.qa_status === activeFilter);
@@ -27,7 +27,7 @@ const SubmissionList: React.FC<SubmissionListProps> = ({ submissions, onSelect, 
   }, [submissions, activeFilter]);
 
   const triageCount = submissions.filter(s =>
-    s.qa_status === QAStatus.HFC_FLAGGED || s.qa_status === QAStatus.PENDING_RE_QA
+    s.qa_status === QAStatus.FLAGGED
   ).length;
 
   const getStatusCount = (status: QAStatus) => {
@@ -62,14 +62,14 @@ const SubmissionList: React.FC<SubmissionListProps> = ({ submissions, onSelect, 
                 All ({submissions.length})
               </button>
               <button
-                onClick={() => setActiveFilter(QAStatus.PENDING_QA)}
+                onClick={() => setActiveFilter(QAStatus.PENDING_APPROVAL)}
                 className={`px-2 py-1 text-xs rounded transition-colors ${
-                  activeFilter === QAStatus.PENDING_QA
+                  activeFilter === QAStatus.PENDING_APPROVAL
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >
-                Pending ({getStatusCount(QAStatus.PENDING_QA)})
+                Pending Approval ({getStatusCount(QAStatus.PENDING_APPROVAL)})
               </button>
               <button
                 onClick={() => setActiveFilter(QAStatus.APPROVED)}
@@ -81,15 +81,25 @@ const SubmissionList: React.FC<SubmissionListProps> = ({ submissions, onSelect, 
               >
                 Approved ({getStatusCount(QAStatus.APPROVED)})
               </button>
+              <button
+                onClick={() => setActiveFilter(QAStatus.REJECTED)}
+                className={`px-2 py-1 text-xs rounded transition-colors ${
+                  activeFilter === QAStatus.REJECTED
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Rejected ({getStatusCount(QAStatus.REJECTED)})
+              </button>
             </div>
 
             <p className="text-xs text-gray-400">
               {activeFilter === 'triage' && `${triageCount} submissions require attention.`}
               {activeFilter === 'all' && `Showing all ${submissions.length} submissions.`}
-              {activeFilter === QAStatus.PENDING_QA && `Showing ${getStatusCount(QAStatus.PENDING_QA)} pending submissions.`}
+              {activeFilter === QAStatus.PENDING_APPROVAL && `Showing ${getStatusCount(QAStatus.PENDING_APPROVAL)} submissions pending approval.`}
               {activeFilter === QAStatus.APPROVED && `Showing ${getStatusCount(QAStatus.APPROVED)} approved submissions.`}
-              {activeFilter === QAStatus.HFC_FLAGGED && `Showing ${getStatusCount(QAStatus.HFC_FLAGGED)} flagged submissions.`}
-              {activeFilter === QAStatus.PENDING_RE_QA && `Showing ${getStatusCount(QAStatus.PENDING_RE_QA)} submissions pending re-review.`}
+              {activeFilter === QAStatus.FLAGGED && `Showing ${getStatusCount(QAStatus.FLAGGED)} flagged submissions.`}
+              {activeFilter === QAStatus.REJECTED && `Showing ${getStatusCount(QAStatus.REJECTED)} rejected submissions.`}
             </p>
         </div>
         <div className="flex-1 overflow-y-auto">
