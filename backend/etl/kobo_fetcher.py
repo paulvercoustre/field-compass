@@ -80,9 +80,13 @@ class KoboFetcher:
             List of submission dictionaries
         """
         all_submissions = []
+        
+        # Handle None limit - use a large default or no limit
+        effective_limit = limit if limit is not None else None
+        
         params = {
             'format': 'json',
-            'limit': min(limit, 30000),  # Kobo API max is 30000
+            'limit': min(effective_limit, 30000) if effective_limit is not None else 30000,  # Kobo API max is 30000
         }
         
         if start:
@@ -97,9 +101,12 @@ class KoboFetcher:
         
         logger.info(f"Fetching submissions for asset {asset_uid}...")
         
-        while len(all_submissions) < limit:
+        while effective_limit is None or len(all_submissions) < effective_limit:
             params['start'] = offset
-            params['limit'] = min(page_size, limit - len(all_submissions))
+            if effective_limit is not None:
+                params['limit'] = min(page_size, effective_limit - len(all_submissions))
+            else:
+                params['limit'] = page_size
             
             try:
                 response = self._make_request(f'/assets/{asset_uid}/data/', params=params)
@@ -127,7 +134,9 @@ class KoboFetcher:
                 break
         
         logger.info(f"Total submissions fetched: {len(all_submissions)}")
-        return all_submissions[:limit]
+        if effective_limit is not None:
+            return all_submissions[:effective_limit]
+        return all_submissions
     
     def get_submission_audit_url(self, submission: Dict[str, Any]) -> Optional[str]:
         """

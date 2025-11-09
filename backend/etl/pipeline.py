@@ -100,18 +100,18 @@ class ETLPipeline:
                     submission_uuid = parsed['_uuid']
                     
                     # Merge submission (upsert with edit detection)
-                    submission, history = merge_submission(
+                    submission, history, is_new = merge_submission(
                         self.db,
                         parsed,
                         survey_id,
                         threshold_seconds=300
                     )
                     
-                    if history:
+                    if is_new:
+                        stats['created'] += 1
+                    elif history:
                         stats['edited'] += 1
                         stats['updated'] += 1
-                    elif submission.is_edited is False:
-                        stats['created'] += 1
                     else:
                         stats['updated'] += 1
                     
@@ -190,7 +190,7 @@ class ETLPipeline:
         submission_uuid = parsed['_uuid']
         
         # Merge submission
-        submission, history = merge_submission(
+        submission, history, _ = merge_submission(
             self.db,
             parsed,
             survey_id,

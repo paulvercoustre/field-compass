@@ -30,22 +30,37 @@ class HFCEngine:
         self.survey_config = survey_config
         self.config_data = survey_config.config_data
         
-        # Extract configuration
-        self.uuid_field = self.config_data.get('uuid', '_uuid')
-        self.enumerator_field = self.config_data.get('enumerator', 'enumerator_id')
-        self.date_interview_field = self.config_data.get('date_interview', 'today')
-        self.start_time_field = self.config_data.get('start_time', 'start')
-        self.end_time_field = self.config_data.get('end_time', 'end')
-        self.dk_value = self.config_data.get('dk_value', -99)
-        self.dk_string_value = self.config_data.get('dk_string_value', 'dk')
+        # Extract configuration - handle nested structure
+        core_identifiers = self.config_data.get('core_identifiers', {})
+        special_values = self.config_data.get('special_values', {})
+        global_parameters = self.config_data.get('global_parameters', {})
         
-        # Date range from config
-        self.data_collection_start_date = self.config_data.get('data_collection_start_date')
-        self.data_collection_end_date = self.config_data.get('data_collection_end_date')
+        # Core identifiers
+        self.uuid_field = core_identifiers.get('uuid', '_uuid')
+        self.enumerator_field = core_identifiers.get('enumerator', 'enumerator_id')
+        self.date_interview_field = core_identifiers.get('date_interview', 'today')
+        self.start_time_field = core_identifiers.get('start_time', 'start')
+        self.end_time_field = core_identifiers.get('end_time', 'end')
         
-        # Duration limits
-        self.min_survey_duration_minutes = self.config_data.get('min_survey_duration_minutes')
-        self.max_survey_duration_minutes = self.config_data.get('max_survey_duration_minutes')
+        # Special values
+        self.dk_value = special_values.get('dk_value', -99)
+        self.dk_string_value = special_values.get('dk_string_value', 'dk')
+        
+        # Global parameters - date range
+        self.data_collection_start_date = global_parameters.get('data_collection_start_date')
+        self.data_collection_end_date = global_parameters.get('data_collection_end_date')
+        
+        # Global parameters - duration limits - ensure they're numbers or None
+        min_duration = global_parameters.get('min_survey_duration_minutes')
+        max_duration = global_parameters.get('max_survey_duration_minutes')
+        try:
+            self.min_survey_duration_minutes = float(min_duration) if min_duration is not None else None
+        except (ValueError, TypeError):
+            self.min_survey_duration_minutes = None
+        try:
+            self.max_survey_duration_minutes = float(max_duration) if max_duration is not None else None
+        except (ValueError, TypeError):
+            self.max_survey_duration_minutes = None
     
     def _get_field_value(self, submission_data: Dict[str, Any], field_name: str) -> Tuple[Any, Optional[str]]:
         """
@@ -201,7 +216,7 @@ class HFCEngine:
             try:
                 duration_minutes = float(active_time)
                 
-                if self.min_survey_duration_minutes and duration_minutes < self.min_survey_duration_minutes:
+                if self.min_survey_duration_minutes is not None and duration_minutes < self.min_survey_duration_minutes:
                     issues.append(QualityIssue(
                         check="duration_too_short",
                         field="active_interview_time",
@@ -209,7 +224,7 @@ class HFCEngine:
                         message=f"Active survey duration too short ({duration_minutes:.2f} min < {self.min_survey_duration_minutes} min)"
                     ))
                 
-                if self.max_survey_duration_minutes and duration_minutes > self.max_survey_duration_minutes:
+                if self.max_survey_duration_minutes is not None and duration_minutes > self.max_survey_duration_minutes:
                     issues.append(QualityIssue(
                         check="duration_too_long",
                         field="active_interview_time",
@@ -237,7 +252,7 @@ class HFCEngine:
                     
                     duration_minutes = (end_dt - start_dt).total_seconds() / 60
                     
-                    if self.min_survey_duration_minutes and duration_minutes < self.min_survey_duration_minutes:
+                    if self.min_survey_duration_minutes is not None and duration_minutes < self.min_survey_duration_minutes:
                         issues.append(QualityIssue(
                             check="duration_too_short",
                             field="duration_minutes",
@@ -245,7 +260,7 @@ class HFCEngine:
                             message=f"Survey duration too short ({duration_minutes:.2f} min < {self.min_survey_duration_minutes} min)"
                         ))
                     
-                    if self.max_survey_duration_minutes and duration_minutes > self.max_survey_duration_minutes:
+                    if self.max_survey_duration_minutes is not None and duration_minutes > self.max_survey_duration_minutes:
                         issues.append(QualityIssue(
                             check="duration_too_long",
                             field="duration_minutes",
@@ -370,6 +385,8 @@ class HFCEngine:
         try:
             # Replace variable names with their values
             for var, value in context.items():
+                if var == '__builtins__':
+                    continue
                 # Escape special regex characters
                 var_pattern = re.escape(var)
                 # Replace variable names (whole word match)

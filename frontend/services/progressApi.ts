@@ -365,3 +365,61 @@ export const deleteValidationRule = async (surveyId: string, ruleId: string): Pr
     throw error;
   }
 };
+
+// ============================================================================
+// ETL Pipeline API
+// ============================================================================
+
+export interface ETLStats {
+  fetched: number;
+  created: number;
+  updated: number;
+  edited: number;
+  hfc_flagged: number;
+  errors: number;
+  duration_seconds: number;
+}
+
+/**
+ * Trigger ETL pipeline for a survey
+ * This will:
+ * 1. Fetch submissions from KoboToolbox API
+ * 2. Merge submissions (with edit detection)
+ * 3. Run High-Frequency Checks (HFC)
+ * 4. Update database with results
+ * 
+ * @param surveyId Survey ID (UUID string)
+ * @param limit Optional limit on number of submissions to process
+ * @param startDate Optional start date (YYYY-MM-DD format) - only process submissions after this date
+ */
+export const triggerETL = async (
+  surveyId: string,
+  limit?: number,
+  startDate?: string
+): Promise<ETLStats> => {
+  try {
+    const params = new URLSearchParams();
+    if (limit) {
+      params.append('limit', limit.toString());
+    }
+    if (startDate) {
+      params.append('start_date', startDate);
+    }
+
+    const url = `${API_BASE_URL}/api/etl/run/${surveyId}${params.toString() ? `?${params}` : ''}`;
+    const response = await fetch(url, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(errorData.detail || `Failed to trigger ETL: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.data as ETLStats;
+  } catch (error) {
+    console.error('Error triggering ETL:', error);
+    throw error;
+  }
+};

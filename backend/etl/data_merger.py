@@ -125,7 +125,7 @@ def merge_submission(
     parsed_submission: Dict[str, Any],
     survey_id: str,
     threshold_seconds: int = 300
-) -> Tuple[SubmissionCurrent, Optional[SubmissionHistory]]:
+) -> Tuple[SubmissionCurrent, Optional[SubmissionHistory], bool]:
     """
     Merge a submission into the database (upsert with edit detection).
     
@@ -143,12 +143,17 @@ def merge_submission(
     new_end = parsed_submission['end']
     new_data = parsed_submission['submission_data']
     
-    # Check if submission exists
+    # Check if submission exists (by _id only, since _id is unique across all surveys)
     existing = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == submission_id).first()
     
     history_record = None
     
     if existing:
+        # If submission exists but belongs to a different survey, update the survey_id
+        # This handles cases where a submission is moved between surveys
+        if str(existing.survey_id) != survey_id:
+            logger.info(f"Submission {submission_id} exists but belongs to different survey. Updating survey_id from {existing.survey_id} to {survey_id}")
+            existing.survey_id = survey_id
         # Check if this is an edit
         is_edited = is_edited_submission(existing, new_end, threshold_seconds)
         
@@ -186,7 +191,7 @@ def merge_submission(
         
         db.commit()
         db.refresh(existing)
-        return existing, history_record
+        return existing, history_record, False  # False = not newly created
     else:
         # New submission
         new_submission = SubmissionCurrent(
@@ -206,7 +211,7 @@ def merge_submission(
         db.refresh(new_submission)
         
         logger.info(f"Created new submission {submission_id}")
-        return new_submission, None
+        return new_submission, None, True  # True = newly created
 
 
 def merge_submissions_batch(
@@ -232,13 +237,13 @@ def merge_submissions_batch(
     for kobo_sub in kobo_submissions:
         try:
             parsed = parse_kobo_submission(kobo_sub)
-            existing, history = merge_submission(db, parsed, survey_id, threshold_seconds)
+            existing, history, is_new = merge_submission(db, parsed, survey_id, threshold_seconds)
             
-            if existing.is_edited and history:
+            if is_new:
+                stats['created'] += 1
+            elif history:
                 stats['edited'] += 1
                 stats['updated'] += 1
-            elif existing.is_edited is False and history is None:
-                stats['created'] += 1
             else:
                 stats['updated'] += 1
                 
