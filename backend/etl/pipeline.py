@@ -3,6 +3,7 @@ ETL Pipeline
 Main orchestrator for fetching, merging, and validating submissions.
 """
 
+import os
 import logging
 from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime
@@ -12,6 +13,7 @@ from uuid import UUID
 from etl.kobo_fetcher import KoboFetcher, create_fetcher_from_env
 from etl.data_merger import parse_kobo_submission, merge_submission
 from etl.hfc_engine import HFCEngine
+from etl.audit_processor import download_and_process_audit
 from database.models import SurveyConfig, SubmissionCurrent
 from services.database import get_db
 
@@ -91,6 +93,9 @@ class ETLPipeline:
             # Step 2: Initialize HFC engine
             hfc_engine = HFCEngine(self.db, survey_config)
             
+            # Get Kobo API token for audit downloads
+            kobo_token = os.getenv('KOBO_API_TOKEN')
+            
             # Step 3: Process each submission
             logger.info("Step 2: Processing submissions...")
             for kobo_sub in kobo_submissions:
@@ -98,6 +103,23 @@ class ETLPipeline:
                     # Parse submission
                     parsed = parse_kobo_submission(kobo_sub)
                     submission_uuid = parsed['_uuid']
+                    audit_url = parsed.get('audit_url')
+                    
+                    # Download and process audit log (if available)
+                    audit_metrics = None
+                    if audit_url:
+                        try:
+                            audit_metrics = download_and_process_audit(
+                                audit_url=audit_url,
+                                uuid=submission_uuid,
+                                kobo_token=kobo_token
+                            )
+                            if audit_metrics:
+                                # Add active_interview_time to submission_data
+                                parsed['submission_data']['active_interview_time'] = audit_metrics.get('active_interview_time')
+                                logger.debug(f"Added audit metrics for {submission_uuid}: active_time={audit_metrics.get('active_interview_time')} min")
+                        except Exception as e:
+                            logger.warning(f"Failed to process audit log for {submission_uuid}: {e}")
                     
                     # Merge submission (upsert with edit detection)
                     submission, history, is_new = merge_submission(
@@ -119,7 +141,9 @@ class ETLPipeline:
                     # Run HFC checks
                     issues = hfc_engine.run_checks(
                         submission_data=submission.submission_data,
-                        submission_uuid=submission_uuid
+                        submission_uuid=submission_uuid,
+                        start_time=submission._submission_time,
+                        end_time=submission.end
                     )
                     
                     # Update submission with HFC results
@@ -198,6 +222,22 @@ class ETLPipeline:
         # Parse submission
         parsed = parse_kobo_submission(kobo_submission)
         submission_uuid = parsed['_uuid']
+        audit_url = parsed.get('audit_url')
+        
+        # Download and process audit log (if available)
+        kobo_token = os.getenv('KOBO_API_TOKEN')
+        if audit_url:
+            try:
+                audit_metrics = download_and_process_audit(
+                    audit_url=audit_url,
+                    uuid=submission_uuid,
+                    kobo_token=kobo_token
+                )
+                if audit_metrics:
+                    # Add active_interview_time to submission_data
+                    parsed['submission_data']['active_interview_time'] = audit_metrics.get('active_interview_time')
+            except Exception as e:
+                logger.warning(f"Failed to process audit log for {submission_uuid}: {e}")
         
         # Merge submission
         submission, history, _ = merge_submission(
@@ -212,7 +252,9 @@ class ETLPipeline:
         hfc_engine = HFCEngine(self.db, survey_config)
         issues = hfc_engine.run_checks(
             submission_data=submission.submission_data,
-            submission_uuid=submission_uuid
+            submission_uuid=submission_uuid,
+            start_time=submission._submission_time,
+            end_time=submission.end
         )
         
         # Update submission with HFC results

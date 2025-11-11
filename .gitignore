@@ -75,6 +75,9 @@ Thumbs.db
 # Legacy code (for reference only, not part of main codebase)
 hfc/
 
+# Audit log files
+backend/data/audits/
+
 # Misc
 *.bak
 *.swp

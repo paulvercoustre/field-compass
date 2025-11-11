@@ -129,6 +129,7 @@ export interface ProgressData {
   byDistrict: ProgressByDistrict[];
   byLivelihood: ProgressByLivelihood[];
   detailed: DetailedProgress[];
+  samplingColumns: string[];
 }
 
 export interface EnumeratorCollectionStats {
