@@ -105,10 +105,17 @@ class ETLPipeline:
                     submission_uuid = parsed['_uuid']
                     audit_url = parsed.get('audit_url')
                     
+                    # Log audit URL for debugging
+                    if audit_url:
+                        logger.info(f"Processing audit log for {submission_uuid}: {audit_url}")
+                    else:
+                        logger.debug(f"No audit URL found for submission {submission_uuid}")
+                    
                     # Download and process audit log (if available)
                     audit_metrics = None
                     if audit_url:
                         try:
+                            logger.debug(f"Downloading audit log from: {audit_url}")
                             audit_metrics = download_and_process_audit(
                                 audit_url=audit_url,
                                 uuid=submission_uuid,
@@ -139,11 +146,11 @@ class ETLPipeline:
                         stats['updated'] += 1
                     
                     # Run HFC checks
+                    # Note: Duration check uses audit logs (active_interview_time) or form fields (start/end)
+                    # Metadata timestamps (_submission_time, end) are NOT used for duration
                     issues = hfc_engine.run_checks(
                         submission_data=submission.submission_data,
-                        submission_uuid=submission_uuid,
-                        start_time=submission._submission_time,
-                        end_time=submission.end
+                        submission_uuid=submission_uuid
                     )
                     
                     # Update submission with HFC results
@@ -249,12 +256,12 @@ class ETLPipeline:
         )
         
         # Run HFC checks
+        # Note: Duration check uses audit logs (active_interview_time) or form fields (start/end)
+        # Metadata timestamps (_submission_time, end) are NOT used for duration
         hfc_engine = HFCEngine(self.db, survey_config)
         issues = hfc_engine.run_checks(
             submission_data=submission.submission_data,
-            submission_uuid=submission_uuid,
-            start_time=submission._submission_time,
-            end_time=submission.end
+            submission_uuid=submission_uuid
         )
         
         # Update submission with HFC results

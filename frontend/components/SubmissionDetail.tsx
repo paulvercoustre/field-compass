@@ -42,10 +42,10 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
   );
 
   return (
-    <div className="flex flex-col h-full bg-gray-900">
+    <div className="flex flex-col h-full bg-gray-900 min-w-0">
       <div className="p-4 border-b border-gray-700">
         <div className="flex items-start justify-between">
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h2 className="text-xl font-bold text-white">Submission <span className="font-mono">#{_id}</span></h2>
             
             <div className="flex items-center mt-3 space-x-4 flex-wrap gap-2">
@@ -75,7 +75,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
         </div>
       </div>
 
-      <div className="flex-1 p-4 overflow-y-auto">
+      <div className="flex-1 p-4 overflow-y-auto min-w-0">
         {data_quality_issues.length > 0 && (
             <div className="mb-6">
                 <h3 className="mb-2 text-lg font-semibold text-gray-200">Quality Flags</h3>
@@ -85,7 +85,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
             </div>
         )}
         
-        <div>
+        <div className="min-w-0">
             <div className="border-b border-gray-700">
                 <div className="flex items-center justify-between">
                     <nav className="flex -mb-px space-x-6" aria-label="Tabs">
@@ -111,7 +111,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
                     )}
                 </div>
             </div>
-            <div className="py-4">
+            <div className="py-4 min-w-0">
                 {isLoading ? (
                     <div className="flex justify-center mt-8">
                         <Spinner />

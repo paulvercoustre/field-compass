@@ -154,7 +154,7 @@ const Dashboard: React.FC = () => {
             />
           )}
         </div>
-        <div className="flex-1 hidden md:block">
+        <div className="flex-1 hidden md:block min-w-0">
           <SubmissionDetail
             submission={selectedSubmission}
             history={history}

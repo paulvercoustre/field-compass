@@ -104,11 +104,15 @@ class HFCEngine:
         Args:
             submission_data: Submission data dictionary
             submission_uuid: UUID of the submission
-            start_time: Submission start time (from metadata, optional)
-            end_time: Submission end time (from metadata, optional)
+            start_time: Submission start time (from metadata, optional, deprecated - not used)
+            end_time: Submission end time (from metadata, optional, deprecated - not used)
             
         Returns:
             List of QualityIssue objects
+            
+        Note:
+            Duration checks use audit logs (active_interview_time) or form fields (start/end).
+            Metadata timestamps are NOT used for duration calculation.
         """
         issues = []
         
@@ -127,6 +131,12 @@ class HFCEngine:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None
     ) -> List[QualityIssue]:
+        """
+        Run basic HFC checks.
+        
+        Note: start_time and end_time parameters are kept for API compatibility
+        but are NOT used for duration checks (only audit logs and form fields are used).
+        """
         """Run basic built-in checks."""
         issues = []
         
@@ -214,7 +224,8 @@ class HFCEngine:
                 logger.debug(f"Could not parse date for validation: {e}")
         
         # 4. Check survey duration
-        duration_issues = self._check_duration(submission_data, start_time, end_time)
+        # Note: start_time/end_time are not used - duration check uses audit logs or form fields only
+        duration_issues = self._check_duration(submission_data)
         issues.extend(duration_issues)
         
         return issues
@@ -225,15 +236,28 @@ class HFCEngine:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None
     ) -> List[QualityIssue]:
-        """Check survey duration against min/max limits."""
+        """
+        Check survey duration against min/max limits.
+        
+        Uses two-tier approach:
+        1. Priority 1: active_interview_time from audit logs (if available)
+        2. Priority 2: start/end fields from submission_data (form timestamps)
+        
+        Note: Does NOT use metadata timestamps (_submission_time, end) as these
+        represent server upload time, not actual form duration.
+        """
         issues = []
         
-        # Try to get active_interview_time from audit logs (if available)
+        logger.debug(f"Duration check: min={self.min_survey_duration_minutes}, max={self.max_survey_duration_minutes}")
+        
+        # Priority 1: Try to get active_interview_time from audit logs (if available)
         active_time = submission_data.get('active_interview_time')
+        logger.debug(f"Duration check: active_interview_time from data={active_time}")
         
         if active_time is not None:
             try:
                 duration_minutes = float(active_time)
+                logger.debug(f"Using active_interview_time: {duration_minutes} minutes")
                 
                 if self.min_survey_duration_minutes is not None and duration_minutes < self.min_survey_duration_minutes:
                     issues.append(QualityIssue(
@@ -252,32 +276,13 @@ class HFCEngine:
                     ))
             except (ValueError, TypeError):
                 pass
-        elif start_time and end_time:
-            # Use provided start/end times from metadata
-            try:
-                duration_minutes = (end_time - start_time).total_seconds() / 60
-                
-                if self.min_survey_duration_minutes is not None and duration_minutes < self.min_survey_duration_minutes:
-                    issues.append(QualityIssue(
-                        check="duration_too_short",
-                        field="duration_minutes",
-                        value=duration_minutes,
-                        message=f"Survey duration too short ({duration_minutes:.2f} min < {self.min_survey_duration_minutes} min)"
-                    ))
-                
-                if self.max_survey_duration_minutes is not None and duration_minutes > self.max_survey_duration_minutes:
-                    issues.append(QualityIssue(
-                        check="duration_too_long",
-                        field="duration_minutes",
-                        value=duration_minutes,
-                        message=f"Survey duration too long ({duration_minutes:.2f} min > {self.max_survey_duration_minutes} min)"
-                    ))
-            except Exception as e:
-                logger.debug(f"Could not calculate duration from start/end times: {e}")
         else:
-            # Fallback: try to find start/end times in submission data (for backwards compatibility)
-            start_time_data, _ = self._get_field_value(submission_data, self.start_time_field)
-            end_time_data, _ = self._get_field_value(submission_data, self.end_time_field)
+            # Priority 2: Use start/end fields from submission data (form timestamps)
+            logger.debug(f"Using submission data fields: {self.start_time_field}, {self.end_time_field}")
+            logger.debug(f"Submission data keys (sample): {list(submission_data.keys())[:20]}")
+            start_time_data, start_field_path = self._get_field_value(submission_data, self.start_time_field)
+            end_time_data, end_field_path = self._get_field_value(submission_data, self.end_time_field)
+            logger.debug(f"Found in submission data: start={start_time_data} (path={start_field_path}), end={end_time_data} (path={end_field_path})")
             
             if start_time_data and end_time_data:
                 try:
@@ -292,6 +297,7 @@ class HFCEngine:
                         end_dt = end_time_data
                     
                     duration_minutes = (end_dt - start_dt).total_seconds() / 60
+                    logger.debug(f"Using submission data timestamps: {duration_minutes} minutes")
                     
                     if self.min_survey_duration_minutes is not None and duration_minutes < self.min_survey_duration_minutes:
                         issues.append(QualityIssue(
@@ -310,7 +316,10 @@ class HFCEngine:
                         ))
                 except Exception as e:
                     logger.debug(f"Could not calculate duration from submission data fields: {e}")
+            else:
+                logger.debug("No start/end time data found in submission data fields - cannot calculate duration")
         
+        logger.debug(f"Duration check complete: {len(issues)} issues found")
         return issues
     
     def _run_custom_rules(self, submission_data: Dict[str, Any], submission_uuid: str) -> List[QualityIssue]:

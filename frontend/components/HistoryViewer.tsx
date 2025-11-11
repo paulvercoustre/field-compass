@@ -30,9 +30,9 @@ const PatchOperation: React.FC<{ op: JsonPatch }> = ({ op }) => {
     }
 
     return (
-        <div className={`flex font-mono text-sm ${color}`}>
-            <span className="w-4">{symbol}</span>
-            <span>{text}</span>
+        <div className={`flex font-mono text-sm ${color} min-w-0`}>
+            <span className="w-4 flex-shrink-0">{symbol}</span>
+            <span className="min-w-0 break-words">{text}</span>
         </div>
     );
 };
@@ -43,14 +43,14 @@ const HistoryViewer: React.FC<HistoryViewerProps> = ({ history }) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       {history.map((entry) => (
-        <div key={entry.history_id} className="p-4 bg-gray-800 rounded-lg">
-          <div className="pb-3 mb-3 border-b border-gray-700">
-            <p className="font-semibold text-white">Change from {new Date(entry.timestamp).toLocaleString()}</p>
-            <p className="text-xs font-mono text-gray-500">Deprecated UUID: {entry.deprecated_uuid}</p>
+        <div key={entry.history_id} className="p-4 bg-gray-800 rounded-lg min-w-0">
+          <div className="pb-3 mb-3 border-b border-gray-700 min-w-0">
+            <p className="font-semibold text-white break-words">Change from {new Date(entry.timestamp).toLocaleString()}</p>
+            <p className="text-xs font-mono text-gray-500 break-all">Deprecated UUID: {entry.deprecated_uuid}</p>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             {entry.data_delta.map((op, index) => (
               <PatchOperation key={index} op={op} />
             ))}

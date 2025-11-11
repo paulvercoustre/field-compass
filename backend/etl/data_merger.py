@@ -102,24 +102,69 @@ def parse_kobo_submission(kobo_data: Dict[str, Any]) -> Dict[str, Any]:
     end_time_str = kobo_data.get('end', '')
     
     # Parse timestamps
+    # Handle timezone-aware and timezone-naive timestamps
     try:
-        submission_time = datetime.fromisoformat(submission_time_str.replace('Z', '+00:00'))
-    except (ValueError, AttributeError):
-        logger.warning(f"Could not parse _submission_time: {submission_time_str}")
+        if 'Z' in submission_time_str or '+' in submission_time_str or submission_time_str.count('-') > 2:
+            # Has timezone info
+            submission_time = datetime.fromisoformat(submission_time_str.replace('Z', '+00:00'))
+        else:
+            # No timezone - try to infer from end_time if available
+            submission_time = datetime.fromisoformat(submission_time_str)
+            # If end_time has timezone, assume submission_time is in same timezone
+            if end_time_str:
+                try:
+                    end_temp = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+                    if end_temp.tzinfo:
+                        # Apply same timezone to submission_time
+                        submission_time = submission_time.replace(tzinfo=end_temp.tzinfo)
+                    else:
+                        # Both naive, assume UTC
+                        from datetime import timezone
+                        submission_time = submission_time.replace(tzinfo=timezone.utc)
+                except:
+                    from datetime import timezone
+                    submission_time = submission_time.replace(tzinfo=timezone.utc)
+            else:
+                # No end_time to infer from, assume UTC
+                from datetime import timezone
+                submission_time = submission_time.replace(tzinfo=timezone.utc)
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Could not parse _submission_time: {submission_time_str}, error: {e}")
         submission_time = datetime.utcnow()
     
     try:
-        end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
-    except (ValueError, AttributeError):
-        logger.warning(f"Could not parse end time: {end_time_str}")
-        end_time = datetime.utcnow()
+        if end_time_str:
+            end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+            # If end_time is naive but submission_time has timezone, apply same timezone
+            if end_time.tzinfo is None and submission_time.tzinfo:
+                end_time = end_time.replace(tzinfo=submission_time.tzinfo)
+            elif end_time.tzinfo is None:
+                from datetime import timezone
+                end_time = end_time.replace(tzinfo=timezone.utc)
+        else:
+            # No end_time provided, use submission_time
+            end_time = submission_time
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Could not parse end time: {end_time_str}, error: {e}")
+        end_time = submission_time if 'submission_time' in locals() else datetime.utcnow()
     
-    # Extract submission data (everything except metadata fields)
-    metadata_fields = ['_id', '_uuid', '_submission_time', 'end', '_attachments', '_geolocation', 
-                       '_notes', '_status', '_submitted_by', '_tags', '_validation_status', 
-                       '_xform_id_string', 'formhub/uuid', 'meta/instanceID', '_audit_URL']
+    # Ensure both are timezone-aware and in UTC for storage
+    from datetime import timezone
+    if submission_time.tzinfo is None:
+        submission_time = submission_time.replace(tzinfo=timezone.utc)
+    else:
+        submission_time = submission_time.astimezone(timezone.utc)
     
-    submission_data = {k: v for k, v in kobo_data.items() if k not in metadata_fields}
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(tzinfo=timezone.utc)
+    else:
+        end_time = end_time.astimezone(timezone.utc)
+    
+    # Extract submission data - keep ALL fields (don't filter out metadata)
+    # This ensures form fields like 'start' and 'end' are preserved in submission_data
+    # Kobo's metadata fields (like '_submission_time', 'end') are already extracted separately above
+    # If there are form fields with the same names, they will be in submission_data
+    submission_data = {k: v for k, v in kobo_data.items()}
     
     # Extract Kobo validation status
     # _validation_status is a dict with format: {'timestamp': ..., 'uid': ..., 'by_whom': ..., 'label': 'Approved'}
@@ -134,13 +179,31 @@ def parse_kobo_submission(kobo_data: Dict[str, Any]) -> Dict[str, Any]:
             # If it's already a string, use it directly
             kobo_validation_status = kobo_validation_status_raw
     
+    # Extract audit URL
+    # Kobo provides _audit_URL in API response, but if not present, check _attachments
+    # The audit file is often in _attachments with download_url
+    audit_url = kobo_data.get('_audit_URL') or kobo_data.get('audit_URL')
+    
+    # If no direct audit URL, check attachments for audit.csv
+    if not audit_url:
+        attachments = kobo_data.get('_attachments', [])
+        if attachments:
+            for attachment in attachments:
+                if isinstance(attachment, dict):
+                    filename = attachment.get('filename', '') or attachment.get('media_file_basename', '')
+                    if filename and 'audit.csv' in filename.lower():
+                        audit_url = attachment.get('download_url')
+                        if audit_url:
+                            logger.debug(f"Found audit URL in attachments: {audit_url}")
+                            break
+    
     return {
         '_id': submission_id,
         '_uuid': uuid,
         '_submission_time': submission_time,
         'end': end_time,
         'submission_data': submission_data,
-        'audit_url': kobo_data.get('_audit_URL') or kobo_data.get('audit_URL'),
+        'audit_url': audit_url,
         'kobo_validation_status': kobo_validation_status
     }
 
@@ -166,6 +229,7 @@ def merge_submission(
     """
     submission_id = parsed_submission['_id']
     new_uuid = parsed_submission['_uuid']
+    new_submission_time = parsed_submission['_submission_time']
     new_end = parsed_submission['end']
     new_data = parsed_submission['submission_data']
     kobo_validation_status = parsed_submission.get('kobo_validation_status')
@@ -205,6 +269,7 @@ def merge_submission(
             
             # Update existing submission
             existing._uuid = new_uuid
+            existing._submission_time = new_submission_time
             existing.end = new_end
             existing.submission_data = new_data
             existing.is_edited = True
@@ -217,6 +282,8 @@ def merge_submission(
             # No significant edit, just update metadata if needed
             if existing._uuid != new_uuid:
                 existing._uuid = new_uuid
+            if existing._submission_time != new_submission_time:
+                existing._submission_time = new_submission_time
             if existing.end != new_end:
                 existing.end = new_end
             existing.kobo_validation_status = kobo_validation_status
