@@ -91,13 +91,21 @@ class HFCEngine:
         # Not found
         return None, None
     
-    def run_checks(self, submission_data: Dict[str, Any], submission_uuid: str) -> List[QualityIssue]:
+    def run_checks(
+        self, 
+        submission_data: Dict[str, Any], 
+        submission_uuid: str,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> List[QualityIssue]:
         """
         Run all HFC checks on a submission.
         
         Args:
             submission_data: Submission data dictionary
             submission_uuid: UUID of the submission
+            start_time: Submission start time (from metadata, optional)
+            end_time: Submission end time (from metadata, optional)
             
         Returns:
             List of QualityIssue objects
@@ -105,14 +113,20 @@ class HFCEngine:
         issues = []
         
         # Run basic checks
-        issues.extend(self._run_basic_checks(submission_data, submission_uuid))
+        issues.extend(self._run_basic_checks(submission_data, submission_uuid, start_time, end_time))
         
         # Run custom validation rules from database
         issues.extend(self._run_custom_rules(submission_data, submission_uuid))
         
         return issues
     
-    def _run_basic_checks(self, submission_data: Dict[str, Any], submission_uuid: str) -> List[QualityIssue]:
+    def _run_basic_checks(
+        self, 
+        submission_data: Dict[str, Any], 
+        submission_uuid: str,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> List[QualityIssue]:
         """Run basic built-in checks."""
         issues = []
         
@@ -200,12 +214,17 @@ class HFCEngine:
                 logger.debug(f"Could not parse date for validation: {e}")
         
         # 4. Check survey duration
-        duration_issues = self._check_duration(submission_data)
+        duration_issues = self._check_duration(submission_data, start_time, end_time)
         issues.extend(duration_issues)
         
         return issues
     
-    def _check_duration(self, submission_data: Dict[str, Any]) -> List[QualityIssue]:
+    def _check_duration(
+        self, 
+        submission_data: Dict[str, Any],
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> List[QualityIssue]:
         """Check survey duration against min/max limits."""
         issues = []
         
@@ -233,22 +252,44 @@ class HFCEngine:
                     ))
             except (ValueError, TypeError):
                 pass
+        elif start_time and end_time:
+            # Use provided start/end times from metadata
+            try:
+                duration_minutes = (end_time - start_time).total_seconds() / 60
+                
+                if self.min_survey_duration_minutes is not None and duration_minutes < self.min_survey_duration_minutes:
+                    issues.append(QualityIssue(
+                        check="duration_too_short",
+                        field="duration_minutes",
+                        value=duration_minutes,
+                        message=f"Survey duration too short ({duration_minutes:.2f} min < {self.min_survey_duration_minutes} min)"
+                    ))
+                
+                if self.max_survey_duration_minutes is not None and duration_minutes > self.max_survey_duration_minutes:
+                    issues.append(QualityIssue(
+                        check="duration_too_long",
+                        field="duration_minutes",
+                        value=duration_minutes,
+                        message=f"Survey duration too long ({duration_minutes:.2f} min > {self.max_survey_duration_minutes} min)"
+                    ))
+            except Exception as e:
+                logger.debug(f"Could not calculate duration from start/end times: {e}")
         else:
-            # Fallback: calculate from start/end times
-            start_time, _ = self._get_field_value(submission_data, self.start_time_field)
-            end_time, _ = self._get_field_value(submission_data, self.end_time_field)
+            # Fallback: try to find start/end times in submission data (for backwards compatibility)
+            start_time_data, _ = self._get_field_value(submission_data, self.start_time_field)
+            end_time_data, _ = self._get_field_value(submission_data, self.end_time_field)
             
-            if start_time and end_time:
+            if start_time_data and end_time_data:
                 try:
-                    if isinstance(start_time, str):
-                        start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                    if isinstance(start_time_data, str):
+                        start_dt = datetime.fromisoformat(start_time_data.replace('Z', '+00:00'))
                     else:
-                        start_dt = start_time
+                        start_dt = start_time_data
                     
-                    if isinstance(end_time, str):
-                        end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                    if isinstance(end_time_data, str):
+                        end_dt = datetime.fromisoformat(end_time_data.replace('Z', '+00:00'))
                     else:
-                        end_dt = end_time
+                        end_dt = end_time_data
                     
                     duration_minutes = (end_dt - start_dt).total_seconds() / 60
                     
@@ -268,7 +309,7 @@ class HFCEngine:
                             message=f"Survey duration too long ({duration_minutes:.2f} min > {self.max_survey_duration_minutes} min)"
                         ))
                 except Exception as e:
-                    logger.debug(f"Could not calculate duration: {e}")
+                    logger.debug(f"Could not calculate duration from submission data fields: {e}")
         
         return issues
     
@@ -282,13 +323,18 @@ class HFCEngine:
             ValidationRule.is_active == True
         ).all()
         
+        logger.debug(f"Found {len(rules)} active validation rules for survey {self.survey_config.survey_id}")
+        
         for rule in rules:
             try:
                 rule_data = rule.rule_data
+                logger.debug(f"Evaluating rule '{rule.rule_name}' with expression: {rule_data.get('check_expression')}")
                 rule_issues = self._evaluate_rule(rule_data, submission_data, submission_uuid)
+                if rule_issues:
+                    logger.info(f"Rule '{rule.rule_name}' generated {len(rule_issues)} issue(s)")
                 issues.extend(rule_issues)
             except Exception as e:
-                logger.error(f"Error evaluating rule '{rule.rule_name}': {e}")
+                logger.error(f"Error evaluating rule '{rule.rule_name}': {e}", exc_info=True)
                 continue
         
         return issues
@@ -327,7 +373,7 @@ class HFCEngine:
                 var_values[var] = (value, field_path or var)
         
         if missing_vars:
-            logger.debug(f"Rule '{check_id}' skipped: missing variables {missing_vars}")
+            logger.debug(f"Rule '{check_id}' skipped: missing variables {missing_vars} in submission {submission_uuid}")
             return issues
         
         # Filter out rows with NA or DK values in relevant columns
@@ -350,11 +396,16 @@ class HFCEngine:
                 value, field_path = var_values[var]
                 # Use the variable name from config in the expression, but get value from actual path
                 eval_context[var] = value
+                logger.debug(f"Rule '{check_id}': variable '{var}' = {value} (from field '{field_path}')")
             eval_context['__builtins__'] = {}
+            
+            logger.debug(f"Rule '{check_id}': evaluating expression '{check_expression}' with context {eval_context}")
             
             # Replace common operators and functions for safety
             # This is a simplified version - in production, consider using a proper expression evaluator
             result = self._safe_eval(check_expression, eval_context)
+            
+            logger.debug(f"Rule '{check_id}': expression result = {result}")
             
             if result:
                 # Rule failed - create issue
@@ -369,7 +420,7 @@ class HFCEngine:
                     message=issue_message
                 ))
         except Exception as e:
-            logger.warning(f"Error evaluating expression '{check_expression}' for rule '{check_id}': {e}")
+            logger.warning(f"Error evaluating expression '{check_expression}' for rule '{check_id}': {e}", exc_info=True)
         
         return issues
     
@@ -384,26 +435,58 @@ class HFCEngine:
         """
         try:
             # Replace variable names with their values
+            # Need to format values properly: quote strings, keep numbers as-is
             for var, value in context.items():
                 if var == '__builtins__':
                     continue
                 # Escape special regex characters
                 var_pattern = re.escape(var)
+                
+                # Format the value for replacement
+                if isinstance(value, str):
+                    # String values need to be quoted
+                    # Escape any quotes in the string value itself
+                    escaped_value = value.replace('"', '\\"')
+                    replacement = f'"{escaped_value}"'
+                elif isinstance(value, (int, float)):
+                    # Numeric values don't need quotes
+                    replacement = str(value)
+                elif value is None:
+                    # None becomes None (Python keyword)
+                    replacement = "None"
+                else:
+                    # For other types, convert to string and quote
+                    replacement = f'"{str(value)}"'
+                
                 # Replace variable names (whole word match)
-                expression = re.sub(rf'\b{var_pattern}\b', str(value), expression)
+                expression = re.sub(rf'\b{var_pattern}\b', replacement, expression)
+            
+            # Convert logical operators from frontend format to Python format
+            # Frontend uses & and |, Python uses 'and' and 'or'
+            # Need to be careful: & and | can appear in other contexts (like & in "&" string)
+            # So we replace them only when they're standalone operators (with spaces around them)
+            expression = re.sub(r'\s+&\s+', ' and ', expression)
+            expression = re.sub(r'\s+\|\s+', ' or ', expression)
+            
+            logger.debug(f"After variable replacement and operator conversion: {expression}")
             
             # Evaluate the expression
             # WARNING: This uses eval() which can be unsafe. In production, use a proper parser.
             # For now, we'll restrict to simple comparisons and basic math
-            allowed_chars = set('0123456789+-*/.()<>=!&| ')
-            if all(c in allowed_chars or c.isdigit() or c in '+-*/.()<>=!&| ' for c in expression):
+            # Allow quotes for string literals, and 'and'/'or' keywords
+            # Check that expression only contains safe characters
+            # Allow alphanumeric, spaces, operators, quotes, and Python keywords 'and'/'or'
+            safe_chars = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+-*/.()<>=! "\' ')
+            if all(c in safe_chars or c.isspace() for c in expression):
                 result = eval(expression, {"__builtins__": {}})
                 return bool(result)
             else:
-                logger.warning(f"Expression contains disallowed characters: {expression}")
+                # Log which characters are problematic
+                problematic = [c for c in expression if c not in safe_chars and not c.isspace()]
+                logger.warning(f"Expression contains disallowed characters: {problematic} in expression: {expression}")
                 return False
         except Exception as e:
-            logger.warning(f"Error evaluating expression: {e}")
+            logger.warning(f"Error evaluating expression '{expression}': {e}", exc_info=True)
             return False
     
     def determine_qa_status(self, issues: List[QualityIssue], kobo_validation_status: Optional[str] = None) -> Optional[str]:

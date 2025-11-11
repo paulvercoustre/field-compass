@@ -70,7 +70,18 @@ def is_edited_submission(
     Returns:
         True if submission was edited, False otherwise
     """
-    time_diff = (new_end_timestamp - existing_submission._submission_time).total_seconds()
+    # Handle timezone-aware vs timezone-naive datetime comparison
+    existing_time = existing_submission._submission_time
+    if existing_time.tzinfo is None and new_end_timestamp.tzinfo is not None:
+        # If existing is naive but new is aware, make existing aware (assume UTC)
+        from datetime import timezone
+        existing_time = existing_time.replace(tzinfo=timezone.utc)
+    elif existing_time.tzinfo is not None and new_end_timestamp.tzinfo is None:
+        # If existing is aware but new is naive, make new aware (assume UTC)
+        from datetime import timezone
+        new_end_timestamp = new_end_timestamp.replace(tzinfo=timezone.utc)
+    
+    time_diff = (new_end_timestamp - existing_time).total_seconds()
     return time_diff > threshold_seconds
 
 

@@ -2,8 +2,16 @@
 
 ## 📊 Overall Status
 
-**Current Phase**: ETL Pipeline Complete ✅  
-**Next Phase**: Airflow Orchestration & Frontend Integration
+**Current Phase**: Core Platform Complete ✅  
+**Next Phase**: Testing, Optimization & Airflow Orchestration
+
+**Major Milestones Achieved**:
+- ✅ Complete ETL pipeline with Kobo integration
+- ✅ Full frontend-backend integration  
+- ✅ Survey management UI (create, edit, delete)
+- ✅ QA status workflow with Kobo validation sync
+- ✅ Data quality checks and validation rules
+- ✅ Manual ETL trigger from UI
 
 ---
 
@@ -57,9 +65,19 @@
 
 ## 🚧 In Progress / Next Steps
 
-### 6. Airflow DAG (0% Complete)
+### 6. QA Status Workflow (100% Complete) ✅
+**Status**: Complete  
+**What's Done**:
+- ✅ Kobo validation status sync (extracts from API response)
+- ✅ Dynamic status determination (Kobo rejection > HFC flags > Kobo approval)
+- ✅ Status badges (PENDING_APPROVAL, FLAGGED, APPROVED, REJECTED)
+- ✅ Dynamic Kobo edit links based on survey's kobo_asset_id
+- ✅ "View in Kobo" button in submission detail view
+- ✅ Status priority logic: Rejection > On Hold > HFC Issues > Approval
+
+### 7. Airflow DAG (0% Complete)
 **Status**: Not started  
-**Priority**: High  
+**Priority**: Medium (ETL can be triggered manually via UI)  
 **What's Needed**:
 - Airflow DAG definition for scheduled ETL runs
 - Configuration for Cloud Composer (GCP) or local Airflow
@@ -68,37 +86,45 @@
 
 **Estimated Effort**: 2-3 days
 
-### 7. Frontend Integration (30% Complete)
-**Status**: Partially complete (UI exists, needs API connection)  
+### 7. Frontend Integration (95% Complete) ✅
+**Status**: Nearly complete  
 **Priority**: High  
 **What's Done**:
 - ✅ React/TypeScript frontend structure
 - ✅ UI components (Dashboard, SubmissionList, etc.)
 - ✅ Type definitions
+- ✅ Connected to real API (replaced mock data)
+- ✅ Error handling and loading states
+- ✅ Survey selection and context management
+- ✅ ETL refresh functionality
+- ✅ QA status workflow with Kobo sync
+- ✅ Dynamic Kobo edit links
 
 **What's Needed**:
-- ✅ Connect to real API (replace mock data)
-- ✅ Error handling
-- ✅ Loading states
-- ✅ Real-time updates (optional)
+- ⚠️ Real-time updates (optional, low priority)
 
-**Estimated Effort**: 1-2 days
+**Estimated Effort**: < 1 day
 
-### 8. Survey Configuration Management (20% Complete)
-**Status**: Backend ready, needs UI  
-**Priority**: Medium  
+### 8. Survey Configuration Management (90% Complete) ✅
+**Status**: Nearly complete  
+**Priority**: High  
 **What's Done**:
 - ✅ Database schema
 - ✅ CLI scripts for creating/updating configs
-- ✅ API endpoints (if created)
+- ✅ API endpoints (CRUD operations)
+- ✅ Frontend UI for survey setup (CreateSurveyPage)
+- ✅ Kobo form import/parsing (XLSX support)
+- ✅ Field mapping interface (dropdowns for core identifiers)
+- ✅ Validation rule builder UI (integrated in survey creation)
+- ✅ Survey settings page (view/edit/delete)
+- ✅ Sidebar navigation with survey list
+- ✅ Sampling frame upload (CSV/XLSX with validation)
+- ✅ Kobo tool persistence (no re-upload needed for edits)
 
 **What's Needed**:
-- ✅ Frontend UI for survey setup
-- ✅ Kobo form import/parsing
-- ✅ Field mapping interface
-- ✅ Validation rule builder UI
+- ⚠️ Minor UX polish (optional)
 
-**Estimated Effort**: 3-4 days
+**Estimated Effort**: < 1 day
 
 ### 9. Testing & Validation (10% Complete)
 **Status**: Manual testing done, needs automation  
@@ -143,42 +169,35 @@
 
 ## 🎯 Immediate Next Steps (Recommended Order)
 
-### Phase 1: Complete Core Functionality (1-2 weeks)
+### Phase 1: Complete Core Functionality (Mostly Done! 🎉)
 
-1. **Survey Management UI** (Priority 1) ⚠️ NEEDS REFACTORING
-   - ✅ **Survey Selection UI**: Dropdown selector working
-   - ✅ **Basic Survey Setup**: Form for configuring survey settings
-   - ⚠️ **Survey Creation/Edit Flow**: Current flow needs improvement
-     - **Issue**: Creation and editing are mixed in same page, confusing UX
-     - **Solution**: Separate into two distinct pages:
-       - **Survey List Page** (like KoboToolbox):
-         - Table/card view of all surveys
-         - Actions: View, Edit, Delete, Duplicate
-         - Search/filter functionality
-         - Shows survey status, submission count, last updated
-       - **Survey Creation/Edit Form**:
-         - Multi-step wizard or tabbed interface
-         - Step 1: Basic Info (name, Kobo Asset ID)
-         - Step 2: Kobo Tool Upload
-         - Step 3: Core Configuration (identifiers, DK values, global params)
-         - Step 4: Sampling Frame Upload
-         - Step 5: **Data Quality Rules** (integrated rule builder)
-         - Step 6: Review & Save
-   - 🔄 **Integrate Rule Builder**: 
-     - Move rule builder into survey creation/editing flow
-     - Allow creating validation rules during survey setup
-     - Save rules directly to database (validation_rules table)
-     - Show existing rules in survey edit mode
+1. **Survey Management UI** (Priority 1) ✅ COMPLETE
+   - ✅ **Survey Selection UI**: Sidebar with survey list
+   - ✅ **Survey Creation**: CreateSurveyPage with full form
+   - ✅ **Survey Settings**: View/edit/delete survey configuration
+   - ✅ **Rule Builder Integration**: Integrated into survey creation/editing
+   - ✅ **Kobo Tool Upload**: XLSX parsing and persistence
+   - ✅ **Sampling Frame Upload**: CSV/XLSX with validation
+   - ✅ **Sidebar Navigation**: Survey list with "Add Survey" button
 
-2. **Airflow DAG Setup** (Priority 2)
+2. **QA Status Workflow** (Priority 1) ✅ COMPLETE
+   - ✅ Kobo validation status sync
+   - ✅ Dynamic status determination
+   - ✅ Status badges and UI
+   - ✅ Kobo edit links
+   - ✅ ETL refresh functionality
+
+3. **Frontend API Integration** (Priority 2) ✅ COMPLETE
+   - ✅ Connected to real API
+   - ✅ Error handling and loading states
+   - ✅ Survey context management
+   - ✅ ETL trigger from UI
+
+4. **Airflow DAG Setup** (Priority 3)
    - Create DAG for scheduled ETL runs
    - Test locally with Airflow
    - Configure for Cloud Composer
-
-3. **Frontend API Integration** (Priority 3) ✅ Mostly Complete
-   - ✅ Replace mock data with real API calls
-   - Add error handling
-   - Test end-to-end flow
+   - **Note**: Manual ETL trigger via UI is working, so this is lower priority
 
 ### Phase 2: Polish & Production Ready (2-3 weeks)
 
@@ -253,17 +272,40 @@
 
 ---
 
-## 📋 Tomorrow's Priorities
+## 📋 Next Priorities
 
-### Survey Management UX Refactoring
-1. **Survey List Page**: Create overview page with all surveys (table/cards)
-2. **Survey Wizard**: Convert current form to multi-step wizard
-3. **Rule Builder Integration**: Embed rule builder in survey setup flow
-4. **API Endpoints**: Add delete, duplicate, and rule management endpoints
+### High Priority
+1. **Airflow DAG Setup** (if automated scheduling is needed)
+   - Create DAG for scheduled ETL runs
+   - Test locally with Airflow
+   - Configure for Cloud Composer
 
-See `SURVEY_UX_IMPROVEMENTS.md` for detailed implementation plan.
+2. **Testing Suite**
+   - Unit tests for ETL components
+   - Integration tests for API endpoints
+   - Frontend component tests
+
+### Medium Priority
+3. **HFC Engine Expression Evaluator**
+   - Replace `eval()` with safe expression parser (e.g., `simpleeval`)
+   - Improve security and reliability
+
+4. **Performance Optimization**
+   - Parallelize ETL processing for large datasets
+   - Batch database commits
+   - Optimize queries
+
+### Low Priority
+5. **Audit Log Processing**
+   - Extract metrics from audit logs (active time, etc.)
+   - Add to enumerator performance metrics
+
+6. **Additional Features**
+   - Survey duplication
+   - Export functionality
+   - Advanced filtering/search
 
 ---
 
-*Last Updated: 2025-11-07*
+*Last Updated: 2025-11-09*
 

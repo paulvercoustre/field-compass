@@ -5,7 +5,7 @@ Provides data collection progress and enumerator performance metrics.
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from uuid import UUID as UUIDType
 from collections import defaultdict
 
@@ -18,6 +18,28 @@ from models import (
 )
 
 router = APIRouter()
+
+# Target column names that don't need to match Kobo variables
+TARGET_COLUMN_NAMES = [
+    'target',
+    'target_interviews',
+    'target_interview',
+    'target_count',
+    'target_number',
+    'interviews_target',
+    'interview_target',
+    'total_target',
+    'expected_interviews',
+    'expected_count',
+    'sample_size',
+    'sample_size_target',
+]
+
+
+def _is_target_column(column_name: str) -> bool:
+    """Check if a column name is a target column."""
+    normalized = column_name.lower().strip()
+    return any(name in normalized for name in TARGET_COLUMN_NAMES)
 
 
 def _get_survey_config(db: Session, survey_id: Optional[str]) -> Optional[SurveyConfig]:
@@ -72,6 +94,62 @@ def _extract_sampling_cols(submission_data: Dict[str, Any], sampling_cols: List[
     return result
 
 
+def _calculate_targets_from_frame(
+    frame_data: List[Dict[str, Any]],
+    sampling_cols: List[str],
+    target_column: Optional[str] = None
+) -> Tuple[int, Dict[str, int], Dict[Tuple, int]]:
+    """
+    Calculate targets from sampling frame data.
+    
+    Returns:
+        - total_target: Sum of all target values
+        - targets_by_col: Dict mapping column_name -> value -> target count
+        - targets_by_combo: Dict mapping (col1_value, col2_value, ...) -> target count
+    """
+    total_target = 0
+    targets_by_col: Dict[str, Dict[str, int]] = {col: defaultdict(int) for col in sampling_cols}
+    targets_by_combo: Dict[Tuple, int] = defaultdict(int)
+    
+    if not frame_data:
+        return total_target, {col: dict(targets_by_col[col]) for col in sampling_cols}, dict(targets_by_combo)
+    
+    # Find target column if not provided
+    if not target_column and frame_data:
+        frame_headers = list(frame_data[0].keys())
+        for header in frame_headers:
+            if _is_target_column(header):
+                target_column = header
+                break
+    
+    # Aggregate targets from frame data
+    for row in frame_data:
+        # Get target value (default to 1 if no target column)
+        target_value = 1
+        if target_column and target_column in row:
+            try:
+                target_value = int(float(row[target_column]))  # Handle numeric strings
+            except (ValueError, TypeError):
+                target_value = 1
+        
+        total_target += target_value
+        
+        # Aggregate by each sampling column
+        for col in sampling_cols:
+            if col in row:
+                col_value = str(row[col]) if row[col] is not None else "Unknown"
+                targets_by_col[col][col_value] += target_value
+        
+        # Aggregate by combination of all sampling columns
+        combo_key = tuple(
+            str(row.get(col, "Unknown")) if row.get(col) is not None else "Unknown"
+            for col in sampling_cols
+        )
+        targets_by_combo[combo_key] += target_value
+    
+    return total_target, {col: dict(targets_by_col[col]) for col in sampling_cols}, dict(targets_by_combo)
+
+
 @router.get("/progress", response_model=ProgressData)
 async def get_progress_data(
     survey_id: Optional[str] = Query(None, description="Filter by survey ID (UUID)"),
@@ -79,11 +157,11 @@ async def get_progress_data(
 ):
     """
     Get data collection progress metrics.
-    Returns overall progress, by district, by livelihood, and detailed breakdown.
+    Returns overall progress, by sampling column disaggregations, and detailed breakdown.
     
-    Note: Target values are not yet stored in database, so progress percentages
-    will be calculated based on conducted interviews only. Targets need to be
-    added via survey configuration or sampling frame import.
+    Progress is calculated by counting completed surveys (submissions) against targets
+    from the sampling frame. Disaggregations are dynamically generated based on
+    the sampling_cols in the survey configuration.
     """
     # Build base query
     query = db.query(SubmissionCurrent)
@@ -93,84 +171,111 @@ async def get_progress_data(
     if survey_config:
         query = query.filter(SubmissionCurrent.survey_id == survey_config.survey_id)
     
-    # Get all submissions
+    # Get all submissions (completed surveys)
     submissions = query.all()
     
-    # Get sampling columns from survey config
+    # Get sampling frame configuration
     sampling_cols = []
-    admin_level = None
+    frame_data = []
+    target_column = None
+    
     if survey_config and survey_config.config_data:
         config = survey_config.config_data
         sampling_frame_config = config.get("sampling_frame", {})
         sampling_cols = sampling_frame_config.get("sampling_cols", [])
-        admin_level = sampling_frame_config.get("admin_level_for_label")
+        frame_data = sampling_frame_config.get("frame_data", [])
+        
+        # Find target column from frame headers if available
+        if frame_data and len(frame_data) > 0:
+            frame_headers = list(frame_data[0].keys())
+            for header in frame_headers:
+                if _is_target_column(header):
+                    target_column = header
+                    break
+    
+    # Calculate targets from sampling frame
+    total_target, targets_by_col, targets_by_combo = _calculate_targets_from_frame(
+        frame_data, sampling_cols, target_column
+    )
     
     # Calculate overall progress
     total_conducted = len(submissions)
-    # TODO: Get targets from sampling frame when available
-    total_target = 0  # Placeholder until sampling frame is stored in DB
-    
     overall = OverallProgress(
         conducted=total_conducted,
         target=total_target,
         progress=100.0 if total_target == 0 else round((total_conducted / total_target) * 100, 1)
     )
     
-    # Group by district (first sampling column, typically admin level)
+    # Group by first sampling column (typically district/admin level)
     by_district = []
     if sampling_cols and len(sampling_cols) > 0:
-        district_col = sampling_cols[0]
-        district_counts = defaultdict(int)
+        first_col = sampling_cols[0]
+        col_counts = defaultdict(int)
         
         for sub in submissions:
-            district = _get_field_value(sub.submission_data, district_col) or "Unknown"
-            district_counts[district] += 1
+            col_value = _get_field_value(sub.submission_data, first_col) or "Unknown"
+            col_value = str(col_value) if col_value is not None else "Unknown"
+            col_counts[col_value] += 1
         
-        for district, conducted in sorted(district_counts.items()):
+        # Get targets for this column
+        col_targets = targets_by_col.get(first_col, {})
+        
+        for col_value, conducted in sorted(col_counts.items()):
+            target = col_targets.get(col_value, 0)
             by_district.append(ProgressByDistrict(
-                district=str(district),
+                district=str(col_value),
                 conducted=conducted,
-                target=0,  # TODO: Get from sampling frame
-                progress=100.0  # Placeholder
+                target=target,
+                progress=100.0 if target == 0 else round((conducted / target) * 100, 1)
             ))
     
-    # Group by livelihood (second sampling column, if exists)
+    # Group by second sampling column (typically livelihood, if exists)
     by_livelihood = []
     if sampling_cols and len(sampling_cols) > 1:
-        livelihood_col = sampling_cols[1]
-        livelihood_counts = defaultdict(int)
+        second_col = sampling_cols[1]
+        col_counts = defaultdict(int)
         
         for sub in submissions:
-            livelihood = _get_field_value(sub.submission_data, livelihood_col) or "Unknown"
-            livelihood_counts[livelihood] += 1
+            col_value = _get_field_value(sub.submission_data, second_col) or "Unknown"
+            col_value = str(col_value) if col_value is not None else "Unknown"
+            col_counts[col_value] += 1
         
-        for livelihood, conducted in sorted(livelihood_counts.items()):
+        # Get targets for this column
+        col_targets = targets_by_col.get(second_col, {})
+        
+        for col_value, conducted in sorted(col_counts.items()):
+            target = col_targets.get(col_value, 0)
             by_livelihood.append(ProgressByLivelihood(
-                livelihood=str(livelihood),
+                livelihood=str(col_value),
                 conducted=conducted,
-                target=0,  # TODO: Get from sampling frame
-                progress=100.0  # Placeholder
+                target=target,
+                progress=100.0 if target == 0 else round((conducted / target) * 100, 1)
             ))
     
-    # Detailed breakdown (district × livelihood)
+    # Detailed breakdown (all sampling columns combined)
     detailed = []
     if sampling_cols and len(sampling_cols) >= 2:
-        district_col = sampling_cols[0]
-        livelihood_col = sampling_cols[1]
+        first_col = sampling_cols[0]
+        second_col = sampling_cols[1]
         combo_counts = defaultdict(int)
         
         for sub in submissions:
-            district = _get_field_value(sub.submission_data, district_col) or "Unknown"
-            livelihood = _get_field_value(sub.submission_data, livelihood_col) or "Unknown"
-            combo_counts[(district, livelihood)] += 1
+            first_value = _get_field_value(sub.submission_data, first_col) or "Unknown"
+            second_value = _get_field_value(sub.submission_data, second_col) or "Unknown"
+            first_value = str(first_value) if first_value is not None else "Unknown"
+            second_value = str(second_value) if second_value is not None else "Unknown"
+            combo_counts[(first_value, second_value)] += 1
         
-        for (district, livelihood), conducted in sorted(combo_counts.items()):
+        # Get targets for combinations
+        for (first_value, second_value), conducted in sorted(combo_counts.items()):
+            combo_key = (first_value, second_value)
+            target = targets_by_combo.get(combo_key, 0)
             detailed.append(DetailedProgress(
-                district=str(district),
-                livelihood=str(livelihood),
+                district=str(first_value),
+                livelihood=str(second_value),
                 conducted=conducted,
-                target=0,  # TODO: Get from sampling frame
-                progress=100.0  # Placeholder
+                target=target,
+                progress=100.0 if target == 0 else round((conducted / target) * 100, 1)
             ))
     
     return ProgressData(
@@ -178,6 +283,7 @@ async def get_progress_data(
         byDistrict=by_district,
         byLivelihood=by_livelihood,
         detailed=detailed,
+        samplingColumns=sampling_cols,
     )
 
 

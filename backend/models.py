@@ -152,6 +152,7 @@ class ProgressData(BaseModel):
     byDistrict: List[ProgressByDistrict]
     byLivelihood: List[ProgressByLivelihood]
     detailed: List[DetailedProgress]
+    samplingColumns: List[str] = Field(default_factory=list, description="Names of sampling columns used for disaggregation")
 
 
 # ============================================================================

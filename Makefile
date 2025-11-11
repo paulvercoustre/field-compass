@@ -32,8 +32,14 @@ db-shell: ## Open PostgreSQL shell
 api-shell: ## Open Python shell in backend container
 	docker-compose exec backend python
 
-test: ## Run tests (when implemented)
+test: ## Run all tests
 	docker-compose exec backend pytest
+
+test-cov: ## Run tests with coverage report
+	docker-compose exec backend pytest --cov=. --cov-report=term-missing
+
+test-verbose: ## Run tests with verbose output
+	docker-compose exec backend pytest -v
 
 clean: ## Remove all containers and volumes
 	docker-compose down -v
