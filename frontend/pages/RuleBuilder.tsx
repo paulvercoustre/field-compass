@@ -7,6 +7,7 @@ import { saveJsonToFile } from '../utils/file';
 import RuleEditor from '../components/rule-builder/RuleEditor';
 import StagedRulesList from '../components/rule-builder/StagedRulesList';
 import GlobalParametersForm from '../components/rule-builder/GlobalParameters';
+import ErrorMessage from '../components/ui/ErrorMessage';
 
 const RuleBuilder: React.FC = () => {
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
@@ -19,6 +20,7 @@ const RuleBuilder: React.FC = () => {
     max_survey_duration_minutes: null,
   });
   const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,11 +72,16 @@ const RuleBuilder: React.FC = () => {
   }, []);
 
   const handleSaveAllRules = () => {
+    setSaveError(null);
     if (stagedRules.length === 0) {
-      alert("No rules to save. Please create at least one rule.");
+      setSaveError("No rules to save. Please create at least one rule.");
       return;
     }
-    saveJsonToFile(globalParams, stagedRules, koboToolData?.variableMap);
+    try {
+      saveJsonToFile(globalParams, stagedRules, koboToolData?.variableMap);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save rules');
+    }
   };
 
   return (
@@ -131,10 +138,11 @@ const RuleBuilder: React.FC = () => {
                   onDelete={handleDeleteRule}
                 />
                 <div className="mt-6">
+                  <ErrorMessage error={saveError} className="mb-2" />
                   <button 
                     onClick={handleSaveAllRules}
                     disabled={stagedRules.length === 0}
-                    className="w-full px-4 py-2 font-bold text-white bg-green-600 rounded-md disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-green-500 transition-colors"
+                    className="w-full px-4 py-2 font-bold text-white bg-green-600 rounded-md disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-900"
                   >
                     Save All Rules to JSON
                   </button>

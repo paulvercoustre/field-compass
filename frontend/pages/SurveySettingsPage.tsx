@@ -10,6 +10,8 @@ import { StagedRule } from '../types';
 import RuleEditor from '../components/rule-builder/RuleEditor';
 import StagedRulesList from '../components/rule-builder/StagedRulesList';
 import { Spinner } from '../components/Spinner';
+import ErrorMessage from '../components/ui/ErrorMessage';
+import SuccessMessage from '../components/ui/SuccessMessage';
 
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -442,17 +444,15 @@ const SurveySettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-md text-red-200">
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-4 p-4 bg-green-900/50 border border-green-700 rounded-md text-green-200">
-            {success}
-          </div>
-        )}
+        <div className="mb-4 space-y-2">
+          <ErrorMessage error={error} className="text-base" />
+          <SuccessMessage 
+            message={success} 
+            onDismiss={() => setSuccess(null)}
+            autoHide={true}
+            autoHideDelay={5000}
+          />
+        </div>
 
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (

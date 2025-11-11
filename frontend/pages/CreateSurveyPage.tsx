@@ -10,6 +10,8 @@ import { createValidationRule, ValidationRuleCreate } from '../services/progress
 import RuleEditor from '../components/rule-builder/RuleEditor';
 import StagedRulesList from '../components/rule-builder/StagedRulesList';
 import { Spinner } from '../components/Spinner';
+import ErrorMessage from '../components/ui/ErrorMessage';
+import SuccessMessage from '../components/ui/SuccessMessage';
 
 const CreateSurveyPage: React.FC = () => {
   const { refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -296,17 +298,15 @@ const CreateSurveyPage: React.FC = () => {
       <div className="bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-4xl">
         <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Create New Survey</h1>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-md text-red-200">
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-4 p-4 bg-green-900/50 border border-green-700 rounded-md text-green-200">
-            {success}
-          </div>
-        )}
+        <div className="mb-4 space-y-2">
+          <ErrorMessage error={error} className="text-base" />
+          <SuccessMessage 
+            message={success} 
+            onDismiss={() => setSuccess(null)}
+            autoHide={true}
+            autoHideDelay={5000}
+          />
+        </div>
 
         <div className="space-y-6">
           {/* Basic Information */}
