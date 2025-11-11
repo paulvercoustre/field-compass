@@ -13,7 +13,7 @@ from services.database import get_db
 from database.models import SubmissionCurrent, SurveyConfig
 from models import (
     ProgressData, PerformanceData,
-    OverallProgress, ProgressByDistrict, ProgressByLivelihood, DetailedProgress,
+    OverallProgress, ProgressByColumn, DetailedProgress,
     EnumeratorCollectionStats, EnumeratorQualityStats
 )
 
@@ -206,84 +206,83 @@ async def get_progress_data(
         progress=100.0 if total_target == 0 else round((total_conducted / total_target) * 100, 1)
     )
     
-    # Group by first sampling column (typically district/admin level)
-    by_district = []
-    if sampling_cols and len(sampling_cols) > 0:
-        first_col = sampling_cols[0]
-        col_counts = defaultdict(int)
-        
-        for sub in submissions:
-            col_value = _get_field_value(sub.submission_data, first_col) or "Unknown"
-            col_value = str(col_value) if col_value is not None else "Unknown"
-            col_counts[col_value] += 1
-        
-        # Get targets for this column
-        col_targets = targets_by_col.get(first_col, {})
-        
-        for col_value, conducted in sorted(col_counts.items()):
-            target = col_targets.get(col_value, 0)
-            by_district.append(ProgressByDistrict(
-                district=str(col_value),
-                conducted=conducted,
-                target=target,
-                progress=100.0 if target == 0 else round((conducted / target) * 100, 1)
-            ))
+    # Group by each sampling column dynamically
+    by_column: Dict[str, List[ProgressByColumn]] = {}
     
-    # Group by second sampling column (typically livelihood, if exists)
-    by_livelihood = []
-    if sampling_cols and len(sampling_cols) > 1:
-        second_col = sampling_cols[1]
+    for col in sampling_cols:
         col_counts = defaultdict(int)
         
+        # Count conducted surveys for each value in this column
         for sub in submissions:
-            col_value = _get_field_value(sub.submission_data, second_col) or "Unknown"
+            col_value = _get_field_value(sub.submission_data, col) or "Unknown"
             col_value = str(col_value) if col_value is not None else "Unknown"
             col_counts[col_value] += 1
         
         # Get targets for this column
-        col_targets = targets_by_col.get(second_col, {})
+        col_targets = targets_by_col.get(col, {})
         
+        # Build progress list for this column
+        column_progress = []
         for col_value, conducted in sorted(col_counts.items()):
             target = col_targets.get(col_value, 0)
-            by_livelihood.append(ProgressByLivelihood(
-                livelihood=str(col_value),
+            column_progress.append(ProgressByColumn(
+                value=str(col_value),
                 conducted=conducted,
                 target=target,
                 progress=100.0 if target == 0 else round((conducted / target) * 100, 1)
             ))
+        
+        by_column[col] = column_progress
     
     # Detailed breakdown (all sampling columns combined)
     detailed = []
-    if sampling_cols and len(sampling_cols) >= 2:
-        first_col = sampling_cols[0]
-        second_col = sampling_cols[1]
+    if sampling_cols and len(sampling_cols) > 0:
         combo_counts = defaultdict(int)
+        combo_values_map = {}
         
+        # Group submissions by all sampling column values
         for sub in submissions:
-            first_value = _get_field_value(sub.submission_data, first_col) or "Unknown"
-            second_value = _get_field_value(sub.submission_data, second_col) or "Unknown"
-            first_value = str(first_value) if first_value is not None else "Unknown"
-            second_value = str(second_value) if second_value is not None else "Unknown"
-            combo_counts[(first_value, second_value)] += 1
+            combo_values = {}
+            combo_key_parts = []
+            
+            for col in sampling_cols:
+                col_value = _get_field_value(sub.submission_data, col) or "Unknown"
+                col_value = str(col_value) if col_value is not None else "Unknown"
+                combo_values[col] = col_value
+                combo_key_parts.append(col_value)
+            
+            combo_key = tuple(combo_key_parts)
+            combo_counts[combo_key] += 1
+            # Store values dict for this combination (only need to store once per unique combo)
+            if combo_key not in combo_values_map:
+                combo_values_map[combo_key] = combo_values
         
-        # Get targets for combinations
-        for (first_value, second_value), conducted in sorted(combo_counts.items()):
-            combo_key = (first_value, second_value)
+        # Build detailed progress entries
+        for combo_key, conducted in sorted(combo_counts.items()):
+            # Get the values dict for this combination
+            values_dict = combo_values_map[combo_key]
+            
+            # Get target for this combination
             target = targets_by_combo.get(combo_key, 0)
+            
             detailed.append(DetailedProgress(
-                district=str(first_value),
-                livelihood=str(second_value),
+                values=values_dict,
                 conducted=conducted,
                 target=target,
                 progress=100.0 if target == 0 else round((conducted / target) * 100, 1)
             ))
     
+    # Build legacy fields for backward compatibility
+    by_district = by_column.get(sampling_cols[0], []) if sampling_cols else []
+    by_livelihood = by_column.get(sampling_cols[1], []) if len(sampling_cols) > 1 else []
+    
     return ProgressData(
         overall=overall,
-        byDistrict=by_district,
-        byLivelihood=by_livelihood,
+        byColumn=by_column,
         detailed=detailed,
         samplingColumns=sampling_cols,
+        byDistrict=by_district,  # Legacy
+        byLivelihood=by_livelihood,  # Legacy
     )
 
 

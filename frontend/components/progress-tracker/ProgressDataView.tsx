@@ -4,164 +4,177 @@ import { ProgressData } from '../../types';
 import ProgressBar from './ProgressBar';
 import { SubTabButton } from '../ui/SubTabButton';
 
-type ProgressSubTab = 'overall' | 'by-first' | 'by-second' | 'detailed';
+type ProgressSubTab = 'overall' | string; // string will be column name for "by-{columnName}"
 
 interface ProgressDataViewProps {
     data: ProgressData;
 }
 
 const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data }) => {
-    // Get column names from sampling columns
-    const firstColumnName = data.samplingColumns[0] || 'Sampling Column 1';
-    const secondColumnName = data.samplingColumns[1] || 'Sampling Column 2';
+    // Get all column names from sampling columns
+    const columnNames = data.samplingColumns || [];
     
-    // Determine default tab based on available data
-    const hasFirstColumn = data.byDistrict.length > 0;
-    const hasSecondColumn = data.byLivelihood.length > 0;
+    // Determine which tabs have data
+    const hasColumnTabs = Object.keys(data.byColumn || {}).length > 0;
     const hasDetailed = data.detailed.length > 0;
     
+    // Determine default tab
     const getDefaultTab = (): ProgressSubTab => {
         if (hasDetailed) return 'detailed';
-        if (hasFirstColumn) return 'by-first';
-        if (hasSecondColumn) return 'by-second';
+        if (hasColumnTabs && columnNames.length > 0) {
+            return `by-${columnNames[0]}`;
+        }
         return 'overall';
     };
     
     const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>(getDefaultTab());
     const [filter, setFilter] = useState('');
 
+    // Filter detailed data based on all column values
     const filteredDetailedData = useMemo(() => {
         if (!filter) return data.detailed;
         const lowercasedFilter = filter.toLowerCase();
-        return data.detailed.filter(row =>
-            row.district.toLowerCase().includes(lowercasedFilter) ||
-            row.livelihood.toLowerCase().includes(lowercasedFilter)
-        );
+        return data.detailed.filter(row => {
+            // Check if any column value matches the filter
+            return Object.values(row.values || {}).some(value =>
+                String(value).toLowerCase().includes(lowercasedFilter)
+            );
+        });
     }, [data.detailed, filter]);
     
     const renderContent = () => {
-        switch (activeSubTab) {
-            case 'overall':
-                return (
-                    <table className="min-w-full">
-                        <thead className="bg-gray-900">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
+        if (activeSubTab === 'overall') {
+            return (
+                <table className="min-w-full">
+                    <thead className="bg-gray-900">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-gray-850">
+                        <tr>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{data.overall.conducted}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{data.overall.target}</td>
+                            <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={data.overall.progress} /></td>
+                        </tr>
+                    </tbody>
+                </table>
+            );
+        }
+        
+        // Check if this is a "by-column" tab
+        if (activeSubTab.startsWith('by-')) {
+            const columnName = activeSubTab.replace('by-', '');
+            const columnData = data.byColumn?.[columnName] || [];
+            
+            return (
+                <table className="min-w-full">
+                    <thead className="bg-gray-900">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{columnName}</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-gray-850">
+                        {columnData.map(row => (
+                            <tr key={row.value}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{row.value}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{row.conducted}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{row.target}</td>
+                                <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                             </tr>
-                        </thead>
-                        <tbody className="bg-gray-850">
-                            <tr>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{data.overall.conducted}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{data.overall.target}</td>
-                                <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={data.overall.progress} /></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                );
-            case 'by-first':
-                 return (
-                    <table className="min-w-full">
-                        <thead className="bg-gray-900">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{firstColumnName}</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-gray-850">
-                            {data.byDistrict.map(row => (
-                                <tr key={row.district}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{row.district}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{row.conducted}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{row.target}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
+                        ))}
+                    </tbody>
+                </table>
+            );
+        }
+        
+        // Detailed view
+        if (activeSubTab === 'detailed') {
+            const filterPlaceholder = columnNames.length > 0
+                ? `Filter by ${columnNames.join(', ')}...`
+                : 'Filter...';
+            
+            return (
+                <>
+                    <input
+                        type="text"
+                        value={filter}
+                        onChange={(e) => setFilter(e.target.value)}
+                        placeholder={filterPlaceholder}
+                        className="w-full px-4 py-2 mb-4 bg-gray-800 border border-gray-700 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <div className="overflow-x-auto rounded-lg shadow-md">
+                        <table className="min-w-full">
+                            <thead className="bg-gray-900">
+                                <tr>
+                                    {columnNames.map(colName => (
+                                        <th key={colName} className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                            {colName}
+                                        </th>
+                                    ))}
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                );
-            case 'by-second':
-                return (
-                    <table className="min-w-full">
-                        <thead className="bg-gray-900">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{secondColumnName}</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-gray-850">
-                            {data.byLivelihood.map(row => (
-                                <tr key={row.livelihood}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{row.livelihood}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{row.conducted}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{row.target}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                );
-            case 'detailed':
-                return (
-                    <>
-                        <input
-                            type="text"
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            placeholder={`Filter by ${firstColumnName} or ${secondColumnName}...`}
-                            className="w-full px-4 py-2 mb-4 bg-gray-800 border border-gray-700 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <div className="overflow-x-auto rounded-lg shadow-md">
-                            <table className="min-w-full">
-                                <thead className="bg-gray-900">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{firstColumnName}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{secondColumnName}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-gray-850">
-                                    {filteredDetailedData.map((row, index) => (
-                                        <tr key={`${row.district}-${row.livelihood}-${index}`}>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{row.district}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{row.livelihood}</td>
+                            </thead>
+                            <tbody className="bg-gray-850">
+                                {filteredDetailedData.map((row, index) => {
+                                    const rowKey = Object.values(row.values || {}).join('-') + `-${index}`;
+                                    return (
+                                        <tr key={rowKey}>
+                                            {columnNames.map(colName => (
+                                                <td key={colName} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                                                    {row.values?.[colName] || 'Unknown'}
+                                                </td>
+                                            ))}
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-center">{row.target}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-center">{row.conducted}</td>
                                             <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </>
-                );
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            );
         }
+        
+        return null;
     };
 
     return (
         <div>
             <h3 className="text-xl font-bold mb-4 text-white">Data Collection Progress</h3>
             <div className="flex flex-wrap gap-2 mb-4">
-                <SubTabButton<ProgressSubTab> tabId="overall" activeTab={activeSubTab} onClick={setActiveSubTab}>Overall</SubTabButton>
-                {hasFirstColumn && (
-                    <SubTabButton<ProgressSubTab> tabId="by-first" activeTab={activeSubTab} onClick={setActiveSubTab}>
-                        By {firstColumnName}
-                    </SubTabButton>
-                )}
-                {hasSecondColumn && (
-                    <SubTabButton<ProgressSubTab> tabId="by-second" activeTab={activeSubTab} onClick={setActiveSubTab}>
-                        By {secondColumnName}
-                    </SubTabButton>
-                )}
+                <SubTabButton<ProgressSubTab> tabId="overall" activeTab={activeSubTab} onClick={setActiveSubTab}>
+                    Overall
+                </SubTabButton>
+                {Object.keys(data.byColumn || {}).map(columnName => {
+                    const columnData = data.byColumn[columnName];
+                    if (columnData && columnData.length > 0) {
+                        return (
+                            <SubTabButton<ProgressSubTab>
+                                key={columnName}
+                                tabId={`by-${columnName}`}
+                                activeTab={activeSubTab}
+                                onClick={setActiveSubTab}
+                            >
+                                By {columnName}
+                            </SubTabButton>
+                        );
+                    }
+                    return null;
+                })}
                 {hasDetailed && (
-                    <SubTabButton<ProgressSubTab> tabId="detailed" activeTab={activeSubTab} onClick={setActiveSubTab}>Detailed</SubTabButton>
+                    <SubTabButton<ProgressSubTab> tabId="detailed" activeTab={activeSubTab} onClick={setActiveSubTab}>
+                        Detailed
+                    </SubTabButton>
                 )}
             </div>
             <div className="p-4 bg-gray-900/50 border border-gray-700 rounded-lg overflow-x-auto">

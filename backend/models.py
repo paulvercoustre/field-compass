@@ -125,23 +125,17 @@ class OverallProgress(BaseModel):
     progress: float
 
 
-class ProgressByDistrict(BaseModel):
-    district: str
-    conducted: int
-    target: int
-    progress: float
-
-
-class ProgressByLivelihood(BaseModel):
-    livelihood: str
+class ProgressByColumn(BaseModel):
+    """Progress for a single value within a sampling column."""
+    value: str
     conducted: int
     target: int
     progress: float
 
 
 class DetailedProgress(BaseModel):
-    district: str
-    livelihood: str
+    """Progress for a combination of all sampling column values."""
+    values: Dict[str, str] = Field(..., description="Map of column name to value")
     target: int
     conducted: int
     progress: float
@@ -149,10 +143,19 @@ class DetailedProgress(BaseModel):
 
 class ProgressData(BaseModel):
     overall: OverallProgress
-    byDistrict: List[ProgressByDistrict]
-    byLivelihood: List[ProgressByLivelihood]
-    detailed: List[DetailedProgress]
+    byColumn: Dict[str, List[ProgressByColumn]] = Field(
+        default_factory=dict,
+        description="Progress disaggregated by each sampling column. Key is column name, value is list of progress by column value."
+    )
+    detailed: List[DetailedProgress] = Field(
+        default_factory=list,
+        description="Detailed progress for all combinations of sampling column values"
+    )
     samplingColumns: List[str] = Field(default_factory=list, description="Names of sampling columns used for disaggregation")
+    
+    # Legacy fields for backward compatibility (deprecated, use byColumn instead)
+    byDistrict: List[ProgressByColumn] = Field(default_factory=list, description="Deprecated: Use byColumn instead")
+    byLivelihood: List[ProgressByColumn] = Field(default_factory=list, description="Deprecated: Use byColumn instead")
 
 
 # ============================================================================

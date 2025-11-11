@@ -102,23 +102,15 @@ export interface OverallProgress {
   progress: number;
 }
 
-export interface ProgressByDistrict {
-  district: string;
-  conducted: number;
-  target: number;
-  progress: number;
-}
-
-export interface ProgressByLivelihood {
-  livelihood: string;
+export interface ProgressByColumn {
+  value: string;
   conducted: number;
   target: number;
   progress: number;
 }
 
 export interface DetailedProgress {
-  district: string;
-  livelihood: string;
+  values: Record<string, string>;  // Map of column name to value
   target: number;
   conducted: number;
   progress: number;
@@ -126,10 +118,12 @@ export interface DetailedProgress {
 
 export interface ProgressData {
   overall: OverallProgress;
-  byDistrict: ProgressByDistrict[];
-  byLivelihood: ProgressByLivelihood[];
+  byColumn: Record<string, ProgressByColumn[]>;  // Key is column name, value is list of progress by column value
   detailed: DetailedProgress[];
   samplingColumns: string[];
+  // Legacy fields for backward compatibility
+  byDistrict?: ProgressByColumn[];
+  byLivelihood?: ProgressByColumn[];
 }
 
 export interface EnumeratorCollectionStats {
