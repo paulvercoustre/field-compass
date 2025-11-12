@@ -57,9 +57,9 @@ const App: React.FC = () => {
         
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex-shrink-0 bg-gray-800 border-b border-gray-700">
-            <div className="flex items-center justify-between h-16 px-4 mx-auto max-w-screen-2xl sm:px-6 lg:px-8">
-              <h1 className="text-xl font-bold text-white">Field Compass</h1>
-              <nav className="flex flex-wrap items-center justify-end gap-2 sm:space-x-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 min-h-16 py-3 sm:py-0 sm:h-16 px-4 mx-auto max-w-screen-2xl sm:px-6 lg:px-8">
+              <h1 className="text-xl font-bold text-white flex-shrink-0">Field Compass</h1>
+              <nav className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
                 <NavButton currentView={view} targetView="dashboard" onClick={() => setView('dashboard')}>
                   QA Dashboard
                 </NavButton>
