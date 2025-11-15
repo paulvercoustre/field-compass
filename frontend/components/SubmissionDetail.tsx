@@ -30,7 +30,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
   const { _id, submission_data, is_edited, data_quality_issues, qa_status, kobo_validation_status } = submission;
   
   // Construct Kobo edit URL dynamically from selected survey's kobo_asset_id
-  const koboEditUrl = selectedSurvey?.kobo_asset_id 
+  const koboEditUrl = selectedSurvey?.kobo_asset_id && submission?._id
     ? `https://kf.kobotoolbox.org/#/forms/${selectedSurvey.kobo_asset_id}/data/table`
     : null;
 

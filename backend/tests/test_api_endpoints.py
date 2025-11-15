@@ -8,7 +8,7 @@ from database.models import Base, SurveyConfig, SubmissionCurrent
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from uuid import uuid4
+from uuid import uuid4, UUID
 from datetime import datetime
 
 # Create test database
@@ -125,7 +125,14 @@ def test_survey(client):
             "core_identifiers": {
                 "uuid": "_uuid",
                 "enumerator": "enumerator_id"
-            }
+            },
+            "sampling_frame": {
+                "sampling_cols": ["district"],
+                "frame_data": [
+                    {"district": "North", "target": 10},
+                    {"district": "South", "target": 15},
+                ],
+            },
         }
     }
     
@@ -227,4 +234,72 @@ class TestSubmissionsEndpoint:
         # All returned submissions should have FLAGGED status
         for sub in data["submissions"]:
             assert sub["qa_status"] == "FLAGGED"
+
+
+class TestProgressEndpoint:
+    """Tests for /api/progress endpoint."""
+
+    def test_progress_includes_sampling_targets_without_data(self, client, test_survey):
+        """Progress should list sampling frame targets even with zero submissions."""
+        response = client.get(f"/api/progress?survey_id={test_survey['survey_id']}")
+        assert response.status_code == 200
+        payload = response.json()
+
+        overall = payload["overall"]
+        assert overall["target"] == 25
+        assert overall["conducted"] == 0
+
+        by_district = payload["byColumn"].get("district", [])
+        assert len(by_district) == 2
+        north_row = next((row for row in by_district if row["value"] == "North"), None)
+        south_row = next((row for row in by_district if row["value"] == "South"), None)
+        assert north_row is not None
+        assert north_row["target"] == 10
+        assert north_row["conducted"] == 0
+        assert south_row is not None
+        assert south_row["target"] == 15
+        assert south_row["conducted"] == 0
+
+        detailed = payload["detailed"]
+        assert len(detailed) == 2
+        assert any(row["values"]["district"] == "North" and row["target"] == 10 and row["conducted"] == 0 for row in detailed)
+        assert any(row["values"]["district"] == "South" and row["target"] == 15 and row["conducted"] == 0 for row in detailed)
+
+    def test_progress_filters_approved_only(self, client, test_survey):
+        """Progress endpoint should respect the approved_only flag."""
+        survey_uuid = UUID(test_survey["survey_id"])
+
+        with TestingSessionLocal() as db:
+            submission_approved = SubmissionCurrent(
+                _id=1,
+                survey_id=survey_uuid,
+                _uuid=str(uuid4()),
+                _submission_time=datetime.utcnow(),
+                end=datetime.utcnow(),
+                submission_data={"enumerator_id": "enum-a"},
+                qa_status="APPROVED",
+            )
+            submission_pending = SubmissionCurrent(
+                _id=2,
+                survey_id=survey_uuid,
+                _uuid=str(uuid4()),
+                _submission_time=datetime.utcnow(),
+                end=datetime.utcnow(),
+                submission_data={"enumerator_id": "enum-b"},
+                qa_status="PENDING_APPROVAL",
+            )
+            db.add_all([submission_approved, submission_pending])
+            db.commit()
+
+        response_all = client.get(f"/api/progress?survey_id={test_survey['survey_id']}")
+        assert response_all.status_code == 200
+        overall_all = response_all.json()["overall"]
+        assert overall_all["conducted"] == 2
+
+        response_approved = client.get(
+            f"/api/progress?survey_id={test_survey['survey_id']}&approved_only=true"
+        )
+        assert response_approved.status_code == 200
+        overall_approved = response_approved.json()["overall"]
+        assert overall_approved["conducted"] == 1
 

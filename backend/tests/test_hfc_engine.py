@@ -23,7 +23,7 @@ class TestDetermineQAStatus:
         assert status == "APPROVED"
     
     def test_status_with_issues_and_approved(self, test_db, test_survey_config):
-        """Test status when HFC finds issues but Kobo says Approved - should be FLAGGED."""
+        """Kobo approval should keep status as APPROVED even if HFC finds issues."""
         engine = HFCEngine(test_db, test_survey_config)
         issues = [
             QualityIssue(check="outlier", field="age", value=150, message="Age is an outlier")
@@ -32,8 +32,7 @@ class TestDetermineQAStatus:
         
         status = engine.determine_qa_status(issues, kobo_validation_status=kobo_status)
         
-        # HFC issues take priority over Kobo approval
-        assert status == "FLAGGED"
+        assert status == "APPROVED"
     
     def test_status_with_no_issues_and_rejected(self, test_db, test_survey_config):
         """Test status when no HFC issues but Kobo says Not Approved - should be REJECTED."""

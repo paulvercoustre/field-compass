@@ -14,14 +14,15 @@ const DataCollectionProgressPage: React.FC = () => {
   const [etlStats, setEtlStats] = useState<ETLStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [approvedOnly, setApprovedOnly] = useState(true);
 
   const fetchData = useCallback(async () => {
     if (!selectedSurvey) return;
-    
+
     setIsLoading(true);
     setError(null);
     try {
-      const progress = await progressApi.getProgressData(selectedSurvey.survey_id);
+      const progress = await progressApi.getProgressData(selectedSurvey.survey_id, { approvedOnly });
       setProgressData(progress);
     } catch (e) {
       setError('Failed to fetch tracking data.');
@@ -29,7 +30,7 @@ const DataCollectionProgressPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedSurvey]);
+  }, [selectedSurvey, approvedOnly]);
 
   useEffect(() => {
     fetchData();
@@ -69,7 +70,26 @@ const DataCollectionProgressPage: React.FC = () => {
       <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Data Collection Progress</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-gray-100">Approved surveys only</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={approvedOnly}
+                aria-label="Toggle approved surveys only"
+                onClick={() => setApprovedOnly((prev) => !prev)}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                  approvedOnly ? 'bg-indigo-500 shadow-lg shadow-indigo-500/30' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+                    approvedOnly ? 'translate-x-5' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
             {etlStats && (
               <div className="text-sm text-gray-400">
                 <span className="text-green-400">✓</span> Last run: {etlStats.duration_seconds.toFixed(1)}s
@@ -118,7 +138,7 @@ const DataCollectionProgressPage: React.FC = () => {
           <div className="p-4 text-center text-red-400">{error}</div>
         ) : (
           <div className="bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-screen-2xl">
-            {progressData && <ProgressDataView data={progressData} />}
+            {progressData && <ProgressDataView data={progressData} approvedOnly={approvedOnly} />}
           </div>
         )}
       </div>

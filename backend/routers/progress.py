@@ -98,7 +98,7 @@ def _calculate_targets_from_frame(
     frame_data: List[Dict[str, Any]],
     sampling_cols: List[str],
     target_column: Optional[str] = None
-) -> Tuple[int, Dict[str, int], Dict[Tuple, int]]:
+) -> Tuple[int, Dict[str, Dict[str, int]], Dict[Tuple[str, ...], int], Dict[Tuple[str, ...], Dict[str, str]]]:
     """
     Calculate targets from sampling frame data.
     
@@ -106,13 +106,20 @@ def _calculate_targets_from_frame(
         - total_target: Sum of all target values
         - targets_by_col: Dict mapping column_name -> value -> target count
         - targets_by_combo: Dict mapping (col1_value, col2_value, ...) -> target count
+        - combo_values_map: Dict mapping combo tuple to dict of column -> value
     """
     total_target = 0
     targets_by_col: Dict[str, Dict[str, int]] = {col: defaultdict(int) for col in sampling_cols}
     targets_by_combo: Dict[Tuple, int] = defaultdict(int)
+    combo_values_map: Dict[Tuple[str, ...], Dict[str, str]] = {}
     
     if not frame_data:
-        return total_target, {col: dict(targets_by_col[col]) for col in sampling_cols}, dict(targets_by_combo)
+        return (
+            total_target,
+            {col: dict(targets_by_col[col]) for col in sampling_cols},
+            dict(targets_by_combo),
+            combo_values_map,
+        )
     
     # Find target column if not provided
     if not target_column and frame_data:
@@ -139,6 +146,8 @@ def _calculate_targets_from_frame(
             if col in row:
                 col_value = str(row[col]) if row[col] is not None else "Unknown"
                 targets_by_col[col][col_value] += target_value
+            else:
+                targets_by_col[col]["Unknown"] += target_value
         
         # Aggregate by combination of all sampling columns
         combo_key = tuple(
@@ -146,13 +155,26 @@ def _calculate_targets_from_frame(
             for col in sampling_cols
         )
         targets_by_combo[combo_key] += target_value
+        combo_values_map[combo_key] = {
+            col: (str(row.get(col)) if row.get(col) is not None else "Unknown")
+            for col in sampling_cols
+        }
     
-    return total_target, {col: dict(targets_by_col[col]) for col in sampling_cols}, dict(targets_by_combo)
+    return (
+        total_target,
+        {col: dict(targets_by_col[col]) for col in sampling_cols},
+        dict(targets_by_combo),
+        combo_values_map,
+    )
 
 
 @router.get("/progress", response_model=ProgressData)
 async def get_progress_data(
     survey_id: Optional[str] = Query(None, description="Filter by survey ID (UUID)"),
+    approved_only: bool = Query(
+        False,
+        description="When true, only count submissions whose qa_status is APPROVED.",
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -171,6 +193,10 @@ async def get_progress_data(
     if survey_config:
         query = query.filter(SubmissionCurrent.survey_id == survey_config.survey_id)
     
+    # Filter to approved submissions if requested
+    if approved_only:
+        query = query.filter(SubmissionCurrent.qa_status == "APPROVED")
+
     # Get all submissions (completed surveys)
     submissions = query.all()
     
@@ -194,7 +220,12 @@ async def get_progress_data(
                     break
     
     # Calculate targets from sampling frame
-    total_target, targets_by_col, targets_by_combo = _calculate_targets_from_frame(
+    (
+        total_target,
+        targets_by_col,
+        targets_by_combo,
+        targets_combo_values
+    ) = _calculate_targets_from_frame(
         frame_data, sampling_cols, target_column
     )
     
@@ -221,9 +252,11 @@ async def get_progress_data(
         # Get targets for this column
         col_targets = targets_by_col.get(col, {})
         
-        # Build progress list for this column
+        # Build progress list for this column ensuring targets with zero conducted are included
+        all_values = set(col_counts.keys()) | set(col_targets.keys())
         column_progress = []
-        for col_value, conducted in sorted(col_counts.items()):
+        for col_value in sorted(all_values):
+            conducted = col_counts.get(col_value, 0)
             target = col_targets.get(col_value, 0)
             column_progress.append(ProgressByColumn(
                 value=str(col_value),
@@ -257,14 +290,19 @@ async def get_progress_data(
             if combo_key not in combo_values_map:
                 combo_values_map[combo_key] = combo_values
         
+        # Include combinations from frame even if no submissions
+        all_combo_keys = set(combo_counts.keys()) | set(targets_by_combo.keys())
+
         # Build detailed progress entries
-        for combo_key, conducted in sorted(combo_counts.items()):
-            # Get the values dict for this combination
-            values_dict = combo_values_map[combo_key]
-            
-            # Get target for this combination
+        for combo_key in sorted(all_combo_keys):
+            conducted = combo_counts.get(combo_key, 0)
             target = targets_by_combo.get(combo_key, 0)
-            
+
+            # Get the values dict for this combination
+            values_dict = combo_values_map.get(combo_key) or targets_combo_values.get(combo_key) or {
+                col: "Unknown" for col in sampling_cols
+            }
+
             detailed.append(DetailedProgress(
                 values=values_dict,
                 conducted=conducted,

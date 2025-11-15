@@ -8,9 +8,10 @@ type ProgressSubTab = 'overall' | string; // string will be column name for "by-
 
 interface ProgressDataViewProps {
     data: ProgressData;
+    approvedOnly?: boolean;
 }
 
-const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data }) => {
+const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data, approvedOnly = false }) => {
     // Get all column names from sampling columns
     const columnNames = data.samplingColumns || [];
     
@@ -150,7 +151,14 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data }) => {
 
     return (
         <div>
-            <h3 className="text-xl font-bold mb-4 text-white">Data Collection Progress</h3>
+            <div className="flex items-center justify-between gap-2 mb-4">
+                <h3 className="text-xl font-bold text-white">Data Collection Progress</h3>
+                {approvedOnly && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/40 bg-indigo-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-100">
+                        Approved surveys only
+                    </span>
+                )}
+            </div>
             <div className="flex flex-wrap gap-2 mb-4">
                 <SubTabButton<ProgressSubTab> tabId="overall" activeTab={activeSubTab} onClick={setActiveSubTab}>
                     Overall

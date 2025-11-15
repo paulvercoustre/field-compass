@@ -505,8 +505,8 @@ class HFCEngine:
         Status priority:
         1. If Kobo = "Not Approved" or "Flagged for Removal" → REJECTED (highest priority)
         2. If Kobo = "On Hold" → Don't change (keep current status)
-        3. If HFC finds issues → FLAGGED (unless already rejected in Kobo)
-        4. If Kobo = "Approved" and no HFC issues → APPROVED
+        3. If Kobo = "Approved" → APPROVED (Kobo is source of truth even if HFC finds issues)
+        4. If HFC finds issues → FLAGGED (when Kobo hasn't approved and submission isn't rejected)
         5. If no Kobo status and no HFC issues → PENDING_APPROVAL
         
         Args:
@@ -530,8 +530,8 @@ class HFCEngine:
                 # This will be handled by the caller
                 return None
             
-            # If Kobo says Approved and no HFC issues, approve
-            if kobo_status_lower == "approved" and not issues:
+            # If Kobo says Approved, Kobo remains source of truth regardless of HFC issues
+            if kobo_status_lower == "approved":
                 return "APPROVED"
         
         # If HFC finds issues, flag (unless already rejected in Kobo, which we checked above)

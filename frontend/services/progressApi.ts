@@ -82,12 +82,19 @@ export const getSurveys = async (): Promise<Survey[]> => {
  * Fetch progress data from the API
  * @param surveyId Optional survey ID to filter by (UUID string)
  */
+export interface ProgressQueryOptions {
+  approvedOnly?: boolean;
+}
+
 export const progressApi = {
-  getProgressData: async (surveyId?: string): Promise<ProgressData> => {
+  getProgressData: async (surveyId?: string, options: ProgressQueryOptions = {}): Promise<ProgressData> => {
     try {
       const params = new URLSearchParams();
       if (surveyId) {
         params.append('survey_id', surveyId);
+      }
+      if (options.approvedOnly) {
+        params.append('approved_only', 'true');
       }
 
       const url = `${API_BASE_URL}/api/progress${params.toString() ? `?${params}` : ''}`;
