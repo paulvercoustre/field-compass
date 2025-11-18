@@ -11,7 +11,10 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 from services.database import get_db
-from database.models import SurveyConfig
+from database.models import SurveyConfig, SubmissionCurrent, ValidationRule
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -181,7 +184,12 @@ async def delete_survey(
 ):
     """
     Delete a survey and all associated data.
-    WARNING: This will permanently delete the survey configuration and all related data.
+    WARNING: This will permanently delete the survey configuration and all related data:
+    - All submissions (submissions_current and submissions_history)
+    - All validation rules
+    - The survey configuration itself
+    
+    This operation cannot be undone.
     """
     try:
         survey_uuid = UUID(survey_id)
@@ -196,12 +204,55 @@ async def delete_survey(
     if not survey:
         raise HTTPException(status_code=404, detail=f"Survey {survey_id} not found")
     
-    # TODO: In the future, we may want to cascade delete related data (submissions, validation rules, etc.)
-    # For now, we'll just delete the survey config
-    # Note: If there are foreign key constraints, we may need to delete related records first
+    survey_name = survey.survey_name
     
-    db.delete(survey)
-    db.commit()
-    
-    return {"message": f"Survey '{survey.survey_name}' has been deleted successfully"}
+    try:
+        # Step 1: Delete all submissions_current for this survey
+        # Note: submissions_history will be automatically deleted due to CASCADE constraint
+        submissions_count = db.query(SubmissionCurrent).filter(
+            SubmissionCurrent.survey_id == survey_uuid
+        ).count()
+        
+        if submissions_count > 0:
+            logger.info(f"Deleting {submissions_count} submissions for survey {survey_id}")
+            db.query(SubmissionCurrent).filter(
+                SubmissionCurrent.survey_id == survey_uuid
+            ).delete()
+            logger.info(f"Deleted {submissions_count} submissions for survey {survey_id}")
+        
+        # Step 2: Delete all validation rules for this survey
+        # Note: These will be automatically deleted due to CASCADE constraint,
+        # but we count them for logging purposes
+        rules_count = db.query(ValidationRule).filter(
+            ValidationRule.survey_id == survey_uuid
+        ).count()
+        
+        if rules_count > 0:
+            logger.info(f"Deleting {rules_count} validation rules for survey {survey_id}")
+            # Validation rules will be auto-deleted by CASCADE, but we can delete explicitly
+            # for clarity and to ensure they're gone before the survey is deleted
+            db.query(ValidationRule).filter(
+                ValidationRule.survey_id == survey_uuid
+            ).delete()
+            logger.info(f"Deleted {rules_count} validation rules for survey {survey_id}")
+        
+        # Step 3: Delete the survey configuration itself
+        db.delete(survey)
+        db.commit()
+        
+        logger.info(f"Successfully deleted survey {survey_id} ({survey_name}) with {submissions_count} submissions and {rules_count} validation rules")
+        
+        return {
+            "message": f"Survey '{survey_name}' has been deleted successfully",
+            "deleted_submissions": submissions_count,
+            "deleted_validation_rules": rules_count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting survey {survey_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete survey: {str(e)}"
+        )
 

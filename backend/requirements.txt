@@ -10,6 +10,7 @@ pandas==2.2.3
 jsonpatch==1.33
 jsondiff==2.0.0
 python-multipart==0.0.12
+simpleeval==0.9.13
 # Testing
 pytest==8.3.4
 pytest-asyncio==0.24.0

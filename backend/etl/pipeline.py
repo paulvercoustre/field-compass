@@ -122,9 +122,10 @@ class ETLPipeline:
                                 kobo_token=kobo_token
                             )
                             if audit_metrics:
-                                # Add active_interview_time to submission_data
+                                # Add audit metrics to submission_data
                                 parsed['submission_data']['active_interview_time'] = audit_metrics.get('active_interview_time')
-                                logger.debug(f"Added audit metrics for {submission_uuid}: active_time={audit_metrics.get('active_interview_time')} min")
+                                parsed['submission_data']['total_duration'] = audit_metrics.get('total_duration')
+                                logger.debug(f"Added audit metrics for {submission_uuid}: active_time={audit_metrics.get('active_interview_time')} min, total_duration={audit_metrics.get('total_duration')} min")
                         except Exception as e:
                             logger.warning(f"Failed to process audit log for {submission_uuid}: {e}")
                     
@@ -241,8 +242,9 @@ class ETLPipeline:
                     kobo_token=kobo_token
                 )
                 if audit_metrics:
-                    # Add active_interview_time to submission_data
+                    # Add audit metrics to submission_data
                     parsed['submission_data']['active_interview_time'] = audit_metrics.get('active_interview_time')
+                    parsed['submission_data']['total_duration'] = audit_metrics.get('total_duration')
             except Exception as e:
                 logger.warning(f"Failed to process audit log for {submission_uuid}: {e}")
         

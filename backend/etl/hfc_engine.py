@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 import logging
+from simpleeval import SimpleEval
 
 from database.models import ValidationRule, SurveyConfig
 from models import QualityIssue
@@ -406,7 +407,6 @@ class HFCEngine:
                 # Use the variable name from config in the expression, but get value from actual path
                 eval_context[var] = value
                 logger.debug(f"Rule '{check_id}': variable '{var}' = {value} (from field '{field_path}')")
-            eval_context['__builtins__'] = {}
             
             logger.debug(f"Rule '{check_id}': evaluating expression '{check_expression}' with context {eval_context}")
             
@@ -435,41 +435,20 @@ class HFCEngine:
     
     def _safe_eval(self, expression: str, context: Dict[str, Any]) -> bool:
         """
-        Safely evaluate a boolean expression.
+        Safely evaluate a boolean expression using simpleeval.
         
-        This is a simplified evaluator. For production, consider using:
-        - ast.literal_eval for simple expressions
-        - A proper expression parser library
-        - Restricted Python execution environment
+        Uses the simpleeval library which provides a safe expression evaluator
+        that prevents code injection attacks while supporting common Python
+        expressions and operators.
+        
+        Args:
+            expression: Expression string to evaluate (e.g., "age > 90")
+            context: Dictionary of variable names to values
+            
+        Returns:
+            Boolean result of the expression evaluation
         """
         try:
-            # Replace variable names with their values
-            # Need to format values properly: quote strings, keep numbers as-is
-            for var, value in context.items():
-                if var == '__builtins__':
-                    continue
-                # Escape special regex characters
-                var_pattern = re.escape(var)
-                
-                # Format the value for replacement
-                if isinstance(value, str):
-                    # String values need to be quoted
-                    # Escape any quotes in the string value itself
-                    escaped_value = value.replace('"', '\\"')
-                    replacement = f'"{escaped_value}"'
-                elif isinstance(value, (int, float)):
-                    # Numeric values don't need quotes
-                    replacement = str(value)
-                elif value is None:
-                    # None becomes None (Python keyword)
-                    replacement = "None"
-                else:
-                    # For other types, convert to string and quote
-                    replacement = f'"{str(value)}"'
-                
-                # Replace variable names (whole word match)
-                expression = re.sub(rf'\b{var_pattern}\b', replacement, expression)
-            
             # Convert logical operators from frontend format to Python format
             # Frontend uses & and |, Python uses 'and' and 'or'
             # Need to be careful: & and | can appear in other contexts (like & in "&" string)
@@ -477,23 +456,25 @@ class HFCEngine:
             expression = re.sub(r'\s+&\s+', ' and ', expression)
             expression = re.sub(r'\s+\|\s+', ' or ', expression)
             
-            logger.debug(f"After variable replacement and operator conversion: {expression}")
+            logger.debug(f"After operator conversion: {expression}")
+            
+            # Prepare names dictionary for simpleeval (exclude __builtins__)
+            names = {k: v for k, v in context.items() if k != '__builtins__'}
+            
+            logger.debug(f"Evaluating expression '{expression}' with names: {list(names.keys())}")
+            
+            # Create SimpleEval instance with names from context
+            # SimpleEval is safe by default - it doesn't allow dangerous operations
+            evaluator = SimpleEval(names=names)
             
             # Evaluate the expression
-            # WARNING: This uses eval() which can be unsafe. In production, use a proper parser.
-            # For now, we'll restrict to simple comparisons and basic math
-            # Allow quotes for string literals, and 'and'/'or' keywords
-            # Check that expression only contains safe characters
-            # Allow alphanumeric, spaces, operators, quotes, and Python keywords 'and'/'or'
-            safe_chars = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+-*/.()<>=! "\' ')
-            if all(c in safe_chars or c.isspace() for c in expression):
-                result = eval(expression, {"__builtins__": {}})
-                return bool(result)
-            else:
-                # Log which characters are problematic
-                problematic = [c for c in expression if c not in safe_chars and not c.isspace()]
-                logger.warning(f"Expression contains disallowed characters: {problematic} in expression: {expression}")
-                return False
+            result = evaluator.eval(expression)
+            
+            logger.debug(f"Expression result: {result}")
+            
+            # Convert result to boolean
+            return bool(result)
+            
         except Exception as e:
             logger.warning(f"Error evaluating expression '{expression}': {e}", exc_info=True)
             return False

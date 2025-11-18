@@ -333,8 +333,14 @@ async def get_performance_data(
     Get enumerator performance metrics.
     Returns collection stats and quality metrics per enumerator.
     
-    Note: Some metrics (active time, DK rate) require audit log processing
-    which will be implemented in the ETL pipeline.
+    Quality metrics include:
+    - avgActiveTime: Average active interview time (minutes) from audit logs
+    - avgTotalTime: Average total duration (minutes) from audit logs
+    - avgDkRate: Average percentage of "Don't Know" values per submission
+    - avgIssuesPerSurvey: Average number of quality issues per submission
+    
+    Note: Active time and total time metrics require audit logs to be processed
+    during ETL. If audit logs are not available, these values will be 0.
     """
     # Get survey config to find enumerator field name
     survey_config = _get_survey_config(db, survey_id)
@@ -352,13 +358,73 @@ async def get_performance_data(
     
     submissions = query.all()
     
+    # Get DK values from survey config for DK rate calculation
+    dk_value = None
+    dk_string_value = None
+    if survey_config and survey_config.config_data:
+        config = survey_config.config_data
+        special_values = config.get("special_values", {})
+        dk_value = special_values.get("dk_value")
+        dk_string_value = special_values.get("dk_string_value")
+    
     # Aggregate by enumerator
     enum_collection_stats = defaultdict(lambda: {
         "needsReview": 0,
         "validated": 0,
         "total": 0,
-        "total_issues": 0
+        "total_issues": 0,
+        "active_times": [],  # List of active_interview_time values (minutes)
+        "total_times": [],   # List of total_duration values (minutes)
+        "dk_rates": []       # List of DK rates per submission (percentage)
     })
+    
+    def _count_dk_values(submission_data: Dict[str, Any], dk_value: Any, dk_string_value: Any) -> Tuple[int, int]:
+        """
+        Count DK values in submission data.
+        
+        Returns:
+            Tuple of (dk_count, total_field_count)
+        """
+        dk_count = 0
+        total_count = 0
+        
+        def _check_value(value: Any) -> bool:
+            """Check if a value is a DK value."""
+            if value is None:
+                return False
+            if isinstance(value, (int, float)) and dk_value is not None and value == dk_value:
+                return True
+            if isinstance(value, str) and dk_string_value and value == dk_string_value:
+                return True
+            return False
+        
+        def _traverse_dict(data: Dict[str, Any], path: str = ""):
+            """Recursively traverse dictionary to count fields."""
+            nonlocal dk_count, total_count
+            
+            for key, value in data.items():
+                current_path = f"{path}.{key}" if path else key
+                
+                if isinstance(value, dict):
+                    # Recursively process nested dictionaries
+                    _traverse_dict(value, current_path)
+                elif isinstance(value, list):
+                    # Process list items
+                    for i, item in enumerate(value):
+                        if isinstance(item, dict):
+                            _traverse_dict(item, f"{current_path}[{i}]")
+                        else:
+                            total_count += 1
+                            if _check_value(item):
+                                dk_count += 1
+                else:
+                    # Leaf value
+                    total_count += 1
+                    if _check_value(value):
+                        dk_count += 1
+        
+        _traverse_dict(submission_data)
+        return dk_count, total_count
     
     for sub in submissions:
         enum_id = _get_field_value(sub.submission_data, enumerator_field) or "Unknown"
@@ -374,6 +440,30 @@ async def get_performance_data(
         # Count issues
         if sub.data_quality_issues:
             enum_collection_stats[enum_id]["total_issues"] += len(sub.data_quality_issues)
+        
+        # Extract audit log metrics from submission_data
+        active_time = sub.submission_data.get('active_interview_time')
+        if active_time is not None:
+            try:
+                active_time_float = float(active_time)
+                enum_collection_stats[enum_id]["active_times"].append(active_time_float)
+            except (ValueError, TypeError):
+                pass  # Skip invalid values
+        
+        total_time = sub.submission_data.get('total_duration')
+        if total_time is not None:
+            try:
+                total_time_float = float(total_time)
+                enum_collection_stats[enum_id]["total_times"].append(total_time_float)
+            except (ValueError, TypeError):
+                pass  # Skip invalid values
+        
+        # Calculate DK rate for this submission
+        if dk_value is not None or dk_string_value:
+            dk_count, total_fields = _count_dk_values(sub.submission_data, dk_value, dk_string_value)
+            if total_fields > 0:
+                dk_rate = (dk_count / total_fields) * 100
+                enum_collection_stats[enum_id]["dk_rates"].append(dk_rate)
     
     # Build collection stats
     collection = []
@@ -391,18 +481,36 @@ async def get_performance_data(
             percentNeedsReview=f"{round((needs_review / total * 100) if total > 0 else 0, 1)}%"
         ))
     
-    # Build quality stats (placeholder for now - requires audit log processing)
+    # Build quality stats with calculated metrics from audit logs
     quality = []
     for enum_id in sorted(enum_collection_stats.keys()):
         stats = enum_collection_stats[enum_id]
         total = stats["total"]
         avg_issues = round(stats["total_issues"] / total if total > 0 else 0, 2)
         
+        # Calculate average active time (in minutes, rounded to nearest integer)
+        active_times = stats["active_times"]
+        avg_active_time = 0
+        if active_times:
+            avg_active_time = round(sum(active_times) / len(active_times))
+        
+        # Calculate average total time (in minutes, rounded to nearest integer)
+        total_times = stats["total_times"]
+        avg_total_time = 0
+        if total_times:
+            avg_total_time = round(sum(total_times) / len(total_times))
+        
+        # Calculate average DK rate (percentage)
+        dk_rates = stats["dk_rates"]
+        avg_dk_rate = 0.0
+        if dk_rates:
+            avg_dk_rate = round(sum(dk_rates) / len(dk_rates), 1)
+        
         quality.append(EnumeratorQualityStats(
             id=enum_id,
-            avgActiveTime=0,  # TODO: Calculate from audit logs
-            avgTotalTime=0,   # TODO: Calculate from audit logs
-            avgDkRate="0%",  # TODO: Calculate from submission data
+            avgActiveTime=avg_active_time,
+            avgTotalTime=avg_total_time,
+            avgDkRate=f"{avg_dk_rate}%",
             avgIssuesPerSurvey=avg_issues
         ))
     
