@@ -5,11 +5,13 @@ Handles CRUD operations for survey submissions.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from sqlalchemy import or_, and_
+from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
+import json
 
 from services.database import get_db
-from database.models import SubmissionCurrent, SubmissionHistory as SubmissionHistoryORM
+from database.models import SubmissionCurrent, SubmissionHistory as SubmissionHistoryORM, SurveyConfig
 from models import Submission, SubmissionHistory, SubmissionListResponse, QualityIssue, JsonPatch
 
 router = APIRouter()
@@ -54,10 +56,43 @@ def _orm_to_pydantic_history(orm_history: SubmissionHistoryORM) -> SubmissionHis
     )
 
 
+def _get_field_value_from_jsonb(submission_data: Dict[str, Any], field_name: str) -> Any:
+    """
+    Get field value from JSONB submission_data, handling Kobo path-based field names.
+    
+    Kobo stores fields with full paths like 'module/variable', but config may only
+    specify 'variable'. This function searches for the field by:
+    1. Direct lookup (exact match)
+    2. Path-based search (field name at end of path)
+    
+    Args:
+        submission_data: Submission data dictionary
+        field_name: Field name from config (may be just the variable name)
+        
+    Returns:
+        Field value or None if not found
+    """
+    # First try direct lookup
+    if field_name in submission_data:
+        return submission_data[field_name]
+    
+    # Search for fields that end with the field name (path-based)
+    # e.g., 'enumerator_id' should match 'sampling_information/enumerator_id'
+    for key in submission_data.keys():
+        if key.endswith(f'/{field_name}') or key == field_name:
+            return submission_data[key]
+    
+    # Not found
+    return None
+
+
 @router.get("/submissions", response_model=SubmissionListResponse)
 async def get_submissions(
     qa_status: Optional[str] = Query(None, description="Filter by QA status"),
     survey_id: Optional[str] = Query(None, description="Filter by survey ID (UUID)"),
+    enumerator: Optional[str] = Query(None, description="Filter by enumerator ID/value"),
+    sampling_variable: Optional[str] = Query(None, description="Filter by sampling variable name (e.g., 'district')"),
+    sampling_value: Optional[str] = Query(None, description="Filter by sampling variable value (requires sampling_variable)"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
@@ -68,35 +103,92 @@ async def get_submissions(
     Supports filtering by:
     - qa_status: HFC_FLAGGED, PENDING_QA, PENDING_RE_QA, APPROVED
     - survey_id: Filter by specific survey (UUID)
+    - enumerator: Filter by enumerator ID/value (searches in submission_data)
+    - sampling_variable: Filter by sampling variable name (e.g., 'district', 'livelihood')
+    - sampling_value: Filter by sampling variable value (requires sampling_variable)
     
     Returns paginated results with total count.
     """
     # Build query
     query = db.query(SubmissionCurrent)
     
-    # Apply filters
-    if qa_status:
-        query = query.filter(SubmissionCurrent.qa_status == qa_status)
-    
+    # Get survey config if survey_id is provided (needed for field name resolution)
+    survey_config = None
     if survey_id:
         try:
             survey_uuid = UUIDType(survey_id)
             query = query.filter(SubmissionCurrent.survey_id == survey_uuid)
+            survey_config = db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_uuid).first()
         except ValueError:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
             )
+    elif enumerator or sampling_variable:
+        # If filtering by enumerator or sampling variable, we need survey_id
+        raise HTTPException(
+            status_code=400,
+            detail="survey_id is required when filtering by enumerator or sampling variables"
+        )
     
-    # Get total count before pagination
-    total = query.count()
+    # Apply qa_status filter
+    if qa_status:
+        query = query.filter(SubmissionCurrent.qa_status == qa_status)
+    
+    # Get all submissions (we'll filter by JSONB fields in Python)
+    # Note: This could be optimized with PostgreSQL JSONB queries, but filtering
+    # in Python is more reliable for path-based field matching
+    orm_submissions = query.order_by(SubmissionCurrent._submission_time.desc()).all()
+    
+    # Get enumerator field name from survey config
+    enumerator_field = None
+    if survey_config and survey_config.config_data:
+        config = survey_config.config_data
+        core_ids = config.get("core_identifiers", {})
+        enumerator_field = core_ids.get("enumerator", "enumerator_id")
+    
+    # Get sampling columns from survey config
+    sampling_cols = []
+    if survey_config and survey_config.config_data:
+        config = survey_config.config_data
+        sampling_frame_config = config.get("sampling_frame", {})
+        sampling_cols = sampling_frame_config.get("sampling_cols", [])
+    
+    # Filter by enumerator if provided
+    if enumerator and enumerator_field:
+        filtered_submissions = []
+        for sub in orm_submissions:
+            if sub.submission_data:
+                enum_value = _get_field_value_from_jsonb(sub.submission_data, enumerator_field)
+                if enum_value and str(enum_value) == str(enumerator):
+                    filtered_submissions.append(sub)
+        orm_submissions = filtered_submissions
+    
+    # Filter by sampling variable if provided
+    if sampling_variable and sampling_value:
+        if sampling_variable not in sampling_cols:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid sampling_variable '{sampling_variable}'. Available variables: {', '.join(sampling_cols)}"
+            )
+        
+        filtered_submissions = []
+        for sub in orm_submissions:
+            if sub.submission_data:
+                var_value = _get_field_value_from_jsonb(sub.submission_data, sampling_variable)
+                if var_value and str(var_value) == str(sampling_value):
+                    filtered_submissions.append(sub)
+        orm_submissions = filtered_submissions
+    
+    # Get total count after JSONB filtering
+    total = len(orm_submissions)
     
     # Apply pagination
     offset = (page - 1) * page_size
-    orm_submissions = query.order_by(SubmissionCurrent._submission_time.desc()).offset(offset).limit(page_size).all()
+    paginated_submissions = orm_submissions[offset:offset + page_size]
     
     # Convert to Pydantic models
-    submissions = [_orm_to_pydantic_submission(sub) for sub in orm_submissions]
+    submissions = [_orm_to_pydantic_submission(sub) for sub in paginated_submissions]
     
     return SubmissionListResponse(
         submissions=submissions,

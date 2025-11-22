@@ -5,11 +5,6 @@ import { Spinner } from './Spinner';
 const SurveySelector: React.FC = () => {
   const { selectedSurvey, surveys, isLoading, error, setSelectedSurvey } = useSurvey();
 
-  // Debug: log surveys when they change
-  React.useEffect(() => {
-    console.log('SurveySelector - surveys updated:', surveys.length, surveys);
-  }, [surveys]);
-
   if (isLoading) {
     return (
       <div className="flex items-center gap-2">

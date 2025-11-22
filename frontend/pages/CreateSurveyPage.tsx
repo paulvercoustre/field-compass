@@ -211,13 +211,6 @@ const CreateSurveyPage: React.FC = () => {
           survey: koboToolData.survey,
           choices: koboToolData.choices,
         } : undefined,
-        // TODO: Save validation rules to database when API is ready
-        // validation_rules: stagedRules.map(rule => ({
-        //   description: rule.description,
-        //   issue_message: rule.issue_message,
-        //   conditions: rule.conditions,
-        //   roster_name: rule.roster_name,
-        // })),
       };
 
       const newSurvey = await createSurvey({

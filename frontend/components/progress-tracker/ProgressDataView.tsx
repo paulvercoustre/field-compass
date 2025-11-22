@@ -19,16 +19,8 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data, approvedOnly 
     const hasColumnTabs = Object.keys(data.byColumn || {}).length > 0;
     const hasDetailed = data.detailed.length > 0;
     
-    // Determine default tab
-    const getDefaultTab = (): ProgressSubTab => {
-        if (hasDetailed) return 'detailed';
-        if (hasColumnTabs && columnNames.length > 0) {
-            return `by-${columnNames[0]}`;
-        }
-        return 'overall';
-    };
-    
-    const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>(getDefaultTab());
+    // Always default to 'overall' tab when page first loads
+    const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>('overall');
     const [filter, setFilter] = useState('');
 
     // Filter detailed data based on all column values

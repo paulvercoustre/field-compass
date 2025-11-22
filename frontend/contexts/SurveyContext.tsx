@@ -35,7 +35,6 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
     setError(null);
     try {
       const data = await getSurveys();
-      console.log('Refreshed surveys:', data); // Debug log
       
       // Update surveys state
       setSurveys(data);
