@@ -1,47 +1,107 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Submission, SubmissionHistory } from '../types';
+import { Submission, SubmissionHistory, FilterState } from '../types';
 import { api } from '../services/api';
 import { useSurvey } from '../contexts/SurveyContext';
-import { triggerETL, ETLStats } from '../services/progressApi';
+import { triggerETL, ETLStats, getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import SubmissionList from './SubmissionList';
 import SubmissionDetail from './SubmissionDetail';
+import SubmissionFilters from './SubmissionFilters';
 import { Spinner } from './Spinner';
 
 const Dashboard: React.FC = () => {
   const { selectedSurvey } = useSurvey();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [allSubmissions, setAllSubmissions] = useState<Submission[]>([]); // For filter options
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [history, setHistory] = useState<SubmissionHistory[]>([]);
+  const [filterState, setFilterState] = useState<FilterState>({});
+  const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
+  const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(false);
   const [isRunningETL, setIsRunningETL] = useState<boolean>(false);
   const [etlStats, setEtlStats] = useState<ETLStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const fetchSubmissions = useCallback(async () => {
+  // Fetch all submissions for filter options
+  const fetchAllSubmissions = useCallback(async () => {
     if (!selectedSurvey) return;
-    
+
+    try {
+      setIsLoadingConfig(true);
+      setError(null);
+      const data = await api.getSubmissions(
+        undefined, // no filters
+        selectedSurvey.survey_id // surveyId
+      );
+      setAllSubmissions(data);
+    } catch (err) {
+      setError('Failed to fetch submissions.');
+      console.error(err);
+    } finally {
+      setIsLoadingConfig(false);
+    }
+  }, [selectedSurvey]);
+
+  // Fetch filtered submissions
+  const fetchFilteredSubmissions = useCallback(async () => {
+    if (!selectedSurvey) return;
+
     try {
       setIsLoadingSubmissions(true);
       setError(null);
       const data = await api.getSubmissions(
-        undefined, // qaStatus
+        filterState, // current filters
         selectedSurvey.survey_id // surveyId
       );
       setSubmissions(data);
+
+      // Clear selected submission if it's no longer in the filtered results
+      if (selectedSubmission && !data.find(s => s._id === selectedSubmission._id)) {
+        setSelectedSubmission(null);
+        setHistory([]);
+      }
     } catch (err) {
       setError('Failed to fetch submissions.');
       console.error(err);
     } finally {
       setIsLoadingSubmissions(false);
     }
+  }, [selectedSurvey, filterState, selectedSubmission]);
+
+  // Fetch survey config
+  const fetchSurveyConfig = useCallback(async () => {
+    if (!selectedSurvey) return;
+
+    try {
+      setIsLoadingConfig(true);
+      const config = await getSurveyConfig(selectedSurvey.survey_id);
+      setSurveyConfig(config);
+    } catch (err) {
+      console.error('Failed to fetch survey config:', err);
+      // Don't set error for config loading as it's not critical
+    } finally {
+      setIsLoadingConfig(false);
+    }
   }, [selectedSurvey]);
 
+  // Fetch all submissions and survey config when survey changes
   useEffect(() => {
-    fetchSubmissions();
-  }, [fetchSubmissions]);
+    if (selectedSurvey) {
+      fetchAllSubmissions();
+      fetchSurveyConfig();
+      setFilterState({}); // Reset filters when survey changes
+    }
+  }, [selectedSurvey, fetchAllSubmissions, fetchSurveyConfig]);
+
+  // Fetch filtered submissions when filters change
+  useEffect(() => {
+    if (selectedSurvey) {
+      fetchFilteredSubmissions();
+    }
+  }, [selectedSurvey, filterState, fetchFilteredSubmissions]);
 
   const handleRefresh = async () => {
     if (!selectedSurvey) {
@@ -60,7 +120,8 @@ const Dashboard: React.FC = () => {
       setEtlStats(stats);
       
       // Refresh submissions after ETL completes
-      await fetchSubmissions();
+      await fetchAllSubmissions();
+      await fetchFilteredSubmissions();
       
       setSuccess(
         `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${stats.hfc_flagged} flagged`
@@ -91,6 +152,10 @@ const Dashboard: React.FC = () => {
       }
     }
   }, [submissions, selectedSubmission]);
+
+  const handleFiltersChange = useCallback((newFilters: FilterState) => {
+    setFilterState(newFilters);
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
@@ -139,19 +204,30 @@ const Dashboard: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex flex-1 min-h-0">
-        <div className="flex-shrink-0 w-full border-r border-gray-700 md:w-1/3 lg:w-1/4 xl:w-1/5 bg-gray-850">
+        <div className="flex flex-col flex-shrink-0 w-full border-r border-gray-700 md:w-1/3 lg:w-1/4 xl:w-1/5 bg-gray-850 min-h-0">
+          {/* Filters */}
+          <SubmissionFilters
+            submissions={allSubmissions}
+            surveyConfig={surveyConfig}
+            activeFilters={filterState}
+            onFiltersChange={handleFiltersChange}
+            isLoading={isLoadingSubmissions}
+          />
+
           {isLoadingSubmissions ? (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex items-center justify-center flex-1 min-h-0">
               <Spinner />
             </div>
           ) : error && !isRunningETL ? (
             <div className="p-4 text-center text-red-400">{error}</div>
           ) : (
-            <SubmissionList
-              submissions={submissions}
-              onSelect={handleSelectSubmission}
-              selectedSubmissionId={selectedSubmission?._id ?? null}
-            />
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <SubmissionList
+                submissions={submissions}
+                onSelect={handleSelectSubmission}
+                selectedSubmissionId={selectedSubmission?._id ?? null}
+              />
+            </div>
           )}
         </div>
         <div className="flex-1 hidden md:block min-w-0">

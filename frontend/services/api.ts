@@ -1,5 +1,6 @@
 
-import { Submission, SubmissionHistory } from '../types';
+import { Submission, SubmissionHistory, FilterState } from '../types';
+import { buildFilterParams } from '../utils/filterUtils';
 
 // API base URL - defaults to localhost:8000 for development
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -12,15 +13,15 @@ interface SubmissionListResponse {
 }
 
 /**
- * Fetch submissions from the API
- * @param qaStatus Optional filter by QA status
- * @param surveyId Optional filter by survey ID
+ * Fetch submissions from the API with optional filtering
+ * @param filters Optional filter state object
+ * @param surveyId Optional filter by survey ID (required for enumerator/sampling filters)
  * @param page Page number (default: 1)
  * @param pageSize Items per page (default: 50)
  */
 export const api = {
   getSubmissions: async (
-    qaStatus?: string,
+    filters?: FilterState,
     surveyId?: string,
     page: number = 1,
     pageSize: number = 50
@@ -30,17 +31,21 @@ export const api = {
         page: page.toString(),
         page_size: pageSize.toString(),
       });
-      
-      if (qaStatus) {
-        params.append('qa_status', qaStatus);
-      }
-      
+
       if (surveyId) {
         params.append('survey_id', surveyId);
       }
 
+      // Add filter parameters if provided
+      if (filters) {
+        const filterParams = buildFilterParams(filters);
+        for (const [key, value] of filterParams) {
+          params.append(key, value);
+        }
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/submissions?${params}`);
-      
+
       if (!response.ok) {
         throw new Error(`Failed to fetch submissions: ${response.statusText}`);
       }

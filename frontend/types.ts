@@ -147,3 +147,16 @@ export interface PerformanceData {
   collection: EnumeratorCollectionStats[];
   quality: EnumeratorQualityStats[];
 }
+
+// --- Filtering Types ---
+
+export interface SamplingFilter {
+  variable: string;
+  values: string[];
+}
+
+export interface FilterState {
+  qaStatuses?: QAStatus[];
+  enumerators?: string[];
+  samplingFilters?: SamplingFilter[];
+}
