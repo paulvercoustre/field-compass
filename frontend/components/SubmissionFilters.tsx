@@ -75,18 +75,18 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
 
   return (
     <div className="flex flex-col gap-1" ref={dropdownRef}>
-      <label className="text-sm font-medium text-gray-300">{label}</label>
+      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full min-w-[200px] min-h-[2.5rem] px-3 py-2 text-left bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hover:border-gray-500 transition-colors ${
+          className={`w-full min-w-[200px] min-h-[2.5rem] px-3 py-2 text-left bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hover:border-gray-400 dark:hover:border-gray-500 transition-colors ${
             isOpen ? 'ring-2 ring-indigo-500 border-indigo-500' : ''
           }`}
         >
           <div className="flex flex-wrap items-center gap-1">
             {selectedValues.length === 0 ? (
-              <span className="text-gray-400">{placeholder}</span>
+              <span className="text-gray-500 dark:text-gray-400">{placeholder}</span>
             ) : (
               <>
                 {displayedValues.map(value => {
@@ -94,12 +94,12 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                   return (
                     <span
                       key={value}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-600/20 text-indigo-300 text-xs font-medium rounded border border-indigo-500"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-600/20 text-indigo-800 dark:text-indigo-300 text-xs font-medium rounded border border-indigo-500"
                     >
                       {option?.label || value}
                       <button
                         onClick={(e) => handleRemoveValue(value, e)}
-                        className="hover:text-white text-indigo-300"
+                        className="hover:text-indigo-900 dark:hover:text-white text-indigo-800 dark:text-indigo-300"
                       >
                         ×
                       </button>
@@ -107,14 +107,14 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                   );
                 })}
                 {remainingCount > 0 && (
-                  <span className="text-xs text-gray-400">+{remainingCount} more</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">+{remainingCount} more</span>
                 )}
               </>
             )}
           </div>
           <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
             <svg
-              className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+              className={`w-4 h-4 text-gray-600 dark:text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -125,37 +125,37 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full min-w-[200px] mt-1 bg-gray-700 border border-gray-600 rounded-md shadow-lg max-h-60 overflow-hidden">
+          <div className="absolute z-50 w-full min-w-[200px] mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-hidden">
             {options.length > 5 && (
-              <div className="p-2 border-b border-gray-600">
+              <div className="p-2 border-b border-gray-200 dark:border-gray-600">
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search..."
-                  className="w-full px-2 py-1 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full px-2 py-1 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   onClick={(e) => e.stopPropagation()}
                 />
               </div>
             )}
             <div className="max-h-48 overflow-y-auto">
               {filteredOptions.length === 0 ? (
-                <div className="p-3 text-center text-gray-400 text-sm">
+                <div className="p-3 text-center text-gray-600 dark:text-gray-400 text-sm">
                   No options found
                 </div>
               ) : (
                 filteredOptions.map(option => (
                   <label
                     key={option.value}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-gray-600 cursor-pointer text-sm"
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-sm"
                   >
                     <input
                       type="checkbox"
                       checked={selectedValues.includes(option.value)}
                       onChange={() => handleToggleOption(option.value)}
-                      className="rounded border-gray-500 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
+                      className="rounded border-gray-400 dark:border-gray-500 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
                     />
-                    <span className="text-white break-words" title={option.label}>
+                    <span className="text-gray-900 dark:text-white break-words" title={option.label}>
                       {option.label}
                     </span>
                   </label>
@@ -163,10 +163,10 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
               )}
             </div>
             {selectedValues.length > 0 && (
-              <div className="border-t border-gray-600 p-2">
+              <div className="border-t border-gray-200 dark:border-gray-600 p-2">
                 <button
                   onClick={() => onChange([])}
-                  className="w-full text-left text-xs text-gray-400 hover:text-white"
+                  className="w-full text-left text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 >
                   Clear all
                 </button>
@@ -286,13 +286,13 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
   };
 
   return (
-    <div className="bg-gray-800 border-b border-gray-700">
+    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       {/* Collapsed Header */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-2 px-3 py-1 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors"
+            className="flex items-center gap-2 px-3 py-1 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
           >
             <svg
               className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -314,7 +314,7 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
         {activeFilterCount > 0 && (
           <button
             onClick={handleClearAllFilters}
-            className="text-sm text-gray-400 hover:text-white transition-colors"
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             Clear All
           </button>
@@ -323,21 +323,21 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
 
       {/* Expanded Filter Panel */}
       {isExpanded && (
-        <div className="px-4 pb-4 border-t border-gray-700">
+        <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-700">
           {/* Filter Summary */}
           {activeFilterCount > 0 && (
             <div className="mt-4 mb-4">
-              <div className="text-sm text-gray-300 mb-3">
+              <div className="text-sm text-gray-700 dark:text-gray-300 mb-3">
                 Active filters ({activeFilterCount})
               </div>
               <div className="flex flex-wrap gap-2">
                 {/* QA Status Chips */}
                 {(activeFilters.qaStatuses || []).map((status) => (
-                  <span key={status} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-600/20 text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
+                  <span key={status} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-600/20 text-indigo-800 dark:text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
                     QA: {getQAStatusDisplay(status)}
                     <button
                       onClick={() => handleRemoveFilter('qaStatuses', status)}
-                      className="ml-1 hover:text-white"
+                      className="ml-1 hover:text-indigo-900 dark:hover:text-white"
                     >
                       ×
                     </button>
@@ -346,11 +346,11 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
 
                 {/* Enumerator Chips */}
                 {(activeFilters.enumerators || []).map((enumerator) => (
-                  <span key={enumerator} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-600/20 text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
+                  <span key={enumerator} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-600/20 text-indigo-800 dark:text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
                     Enumerator: {enumerator}
                     <button
                       onClick={() => handleRemoveFilter('enumerators', enumerator)}
-                      className="ml-1 hover:text-white"
+                      className="ml-1 hover:text-indigo-900 dark:hover:text-white"
                     >
                       ×
                     </button>
@@ -360,11 +360,11 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
                 {/* Sampling Filter Chips */}
                 {(activeFilters.samplingFilters || []).map((filter) =>
                   filter.values.map((value) => (
-                    <span key={`${filter.variable}-${value}`} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-600/20 text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
+                    <span key={`${filter.variable}-${value}`} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-600/20 text-indigo-800 dark:text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
                       {filter.variable}: {value}
                       <button
                         onClick={() => handleRemoveFilter('samplingFilters', value, filter.variable)}
-                        className="ml-1 hover:text-white"
+                        className="ml-1 hover:text-indigo-900 dark:hover:text-white"
                       >
                         ×
                       </button>
@@ -408,7 +408,7 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
             {/* Sampling Variables */}
             {supportsSamplingFiltering(surveyConfig) && (
               <div className="flex flex-col gap-2 xl:col-span-1">
-                <label className="text-sm font-medium text-gray-300">Sampling Variables</label>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Sampling Variables</label>
                 <div className="space-y-3">
                   {filterOptions.samplingVariables.map((variable) => {
                     const values = extractUniqueSamplingValues(submissions, variable, surveyConfig);

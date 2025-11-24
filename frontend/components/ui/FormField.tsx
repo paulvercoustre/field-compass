@@ -26,10 +26,10 @@ const FormField: React.FC<FormFieldProps> = ({
     <div className={`flex flex-col ${className}`}>
       <label
         htmlFor={fieldId}
-        className="mb-1 text-sm font-medium text-gray-400"
+        className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-400"
       >
         {label}
-        {required && <span className="text-red-400 ml-1" aria-label="required">*</span>}
+        {required && <span className="text-red-600 dark:text-red-400 ml-1" aria-label="required">*</span>}
       </label>
       {helpText && (
         <p className="text-xs text-gray-500 mb-1">{helpText}</p>

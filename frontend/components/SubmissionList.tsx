@@ -13,10 +13,10 @@ const SubmissionList: React.FC<SubmissionListProps> = ({ submissions, onSelect, 
 
   return (
     <div className="flex flex-col h-full min-h-0">
-        <div className="flex-shrink-0 p-4 border-b border-gray-700">
-            <h2 className="text-lg font-semibold text-white mb-2">Submissions</h2>
+        <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Submissions</h2>
 
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
               {submissions.length === 0
                 ? "No submissions match your filters."
                 : `Showing ${submissions.length} submission${submissions.length !== 1 ? 's' : ''}.`

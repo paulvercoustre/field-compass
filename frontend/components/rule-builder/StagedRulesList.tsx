@@ -16,17 +16,17 @@ const StagedRulesList: React.FC<StagedRulesListProps> = ({ rules, onEdit, onDele
   return (
     <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
       {rules.map(rule => (
-        <div key={rule.id} className="p-3 bg-gray-800 border border-gray-700 rounded-md">
+        <div key={rule.id} className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
           <div className="flex justify-between items-start">
             <div>
-              <p className="font-semibold text-white">{rule.description}</p>
-              <p className="text-sm font-mono text-gray-400">{rule.issue_message}</p>
-              {rule.roster_name && <p className="text-xs text-blue-400 mt-1">Context: {rule.roster_name}</p>}
+              <p className="font-semibold text-gray-900 dark:text-white">{rule.description}</p>
+              <p className="text-sm font-mono text-gray-600 dark:text-gray-400">{rule.issue_message}</p>
+              {rule.roster_name && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Context: {rule.roster_name}</p>}
             </div>
             <div className="flex space-x-2 flex-shrink-0 ml-2">
               <button 
                 onClick={() => onEdit(rule.id)}
-                className="p-1 text-gray-400 hover:text-white"
+                className="p-1 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 title="Edit Rule"
               >
                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -35,7 +35,7 @@ const StagedRulesList: React.FC<StagedRulesListProps> = ({ rules, onEdit, onDele
               </button>
               <button 
                 onClick={() => onDelete(rule.id)}
-                className="p-1 text-gray-400 hover:text-red-400"
+                className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
                 title="Delete Rule"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

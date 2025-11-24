@@ -35,6 +35,7 @@ class HFCEngine:
         core_identifiers = self.config_data.get('core_identifiers', {})
         special_values = self.config_data.get('special_values', {})
         global_parameters = self.config_data.get('global_parameters', {})
+        quality_checks = self.config_data.get('quality_checks', {})
         
         # Core identifiers
         self.uuid_field = core_identifiers.get('uuid', '_uuid')
@@ -62,6 +63,14 @@ class HFCEngine:
             self.max_survey_duration_minutes = float(max_duration) if max_duration is not None else None
         except (ValueError, TypeError):
             self.max_survey_duration_minutes = None
+
+        # Quality checks configuration
+        self.flag_out_of_period = quality_checks.get('flag_out_of_period', False)
+        self.flag_weekend = quality_checks.get('flag_weekend', False)
+        self.weekend_days = quality_checks.get('weekend_days', [5, 6]) # Default to Sat(5), Sun(6)
+        self.flag_office_hours = quality_checks.get('flag_office_hours', False)
+        self.office_hours_start = quality_checks.get('office_hours_start', '08:00')
+        self.office_hours_end = quality_checks.get('office_hours_end', '17:00')
     
     def _get_field_value(self, submission_data: Dict[str, Any], field_name: str) -> Tuple[Any, Optional[str]]:
         """
@@ -160,8 +169,10 @@ class HFCEngine:
                 message=f"Missing enumerator ID in field '{enumerator_field_path or self.enumerator_field}'"
             ))
         
-        # 3. Check date range
+        # 3. Check date range and time
         date_value, date_field_path = self._get_field_value(submission_data, self.date_interview_field)
+        start_time_value, start_time_path = self._get_field_value(submission_data, self.start_time_field)
+
         if date_value:
             try:
                 # Try to parse date (handle various formats)
@@ -185,45 +196,78 @@ class HFCEngine:
                     interview_date = None
                 
                 if interview_date:
-                    # Check against allowed date range
-                    if self.data_collection_start_date:
-                        try:
-                            start_date = datetime.fromisoformat(self.data_collection_start_date).date()
-                            if interview_date < start_date:
-                                issues.append(QualityIssue(
-                                    check="date_out_of_range",
-                                    field=date_field_path or self.date_interview_field,
-                                    value=str(interview_date),
-                                    message=f"Interview date {interview_date} is before allowed start date {start_date}"
-                                ))
-                        except:
-                            pass
+                    # Check against allowed date range (if flag is enabled)
+                    if self.flag_out_of_period:
+                        if self.data_collection_start_date:
+                            try:
+                                start_date = datetime.fromisoformat(self.data_collection_start_date).date()
+                                if interview_date < start_date:
+                                    issues.append(QualityIssue(
+                                        check="date_out_of_range",
+                                        field=date_field_path or self.date_interview_field,
+                                        value=str(interview_date),
+                                        message=f"Interview date {interview_date} is before allowed start date {start_date}"
+                                    ))
+                            except:
+                                pass
+                        
+                        if self.data_collection_end_date:
+                            try:
+                                end_date = datetime.fromisoformat(self.data_collection_end_date).date()
+                                if interview_date > end_date:
+                                    issues.append(QualityIssue(
+                                        check="date_out_of_range",
+                                        field=date_field_path or self.date_interview_field,
+                                        value=str(interview_date),
+                                        message=f"Interview date {interview_date} is after allowed end date {end_date}"
+                                    ))
+                            except:
+                                pass
                     
-                    if self.data_collection_end_date:
-                        try:
-                            end_date = datetime.fromisoformat(self.data_collection_end_date).date()
-                            if interview_date > end_date:
-                                issues.append(QualityIssue(
-                                    check="date_out_of_range",
-                                    field=date_field_path or self.date_interview_field,
-                                    value=str(interview_date),
-                                    message=f"Interview date {interview_date} is after allowed end date {end_date}"
-                                ))
-                        except:
-                            pass
-                    
-                    # Check for weekend interviews (optional)
-                    weekday = interview_date.weekday()  # 0=Monday, 6=Sunday
-                    if weekday >= 5:  # Saturday or Sunday
-                        issues.append(QualityIssue(
-                            check="interview_on_weekend",
-                            field=date_field_path or self.date_interview_field,
-                            value=str(interview_date),
-                            message=f"Interview conducted on weekend: {interview_date.strftime('%A')}"
-                        ))
+                    # Check for weekend interviews (if flag is enabled)
+                    if self.flag_weekend:
+                        weekday = interview_date.weekday()  # 0=Monday, 6=Sunday
+                        if weekday in self.weekend_days:
+                            issues.append(QualityIssue(
+                                check="interview_on_weekend",
+                                field=date_field_path or self.date_interview_field,
+                                value=str(interview_date),
+                                message=f"Interview conducted on weekend: {interview_date.strftime('%A')}"
+                            ))
+
             except Exception as e:
                 logger.debug(f"Could not parse date for validation: {e}")
         
+        # Check office hours
+        if self.flag_office_hours and start_time_value:
+            try:
+                # Try to extract time from start_time_value
+                submission_time = None
+                if isinstance(start_time_value, str):
+                    try:
+                        # Try ISO datetime
+                        dt = datetime.fromisoformat(start_time_value.replace('Z', '+00:00'))
+                        submission_time = dt.time()
+                    except:
+                         # Try parsing as just time if possible (though unlikely for Kobo 'start')
+                         pass
+                elif isinstance(start_time_value, datetime):
+                    submission_time = start_time_value.time()
+                
+                if submission_time:
+                    office_start = datetime.strptime(self.office_hours_start, "%H:%M").time()
+                    office_end = datetime.strptime(self.office_hours_end, "%H:%M").time()
+                    
+                    if submission_time < office_start or submission_time > office_end:
+                         issues.append(QualityIssue(
+                            check="interview_out_of_office_hours",
+                            field=start_time_path or self.start_time_field,
+                            value=str(submission_time),
+                            message=f"Interview started outside office hours ({self.office_hours_start} - {self.office_hours_end}): {submission_time}"
+                        ))
+            except Exception as e:
+                logger.debug(f"Could not parse time for office hours validation: {e}")
+
         # 4. Check survey duration
         # Note: start_time/end_time are not used - duration check uses audit logs or form fields only
         duration_issues = self._check_duration(submission_data)
@@ -521,4 +565,3 @@ class HFCEngine:
         
         # No Kobo status and no HFC issues = ready for approval
         return "PENDING_APPROVAL"
-

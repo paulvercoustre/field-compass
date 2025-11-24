@@ -48,7 +48,7 @@ const ProgressTracker: React.FC = () => {
         className={`font-semibold py-2 px-5 rounded-md transition-colors duration-200 ${
           isActive
             ? 'bg-indigo-600 text-white'
-            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
         }`}
       >
         {children}
@@ -65,13 +65,13 @@ const ProgressTracker: React.FC = () => {
   }
 
   if (error) {
-    return <div className="p-4 text-center text-red-400">{error}</div>;
+    return <div className="p-4 text-center text-red-600 dark:text-red-400">{error}</div>;
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-300">
-      <div className="bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-screen-2xl">
-        <h1 className="text-3xl md:text-4xl font-bold text-center mb-6 text-white">
+    <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
+      <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-screen-2xl">
+        <h1 className="text-3xl md:text-4xl font-bold text-center mb-6 text-gray-900 dark:text-white">
           Monitoring Tracker: Livelihood Actors
         </h1>
 

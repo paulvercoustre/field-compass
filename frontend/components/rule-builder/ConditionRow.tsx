@@ -39,7 +39,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         <select 
             value={condition.value} 
             onChange={e => onChange({ ...condition, value: e.target.value })}
-            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
         >
             <option value="">Select variable...</option>
             {koboToolData.survey.map(q => {
@@ -55,7 +55,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
             <select
                 value={condition.value}
                 onChange={e => onChange({ ...condition, value: e.target.value })}
-                className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
             >
                 <option value="">Select choice...</option>
                 {uniqueChoices.map(c => <option key={c.name} value={c.name}>{c['label::English (en)'] || c.name}</option>)}

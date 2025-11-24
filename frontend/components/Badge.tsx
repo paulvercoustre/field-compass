@@ -9,14 +9,14 @@ interface BadgeProps {
 
 // Extended status map to handle both new and old status values
 const statusStyles: Record<string, string> = {
-  [QAStatus.PENDING_APPROVAL]: 'bg-blue-800 text-blue-200',
-  [QAStatus.FLAGGED]: 'bg-red-800 text-red-200',
-  [QAStatus.APPROVED]: 'bg-green-800 text-green-200',
-  [QAStatus.REJECTED]: 'bg-orange-800 text-orange-200',
+  [QAStatus.PENDING_APPROVAL]: 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200',
+  [QAStatus.FLAGGED]: 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200',
+  [QAStatus.APPROVED]: 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200',
+  [QAStatus.REJECTED]: 'bg-orange-100 dark:bg-orange-800 text-orange-800 dark:text-orange-200',
   // Backward compatibility with old status values
-  'HFC_FLAGGED': 'bg-red-800 text-red-200',
-  'PENDING_QA': 'bg-blue-800 text-blue-200',
-  'PENDING_RE_QA': 'bg-yellow-800 text-yellow-200',
+  'HFC_FLAGGED': 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200',
+  'PENDING_QA': 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200',
+  'PENDING_RE_QA': 'bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200',
 };
 
 const statusText: Record<string, string> = {
@@ -32,7 +32,7 @@ const statusText: Record<string, string> = {
 
 export const Badge: React.FC<BadgeProps> = ({ status, size = 'sm' }) => {
   const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm';
-  const style = statusStyles[status] || 'bg-gray-800 text-gray-200';
+  const style = statusStyles[status] || 'bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200';
   const text = statusText[status] || status;
   return (
     <span className={`inline-flex items-center font-semibold rounded-full ${sizeClasses} ${style}`}>

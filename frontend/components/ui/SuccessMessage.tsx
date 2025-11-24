@@ -42,7 +42,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = ({
     <div
       role="status"
       aria-live="polite"
-      className={`p-4 bg-green-900/50 border border-green-700 rounded-md text-green-200 flex items-center justify-between transition-opacity duration-300 ${className}`}
+      className={`p-4 bg-green-50 dark:bg-green-900/50 border border-green-200 dark:border-green-700 rounded-md text-green-800 dark:text-green-200 flex items-center justify-between transition-opacity duration-300 ${className}`}
     >
       <span>{message}</span>
       {onDismiss && (
@@ -51,7 +51,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = ({
             setIsVisible(false);
             setTimeout(onDismiss, 300);
           }}
-          className="ml-4 text-green-300 hover:text-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 rounded"
+          className="ml-4 text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 rounded"
           aria-label="Dismiss success message"
         >
           <svg

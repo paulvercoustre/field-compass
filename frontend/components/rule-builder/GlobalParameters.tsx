@@ -19,14 +19,14 @@ const GlobalParametersForm: React.FC<GlobalParametersFormProps> = ({ params, onP
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
       <div className="flex flex-col">
-        <label htmlFor="start-date" className="mb-1 text-sm font-medium text-gray-400">Data Collection Start Date</label>
+        <label htmlFor="start-date" className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-400">Data Collection Start Date</label>
         <input
           type="date"
           id="start-date"
           name="data_collection_start_date"
           value={params.data_collection_start_date}
           onChange={handleChange}
-          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-indigo-500 focus:border-indigo-500"
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
         />
       </div>
       <div className="flex flex-col">
@@ -37,7 +37,7 @@ const GlobalParametersForm: React.FC<GlobalParametersFormProps> = ({ params, onP
           name="data_collection_end_date"
           value={params.data_collection_end_date}
           onChange={handleChange}
-          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-indigo-500 focus:border-indigo-500"
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
         />
       </div>
       <div className="flex flex-col">
@@ -49,7 +49,7 @@ const GlobalParametersForm: React.FC<GlobalParametersFormProps> = ({ params, onP
           value={params.min_survey_duration_minutes ?? ''}
           onChange={handleChange}
           placeholder="e.g., 5"
-          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-indigo-500 focus:border-indigo-500"
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
         />
       </div>
       <div className="flex flex-col">
@@ -61,7 +61,7 @@ const GlobalParametersForm: React.FC<GlobalParametersFormProps> = ({ params, onP
           value={params.max_survey_duration_minutes ?? ''}
           onChange={handleChange}
           placeholder="e.g., 90"
-          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-indigo-500 focus:border-indigo-500"
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
         />
       </div>
     </div>

@@ -9,14 +9,14 @@ const SurveySelector: React.FC = () => {
     return (
       <div className="flex items-center gap-2">
         <Spinner />
-        <span className="text-sm text-gray-400">Loading surveys...</span>
+        <span className="text-sm text-gray-600 dark:text-gray-400">Loading surveys...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-sm text-red-400">
+      <div className="text-sm text-red-600 dark:text-red-400">
         Error loading surveys
       </div>
     );
@@ -24,7 +24,7 @@ const SurveySelector: React.FC = () => {
 
   if (surveys.length === 0) {
     return (
-      <div className="text-sm text-yellow-400">
+      <div className="text-sm text-yellow-600 dark:text-yellow-400">
         No surveys available
       </div>
     );
@@ -32,7 +32,7 @@ const SurveySelector: React.FC = () => {
 
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor="survey-select" className="text-sm text-gray-400 whitespace-nowrap">
+      <label htmlFor="survey-select" className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
         Survey:
       </label>
       <select
@@ -46,7 +46,7 @@ const SurveySelector: React.FC = () => {
             setSelectedSurvey(survey || null);
           }
         }}
-        className="px-3 py-1.5 text-sm bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        className="px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       >
         <option value="">-- Create New Survey --</option>
         {surveys.map((survey) => (

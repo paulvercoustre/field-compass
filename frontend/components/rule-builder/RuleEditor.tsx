@@ -182,7 +182,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onBlur={() => handleBlur('description')}
-          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         />
       </FormField>
       
@@ -199,12 +199,12 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
           value={issueMessage}
           onChange={(e) => setIssueMessage(e.target.value)}
           onBlur={() => handleBlur('issueMessage')}
-          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         />
       </FormField>
 
       <div>
-        <h4 className="text-md font-semibold text-gray-200 mb-2">Condition (defines the error)</h4>
+        <h4 className="text-md font-semibold text-gray-800 dark:text-gray-200 mb-2">Condition (defines the error)</h4>
         {errors.context && (
           <ErrorMessage error={errors.context} className="mb-2" />
         )}
@@ -219,7 +219,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
                   <select
                     value={part.joiner}
                     onChange={(e) => handleJoinerChange(index, e.target.value as '&' | '|')}
-                    className="bg-gray-900 border border-gray-600 rounded-md px-3 py-1 text-sm text-white focus:ring-indigo-500 focus:border-indigo-500"
+                    className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 text-sm text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="&">& AND</option>
                     <option value="|">| OR</option>
@@ -249,11 +249,11 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
         + Add Condition
       </button>
 
-      <div className="flex items-center space-x-4 pt-4 border-t border-gray-700">
+      <div className="flex items-center space-x-4 pt-4 border-t border-gray-200 dark:border-gray-700">
         <button 
           type="submit" 
           disabled={!isFormValid}
-          className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+          className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
         >
           {editingRule ? 'Update Rule' : 'Add Rule to List'}
         </button>
@@ -261,7 +261,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
            <button 
             type="button" 
             onClick={onCancel} 
-            className="px-4 py-2 font-bold text-white bg-gray-600 rounded-md hover:bg-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            className="px-4 py-2 font-bold text-white bg-gray-600 rounded-md hover:bg-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
           >
             Cancel Edit
           </button>

@@ -85,36 +85,36 @@ const RuleBuilder: React.FC = () => {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-300">
+    <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
       <div className="mx-auto max-w-screen-2xl">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-8">
-            <section className="p-6 bg-gray-850 rounded-lg border border-gray-700">
-              <h2 className="text-xl font-bold text-white mb-4">Step 1: Load Kobo Tool</h2>
-              <p className="text-gray-400 mb-4">Upload your Kobo tool Excel file (.xlsx) to populate the variable lists.</p>
+            <section className="p-6 bg-gray-100 dark:bg-gray-850 rounded-lg border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Step 1: Load Kobo Tool</h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">Upload your Kobo tool Excel file (.xlsx) to populate the variable lists.</p>
               <input 
                 type="file" 
                 id="kobo-tool-upload" 
                 accept=".xlsx, .xls"
                 onChange={handleFileUpload}
-                className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500"
+                className="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500"
               />
-              {isLoading && <p className="mt-4 text-blue-400">Parsing Kobo tool...</p>}
-              {error && <p className="mt-4 text-red-400">{error}</p>}
-              {koboToolData && <p className="mt-4 text-green-400">Successfully loaded {koboToolData.survey.length} relevant questions.</p>}
+              {isLoading && <p className="mt-4 text-blue-600 dark:text-blue-400">Parsing Kobo tool...</p>}
+              {error && <p className="mt-4 text-red-600 dark:text-red-400">{error}</p>}
+              {koboToolData && <p className="mt-4 text-green-600 dark:text-green-400">Successfully loaded {koboToolData.survey.length} relevant questions.</p>}
             </section>
             
             {koboToolData && (
               <>
-                <section className="p-6 bg-gray-850 rounded-lg border border-gray-700">
-                  <h2 className="text-xl font-bold text-white mb-4">Step 2: Set Global Survey Parameters</h2>
+                <section className="p-6 bg-gray-100 dark:bg-gray-850 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Step 2: Set Global Survey Parameters</h2>
                   <GlobalParametersForm params={globalParams} onParamsChange={setGlobalParams} />
                 </section>
 
-                <section className="p-6 bg-gray-850 rounded-lg border border-gray-700">
-                   <h2 className="text-xl font-bold text-white mb-4">{currentlyEditing ? 'Edit Rule' : 'Step 3: Define a Rule'}</h2>
+                <section className="p-6 bg-gray-100 dark:bg-gray-850 rounded-lg border border-gray-200 dark:border-gray-700">
+                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">{currentlyEditing ? 'Edit Rule' : 'Step 3: Define a Rule'}</h2>
                   <RuleEditor 
                     key={currentlyEditing?.id ?? 'new-rule'}
                     koboToolData={koboToolData}
@@ -130,8 +130,8 @@ const RuleBuilder: React.FC = () => {
           {/* Right Column */}
           {koboToolData && (
             <div className="lg:col-span-1 space-y-8">
-              <section className="p-6 bg-gray-850 rounded-lg border border-gray-700 sticky top-8">
-                <h2 className="text-xl font-bold text-white mb-4">Staged Rules</h2>
+              <section className="p-6 bg-gray-100 dark:bg-gray-850 rounded-lg border border-gray-200 dark:border-gray-700 sticky top-8">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Staged Rules</h2>
                 <StagedRulesList 
                   rules={stagedRules}
                   onEdit={handleEditRule}
@@ -142,7 +142,7 @@ const RuleBuilder: React.FC = () => {
                   <button 
                     onClick={handleSaveAllRules}
                     disabled={stagedRules.length === 0}
-                    className="w-full px-4 py-2 font-bold text-white bg-green-600 rounded-md disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                    className="w-full px-4 py-2 font-bold text-white bg-green-600 rounded-md disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
                   >
                     Save All Rules to JSON
                   </button>

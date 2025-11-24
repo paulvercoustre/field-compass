@@ -44,6 +44,14 @@ export interface SurveyConfig {
       min_survey_duration_minutes?: number | null;
       max_survey_duration_minutes?: number | null;
     };
+    quality_checks?: {
+      flag_out_of_period?: boolean;
+      flag_weekend?: boolean;
+      weekend_days?: number[];
+      flag_office_hours?: boolean;
+      office_hours_start?: string;
+      office_hours_end?: string;
+    };
     kobo_tool?: {
       survey: any[];
       choices: any[];

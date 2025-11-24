@@ -39,17 +39,17 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data, approvedOnly 
         if (activeSubTab === 'overall') {
             return (
                 <table className="min-w-full">
-                    <thead className="bg-gray-900">
+                    <thead className="bg-gray-200 dark:bg-gray-900">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Target Interviews</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Progress (%)</th>
                         </tr>
                     </thead>
-                    <tbody className="bg-gray-850">
+                    <tbody className="bg-white dark:bg-gray-850">
                         <tr>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{data.overall.conducted}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{data.overall.target}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{data.overall.conducted}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{data.overall.target}</td>
                             <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={data.overall.progress} /></td>
                         </tr>
                     </tbody>
@@ -64,20 +64,20 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data, approvedOnly 
             
             return (
                 <table className="min-w-full">
-                    <thead className="bg-gray-900">
+                    <thead className="bg-gray-200 dark:bg-gray-900">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{columnName}</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">{columnName}</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Target Interviews</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Progress (%)</th>
                         </tr>
                     </thead>
-                    <tbody className="bg-gray-850">
+                    <tbody className="bg-white dark:bg-gray-850">
                         {columnData.map(row => (
                             <tr key={row.value}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{row.value}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{row.conducted}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{row.target}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{row.value}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{row.conducted}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{row.target}</td>
                                 <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                             </tr>
                         ))}
@@ -99,34 +99,34 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data, approvedOnly 
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
                         placeholder={filterPlaceholder}
-                        className="w-full px-4 py-2 mb-4 bg-gray-800 border border-gray-700 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-4 py-2 mb-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                     <div className="overflow-x-auto rounded-lg shadow-md">
                         <table className="min-w-full">
-                            <thead className="bg-gray-900">
+                            <thead className="bg-gray-200 dark:bg-gray-900">
                                 <tr>
                                     {columnNames.map(colName => (
-                                        <th key={colName} className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                        <th key={colName} className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">
                                             {colName}
                                         </th>
                                     ))}
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Target Interviews</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Progress (%)</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-gray-850">
+                            <tbody className="bg-white dark:bg-gray-850">
                                 {filteredDetailedData.map((row, index) => {
                                     const rowKey = Object.values(row.values || {}).join('-') + `-${index}`;
                                     return (
                                         <tr key={rowKey}>
                                             {columnNames.map(colName => (
-                                                <td key={colName} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                                                <td key={colName} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                                     {row.values?.[colName] || 'Unknown'}
                                                 </td>
                                             ))}
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-center">{row.target}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-center">{row.conducted}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center">{row.target}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center">{row.conducted}</td>
                                             <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                                         </tr>
                                     );
@@ -144,7 +144,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data, approvedOnly 
     return (
         <div>
             <div className="flex items-center justify-between gap-2 mb-4">
-                <h3 className="text-xl font-bold text-white">Data Collection Progress</h3>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Data Collection Progress</h3>
                 {approvedOnly && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/40 bg-indigo-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-100">
                         Approved surveys only
@@ -177,7 +177,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data, approvedOnly 
                     </SubTabButton>
                 )}
             </div>
-            <div className="p-4 bg-gray-900/50 border border-gray-700 rounded-lg overflow-x-auto">
+            <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
                 {renderContent()}
             </div>
         </div>

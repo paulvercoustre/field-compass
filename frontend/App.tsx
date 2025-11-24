@@ -22,7 +22,7 @@ const App: React.FC = () => {
     const classes = `px-3 py-2 text-sm font-medium rounded-md transition-colors ${
       isActive
         ? 'bg-indigo-600 text-white'
-        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
     }`;
     return (
       <button onClick={onClick} className={classes}>
@@ -52,13 +52,13 @@ const App: React.FC = () => {
 
   return (
     <SurveyProvider>
-      <div className="flex h-full font-sans text-gray-300 bg-gray-900">
+      <div className="flex h-full font-sans text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900">
         <Sidebar onAddSurvey={handleAddSurvey} onSurveySelect={handleSurveySelect} />
         
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex-shrink-0 bg-gray-800 border-b border-gray-700">
+          <header className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 min-h-16 py-3 sm:py-0 sm:h-16 px-4 mx-auto max-w-screen-2xl sm:px-6 lg:px-8">
-              <h1 className="text-xl font-bold text-white flex-shrink-0">Field Compass</h1>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white flex-shrink-0">Field Compass</h1>
               <nav className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
                 <NavButton currentView={view} targetView="dashboard" onClick={() => setView('dashboard')}>
                   QA Dashboard

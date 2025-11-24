@@ -312,12 +312,12 @@ const SurveySetupPage: React.FC = () => {
   ) => {
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
         {availableVariables.length > 0 ? (
           <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">-- Select variable --</option>
             {availableVariables.map((varName) => (
@@ -331,7 +331,7 @@ const SurveySetupPage: React.FC = () => {
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             placeholder="Enter variable name"
           />
         )}
@@ -388,10 +388,10 @@ const SurveySetupPage: React.FC = () => {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-300">
-      <div className="bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-4xl">
+    <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
+      <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-4xl">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-white">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
             {isNewSurvey ? 'Create New Survey' : 'Survey Configuration'}
           </h1>
           {!isNewSurvey && selectedSurvey && (
@@ -405,21 +405,21 @@ const SurveySetupPage: React.FC = () => {
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-md text-red-200">
+          <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-md text-red-800 dark:text-red-200">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-4 p-4 bg-green-900/50 border border-green-700 rounded-md text-green-200">
+          <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/50 border border-green-200 dark:border-green-700 rounded-md text-green-800 dark:text-green-200">
             {success}
           </div>
         )}
 
         <div className="space-y-6">
           {/* Basic Information */}
-          <section className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-white">Basic Information</h2>
+          <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Basic Information</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">
@@ -429,7 +429,7 @@ const SurveySetupPage: React.FC = () => {
                   type="text"
                   value={surveyName}
                   onChange={(e) => setSurveyName(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   required
                 />
               </div>
@@ -441,7 +441,7 @@ const SurveySetupPage: React.FC = () => {
                   type="text"
                   value={koboAssetId}
                   onChange={(e) => setKoboAssetId(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., a3wCWjYRXo46cSygF8gQAc"
                 />
               </div>
@@ -451,7 +451,7 @@ const SurveySetupPage: React.FC = () => {
           {/* Kobo Tool Upload */}
           <section className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
             <h2 className="text-xl font-semibold mb-4 text-white">Kobo Tool</h2>
-            <p className="text-sm text-gray-400 mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Upload the Kobo tool XLSX file to auto-populate variable dropdowns
             </p>
             <div className="space-y-2">
@@ -459,11 +459,11 @@ const SurveySetupPage: React.FC = () => {
                 type="file"
                 accept=".xlsx,.xls"
                 onChange={handleKoboToolUpload}
-                className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
+                className="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
                 disabled={isLoadingTool}
               />
               {isLoadingTool && (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                   <Spinner />
                   <span>Parsing Kobo tool...</span>
                 </div>
@@ -479,7 +479,7 @@ const SurveySetupPage: React.FC = () => {
           {/* Core Identifiers */}
           <section className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
             <h2 className="text-xl font-semibold mb-4 text-white">Core Identifiers</h2>
-            <p className="text-sm text-gray-400 mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Field names for key tracking variables (use variable name only, not full path)
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -538,7 +538,7 @@ const SurveySetupPage: React.FC = () => {
                   type="file"
                   accept=".csv,.xlsx,.xls"
                   onChange={handleSamplingFrameUpload}
-                  className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
+                  className="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
                   disabled={isLoadingFrame || !koboToolData}
                 />
                 {isLoadingFrame && (
@@ -587,7 +587,7 @@ const SurveySetupPage: React.FC = () => {
                 <select
                   value={samplingFrame.admin_level_for_label}
                   onChange={(e) => setSamplingFrame({ ...samplingFrame, admin_level_for_label: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">-- Select column --</option>
                   {samplingFrame.sampling_cols.map((col) => (
@@ -610,7 +610,7 @@ const SurveySetupPage: React.FC = () => {
                   type="number"
                   value={specialValues.dk_value}
                   onChange={(e) => setSpecialValues({ ...specialValues, dk_value: parseInt(e.target.value) || -99 })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               {renderVariableDropdown(
@@ -633,7 +633,7 @@ const SurveySetupPage: React.FC = () => {
                   type="date"
                   value={globalParameters.data_collection_start_date}
                   onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
@@ -644,7 +644,7 @@ const SurveySetupPage: React.FC = () => {
                   type="date"
                   value={globalParameters.data_collection_end_date}
                   onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
@@ -655,7 +655,7 @@ const SurveySetupPage: React.FC = () => {
                   type="number"
                   value={globalParameters.min_survey_duration_minutes || ''}
                   onChange={(e) => setGlobalParameters({ ...globalParameters, min_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., 10"
                 />
               </div>
@@ -667,7 +667,7 @@ const SurveySetupPage: React.FC = () => {
                   type="number"
                   value={globalParameters.max_survey_duration_minutes || ''}
                   onChange={(e) => setGlobalParameters({ ...globalParameters, max_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="e.g., 240"
                 />
               </div>

@@ -14,7 +14,7 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({ error, className = '', id }
       id={id}
       role="alert"
       aria-live="polite"
-      className={`text-sm text-red-400 mt-1 ${className}`}
+      className={`text-sm text-red-600 dark:text-red-400 mt-1 ${className}`}
     >
       {error}
     </div>

@@ -25,7 +25,7 @@ export const api = {
     surveyId?: string,
     page: number = 1,
     pageSize: number = 50
-  ): Promise<Submission[]> => {
+  ): Promise<SubmissionListResponse> => {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -51,7 +51,7 @@ export const api = {
       }
 
       const data: SubmissionListResponse = await response.json();
-      return data.submissions;
+      return data;
     } catch (error) {
       console.error('Error fetching submissions:', error);
       throw error;
