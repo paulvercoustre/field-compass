@@ -27,6 +27,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
 
   const selectedVarInfo = koboToolData.variableMap.get(condition.variable);
   const isSelectQuestion = selectedVarInfo?.type.startsWith('select');
+  const isNumericVariable = selectedVarInfo?.type === 'integer' || selectedVarInfo?.type === 'decimal' || selectedVarInfo?.type === 'calculate';
   const choicesForVar = isSelectQuestion 
     ? koboToolData.choices.filter(c => c.list_name === selectedVarInfo?.choiceListName)
     : [];
@@ -39,7 +40,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         <select 
             value={condition.value} 
             onChange={e => onChange({ ...condition, value: e.target.value })}
-            className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+            className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
             <option value="">Select variable...</option>
             {koboToolData.survey.map(q => {
@@ -55,7 +56,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
             <select
                 value={condition.value}
                 onChange={e => onChange({ ...condition, value: e.target.value })}
-                className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             >
                 <option value="">Select choice...</option>
                 {uniqueChoices.map(c => <option key={c.name} value={c.name}>{c['label::English (en)'] || c.name}</option>)}
@@ -65,22 +66,22 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
 
     return (
       <input
-        type="text"
-        placeholder={condition.operator === '%in%' ? 'value1, value2' : 'Enter static value'}
+        type={isNumericVariable ? "number" : "text"}
+        placeholder={condition.operator === '%in%' ? 'value1, value2' : isNumericVariable ? 'Enter number' : 'Enter static value'}
         value={condition.value}
         onChange={e => onChange({ ...condition, value: e.target.value })}
-        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-indigo-500 focus:border-indigo-500"
+        className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       />
     );
   };
 
   return (
-    <div className="flex items-center gap-2 p-3 bg-gray-800 rounded-md">
+    <div className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
       {/* Variable Select */}
       <select 
         value={condition.variable} 
         onChange={e => onChange({ ...condition, variable: e.target.value, value: '' })} // Reset value on var change
-        className="flex-grow bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-indigo-500 focus:border-indigo-500"
+        className="flex-shrink-0 w-48 min-w-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       >
         <option value="">Select variable...</option>
         {koboToolData.survey.map(q => {
@@ -93,16 +94,16 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
       <select 
         value={condition.operator} 
         onChange={e => onChange({ ...condition, operator: e.target.value })}
-        className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-indigo-500 focus:border-indigo-500"
+        className="flex-shrink-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       >
         {operators.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
       </select>
       
       {/* Value Input Area */}
-      <div className="flex-grow flex items-center gap-2">
-        <div className="flex rounded-md bg-gray-900 p-0.5">
-            <button type="button" onClick={() => handleValueTypeToggle('static')} className={`px-2 py-1 text-xs rounded ${condition.valueType === 'static' ? 'bg-indigo-600' : 'hover:bg-gray-700'}`}>Value</button>
-            <button type="button" onClick={() => handleValueTypeToggle('variable')} className={`px-2 py-1 text-xs rounded ${condition.valueType === 'variable' ? 'bg-indigo-600' : 'hover:bg-gray-700'}`}>Variable</button>
+      <div className="flex-1 flex items-center gap-2 min-w-0">
+        <div className="flex-shrink-0 flex rounded-md bg-gray-200 dark:bg-gray-900 p-0.5">
+            <button type="button" onClick={() => handleValueTypeToggle('static')} className={`px-2 py-1 text-xs rounded ${condition.valueType === 'static' ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-700'}`}>Value</button>
+            <button type="button" onClick={() => handleValueTypeToggle('variable')} className={`px-2 py-1 text-xs rounded ${condition.valueType === 'variable' ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-700'}`}>Variable</button>
         </div>
         {renderValueInput()}
       </div>
@@ -113,7 +114,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         onClick={onRemove}
         disabled={!canRemove}
         title="Remove Condition"
-        className="p-2 text-gray-400 rounded-full disabled:text-gray-600 disabled:cursor-not-allowed hover:bg-gray-700 hover:text-red-400"
+        className="flex-shrink-0 p-2 text-gray-400 rounded-full disabled:text-gray-600 disabled:cursor-not-allowed hover:bg-gray-700 hover:text-red-400"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

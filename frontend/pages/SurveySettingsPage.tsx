@@ -204,13 +204,14 @@ const SurveySettingsPage: React.FC = () => {
     
     try {
       const { headers, rows } = await parseSamplingFrame(file);
+      const headerList = headers as string[];
       
       if (!koboToolData || !koboToolData.variableMap) {
         throw new Error('Please upload Kobo tool first to validate sampling frame columns');
       }
       
-      const toolVars = Array.from(koboToolData.variableMap.keys());
-      const validation = validateSamplingFrameColumns(headers, toolVars);
+      const toolVars: string[] = Array.from(koboToolData.variableMap.keys());
+      const validation = validateSamplingFrameColumns(headerList, toolVars);
       
       if (!validation.isValid) {
         const targetInfo = validation.targetColumn 
@@ -226,8 +227,8 @@ const SurveySettingsPage: React.FC = () => {
       
       // Auto-populate sampling_cols from headers (excluding target column if present)
       const samplingCols = validation.targetColumn 
-        ? headers.filter(h => h !== validation.targetColumn)
-        : headers;
+        ? headerList.filter(h => h !== validation.targetColumn)
+        : headerList;
       
       setSamplingFrame(prev => ({
         ...prev,
@@ -418,6 +419,41 @@ const SurveySettingsPage: React.FC = () => {
     );
   };
 
+  const renderAnswerOptionDropdown = (
+    value: string,
+    onChange: (value: string) => void,
+    label: string
+  ) => {
+    // Get all unique answer options from choices
+    const answerOptions = koboToolData?.choices 
+      ? Array.from(new Set(koboToolData.choices.map(choice => choice.name))).sort()
+      : [];
+
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        {isEditing && answerOptions.length > 0 ? (
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">-- Select answer option --</option>
+            {answerOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
+            {value || '—'}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (!selectedSurvey) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -536,7 +572,7 @@ const SurveySettingsPage: React.FC = () => {
             activeTab={activeTab}
             onClick={setActiveTab}
           >
-            Survey Settings
+            General
           </SubTabButton>
           <SubTabButton
             tabId="quality"
@@ -588,6 +624,42 @@ const SurveySettingsPage: React.FC = () => {
                       {koboAssetId || '—'}
                     </div>
                   )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      Data Collection Start Date
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="date"
+                        value={globalParameters.data_collection_start_date}
+                        onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    ) : (
+                      <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
+                        {globalParameters.data_collection_start_date || '—'}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      Data Collection End Date
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="date"
+                        value={globalParameters.data_collection_end_date}
+                        onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    ) : (
+                      <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
+                        {globalParameters.data_collection_end_date || '—'}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </section>
@@ -641,48 +713,6 @@ const SurveySettingsPage: React.FC = () => {
                   )}
                 </div>
               )}
-            </section>
-
-            {/* Core Identifiers */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderVariableDropdown(
-                  coreIdentifiers.uuid,
-                  (value) => setCoreIdentifiers({ ...coreIdentifiers, uuid: value }),
-                  'UUID'
-                )}
-                {renderVariableDropdown(
-                  coreIdentifiers.enumerator,
-                  (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
-                  'Enumerator'
-                )}
-                {renderVariableDropdown(
-                  coreIdentifiers.date_interview,
-                  (value) => setCoreIdentifiers({ ...coreIdentifiers, date_interview: value }),
-                  'Date Interview'
-                )}
-                {renderVariableDropdown(
-                  coreIdentifiers.start_time,
-                  (value) => setCoreIdentifiers({ ...coreIdentifiers, start_time: value }),
-                  'Start Time'
-                )}
-                {renderVariableDropdown(
-                  coreIdentifiers.end_time,
-                  (value) => setCoreIdentifiers({ ...coreIdentifiers, end_time: value }),
-                  'End Time'
-                )}
-                {renderVariableDropdown(
-                  coreIdentifiers.consent,
-                  (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
-                  'Consent'
-                )}
-                {renderVariableDropdown(
-                  coreIdentifiers.audit,
-                  (value) => setCoreIdentifiers({ ...coreIdentifiers, audit: value }),
-                  'Audit URL'
-                )}
-              </div>
             </section>
 
             {/* Sampling Frame */}
@@ -770,10 +800,20 @@ const SurveySettingsPage: React.FC = () => {
               )}
             </section>
 
-            {/* Special Values */}
+            {/* Core Identifiers */}
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Special Values (Don't Know)</h2>
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {renderVariableDropdown(
+                  coreIdentifiers.enumerator,
+                  (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
+                  'Enumerator ID'
+                )}
+                {renderVariableDropdown(
+                  coreIdentifiers.consent,
+                  (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
+                  'Consent'
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value</label>
                   {isEditing ? (
@@ -789,52 +829,11 @@ const SurveySettingsPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {renderVariableDropdown(
+                {renderAnswerOptionDropdown(
                   specialValues.dk_string_value,
                   (value) => setSpecialValues({ ...specialValues, dk_string_value: value }),
                   'DK String Value'
                 )}
-              </div>
-            </section>
-
-            {/* Global Parameters */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Global Parameters</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Data Collection Start Date
-                  </label>
-                  {isEditing ? (
-                    <input
-                      type="date"
-                      value={globalParameters.data_collection_start_date}
-                      onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  ) : (
-                    <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                      {globalParameters.data_collection_start_date || '—'}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Data Collection End Date
-                  </label>
-                  {isEditing ? (
-                    <input
-                      type="date"
-                      value={globalParameters.data_collection_end_date}
-                      onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  ) : (
-                    <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                      {globalParameters.data_collection_end_date || '—'}
-                    </div>
-                  )}
-                </div>
               </div>
             </section>
           </div>

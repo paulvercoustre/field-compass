@@ -28,6 +28,7 @@ export interface SurveyConfig {
       sampling_cols?: string[];
       admin_level_for_label?: string;
       admin_level_choice_name?: string;
+      frame_data?: Record<string, any>[] | null;
     };
     special_values?: {
       dk_value?: number;

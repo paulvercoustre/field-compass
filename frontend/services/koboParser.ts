@@ -1,5 +1,6 @@
 
-import { KoboToolData, KoboQuestion, KoboChoice, KoboVariable } from '../types';
+import type { KoboToolData, KoboQuestion, KoboChoice, KoboVariable } from '../types';
+export type { KoboToolData } from '../types';
 
 declare const XLSX: any; // Using XLSX from a script tag
 
