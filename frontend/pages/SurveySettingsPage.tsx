@@ -36,6 +36,8 @@ const SurveySettingsPage: React.FC = () => {
   const [koboToolFileName, setKoboToolFileName] = useState<string>('');
   const [isLoadingTool, setIsLoadingTool] = useState(false);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
+  const [labelColumnSurvey, setLabelColumnSurvey] = useState<string>('label::English (en)');
+  const [labelColumnChoices, setLabelColumnChoices] = useState<string>('label::English (en)');
 
   // Sampling frame CSV state
   const [samplingFrameData, setSamplingFrameData] = useState<Record<string, any>[] | null>(null);
@@ -138,8 +140,19 @@ const SurveySettingsPage: React.FC = () => {
       }
 
       if (cd.kobo_tool && cd.kobo_tool.survey && cd.kobo_tool.choices) {
-        // Reconstruct KoboToolData from stored tool
-        const reconstructed = reconstructKoboToolData(cd.kobo_tool.survey, cd.kobo_tool.choices);
+        // Load label column settings first
+        if (cd.kobo_tool.label_column_survey) {
+          setLabelColumnSurvey(cd.kobo_tool.label_column_survey);
+        }
+        if (cd.kobo_tool.label_column_choices) {
+          setLabelColumnChoices(cd.kobo_tool.label_column_choices);
+        }
+        // Reconstruct KoboToolData from stored tool with label column
+        const reconstructed = reconstructKoboToolData(
+          cd.kobo_tool.survey, 
+          cd.kobo_tool.choices,
+          cd.kobo_tool.label_column_survey
+        );
         setKoboToolData(reconstructed);
         setKoboToolFileName('(Loaded from saved config)');
       }
@@ -186,6 +199,20 @@ const SurveySettingsPage: React.FC = () => {
       const data = await parseKoboTool(file);
       setKoboToolData(data);
       setKoboToolFileName(file.name);
+      
+      // Auto-detect and set label columns if available
+      if (data.survey.length > 0) {
+        const surveyLabels = Object.keys(data.survey[0]).filter(key => key.startsWith('label::'));
+        if (surveyLabels.length > 0 && !surveyLabels.includes(labelColumnSurvey)) {
+          setLabelColumnSurvey(surveyLabels[0]);
+        }
+      }
+      if (data.choices.length > 0) {
+        const choiceLabels = Object.keys(data.choices[0]).filter(key => key.startsWith('label::'));
+        if (choiceLabels.length > 0 && !choiceLabels.includes(labelColumnChoices)) {
+          setLabelColumnChoices(choiceLabels[0]);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to parse Kobo tool file');
     } finally {
@@ -268,7 +295,13 @@ const SurveySettingsPage: React.FC = () => {
         kobo_tool: koboToolData ? {
           survey: koboToolData.survey,
           choices: koboToolData.choices,
-        } : config?.config_data.kobo_tool,
+          label_column_survey: labelColumnSurvey,
+          label_column_choices: labelColumnChoices,
+        } : config?.config_data.kobo_tool ? {
+          ...config.config_data.kobo_tool,
+          label_column_survey: labelColumnSurvey,
+          label_column_choices: labelColumnChoices,
+        } : undefined,
       };
 
       await updateSurvey(selectedSurvey.survey_id, {
@@ -694,6 +727,83 @@ const SurveySettingsPage: React.FC = () => {
                       <span>Parsing Kobo tool...</span>
                     </div>
                   )}
+                  
+                  {/* Label Column Settings */}
+                  {koboToolData && (
+                    <div className="mt-4 space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Label Column Settings</h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                        Select which column to use for displaying question and choice labels. This is useful when your survey has multiple language columns.
+                      </p>
+                      
+                      {/* Detect available label columns */}
+                      {(() => {
+                        const surveyLabels = new Set<string>();
+                        const choiceLabels = new Set<string>();
+                        
+                        if (koboToolData.survey.length > 0) {
+                          Object.keys(koboToolData.survey[0]).forEach(key => {
+                            if (key.startsWith('label::')) {
+                              surveyLabels.add(key);
+                            }
+                          });
+                        }
+                        
+                        if (koboToolData.choices.length > 0) {
+                          Object.keys(koboToolData.choices[0]).forEach(key => {
+                            if (key.startsWith('label::')) {
+                              choiceLabels.add(key);
+                            }
+                          });
+                        }
+                        
+                        const surveyLabelArray = Array.from(surveyLabels);
+                        const choiceLabelArray = Array.from(choiceLabels);
+                        
+                        return (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                                Survey Question Label Column
+                              </label>
+                              <select
+                                value={labelColumnSurvey}
+                                onChange={(e) => setLabelColumnSurvey(e.target.value)}
+                                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              >
+                                {surveyLabelArray.length > 0 ? (
+                                  surveyLabelArray.map(col => (
+                                    <option key={col} value={col}>{col}</option>
+                                  ))
+                                ) : (
+                                  <option value="label::English (en)">label::English (en) (default)</option>
+                                )}
+                              </select>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                                Choice Label Column
+                              </label>
+                              <select
+                                value={labelColumnChoices}
+                                onChange={(e) => setLabelColumnChoices(e.target.value)}
+                                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              >
+                                {choiceLabelArray.length > 0 ? (
+                                  choiceLabelArray.map(col => (
+                                    <option key={col} value={col}>{col}</option>
+                                  ))
+                                ) : (
+                                  <option value="label::English (en)">label::English (en) (default)</option>
+                                )}
+                              </select>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-gray-700 dark:text-gray-300">
@@ -1010,9 +1120,9 @@ const SurveySettingsPage: React.FC = () => {
               </div>
             </section>
 
-            {/* Data Quality Rules Builder */}
+            {/* Data Quality Check Builder */}
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Data Quality Rules Builder</h2>
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Data Quality Check Builder</h2>
               {isEditing ? (
                 <div className="space-y-6">
                   {!koboToolData ? (

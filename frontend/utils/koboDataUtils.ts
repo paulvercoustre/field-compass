@@ -6,7 +6,8 @@ import { KoboToolData, KoboQuestion, KoboVariable } from '../types';
  */
 export const reconstructKoboToolData = (
   survey: KoboQuestion[],
-  choices: any[]
+  choices: any[],
+  labelColumnSurvey?: string
 ): KoboToolData => {
   // Filter to only relevant question types (same logic as parser)
   const relevantTypes = ['select_one', 'select_multiple', 'integer', 'decimal', 'calculate', 'text', 'date', 'datetime'];
@@ -15,14 +16,19 @@ export const reconstructKoboToolData = (
     return relevantTypes.some(t => qType.startsWith(t));
   });
 
+  // Determine which label column to use
+  const labelCol = labelColumnSurvey || 'label::English (en)';
+
   // Rebuild variableMap
   const variableMap = new Map<string, KoboVariable>();
   filteredSurvey.forEach(q => {
     if (q.name) {
       const choiceListName = q.type?.includes('select_') ? q.list_name || null : null;
+      // Use the specified label column, fallback to default, then to name
+      const label = (q as any)[labelCol] || q['label::English (en)'] || q.name;
       variableMap.set(q.name, {
         type: q.type || '',
-        label: q['label::English (en)'] || q.name,
+        label: label,
         choiceListName: choiceListName,
         roster_name: q.roster_name || null,
       });

@@ -56,6 +56,8 @@ export interface SurveyConfig {
     kobo_tool?: {
       survey: any[];
       choices: any[];
+      label_column_survey?: string; // Column name for survey labels (e.g., 'label::English (en)')
+      label_column_choices?: string; // Column name for choice labels (e.g., 'label::English (en)')
     };
   };
   created_at?: string;

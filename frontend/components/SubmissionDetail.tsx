@@ -6,7 +6,8 @@ import HistoryViewer from './HistoryViewer';
 import { Spinner } from './Spinner';
 import { Badge, EditIcon, AlertIcon } from './Badge';
 import { useSurvey } from '../contexts/SurveyContext';
-import { getSurveyConfig, SurveyConfig } from '../services/progressApi';
+import { getSurveyConfig, SurveyConfig, getValidationRules, ValidationRule } from '../services/progressApi';
+import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
 
 interface SubmissionDetailProps {
   submission: Submission | null;
@@ -20,6 +21,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
   const [activeTab, setActiveTab] = useState<Tab>('data');
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
+  const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
+  const [isLoadingRules, setIsLoadingRules] = useState(false);
   const { selectedSurvey } = useSurvey();
 
   // Fetch survey config when submission or survey changes
@@ -41,6 +44,25 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
     fetchConfig();
   }, [selectedSurvey]);
 
+  // Fetch validation rules when survey changes
+  useEffect(() => {
+    const fetchRules = async () => {
+      if (!selectedSurvey) return;
+      
+      setIsLoadingRules(true);
+      try {
+        const rules = await getValidationRules(selectedSurvey.survey_id);
+        setValidationRules(rules.filter(r => r.is_active));
+      } catch (error) {
+        console.error('Failed to load validation rules:', error);
+      } finally {
+        setIsLoadingRules(false);
+      }
+    };
+
+    fetchRules();
+  }, [selectedSurvey]);
+
   if (!submission) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
@@ -56,12 +78,15 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
     ? `https://kf.kobotoolbox.org/#/forms/${selectedSurvey.kobo_asset_id}/data/table`
     : null;
 
-  const QualityIssueCard: React.FC<{ issue: QualityIssue }> = ({ issue }) => (
-    <div className="p-3 text-sm bg-yellow-50 dark:bg-yellow-900/50 border border-yellow-200 dark:border-yellow-700/50 rounded-md">
-        <p className="font-semibold text-yellow-800 dark:text-yellow-300">{issue.check}: <span className="font-mono">{issue.field}</span></p>
-        <p className="text-yellow-700 dark:text-yellow-400">{issue.message}</p>
-    </div>
-  );
+  // Check if a rule passed or failed for this submission
+  const checkRuleStatus = (rule: ValidationRule): { passed: boolean; issue?: QualityIssue } => {
+    const checkId = rule.rule_data.check_id || rule.rule_name;
+    const issue = data_quality_issues.find(issue => issue.check === checkId);
+    return {
+      passed: !issue,
+      issue,
+    };
+  };
 
   // Helper function to get value from submission data, handling Kobo path-based field names.
   // This matches the backend implementation in backend/etl/hfc_engine.py and backend/routers/progress.py
@@ -290,12 +315,103 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
           </div>
         )}
 
-        {data_quality_issues.length > 0 && (
+        {/* Quality Checks Section - Always show all checks */}
+        {validationRules.length > 0 && (
             <div className="mb-6">
-                <h3 className="mb-2 text-lg font-semibold text-gray-800 dark:text-gray-200">Quality Flags</h3>
-                <div className="space-y-2">
-                    {data_quality_issues.map((issue, index) => <QualityIssueCard key={index} issue={issue} />)}
-                </div>
+                <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Quality Checks</h3>
+                {isLoadingRules ? (
+                    <div className="flex justify-center py-4">
+                        <Spinner />
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {validationRules.map((rule) => {
+                            const { passed, issue } = checkRuleStatus(rule);
+                            const ruleName = rule.rule_data.check_id || rule.rule_name;
+                            const variables = rule.rule_data.variables_involved || [];
+                            
+                            return (
+                                <div
+                                    key={rule.rule_id}
+                                    className={`p-4 rounded-md border ${
+                                        passed
+                                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/50'
+                                            : 'bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex-1">
+                                            <h4 className={`font-semibold text-sm ${
+                                                passed
+                                                    ? 'text-green-800 dark:text-green-300'
+                                                    : 'text-orange-800 dark:text-orange-300'
+                                            }`}>
+                                                {rule.rule_name || ruleName}
+                                            </h4>
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-4">
+                                            {passed ? (
+                                                <>
+                                                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    <span className="text-sm font-medium text-green-700 dark:text-green-400">Passed</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                    <span className="text-sm font-medium text-red-700 dark:text-red-400">Flagged</span>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Show issue message if failed */}
+                                    {!passed && issue && (
+                                        <p className={`text-sm mb-3 ${
+                                            passed
+                                                ? 'text-green-700 dark:text-green-400'
+                                                : 'text-orange-700 dark:text-orange-400'
+                                        }`}>
+                                            {issue.message || rule.rule_data.issue}
+                                        </p>
+                                    )}
+                                    
+                                    {/* Show variables and their values */}
+                                    {variables.length > 0 && (
+                                        <div className="mt-3 space-y-2">
+                                            <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Variables:</p>
+                                            {variables.map((variable) => {
+                                                const value = getFieldValue(variable);
+                                                const questionLabel = getQuestionLabel(variable, surveyConfig);
+                                                const displayValue = formatValueForDisplay(value, variable, surveyConfig);
+                                                
+                                                return (
+                                                    <div key={variable} className="pl-3 border-l-2 border-gray-300 dark:border-gray-600">
+                                                        <div className="text-sm">
+                                                            <span className="font-medium text-gray-700 dark:text-gray-300">
+                                                                {questionLabel}
+                                                            </span>
+                                                            <span className="text-gray-500 dark:text-gray-400 ml-2 font-mono text-xs">
+                                                                ({variable})
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                                            <span className="font-medium">Value: </span>
+                                                            <span>{displayValue}</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         )}
         
