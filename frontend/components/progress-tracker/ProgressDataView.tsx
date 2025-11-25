@@ -1,27 +1,34 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { ProgressData } from '../../types';
 import ProgressBar from './ProgressBar';
 import { SubTabButton } from '../ui/SubTabButton';
 
-type ProgressSubTab = 'overall' | string; // string will be column name for "by-{columnName}"
+export type ProgressSubTab = 'overall' | string; // string will be column name for "by-{columnName}"
 
 interface ProgressDataViewProps {
     data: ProgressData;
     approvedOnly?: boolean;
+    activeSubTab: ProgressSubTab;
+    setActiveSubTab: (tab: ProgressSubTab) => void;
+    filter: string;
+    setFilter: (filter: string) => void;
 }
 
-const ProgressDataView: React.FC<ProgressDataViewProps> = ({ data, approvedOnly = false }) => {
+const ProgressDataView: React.FC<ProgressDataViewProps> = ({ 
+    data, 
+    approvedOnly = false,
+    activeSubTab,
+    setActiveSubTab,
+    filter,
+    setFilter
+}) => {
     // Get all column names from sampling columns
     const columnNames = data.samplingColumns || [];
     
     // Determine which tabs have data
     const hasColumnTabs = Object.keys(data.byColumn || {}).length > 0;
     const hasDetailed = data.detailed.length > 0;
-    
-    // Always default to 'overall' tab when page first loads
-    const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>('overall');
-    const [filter, setFilter] = useState('');
 
     // Filter detailed data based on all column values
     const filteredDetailedData = useMemo(() => {

@@ -4,7 +4,7 @@ import { progressApi, triggerETL, ETLStats } from '../services/progressApi';
 import { useSurvey } from '../contexts/SurveyContext';
 import { ProgressData } from '../types';
 import { Spinner } from '../components/Spinner';
-import ProgressDataView from '../components/progress-tracker/ProgressDataView';
+import ProgressDataView, { ProgressSubTab } from '../components/progress-tracker/ProgressDataView';
 
 const DataCollectionProgressPage: React.FC = () => {
   const { selectedSurvey } = useSurvey();
@@ -15,6 +15,8 @@ const DataCollectionProgressPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [approvedOnly, setApprovedOnly] = useState(true);
+  const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>('overall');
+  const [filter, setFilter] = useState('');
 
   const fetchData = useCallback(async () => {
     if (!selectedSurvey) return;
@@ -138,7 +140,16 @@ const DataCollectionProgressPage: React.FC = () => {
           <div className="p-4 text-center text-red-600 dark:text-red-400">{error}</div>
         ) : (
           <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-screen-2xl">
-            {progressData && <ProgressDataView data={progressData} approvedOnly={approvedOnly} />}
+            {progressData && (
+              <ProgressDataView 
+                data={progressData} 
+                approvedOnly={approvedOnly}
+                activeSubTab={activeSubTab}
+                setActiveSubTab={setActiveSubTab}
+                filter={filter}
+                setFilter={setFilter}
+              />
+            )}
           </div>
         )}
       </div>

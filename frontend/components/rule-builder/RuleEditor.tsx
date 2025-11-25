@@ -60,7 +60,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
     const newErrors: Record<string, string> = {};
     
     if (touched.description && !description.trim()) {
-      newErrors.description = 'Rule description is required';
+      newErrors.description = 'Quality Check Name is required';
     }
     
     if (touched.issueMessage && !issueMessage.trim()) {
@@ -120,7 +120,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
     // Check for errors
     const newErrors: Record<string, string> = {};
     if (!description.trim()) {
-      newErrors.description = 'Rule description is required';
+      newErrors.description = 'Quality Check Name is required';
     }
     if (!issueMessage.trim()) {
       newErrors.issueMessage = 'Issue message is required';
@@ -171,7 +171,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <FormField
-        label="Rule description"
+        label="Quality Check Name"
         htmlFor="rule-description"
         required
         error={errors.description}
@@ -187,7 +187,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
       </FormField>
       
       <FormField
-        label="Issue Message for Log"
+        label="Quality Check Description"
         htmlFor="rule-issue"
         required
         error={errors.issueMessage}

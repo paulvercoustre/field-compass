@@ -286,6 +286,45 @@ const CreateSurveyPage: React.FC = () => {
     );
   };
 
+  const renderAnswerOptionDropdown = (
+    value: string,
+    onChange: (value: string) => void,
+    label: string
+  ) => {
+    // Get all unique answer options from choices
+    const answerOptions = koboToolData?.choices 
+      ? Array.from(new Set(koboToolData.choices.map(choice => choice.name))).sort()
+      : [];
+
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        {answerOptions.length > 0 ? (
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">-- Select answer option --</option>
+            {answerOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Enter answer option"
+          />
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
       <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-4xl">
@@ -330,16 +369,49 @@ const CreateSurveyPage: React.FC = () => {
                   placeholder="e.g., a3wCWjYRXo46cSygF8gQAc"
                 />
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                    Data Collection Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={globalParameters.data_collection_start_date}
+                    onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                    Data Collection End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={globalParameters.data_collection_end_date}
+                    onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
             </div>
           </section>
 
-          {/* Kobo Tool Upload */}
+          {/* Kobo Tool */}
           <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Kobo Tool</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Upload the Kobo tool XLSX file to auto-populate variable dropdowns
-            </p>
             <div className="space-y-2">
+              {koboToolData && (
+                <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-300">
+                  {koboToolFileName && (
+                    <div className="text-green-600 dark:text-green-400 mb-1">
+                      ✓ {koboToolFileName} ({availableVariables.length} variables)
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    You can upload a new tool to replace the existing one, or keep the current tool.
+                  </p>
+                </div>
+              )}
               <input
                 type="file"
                 accept=".xlsx,.xls"
@@ -353,56 +425,6 @@ const CreateSurveyPage: React.FC = () => {
                   <span>Parsing Kobo tool...</span>
                 </div>
               )}
-              {koboToolFileName && (
-                <div className="text-sm text-green-400">
-                  ✓ Loaded: {koboToolFileName} ({availableVariables.length} variables)
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Core Identifiers */}
-          <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Field names for key tracking variables (use variable name only, not full path)
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderVariableDropdown(
-                coreIdentifiers.uuid,
-                (value) => setCoreIdentifiers({ ...coreIdentifiers, uuid: value }),
-                'UUID'
-              )}
-              {renderVariableDropdown(
-                coreIdentifiers.enumerator,
-                (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
-                'Enumerator'
-              )}
-              {renderVariableDropdown(
-                coreIdentifiers.date_interview,
-                (value) => setCoreIdentifiers({ ...coreIdentifiers, date_interview: value }),
-                'Date Interview'
-              )}
-              {renderVariableDropdown(
-                coreIdentifiers.start_time,
-                (value) => setCoreIdentifiers({ ...coreIdentifiers, start_time: value }),
-                'Start Time'
-              )}
-              {renderVariableDropdown(
-                coreIdentifiers.end_time,
-                (value) => setCoreIdentifiers({ ...coreIdentifiers, end_time: value }),
-                'End Time'
-              )}
-              {renderVariableDropdown(
-                coreIdentifiers.consent,
-                (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
-                'Consent'
-              )}
-              {renderVariableDropdown(
-                coreIdentifiers.audit,
-                (value) => setCoreIdentifiers({ ...coreIdentifiers, audit: value }),
-                'Audit URL'
-              )}
             </div>
           </section>
 
@@ -410,15 +432,22 @@ const CreateSurveyPage: React.FC = () => {
           <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Sampling Frame</h2>
             <div className="space-y-4">
+              {samplingFrameData && (
+                <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-300">
+                  {samplingFrameFileName && (
+                    <div className="text-green-600 dark:text-green-400 mb-1">
+                      ✓ {samplingFrameFileName} ({samplingFrameData.length} rows)
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    You can upload a new CSV/XLSX to replace the existing sampling frame, or keep the current one.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                  Upload Sampling Frame (CSV or XLSX) *
+                  Upload Sampling Frame (CSV or XLSX)
                 </label>
-                <p className="text-xs text-gray-500 mb-2">
-                  CSV or XLSX file with sampling frame data. All column headers (except target/interview count columns) must exist in the Kobo tool.
-                  <br />
-                  <span className="text-gray-600 dark:text-gray-400">Common target column names: target, target_interviews, sample_size, etc.</span>
-                </p>
                 <input
                   type="file"
                   accept=".csv,.xlsx,.xls"
@@ -426,32 +455,26 @@ const CreateSurveyPage: React.FC = () => {
                   className="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
                   disabled={isLoadingFrame || !koboToolData}
                 />
-                {isLoadingFrame && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mt-2">
-                    <Spinner />
-                    <span>Validating and parsing file...</span>
-                  </div>
-                )}
                 {frameValidationError && (
-                  <div className="mt-2 p-3 bg-red-900/50 border border-red-700 rounded-md text-red-200 text-sm">
+                  <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-md text-red-800 dark:text-red-200 text-sm">
                     {frameValidationError}
                   </div>
                 )}
-                {samplingFrameFileName && !frameValidationError && (
-                  <div className="mt-2 text-sm text-green-400">
-                    ✓ Loaded: {samplingFrameFileName} ({samplingFrameData?.length || 0} rows)
+                {samplingFrameFileName && !frameValidationError && !samplingFrameData && (
+                  <div className="mt-2 text-sm text-green-600 dark:text-green-400">
+                    ✓ {samplingFrameFileName}
                   </div>
                 )}
                 {!koboToolData && (
-                  <p className="mt-2 text-sm text-yellow-400">
-                    ⚠ Please upload Kobo tool first to validate sampling frame
+                  <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
+                    ⚠ Please ensure Kobo tool is loaded first to validate sampling frame
                   </p>
                 )}
               </div>
               {samplingFrame.sampling_cols.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Sampling Columns (auto-populated from CSV)
+                    Sampling Columns
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {samplingFrame.sampling_cols.map((col) => (
@@ -465,30 +488,23 @@ const CreateSurveyPage: React.FC = () => {
                   </div>
                 </div>
               )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                  Admin Level for Label
-                </label>
-                <select
-                  value={samplingFrame.admin_level_for_label}
-                  onChange={(e) => setSamplingFrame({ ...samplingFrame, admin_level_for_label: e.target.value })}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">-- Select column --</option>
-                  {samplingFrame.sampling_cols.map((col) => (
-                    <option key={col} value={col}>
-                      {col}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
           </section>
 
-          {/* Special Values */}
+          {/* Core Identifiers */}
           <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Special Values (Don't Know)</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderVariableDropdown(
+                coreIdentifiers.enumerator,
+                (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
+                'Enumerator ID'
+              )}
+              {renderVariableDropdown(
+                coreIdentifiers.consent,
+                (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
+                'Consent'
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value</label>
                 <input
@@ -498,92 +514,12 @@ const CreateSurveyPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
-              {renderVariableDropdown(
+              {renderAnswerOptionDropdown(
                 specialValues.dk_string_value,
                 (value) => setSpecialValues({ ...specialValues, dk_string_value: value }),
                 'DK String Value'
               )}
             </div>
-          </section>
-
-          {/* Global Parameters */}
-          <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Global Parameters</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                  Data Collection Start Date
-                </label>
-                <input
-                  type="date"
-                  value={globalParameters.data_collection_start_date}
-                  onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                  Data Collection End Date
-                </label>
-                <input
-                  type="date"
-                  value={globalParameters.data_collection_end_date}
-                  onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                  Min Survey Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  value={globalParameters.min_survey_duration_minutes || ''}
-                  onChange={(e) => setGlobalParameters({ ...globalParameters, min_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g., 10"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                  Max Survey Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  value={globalParameters.max_survey_duration_minutes || ''}
-                  onChange={(e) => setGlobalParameters({ ...globalParameters, max_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g., 240"
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Data Quality Rules */}
-          <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Data Quality Rules</h2>
-            {!koboToolData ? (
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Please upload a Kobo tool first to create validation rules.
-              </p>
-            ) : (
-              <div className="space-y-6">
-                <RuleEditor
-                  koboToolData={koboToolData}
-                  onSave={handleSaveRule}
-                  onCancel={handleCancelEdit}
-                  editingRule={currentlyEditing}
-                />
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Saved Rules</h3>
-                  <StagedRulesList
-                    rules={stagedRules}
-                    onEdit={handleEditRule}
-                    onDelete={handleDeleteRule}
-                  />
-                </div>
-              </div>
-            )}
           </section>
 
           {/* Save Button */}

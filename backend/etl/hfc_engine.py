@@ -71,7 +71,40 @@ class HFCEngine:
         self.flag_office_hours = quality_checks.get('flag_office_hours', False)
         self.office_hours_start = quality_checks.get('office_hours_start', '08:00')
         self.office_hours_end = quality_checks.get('office_hours_end', '17:00')
-    
+
+    def _convert_value_type(self, value: Any) -> Any:
+        """
+        Convert string numeric values to appropriate numeric types.
+
+        This handles the case where Kobo API returns numeric values as strings.
+        Attempts to convert strings that look like numbers to int/float.
+
+        Args:
+            value: The value to potentially convert
+
+        Returns:
+            The converted value (int, float, or original value if conversion fails)
+        """
+        if not isinstance(value, str):
+            # Already a non-string type, return as-is
+            return value
+
+        # Skip empty strings and strings that are clearly not numbers
+        if not value.strip() or value.lower() in ['dk', 'n/a', 'na', 'none', 'null']:
+            return value
+
+        # Try to convert to int first
+        try:
+            # Check if it's a whole number by converting to float first
+            float_val = float(value)
+            if float_val == int(float_val):
+                return int(float_val)
+            else:
+                return float_val
+        except (ValueError, TypeError):
+            # Not a numeric string, return original value
+            return value
+
     def _get_field_value(self, submission_data: Dict[str, Any], field_name: str) -> Tuple[Any, Optional[str]]:
         """
         Get field value from submission data, handling Kobo path-based field names.
@@ -448,9 +481,11 @@ class HFCEngine:
             eval_context = {}
             for var in variables_involved:
                 value, field_path = var_values[var]
+                # Convert string numeric values to appropriate types (handles Kobo API string numbers)
+                converted_value = self._convert_value_type(value)
                 # Use the variable name from config in the expression, but get value from actual path
-                eval_context[var] = value
-                logger.debug(f"Rule '{check_id}': variable '{var}' = {value} (from field '{field_path}')")
+                eval_context[var] = converted_value
+                logger.debug(f"Rule '{check_id}': variable '{var}' = {converted_value} (converted from {value!r}, from field '{field_path}')")
             
             logger.debug(f"Rule '{check_id}': evaluating expression '{check_expression}' with context {eval_context}")
             
