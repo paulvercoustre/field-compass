@@ -61,7 +61,7 @@ const App: React.FC = () => {
               <h1 className="text-xl font-bold text-gray-900 dark:text-white flex-shrink-0">Field Compass</h1>
               <nav className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
                 <NavButton currentView={view} targetView="dashboard" onClick={() => setView('dashboard')}>
-                  QA Dashboard
+                  Submissions
                 </NavButton>
                 <NavButton currentView={view} targetView="dataCollectionProgress" onClick={() => setView('dataCollectionProgress')}>
                   Data Collection Progress

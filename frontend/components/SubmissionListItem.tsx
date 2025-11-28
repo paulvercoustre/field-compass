@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Submission } from '../types';
-import { Badge, EditIcon, AlertIcon } from './Badge';
+import { Badge, AlertIcon } from './Badge';
 
 interface SubmissionListItemProps {
     submission: Submission;
@@ -10,7 +10,7 @@ interface SubmissionListItemProps {
 }
 
 const SubmissionListItem: React.FC<SubmissionListItemProps> = ({ submission, onSelect, isSelected }) => {
-    const { _id, _submission_time, qa_status, is_edited, data_quality_issues } = submission;
+    const { _id, _submission_time, qa_status, data_quality_issues } = submission;
 
     const baseClasses = "block w-full text-left p-4 border-b border-gray-200 dark:border-gray-800 transition-colors duration-150 focus:outline-none";
     const selectedClasses = "bg-gray-200 dark:bg-gray-700/50";
@@ -28,20 +28,12 @@ const SubmissionListItem: React.FC<SubmissionListItemProps> = ({ submission, onS
             <div className="text-xs text-gray-600 dark:text-gray-400">
                 Submitted: {new Date(_submission_time).toLocaleString()}
             </div>
-            <div className="flex items-center mt-3 space-x-4">
-                {is_edited && (
-                    <div className="flex items-center text-xs text-blue-600 dark:text-blue-400">
-                        <EditIcon />
-                        <span>Edited</span>
-                    </div>
-                )}
-                {data_quality_issues.length > 0 && (
-                    <div className="flex items-center text-xs text-yellow-600 dark:text-yellow-400">
-                        <AlertIcon />
-                        <span>{data_quality_issues.length} Issues</span>
-                    </div>
-                )}
-            </div>
+            {data_quality_issues.length > 0 && (
+                <div className="flex items-center mt-3 text-xs text-yellow-600 dark:text-yellow-400">
+                    <AlertIcon />
+                    <span>{data_quality_issues.length} Issues</span>
+                </div>
+            )}
         </button>
     );
 }

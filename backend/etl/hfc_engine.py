@@ -71,6 +71,12 @@ class HFCEngine:
         self.flag_office_hours = quality_checks.get('flag_office_hours', False)
         self.office_hours_start = quality_checks.get('office_hours_start', '08:00')
         self.office_hours_end = quality_checks.get('office_hours_end', '17:00')
+        self.flag_sampling_frame = quality_checks.get('flag_sampling_frame', False)
+        
+        # Sampling frame configuration
+        sampling_frame_config = self.config_data.get('sampling_frame', {})
+        self.sampling_cols = sampling_frame_config.get('sampling_cols', [])
+        self.frame_data = sampling_frame_config.get('frame_data', [])
 
     def _convert_value_type(self, value: Any) -> Any:
         """
@@ -301,7 +307,12 @@ class HFCEngine:
             except Exception as e:
                 logger.debug(f"Could not parse time for office hours validation: {e}")
 
-        # 4. Check survey duration
+        # 4. Check sampling frame (if flag is enabled)
+        if self.flag_sampling_frame:
+            sampling_frame_issues = self._check_sampling_frame(submission_data)
+            issues.extend(sampling_frame_issues)
+
+        # 5. Check survey duration
         # Note: start_time/end_time are not used - duration check uses audit logs or form fields only
         duration_issues = self._check_duration(submission_data)
         issues.extend(duration_issues)
@@ -398,6 +409,74 @@ class HFCEngine:
                 logger.debug("No start/end time data found in submission data fields - cannot calculate duration")
         
         logger.debug(f"Duration check complete: {len(issues)} issues found")
+        return issues
+    
+    def _check_sampling_frame(self, submission_data: Dict[str, Any]) -> List[QualityIssue]:
+        """
+        Check if submission's sampling column values match the sampling frame.
+        
+        If the combination of sampling column values from the submission doesn't exist
+        in the sampling frame, this creates a quality issue.
+        
+        Args:
+            submission_data: Submission data dictionary
+            
+        Returns:
+            List of QualityIssue objects (empty if no issues found)
+        """
+        issues = []
+        
+        # Skip check if sampling frame is not configured
+        if not self.sampling_cols or not self.frame_data:
+            logger.debug("Sampling frame check skipped: no sampling_cols or frame_data configured")
+            return issues
+        
+        # Extract sampling column values from submission
+        submission_values = {}
+        missing_cols = []
+        
+        for col in self.sampling_cols:
+            value, field_path = self._get_field_value(submission_data, col)
+            if value is None and field_path is None:
+                missing_cols.append(col)
+            else:
+                # Convert to string for comparison (handle None values)
+                submission_values[col] = str(value) if value is not None else "Unknown"
+        
+        # If any required sampling columns are missing, skip the check
+        if missing_cols:
+            logger.debug(f"Sampling frame check skipped: missing columns {missing_cols} in submission")
+            return issues
+        
+        # Build a set of valid combinations from frame_data
+        # Each combination is a tuple of (col1_value, col2_value, ...)
+        valid_combinations = set()
+        for row in self.frame_data:
+            combo = tuple(
+                str(row.get(col, "Unknown")) if row.get(col) is not None else "Unknown"
+                for col in self.sampling_cols
+            )
+            valid_combinations.add(combo)
+        
+        # Check if submission's combination exists in frame
+        submission_combo = tuple(submission_values[col] for col in self.sampling_cols)
+        
+        if submission_combo not in valid_combinations:
+            # Build a descriptive message showing the values
+            combo_description = ", ".join(
+                f"{col}={submission_values[col]}" for col in self.sampling_cols
+            )
+            
+            issues.append(QualityIssue(
+                check="sampling_frame_mismatch",
+                field=", ".join(self.sampling_cols),
+                value=combo_description,
+                message=f"Submission sampling combination not in sampling frame: {combo_description}"
+            ))
+            logger.debug(f"Sampling frame check failed: combination {submission_combo} not found in frame")
+        else:
+            logger.debug(f"Sampling frame check passed: combination {submission_combo} found in frame")
+        
         return issues
     
     def _run_custom_rules(self, submission_data: Dict[str, Any], submission_uuid: str) -> List[QualityIssue]:

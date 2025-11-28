@@ -81,6 +81,7 @@ const SurveySettingsPage: React.FC = () => {
     flag_office_hours: false,
     office_hours_start: '08:00',
     office_hours_end: '17:00',
+    flag_sampling_frame: false,
   });
 
   useEffect(() => {
@@ -136,6 +137,7 @@ const SurveySettingsPage: React.FC = () => {
           flag_office_hours: cd.quality_checks.flag_office_hours ?? false,
           office_hours_start: cd.quality_checks.office_hours_start ?? '08:00',
           office_hours_end: cd.quality_checks.office_hours_end ?? '17:00',
+          flag_sampling_frame: cd.quality_checks.flag_sampling_frame ?? false,
         });
       }
 
@@ -1072,6 +1074,27 @@ const SurveySettingsPage: React.FC = () => {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Sampling Frame Flag */}
+                <div className="flex items-start">
+                  <div className="flex h-5 items-center">
+                    <input
+                      type="checkbox"
+                      disabled={!isEditing}
+                      checked={qualityChecks.flag_sampling_frame}
+                      onChange={(e) => setQualityChecks({ ...qualityChecks, flag_sampling_frame: e.target.checked })}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                    />
+                  </div>
+                  <div className="ml-3">
+                    <label className="text-sm font-medium text-gray-900 dark:text-white">
+                      Flag submissions not in sampling frame
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Create a flag if the submission's sampling column combination (e.g., district and actor) is not found in the sampling frame.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Survey Duration */}

@@ -23,6 +23,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
   const [isLoadingRules, setIsLoadingRules] = useState(false);
+  const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
   const { selectedSurvey } = useSurvey();
 
   // Fetch survey config when submission or survey changes
@@ -62,6 +63,23 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
 
     fetchRules();
   }, [selectedSurvey]);
+
+  // Initialize expanded rules: expand all failed checks by default when submission or rules change
+  useEffect(() => {
+    if (!submission || validationRules.length === 0) return;
+
+    const failedRuleIds = new Set<string>();
+    validationRules.forEach((rule) => {
+      const checkId = rule.rule_data.check_id || rule.rule_name;
+      const issue = submission.data_quality_issues.find(issue => issue.check === checkId);
+      if (issue) {
+        // This is a failed check, expand it by default
+        failedRuleIds.add(rule.rule_id);
+      }
+    });
+
+    setExpandedRules(failedRuleIds);
+  }, [submission, validationRules]);
 
   if (!submission) {
     return (
@@ -181,6 +199,19 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
       .replace(/\//g, ' / ')
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (l) => l.toUpperCase());
+  };
+
+  // Toggle expansion state for a rule
+  const toggleRuleExpansion = (ruleId: string) => {
+    setExpandedRules(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(ruleId)) {
+        newSet.delete(ruleId);
+      } else {
+        newSet.add(ruleId);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -329,6 +360,9 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
                             const { passed, issue } = checkRuleStatus(rule);
                             const ruleName = rule.rule_data.check_id || rule.rule_name;
                             const variables = rule.rule_data.variables_involved || [];
+                            const isExpanded = expandedRules.has(rule.rule_id);
+                            // Both passed and failed checks respect the expanded state
+                            const shouldShowDetails = isExpanded;
                             
                             return (
                                 <div
@@ -339,15 +373,43 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
                                             : 'bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50'
                                     }`}
                                 >
-                                    <div className="flex items-start justify-between mb-3">
+                                    <div className="flex items-start justify-between">
                                         <div className="flex-1">
-                                            <h4 className={`font-semibold text-sm ${
-                                                passed
-                                                    ? 'text-green-800 dark:text-green-300'
-                                                    : 'text-orange-800 dark:text-orange-300'
-                                            }`}>
-                                                {rule.rule_name || ruleName}
-                                            </h4>
+                                            <div className="flex items-center gap-2">
+                                                {variables.length > 0 && (
+                                                    <button
+                                                        onClick={() => toggleRuleExpansion(rule.rule_id)}
+                                                        className={`flex-shrink-0 p-1 rounded transition-colors ${
+                                                            passed
+                                                                ? 'hover:bg-green-100 dark:hover:bg-green-900/40'
+                                                                : 'hover:bg-orange-100 dark:hover:bg-orange-900/40'
+                                                        }`}
+                                                        aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                                                    >
+                                                        <svg 
+                                                            className={`w-4 h-4 transition-transform ${
+                                                                isExpanded ? 'rotate-180' : ''
+                                                            } ${
+                                                                passed
+                                                                    ? 'text-green-700 dark:text-green-400'
+                                                                    : 'text-orange-700 dark:text-orange-400'
+                                                            }`}
+                                                            fill="none" 
+                                                            stroke="currentColor" 
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                                <h4 className={`font-semibold text-sm ${
+                                                    passed
+                                                        ? 'text-green-800 dark:text-green-300'
+                                                        : 'text-orange-800 dark:text-orange-300'
+                                                }`}>
+                                                    {rule.rule_name || ruleName}
+                                                </h4>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-2 ml-4">
                                             {passed ? (
@@ -370,7 +432,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
                                     
                                     {/* Show issue message if failed */}
                                     {!passed && issue && (
-                                        <p className={`text-sm mb-3 ${
+                                        <p className={`text-sm mt-3 ${
                                             passed
                                                 ? 'text-green-700 dark:text-green-400'
                                                 : 'text-orange-700 dark:text-orange-400'
@@ -379,8 +441,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
                                         </p>
                                     )}
                                     
-                                    {/* Show variables and their values */}
-                                    {variables.length > 0 && (
+                                    {/* Show variables and their values - only when expanded */}
+                                    {shouldShowDetails && variables.length > 0 && (
                                         <div className="mt-3 space-y-2">
                                             <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Variables:</p>
                                             {variables.map((variable) => {

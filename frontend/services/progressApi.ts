@@ -52,6 +52,7 @@ export interface SurveyConfig {
       flag_office_hours?: boolean;
       office_hours_start?: string;
       office_hours_end?: string;
+      flag_sampling_frame?: boolean;
     };
     kobo_tool?: {
       survey: any[];
