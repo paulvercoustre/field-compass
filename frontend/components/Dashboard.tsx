@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Submission, SubmissionHistory, FilterState } from '../types';
+import { Submission, FilterState } from '../types';
 import { api } from '../services/api';
 import { useSurvey } from '../contexts/SurveyContext';
 import { triggerETL, ETLStats, getSurveyConfig, SurveyConfig } from '../services/progressApi';
@@ -16,11 +16,9 @@ const Dashboard: React.FC = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [allSubmissions, setAllSubmissions] = useState<Submission[]>([]); // For filter options
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
-  const [history, setHistory] = useState<SubmissionHistory[]>([]);
   const [filterState, setFilterState] = useState<FilterState>({});
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
-  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
   const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(false);
   const [isRunningETL, setIsRunningETL] = useState<boolean>(false);
   const [etlStats, setEtlStats] = useState<ETLStats | null>(null);
@@ -103,9 +101,6 @@ const Dashboard: React.FC = () => {
         }
         return prev;
       });
-      if (clearedSelection) {
-        setHistory([]);
-      }
     } catch (err) {
       setError('Failed to fetch submissions.');
       console.error(err);
@@ -182,17 +177,6 @@ const Dashboard: React.FC = () => {
     if (submission) {
       if (selectedSubmission?._id === submissionId) return; // Avoid refetching for the same submission
       setSelectedSubmission(submission);
-      try {
-        setIsLoadingHistory(true);
-        setHistory([]);
-        const historyData = await api.getSubmissionHistory(submissionId);
-        setHistory(historyData);
-      } catch (err) {
-        setError('Failed to fetch submission history.');
-        console.error(err);
-      } finally {
-        setIsLoadingHistory(false);
-      }
     }
   }, [submissions, selectedSubmission]);
 
@@ -276,8 +260,7 @@ const Dashboard: React.FC = () => {
         <div className="flex-1 hidden md:block min-w-0">
           <SubmissionDetail
             submission={selectedSubmission}
-            history={history}
-            isLoading={isLoadingHistory}
+            isLoading={false}
           />
         </div>
       </div>

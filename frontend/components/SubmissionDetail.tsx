@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Submission, SubmissionHistory, QualityIssue } from '../types';
+import { Submission, QualityIssue } from '../types';
 import JsonViewer from './JsonViewer';
-import HistoryViewer from './HistoryViewer';
 import { Spinner } from './Spinner';
 import { Badge, EditIcon, AlertIcon } from './Badge';
 import { useSurvey } from '../contexts/SurveyContext';
@@ -11,14 +10,10 @@ import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils
 
 interface SubmissionDetailProps {
   submission: Submission | null;
-  history: SubmissionHistory[];
   isLoading: boolean;
 }
 
-type Tab = 'data' | 'history';
-
-const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history, isLoading }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('data');
+const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoading }) => {
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
@@ -478,26 +473,13 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, history
         )}
         
         <div className="min-w-0">
-            <div className="border-b border-gray-200 dark:border-gray-700">
-                <nav className="flex -mb-px space-x-6" aria-label="Tabs">
-                    <button onClick={() => setActiveTab('data')} className={`px-1 py-3 text-sm font-medium border-b-2 ${activeTab === 'data' ? 'border-indigo-400 text-indigo-400' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500'}`}>
-                        Current Data
-                    </button>
-                    <button onClick={() => setActiveTab('history')} className={`px-1 py-3 text-sm font-medium border-b-2 ${activeTab === 'history' ? 'border-indigo-400 text-indigo-400' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500'}`}>
-                        Change History
-                    </button>
-                </nav>
-            </div>
             <div className="py-4 min-w-0">
                 {isLoading ? (
                     <div className="flex justify-center mt-8">
                         <Spinner />
                     </div>
                 ) : (
-                    <>
-                        {activeTab === 'data' && <JsonViewer data={submission_data} />}
-                        {activeTab === 'history' && <HistoryViewer history={history} />}
-                    </>
+                    <JsonViewer data={submission_data} />
                 )}
             </div>
         </div>
