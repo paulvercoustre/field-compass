@@ -11,14 +11,23 @@ from contextlib import asynccontextmanager
 
 from services.database import init_db
 from routers import submissions, progress, etl, surveys, validation_rules
+import os
 
-# CORS origins - update for production
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",  # Vite default port
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-]
+# CORS origins - configurable via environment variable
+# For production, set CORS_ORIGINS as comma-separated list: "https://app.example.com,https://www.example.com"
+# Defaults to localhost for development
+_cors_origins_env = os.getenv("CORS_ORIGINS", "")
+if _cors_origins_env:
+    # Split by comma and strip whitespace
+    ALLOWED_ORIGINS = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
+else:
+    # Default to localhost for development
+    ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:5173",  # Vite default port
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
 
 
 @asynccontextmanager
