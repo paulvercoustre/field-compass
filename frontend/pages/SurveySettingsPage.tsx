@@ -82,6 +82,10 @@ const SurveySettingsPage: React.FC = () => {
     office_hours_start: '08:00',
     office_hours_end: '17:00',
     flag_sampling_frame: false,
+    flag_outliers: false,
+    outlier_variables: [] as string[],
+    outlier_method: 'iqr' as 'iqr' | 'mad' | 'zscore',
+    outlier_threshold: 1.5,
   });
 
   useEffect(() => {
@@ -138,6 +142,10 @@ const SurveySettingsPage: React.FC = () => {
           office_hours_start: cd.quality_checks.office_hours_start ?? '08:00',
           office_hours_end: cd.quality_checks.office_hours_end ?? '17:00',
           flag_sampling_frame: cd.quality_checks.flag_sampling_frame ?? false,
+          flag_outliers: cd.quality_checks.flag_outliers ?? false,
+          outlier_variables: cd.quality_checks.outlier_variables ?? [],
+          outlier_method: cd.quality_checks.outlier_method ?? 'iqr',
+          outlier_threshold: cd.quality_checks.outlier_threshold ?? 1.5,
         });
       }
 
@@ -1095,6 +1103,159 @@ const SurveySettingsPage: React.FC = () => {
                       Create a flag if the submission's sampling column combination (e.g., district and actor) is not found in the sampling frame.
                     </p>
                   </div>
+                </div>
+
+                {/* Outlier Detection Flag */}
+                <div className="space-y-2">
+                  <div className="flex items-start">
+                    <div className="flex h-5 items-center">
+                      <input
+                        type="checkbox"
+                        disabled={!isEditing}
+                        checked={qualityChecks.flag_outliers}
+                        onChange={(e) => setQualityChecks({ ...qualityChecks, flag_outliers: e.target.checked })}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                      />
+                    </div>
+                    <div className="ml-3">
+                      <label className="text-sm font-medium text-gray-900 dark:text-white">
+                        Flag outlier values
+                      </label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Create a flag if numeric values in selected variables are statistical outliers.
+                      </p>
+                    </div>
+                  </div>
+
+                  {qualityChecks.flag_outliers && (
+                    <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 space-y-4">
+                      {/* Variable Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Select Variables to Check
+                        </label>
+                        {isEditing ? (
+                          <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
+                            {availableVariables.length > 0 ? (
+                              availableVariables.map((variable) => (
+                                <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
+                                  <input
+                                    type="checkbox"
+                                    checked={qualityChecks.outlier_variables.includes(variable)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setQualityChecks({
+                                          ...qualityChecks,
+                                          outlier_variables: [...qualityChecks.outlier_variables, variable],
+                                        });
+                                      } else {
+                                        setQualityChecks({
+                                          ...qualityChecks,
+                                          outlier_variables: qualityChecks.outlier_variables.filter((v) => v !== variable),
+                                        });
+                                      }
+                                    }}
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                  />
+                                  <span className="text-sm text-gray-700 dark:text-gray-300">{variable}</span>
+                                </label>
+                              ))
+                            ) : (
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                No variables available. Please upload a Kobo tool first.
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            {qualityChecks.outlier_variables.length > 0 ? (
+                              qualityChecks.outlier_variables.map((variable) => (
+                                <span
+                                  key={variable}
+                                  className="inline-block mr-2 mb-1 px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded dark:bg-indigo-900 dark:text-indigo-200"
+                                >
+                                  {variable}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">No variables selected</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Method Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Detection Method
+                        </label>
+                        {isEditing ? (
+                          <select
+                            value={qualityChecks.outlier_method}
+                            onChange={(e) =>
+                              setQualityChecks({
+                                ...qualityChecks,
+                                outlier_method: e.target.value as 'iqr' | 'mad' | 'zscore',
+                              })
+                            }
+                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          >
+                            <option value="iqr">IQR (Interquartile Range)</option>
+                            <option value="mad">MAD (Median Absolute Deviation)</option>
+                            <option value="zscore">Z-Score</option>
+                          </select>
+                        ) : (
+                          <span className="text-sm text-gray-700 dark:text-gray-300">
+                            {qualityChecks.outlier_method === 'iqr'
+                              ? 'IQR (Interquartile Range)'
+                              : qualityChecks.outlier_method === 'mad'
+                              ? 'MAD (Median Absolute Deviation)'
+                              : 'Z-Score'}
+                          </span>
+                        )}
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {qualityChecks.outlier_method === 'iqr'
+                            ? 'Uses quartiles and IQR. Default threshold: 1.5 (standard)'
+                            : qualityChecks.outlier_method === 'mad'
+                            ? 'Robust method using median and MAD. Default threshold: 3.0'
+                            : 'Uses mean and standard deviation. Default threshold: 2.0 or 3.0'}
+                        </p>
+                      </div>
+
+                      {/* Threshold */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Threshold
+                        </label>
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            value={qualityChecks.outlier_threshold}
+                            onChange={(e) =>
+                              setQualityChecks({
+                                ...qualityChecks,
+                                outlier_threshold: parseFloat(e.target.value) || 1.5,
+                              })
+                            }
+                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                        ) : (
+                          <span className="text-sm text-gray-700 dark:text-gray-300">
+                            {qualityChecks.outlier_threshold}
+                          </span>
+                        )}
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {qualityChecks.outlier_method === 'iqr'
+                            ? 'IQR multiplier (e.g., 1.5 = standard, 3.0 = more conservative)'
+                            : qualityChecks.outlier_method === 'mad'
+                            ? 'Modified Z-score threshold (e.g., 3.0 = standard)'
+                            : 'Z-score threshold (e.g., 2.0 = moderate, 3.0 = strict)'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Survey Duration */}

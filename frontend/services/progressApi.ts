@@ -53,6 +53,10 @@ export interface SurveyConfig {
       office_hours_start?: string;
       office_hours_end?: string;
       flag_sampling_frame?: boolean;
+      flag_outliers?: boolean;
+      outlier_variables?: string[];
+      outlier_method?: 'iqr' | 'mad' | 'zscore';
+      outlier_threshold?: number;
     };
     kobo_tool?: {
       survey: any[];

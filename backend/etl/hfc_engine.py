@@ -9,8 +9,10 @@ from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 import logging
 from simpleeval import SimpleEval
+import statistics
+import math
 
-from database.models import ValidationRule, SurveyConfig
+from database.models import ValidationRule, SurveyConfig, SubmissionCurrent
 from models import QualityIssue
 
 logger = logging.getLogger(__name__)
@@ -72,6 +74,12 @@ class HFCEngine:
         self.office_hours_start = quality_checks.get('office_hours_start', '08:00')
         self.office_hours_end = quality_checks.get('office_hours_end', '17:00')
         self.flag_sampling_frame = quality_checks.get('flag_sampling_frame', False)
+        
+        # Outlier detection configuration
+        self.flag_outliers = quality_checks.get('flag_outliers', False)
+        self.outlier_variables = quality_checks.get('outlier_variables', [])
+        self.outlier_method = quality_checks.get('outlier_method', 'iqr')  # 'iqr', 'mad', or 'zscore'
+        self.outlier_threshold = quality_checks.get('outlier_threshold', 1.5)  # For IQR multiplier or Z-score threshold
         
         # Sampling frame configuration
         sampling_frame_config = self.config_data.get('sampling_frame', {})
@@ -317,6 +325,11 @@ class HFCEngine:
         duration_issues = self._check_duration(submission_data)
         issues.extend(duration_issues)
         
+        # 6. Check for outliers (if flag is enabled)
+        if self.flag_outliers and self.outlier_variables:
+            outlier_issues = self._check_outliers(submission_data, submission_uuid)
+            issues.extend(outlier_issues)
+        
         return issues
     
     def _check_duration(
@@ -478,6 +491,210 @@ class HFCEngine:
             logger.debug(f"Sampling frame check passed: combination {submission_combo} found in frame")
         
         return issues
+    
+    def _check_outliers(self, submission_data: Dict[str, Any], submission_uuid: str) -> List[QualityIssue]:
+        """
+        Check for outliers in specified variables using the configured method.
+        
+        Args:
+            submission_data: Submission data dictionary
+            submission_uuid: UUID of the current submission (to exclude from stats computation)
+            
+        Returns:
+            List of QualityIssue objects (empty if no outliers found)
+        """
+        issues = []
+        
+        if not self.outlier_variables:
+            return issues
+        
+        # Compute statistics for each variable from all existing submissions
+        for variable in self.outlier_variables:
+            try:
+                # Get value for this variable from current submission
+                value, field_path = self._get_field_value(submission_data, variable)
+                
+                # Skip if value is missing or is a special value (DK/NA)
+                if value is None:
+                    continue
+                
+                # Convert to numeric if possible
+                numeric_value = self._convert_value_type(value)
+                if not isinstance(numeric_value, (int, float)):
+                    continue  # Skip non-numeric values
+                
+                # Check for DK values
+                if isinstance(numeric_value, (int, float)) and numeric_value == self.dk_value:
+                    continue
+                
+                # Get statistics for this variable from all submissions
+                stats = self._compute_variable_statistics(variable, submission_uuid)
+                
+                if stats is None:
+                    logger.debug(f"Outlier check skipped for '{variable}': insufficient data")
+                    continue
+                
+                # Check if value is an outlier using the configured method
+                is_outlier = self._is_outlier(numeric_value, stats, self.outlier_method, self.outlier_threshold)
+                
+                if is_outlier:
+                    method_name = self.outlier_method.upper()
+                    issues.append(QualityIssue(
+                        check=f"outlier_{variable}",
+                        field=field_path or variable,
+                        value=numeric_value,
+                        message=f"Value {numeric_value} is an outlier ({method_name} method, threshold: {self.outlier_threshold})"
+                    ))
+                    logger.debug(f"Outlier detected: {variable}={numeric_value} using {self.outlier_method}")
+                    
+            except Exception as e:
+                logger.warning(f"Error checking outlier for variable '{variable}': {e}", exc_info=True)
+                continue
+        
+        return issues
+    
+    def _compute_variable_statistics(self, variable: str, exclude_uuid: Optional[str] = None) -> Optional[Dict[str, float]]:
+        """
+        Compute statistics for a variable from all submissions in the survey.
+        
+        Args:
+            variable: Variable name to compute statistics for
+            exclude_uuid: Optional UUID to exclude from computation (current submission)
+            
+        Returns:
+            Dictionary with statistics (mean, median, std, q1, q3, mad) or None if insufficient data
+        """
+        # Query all submissions for this survey
+        query = self.db.query(SubmissionCurrent).filter(
+            SubmissionCurrent.survey_id == self.survey_config.survey_id
+        )
+        
+        # Exclude current submission if provided
+        if exclude_uuid:
+            query = query.filter(SubmissionCurrent._uuid != exclude_uuid)
+        
+        submissions = query.all()
+        
+        # Extract values for this variable
+        values = []
+        for submission in submissions:
+            value, _ = self._get_field_value(submission.submission_data, variable)
+            if value is None:
+                continue
+            
+            # Convert to numeric
+            numeric_value = self._convert_value_type(value)
+            if not isinstance(numeric_value, (int, float)):
+                continue
+            
+            # Skip DK values
+            if isinstance(numeric_value, (int, float)) and numeric_value == self.dk_value:
+                continue
+            
+            values.append(float(numeric_value))
+        
+        # Need at least 3 values to compute meaningful statistics
+        if len(values) < 3:
+            return None
+        
+        # Compute statistics
+        try:
+            values_sorted = sorted(values)
+            n = len(values_sorted)
+            
+            # Basic statistics
+            mean = statistics.mean(values)
+            median = statistics.median(values)
+            
+            # Standard deviation
+            if n > 1:
+                std = statistics.stdev(values) if n > 1 else 0.0
+            else:
+                std = 0.0
+            
+            # Quartiles for IQR
+            q1_idx = int(n * 0.25)
+            q3_idx = int(n * 0.75)
+            q1 = values_sorted[q1_idx] if q1_idx < n else values_sorted[0]
+            q3 = values_sorted[q3_idx] if q3_idx < n else values_sorted[-1]
+            iqr = q3 - q1 if q3 > q1 else 0.0
+            
+            # Median Absolute Deviation (MAD) for robust outlier detection
+            deviations = [abs(v - median) for v in values]
+            mad = statistics.median(deviations) if deviations else 0.0
+            # Modified Z-score uses 1.4826 * MAD to approximate standard deviation
+            mad_std = 1.4826 * mad if mad > 0 else 0.0
+            
+            return {
+                'mean': mean,
+                'median': median,
+                'std': std,
+                'q1': q1,
+                'q3': q3,
+                'iqr': iqr,
+                'mad': mad,
+                'mad_std': mad_std,
+                'count': n
+            }
+        except Exception as e:
+            logger.warning(f"Error computing statistics for variable '{variable}': {e}", exc_info=True)
+            return None
+    
+    def _is_outlier(self, value: float, stats: Dict[str, float], method: str, threshold: float) -> bool:
+        """
+        Check if a value is an outlier using the specified method.
+        
+        Args:
+            value: Value to check
+            stats: Statistics dictionary from _compute_variable_statistics
+            method: Method to use ('iqr', 'mad', or 'zscore')
+            threshold: Threshold value (multiplier for IQR/MAD, or z-score threshold)
+            
+        Returns:
+            True if value is an outlier, False otherwise
+        """
+        if method == 'iqr':
+            # IQR method: outlier if value < Q1 - threshold*IQR or value > Q3 + threshold*IQR
+            q1 = stats['q1']
+            q3 = stats['q3']
+            iqr = stats['iqr']
+            
+            if iqr == 0:
+                return False  # Can't detect outliers if IQR is 0
+            
+            lower_bound = q1 - threshold * iqr
+            upper_bound = q3 + threshold * iqr
+            
+            return value < lower_bound or value > upper_bound
+        
+        elif method == 'mad':
+            # Modified Z-score using MAD: outlier if |modified_z_score| > threshold
+            # Formula: M = 0.6745 * (x - median) / MAD
+            median = stats['median']
+            mad = stats['mad']
+            
+            if mad == 0:
+                return False  # Can't detect outliers if MAD is 0
+            
+            modified_z_score = 0.6745 * (value - median) / mad
+            
+            return abs(modified_z_score) > threshold
+        
+        elif method == 'zscore':
+            # Z-score method: outlier if |z_score| > threshold
+            mean = stats['mean']
+            std = stats['std']
+            
+            if std == 0:
+                return False  # Can't detect outliers if std is 0
+            
+            z_score = (value - mean) / std
+            
+            return abs(z_score) > threshold
+        
+        else:
+            logger.warning(f"Unknown outlier method: {method}")
+            return False
     
     def _run_custom_rules(self, submission_data: Dict[str, Any], submission_uuid: str) -> List[QualityIssue]:
         """Run custom validation rules from database."""
