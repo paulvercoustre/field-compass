@@ -30,6 +30,7 @@ class QualityIssue(BaseModel):
     field: str = Field(..., description="Field name where issue was found")
     value: Any = Field(..., description="Value that triggered the issue")
     message: str = Field(..., description="Human-readable issue message")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata for the issue (e.g., statistical bounds for outliers)")
 
 
 # ============================================================================

@@ -92,7 +92,10 @@ class ETLPipeline:
             
             # Step 2: Initialize HFC engine
             hfc_engine = HFCEngine(self.db, survey_config)
-            
+
+            # Pre-compute outlier statistics for consistency across all submissions
+            hfc_engine.precompute_outlier_statistics()
+
             # Get Kobo API token for audit downloads
             kobo_token = os.getenv('KOBO_API_TOKEN')
             
@@ -160,7 +163,8 @@ class ETLPipeline:
                             'check': issue.check,
                             'field': issue.field,
                             'value': issue.value,
-                            'message': issue.message
+                            'message': issue.message,
+                            'metadata': issue.metadata
                         }
                         for issue in issues
                     ]

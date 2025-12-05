@@ -80,11 +80,113 @@ class HFCEngine:
         self.outlier_variables = quality_checks.get('outlier_variables', [])
         self.outlier_method = quality_checks.get('outlier_method', 'iqr')  # 'iqr', 'mad', or 'zscore'
         self.outlier_threshold = quality_checks.get('outlier_threshold', 1.5)  # For IQR multiplier or Z-score threshold
-        
+
+        # Statistics cache for outlier detection - computed once per ETL run
+        self._outlier_stats_cache: Dict[str, Dict[str, float]] = {}
+
         # Sampling frame configuration
         sampling_frame_config = self.config_data.get('sampling_frame', {})
         self.sampling_cols = sampling_frame_config.get('sampling_cols', [])
         self.frame_data = sampling_frame_config.get('frame_data', [])
+
+    def precompute_outlier_statistics(self) -> None:
+        """
+        Pre-compute statistics for all configured outlier variables.
+        This should be called once at the beginning of an ETL run to ensure
+        consistent statistics across all submissions.
+        """
+        if not self.flag_outliers or not self.outlier_variables:
+            return
+
+        logger.info(f"Pre-computing outlier statistics for variables: {self.outlier_variables}")
+
+        # Get all existing submissions for this survey
+        submissions = self.db.query(SubmissionCurrent).filter(
+            SubmissionCurrent.survey_id == self.survey_config.survey_id
+        ).all()
+
+        for variable in self.outlier_variables:
+            try:
+                # Extract values for this variable from all submissions
+                values = []
+                for submission in submissions:
+                    value, _ = self._get_field_value(submission.submission_data, variable)
+                    if value is None:
+                        continue
+
+                    # Convert to numeric
+                    numeric_value = self._convert_value_type(value)
+                    if not isinstance(numeric_value, (int, float)):
+                        continue
+
+                    # Skip DK values
+                    if isinstance(numeric_value, (int, float)) and numeric_value == self.dk_value:
+                        continue
+
+                    values.append(float(numeric_value))
+
+                # Compute statistics
+                if len(values) >= 2:  # Need at least 2 values
+                    stats = self._compute_statistics_from_values(values)
+                    if stats:
+                        self._outlier_stats_cache[variable] = stats
+                        logger.debug(f"Pre-computed stats for {variable}: mean={stats['mean']:.3f}, count={stats['count']}")
+                    else:
+                        logger.warning(f"Failed to compute statistics for variable {variable}")
+                else:
+                    logger.warning(f"Insufficient data for outlier statistics on variable {variable} (only {len(values)} values)")
+
+            except Exception as e:
+                logger.error(f"Error pre-computing statistics for variable {variable}: {e}", exc_info=True)
+
+    def _compute_statistics_from_values(self, values: List[float]) -> Optional[Dict[str, float]]:
+        """
+        Compute statistics from a list of values.
+
+        Args:
+            values: List of numeric values
+
+        Returns:
+            Dictionary with statistics or None if computation fails
+        """
+        try:
+            values_sorted = sorted(values)
+            n = len(values_sorted)
+
+            # Basic statistics
+            mean = statistics.mean(values)
+            median = statistics.median(values)
+
+            # Standard deviation
+            std = statistics.stdev(values) if n > 1 else 0.0
+
+            # Quartiles for IQR
+            q1_idx = int(n * 0.25)
+            q3_idx = int(n * 0.75)
+            q1 = values_sorted[q1_idx] if q1_idx < n else values_sorted[0]
+            q3 = values_sorted[q3_idx] if q3_idx < n else values_sorted[-1]
+            iqr = q3 - q1 if q3 > q1 else 0.0
+
+            # Median Absolute Deviation (MAD)
+            deviations = [abs(v - median) for v in values]
+            mad = statistics.median(deviations) if deviations else 0.0
+            # Modified Z-score uses 1.4826 * MAD to approximate standard deviation
+            mad_std = 1.4826 * mad if mad > 0 else 0.0
+
+            return {
+                'mean': mean,
+                'median': median,
+                'std': std,
+                'q1': q1,
+                'q3': q3,
+                'iqr': iqr,
+                'mad': mad,
+                'mad_std': mad_std,
+                'count': n
+            }
+        except Exception as e:
+            logger.error(f"Error computing statistics from values: {e}", exc_info=True)
+            return None
 
     def _convert_value_type(self, value: Any) -> Any:
         """
@@ -495,16 +597,16 @@ class HFCEngine:
     def _check_outliers(self, submission_data: Dict[str, Any], submission_uuid: str) -> List[QualityIssue]:
         """
         Check for outliers in specified variables using the configured method.
-        
+
         Args:
             submission_data: Submission data dictionary
             submission_uuid: UUID of the current submission (to exclude from stats computation)
-            
+
         Returns:
             List of QualityIssue objects (empty if no outliers found)
         """
         issues = []
-        
+
         if not self.outlier_variables:
             return issues
         
@@ -527,23 +629,51 @@ class HFCEngine:
                 if isinstance(numeric_value, (int, float)) and numeric_value == self.dk_value:
                     continue
                 
-                # Get statistics for this variable from all submissions
-                stats = self._compute_variable_statistics(variable, submission_uuid)
-                
+                # Get cached statistics for this variable
+                stats = self._outlier_stats_cache.get(variable)
+
                 if stats is None:
-                    logger.debug(f"Outlier check skipped for '{variable}': insufficient data")
+                    logger.debug(f"Outlier check skipped for '{variable}': no cached statistics available")
                     continue
+
+                # Check for small datasets and provide warning context
+                sample_size_warning = ""
+                if stats['count'] < 5:
+                    sample_size_warning = "WARNING: Very small sample size"
+                elif stats['count'] < 10:
+                    sample_size_warning = "NOTE: Small sample size"
                 
                 # Check if value is an outlier using the configured method
                 is_outlier = self._is_outlier(numeric_value, stats, self.outlier_method, self.outlier_threshold)
                 
                 if is_outlier:
                     method_name = self.outlier_method.upper()
+
+                    # Calculate bounds for display
+                    bounds_info = self._get_outlier_bounds(numeric_value, stats, self.outlier_method, self.outlier_threshold)
+
+                    # Include statistical context in metadata
+                    metadata = {
+                        "method": self.outlier_method,
+                        "threshold": self.outlier_threshold,
+                        "bounds": bounds_info,
+                        "statistics": {
+                            "mean": round(stats['mean'], 3),
+                            "median": round(stats['median'], 3),
+                            "count": stats['count']
+                        }
+                    }
+
+                    # Add sample size warning if applicable
+                    if sample_size_warning:
+                        metadata["sample_size_warning"] = sample_size_warning
+
                     issues.append(QualityIssue(
                         check=f"outlier_{variable}",
                         field=field_path or variable,
                         value=numeric_value,
-                        message=f"Value {numeric_value} is an outlier ({method_name} method, threshold: {self.outlier_threshold})"
+                        message=f"Value {numeric_value} is an outlier ({method_name} method, threshold: {self.outlier_threshold})",
+                        metadata=metadata
                     ))
                     logger.debug(f"Outlier detected: {variable}={numeric_value} using {self.outlier_method}")
                     
@@ -593,9 +723,9 @@ class HFCEngine:
             
             values.append(float(numeric_value))
         
-        # Need at least 3 values to compute meaningful statistics
-        if len(values) < 3:
-            return None
+        # Handle small datasets - need at least 2 values, but provide warnings for very small datasets
+        if len(values) < 2:
+            return None  # Can't compute meaningful statistics with less than 2 values
         
         # Compute statistics
         try:
@@ -695,6 +825,63 @@ class HFCEngine:
         else:
             logger.warning(f"Unknown outlier method: {method}")
             return False
+
+    def _get_outlier_bounds(self, value: float, stats: Dict[str, float], method: str, threshold: float) -> Dict[str, float]:
+        """
+        Calculate the upper and lower bounds for an outlier based on the detection method.
+
+        Args:
+            value: The outlier value (for context)
+            stats: Statistics dictionary
+            method: Detection method ('iqr', 'mad', or 'zscore')
+            threshold: Threshold value
+
+        Returns:
+            Dictionary with lower_bound and upper_bound
+        """
+        if method == 'iqr':
+            q1 = stats['q1']
+            q3 = stats['q3']
+            iqr = stats['iqr']
+
+            if iqr == 0:
+                return {"lower_bound": q1, "upper_bound": q3, "note": "No variation in data"}
+
+            lower_bound = q1 - threshold * iqr
+            upper_bound = q3 + threshold * iqr
+
+            return {"lower_bound": round(lower_bound, 3), "upper_bound": round(upper_bound, 3)}
+
+        elif method == 'mad':
+            median = stats['median']
+            mad = stats['mad']
+
+            if mad == 0:
+                return {"lower_bound": median, "upper_bound": median, "note": "No variation in data"}
+
+            # For MAD, the bounds are theoretical - we show the threshold distance from median
+            # The actual bounds depend on the MAD value and threshold
+            bound_distance = (threshold * mad) / 0.6745  # Convert back to approximate std units
+
+            lower_bound = median - bound_distance
+            upper_bound = median + bound_distance
+
+            return {"lower_bound": round(lower_bound, 3), "upper_bound": round(upper_bound, 3)}
+
+        elif method == 'zscore':
+            mean = stats['mean']
+            std = stats['std']
+
+            if std == 0:
+                return {"lower_bound": mean, "upper_bound": mean, "note": "No variation in data"}
+
+            lower_bound = mean - threshold * std
+            upper_bound = mean + threshold * std
+
+            return {"lower_bound": round(lower_bound, 3), "upper_bound": round(upper_bound, 3)}
+
+        else:
+            return {"lower_bound": 0, "upper_bound": 0, "note": "Unknown method"}
     
     def _run_custom_rules(self, submission_data: Dict[str, Any], submission_uuid: str) -> List[QualityIssue]:
         """Run custom validation rules from database."""

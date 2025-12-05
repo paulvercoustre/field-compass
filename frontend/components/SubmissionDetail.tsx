@@ -341,10 +341,167 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
           </div>
         )}
 
+        {/* General Quality Issues Section - Shows issues from general checks (not validation rules) */}
+        {data_quality_issues.length > 0 && (() => {
+            // Get check IDs from validation rules
+            const validationRuleCheckIds = new Set(
+                validationRules.map(rule => rule.rule_data.check_id || rule.rule_name)
+            );
+            
+            // Filter out issues that are from validation rules
+            const generalIssues = data_quality_issues.filter(
+                issue => !validationRuleCheckIds.has(issue.check)
+            );
+            
+            if (generalIssues.length === 0) return null;
+            
+            return (
+                <div className="mb-6">
+                    <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">General Quality Issues</h3>
+                    <div className="space-y-3">
+                        {generalIssues.map((issue, index) => {
+                            const isOutlier = issue.check.startsWith('outlier_');
+                            const variableName = isOutlier ? issue.check.replace('outlier_', '') : null;
+                            const fieldValue = variableName ? getFieldValue(variableName) : undefined;
+                            const questionLabel = variableName && surveyConfig ? getQuestionLabel(variableName, surveyConfig) : null;
+                            const displayValue = fieldValue !== undefined && fieldValue !== null && variableName && surveyConfig ? formatValueForDisplay(fieldValue, variableName, surveyConfig) : null;
+
+                            // Extract outlier metadata if available
+                            const outlierMetadata = issue.metadata;
+
+                            // Debug logging (temporary)
+                            // if (isOutlier) {
+                            //     console.log('Outlier issue:', JSON.stringify(issue, null, 2));
+                            //     console.log('Outlier metadata:', outlierMetadata);
+                            // }
+                            
+                            return (
+                                <div
+                                    key={`${issue.check}-${index}`}
+                                    className="p-4 rounded-md border bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50"
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <svg className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                                <h4 className="font-semibold text-sm text-orange-800 dark:text-orange-300">
+                                                    {isOutlier 
+                                                        ? `Outlier: ${questionLabel || variableName || issue.field}`
+                                                        : issue.check.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                                    }
+                                                </h4>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-4">
+                                            <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                            <span className="text-sm font-medium text-red-700 dark:text-red-400">Flagged</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Show issue message */}
+                                    <p className="text-sm mt-3 text-orange-700 dark:text-orange-400">
+                                        {issue.message}
+                                    </p>
+                                    
+                                    {/* Show field and value details */}
+                                    <div className="mt-3 space-y-2">
+                                        {issue.field && (
+                                            <div className="text-sm">
+                                                <span className="font-medium text-gray-700 dark:text-gray-300">Field: </span>
+                                                <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">
+                                                    {issue.field}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {issue.value !== null && issue.value !== undefined && (
+                                            <div className="text-sm">
+                                                <span className="font-medium text-gray-700 dark:text-gray-300">Value: </span>
+                                                <span className="text-gray-600 dark:text-gray-400">
+                                                    {String(issue.value)}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {/* For outliers, show the variable label and statistical context */}
+                                        {isOutlier && variableName && (
+                                            <div className="pl-3 border-l-2 border-orange-300 dark:border-orange-600 mt-2 space-y-2">
+                                                {questionLabel && (
+                                                    <div className="text-sm">
+                                                        <span className="font-medium text-gray-700 dark:text-gray-300">
+                                                            {questionLabel}
+                                                        </span>
+                                                        <span className="text-gray-500 dark:text-gray-400 ml-2 font-mono text-xs">
+                                                            ({variableName})
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {fieldValue !== undefined && fieldValue !== null && (
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                        <span className="font-medium">Value: </span>
+                                                        <span>{displayValue !== null ? displayValue : String(fieldValue)}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Statistical bounds */}
+                                                {outlierMetadata && outlierMetadata.bounds ? (
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                        <span className="font-medium">Expected range: </span>
+                                                        <span className="font-mono">
+                                                            {outlierMetadata.bounds.lower_bound !== undefined && outlierMetadata.bounds.upper_bound !== undefined
+                                                                ? `${outlierMetadata.bounds.lower_bound} to ${outlierMetadata.bounds.upper_bound}`
+                                                                : outlierMetadata.bounds.note || 'Unable to calculate'
+                                                            }
+                                                        </span>
+                                                        <span className="text-xs ml-2">
+                                                            ({outlierMetadata.method?.toUpperCase()} method, threshold: {outlierMetadata.threshold})
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-red-600 dark:text-red-400">
+                                                        No bounds data available
+                                                    </div>
+                                                )}
+
+                                                {/* Statistics */}
+                                                {outlierMetadata && outlierMetadata.statistics ? (
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                        <span className="font-medium">Dataset stats: </span>
+                                                        <span className="font-mono">
+                                                            mean={outlierMetadata.statistics.mean},
+                                                            median={outlierMetadata.statistics.median},
+                                                            n={outlierMetadata.statistics.count}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-red-600 dark:text-red-400">
+                                                        No statistics data available
+                                                    </div>
+                                                )}
+
+                                                {/* Sample size warning */}
+                                                {outlierMetadata && outlierMetadata.sample_size_warning && (
+                                                    <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded">
+                                                        <span className="font-medium">⚠️ {outlierMetadata.sample_size_warning}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        })()}
+
         {/* Quality Checks Section - Always show all checks */}
         {validationRules.length > 0 && (
             <div className="mb-6">
-                <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Quality Checks</h3>
+                <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Custom Quality Checks</h3>
                 {isLoadingRules ? (
                     <div className="flex justify-center py-4">
                         <Spinner />

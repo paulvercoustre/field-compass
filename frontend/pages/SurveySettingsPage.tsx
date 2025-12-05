@@ -96,8 +96,18 @@ const SurveySettingsPage: React.FC = () => {
 
   useEffect(() => {
     if (koboToolData && koboToolData.variableMap) {
-      const vars = Array.from(koboToolData.variableMap.keys());
+      // Filter to only numeric variables (integer, decimal, calculate)
+      const numericTypes = ['integer', 'decimal', 'calculate'];
+      const vars = Array.from(koboToolData.variableMap.entries())
+        .filter(([_, variable]) => numericTypes.includes(variable.type))
+        .map(([name, _]) => name);
       setAvailableVariables(vars);
+      
+      // Clean up outlier_variables to remove any non-numeric variables
+      setQualityChecks((prev) => ({
+        ...prev,
+        outlier_variables: prev.outlier_variables.filter((v) => vars.includes(v)),
+      }));
     }
   }, [koboToolData]);
 
@@ -134,6 +144,16 @@ const SurveySettingsPage: React.FC = () => {
         setGlobalParameters({ ...globalParameters, ...cd.global_parameters });
       }
       if (cd.quality_checks) {
+        // Filter outlier variables to only include numeric ones
+        const numericTypes = ['integer', 'decimal', 'calculate'];
+        const savedOutlierVars = cd.quality_checks.outlier_variables ?? [];
+        const validOutlierVars = koboToolData?.variableMap
+          ? savedOutlierVars.filter((varName: string) => {
+              const varInfo = koboToolData.variableMap.get(varName);
+              return varInfo && numericTypes.includes(varInfo.type);
+            })
+          : savedOutlierVars; // If no tool data, keep all (will be filtered later)
+        
         setQualityChecks({
           flag_out_of_period: cd.quality_checks.flag_out_of_period ?? false,
           flag_weekend: cd.quality_checks.flag_weekend ?? false,
@@ -143,7 +163,7 @@ const SurveySettingsPage: React.FC = () => {
           office_hours_end: cd.quality_checks.office_hours_end ?? '17:00',
           flag_sampling_frame: cd.quality_checks.flag_sampling_frame ?? false,
           flag_outliers: cd.quality_checks.flag_outliers ?? false,
-          outlier_variables: cd.quality_checks.outlier_variables ?? [],
+          outlier_variables: validOutlierVars,
           outlier_method: cd.quality_checks.outlier_method ?? 'iqr',
           outlier_threshold: cd.quality_checks.outlier_threshold ?? 1.5,
         });
@@ -1105,6 +1125,55 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Survey Duration Limits */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                  <h3 className="text-md font-medium text-gray-900 dark:text-white mb-3">Survey Duration Limits</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                        Min Survey Duration (minutes)
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={globalParameters.min_survey_duration_minutes || ''}
+                          onChange={(e) => setGlobalParameters({ ...globalParameters, min_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
+                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="e.g., 10"
+                        />
+                      ) : (
+                        <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
+                          {globalParameters.min_survey_duration_minutes ?? '—'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                        Max Survey Duration (minutes)
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={globalParameters.max_survey_duration_minutes || ''}
+                          onChange={(e) => setGlobalParameters({ ...globalParameters, max_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
+                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="e.g., 240"
+                        />
+                      ) : (
+                        <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
+                          {globalParameters.max_survey_duration_minutes ?? '—'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Outlier Detection Settings */}
+            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Outlier Detection</h2>
+              <div className="space-y-6">
                 {/* Outlier Detection Flag */}
                 <div className="space-y-2">
                   <div className="flex items-start">
@@ -1134,6 +1203,9 @@ const SurveySettingsPage: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                           Select Variables to Check
                         </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                          Only numeric variables (integer, decimal, calculate) are shown.
+                        </p>
                         {isEditing ? (
                           <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
                             {availableVariables.length > 0 ? (
@@ -1192,12 +1264,20 @@ const SurveySettingsPage: React.FC = () => {
                         {isEditing ? (
                           <select
                             value={qualityChecks.outlier_method}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const newMethod = e.target.value as 'iqr' | 'mad' | 'zscore';
+                              // Update threshold based on method
+                              const defaultThresholds = {
+                                iqr: 1.5,
+                                mad: 3.0,
+                                zscore: 2.0,
+                              };
                               setQualityChecks({
                                 ...qualityChecks,
-                                outlier_method: e.target.value as 'iqr' | 'mad' | 'zscore',
-                              })
-                            }
+                                outlier_method: newMethod,
+                                outlier_threshold: defaultThresholds[newMethod],
+                              });
+                            }}
                             className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           >
                             <option value="iqr">IQR (Interquartile Range)</option>
@@ -1215,10 +1295,10 @@ const SurveySettingsPage: React.FC = () => {
                         )}
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                           {qualityChecks.outlier_method === 'iqr'
-                            ? 'Uses quartiles and IQR. Default threshold: 1.5 (standard)'
+                            ? 'Uses quartiles and IQR. Standard threshold: 1.5'
                             : qualityChecks.outlier_method === 'mad'
-                            ? 'Robust method using median and MAD. Default threshold: 3.0'
-                            : 'Uses mean and standard deviation. Default threshold: 2.0 or 3.0'}
+                            ? 'Robust method using median and MAD. Standard threshold: 3.0'
+                            : 'Uses mean and standard deviation. Standard threshold: 2.0 (moderate) or 3.0 (strict)'}
                         </p>
                       </div>
 
@@ -1257,52 +1337,9 @@ const SurveySettingsPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-
-                {/* Survey Duration */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                  <h3 className="text-md font-medium text-gray-900 dark:text-white mb-3">Survey Duration Limits</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                        Min Survey Duration (minutes)
-                      </label>
-                      {isEditing ? (
-                        <input
-                          type="number"
-                          value={globalParameters.min_survey_duration_minutes || ''}
-                          onChange={(e) => setGlobalParameters({ ...globalParameters, min_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          placeholder="e.g., 10"
-                        />
-                      ) : (
-                        <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                          {globalParameters.min_survey_duration_minutes ?? '—'}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                        Max Survey Duration (minutes)
-                      </label>
-                      {isEditing ? (
-                        <input
-                          type="number"
-                          value={globalParameters.max_survey_duration_minutes || ''}
-                          onChange={(e) => setGlobalParameters({ ...globalParameters, max_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          placeholder="e.g., 240"
-                        />
-                      ) : (
-                        <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                          {globalParameters.max_survey_duration_minutes ?? '—'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
               </div>
             </section>
+
 
             {/* Data Quality Check Builder */}
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">

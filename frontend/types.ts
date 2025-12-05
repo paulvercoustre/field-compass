@@ -11,6 +11,21 @@ export interface QualityIssue {
   field: string;
   value: any;
   message: string;
+  metadata?: {
+    method?: string;
+    threshold?: number;
+    bounds?: {
+      lower_bound?: number;
+      upper_bound?: number;
+      note?: string;
+    };
+    statistics?: {
+      mean?: number;
+      median?: number;
+      count?: number;
+    };
+    sample_size_warning?: string;
+  };
 }
 
 export interface Submission {
