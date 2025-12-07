@@ -184,6 +184,39 @@ const Dashboard: React.FC = () => {
     setFilterState(newFilters);
   }, []);
 
+  // Keyboard navigation for submissions
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only handle arrow keys when a submission is selected and there are submissions
+      if (!selectedSubmission || submissions.length === 0) {
+        return;
+      }
+
+      // Don't handle if user is typing in an input field
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      const currentIndex = submissions.findIndex(s => s._id === selectedSubmission._id);
+      
+      if (event.key === 'ArrowDown' && currentIndex < submissions.length - 1) {
+        event.preventDefault();
+        const nextSubmission = submissions[currentIndex + 1];
+        handleSelectSubmission(nextSubmission._id);
+      } else if (event.key === 'ArrowUp' && currentIndex > 0) {
+        event.preventDefault();
+        const prevSubmission = submissions[currentIndex - 1];
+        handleSelectSubmission(prevSubmission._id);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedSubmission, submissions, handleSelectSubmission]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Header with Refresh Button */}
