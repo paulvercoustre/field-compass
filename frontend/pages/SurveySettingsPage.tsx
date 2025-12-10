@@ -91,6 +91,19 @@ const SurveySettingsPage: React.FC = () => {
   useEffect(() => {
     if (selectedSurvey) {
       loadSurveyConfig();
+
+      // Check if we should open the quality tab (set from CreateSurveyPage)
+      const shouldOpenQualityTab = localStorage.getItem('openQualityTab');
+      const targetSurveyId = localStorage.getItem('openQualityTabForSurveyId');
+
+      // Only open quality tab if this is the survey we just created
+      if (shouldOpenQualityTab === 'true' && targetSurveyId === selectedSurvey.survey_id) {
+        setActiveTab('quality');
+        setIsEditing(true); // Enable edit mode so user can immediately configure quality checks
+        // Clear the flags so they don't persist
+        localStorage.removeItem('openQualityTab');
+        localStorage.removeItem('openQualityTabForSurveyId');
+      }
     }
   }, [selectedSurvey]);
 
@@ -977,7 +990,7 @@ const SurveySettingsPage: React.FC = () => {
               </div>
             </section>
           </div>
-        ) : (
+        ) : activeTab === 'quality' ? (
           <div className="space-y-6">
             {/* Quality Flag Settings */}
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -1404,7 +1417,7 @@ const SurveySettingsPage: React.FC = () => {
               )}
             </section>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

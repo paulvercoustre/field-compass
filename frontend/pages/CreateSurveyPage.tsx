@@ -12,12 +12,15 @@ import StagedRulesList from '../components/rule-builder/StagedRulesList';
 import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
+import QualityCheckPromptModal from '../components/QualityCheckPromptModal';
 
 const CreateSurveyPage: React.FC = () => {
-  const { refreshSurveys, setSelectedSurvey } = useSurvey();
+  const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showQualityCheckPrompt, setShowQualityCheckPrompt] = useState(false);
+  const [newlyCreatedSurveyId, setNewlyCreatedSurveyId] = useState<string | null>(null);
 
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
@@ -239,17 +242,127 @@ const CreateSurveyPage: React.FC = () => {
       setSuccess('Survey created successfully!');
       
       // Refresh surveys and select the new one
-      await refreshSurveys();
       const surveys = await refreshSurveys();
       const createdSurvey = surveys.find(s => s.survey_id === newSurvey.survey_id);
       if (createdSurvey) {
+        // Set the selected survey first
         setSelectedSurvey(createdSurvey);
+        setNewlyCreatedSurveyId(newSurvey.survey_id);
+        // Show the quality check prompt modal
+        // Use a small delay to ensure context state is updated
+        setTimeout(() => {
+          setShowQualityCheckPrompt(true);
+        }, 50);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create survey');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleConfigureNow = () => {
+    setShowQualityCheckPrompt(false);
+    // Set flag in localStorage to open quality tab in settings
+    // Also store the survey ID to ensure we're editing the correct survey
+    if (newlyCreatedSurveyId) {
+      localStorage.setItem('openQualityTab', 'true');
+      localStorage.setItem('openQualityTabForSurveyId', newlyCreatedSurveyId);
+
+      // Ensure the survey is properly selected and persisted
+      const ensureSurveySelected = async () => {
+        try {
+          // Refresh surveys to make sure we have the latest list
+          const surveyList = await refreshSurveys();
+          const targetSurvey = surveyList.find(s => s.survey_id === newlyCreatedSurveyId);
+
+          if (targetSurvey) {
+            // Force select the survey multiple times to ensure it sticks
+            setSelectedSurvey(targetSurvey);
+            localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
+
+            // Wait a bit and verify the selection is still correct
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            // Double-check that the survey is still selected
+            if (!selectedSurvey || selectedSurvey.survey_id !== newlyCreatedSurveyId) {
+              setSelectedSurvey(targetSurvey);
+              localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
+            }
+
+            // Navigate after ensuring selection is stable
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('navigateToSettings'));
+            }, 100);
+          } else {
+            console.warn('Newly created survey not found in refreshed list');
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('navigateToSettings'));
+            }, 100);
+          }
+        } catch (err) {
+          console.error('Error ensuring survey selection:', err);
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('navigateToSettings'));
+          }, 100);
+        }
+      };
+
+      ensureSurveySelected();
+    }
+  };
+
+  const handleConfigureLater = () => {
+    setShowQualityCheckPrompt(false);
+
+    // Clear flags first
+    localStorage.removeItem('openQualityTab');
+    localStorage.removeItem('openQualityTabForSurveyId');
+
+    // Ensure the survey is selected before navigating to dashboard
+    if (newlyCreatedSurveyId) {
+      const ensureSurveySelected = async () => {
+        try {
+          const surveyList = await refreshSurveys();
+          const targetSurvey = surveyList.find(s => s.survey_id === newlyCreatedSurveyId);
+
+          if (targetSurvey) {
+            setSelectedSurvey(targetSurvey);
+            localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
+
+            // Wait and verify
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            if (!selectedSurvey || selectedSurvey.survey_id !== newlyCreatedSurveyId) {
+              setSelectedSurvey(targetSurvey);
+              localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
+            }
+
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('navigateToDashboard'));
+            }, 100);
+          } else {
+            console.warn('Newly created survey not found in list for dashboard navigation');
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('navigateToDashboard'));
+            }, 100);
+          }
+        } catch (err) {
+          console.error('Error ensuring survey selection for dashboard:', err);
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('navigateToDashboard'));
+          }, 100);
+        }
+      };
+
+      ensureSurveySelected();
+    } else {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('navigateToDashboard'));
+      }, 100);
+    }
+
+    setNewlyCreatedSurveyId(null);
   };
 
   const renderVariableDropdown = (
@@ -534,6 +647,13 @@ const CreateSurveyPage: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {showQualityCheckPrompt && (
+        <QualityCheckPromptModal
+          onConfigureNow={handleConfigureNow}
+          onConfigureLater={handleConfigureLater}
+        />
+      )}
     </div>
   );
 };

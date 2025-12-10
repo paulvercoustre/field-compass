@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SurveyProvider } from './contexts/SurveyContext';
 import Dashboard from './components/Dashboard';
 import DataCollectionProgressPage from './pages/DataCollectionProgressPage';
@@ -11,6 +11,24 @@ type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | '
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>('dashboard');
+
+  // Listen for navigation events from CreateSurveyPage
+  useEffect(() => {
+    const handleNavigateToSettings = () => {
+      setView('settings');
+    };
+
+    const handleNavigateToDashboard = () => {
+      setView('dashboard');
+    };
+
+    window.addEventListener('navigateToSettings', handleNavigateToSettings);
+    window.addEventListener('navigateToDashboard', handleNavigateToDashboard);
+    return () => {
+      window.removeEventListener('navigateToSettings', handleNavigateToSettings);
+      window.removeEventListener('navigateToDashboard', handleNavigateToDashboard);
+    };
+  }, []);
 
   const NavButton: React.FC<{ currentView: View; targetView: View; onClick: () => void; children: React.ReactNode }> = ({
     currentView,
