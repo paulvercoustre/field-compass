@@ -90,6 +90,9 @@ const SurveySettingsPage: React.FC = () => {
 
   useEffect(() => {
     if (selectedSurvey) {
+      // Clear any success/error messages when switching to a different survey
+      setSuccess(null);
+      setError(null);
       loadSurveyConfig();
 
       // Check if we should open the quality tab (set from CreateSurveyPage)
@@ -104,8 +107,20 @@ const SurveySettingsPage: React.FC = () => {
         localStorage.removeItem('openQualityTab');
         localStorage.removeItem('openQualityTabForSurveyId');
       }
+    } else {
+      // Reset deletion state when no survey is selected (keep success message visible)
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setError(null);
     }
   }, [selectedSurvey]);
+
+  // Reset deletion state when modal is closed
+  useEffect(() => {
+    if (!showDeleteConfirm) {
+      setIsDeleting(false);
+    }
+  }, [showDeleteConfirm]);
 
   useEffect(() => {
     if (koboToolData && koboToolData.variableMap) {
@@ -129,6 +144,7 @@ const SurveySettingsPage: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setSuccess(null);
     try {
       const data = await getSurveyConfig(selectedSurvey.survey_id);
       setConfig(data);
@@ -370,6 +386,8 @@ const SurveySettingsPage: React.FC = () => {
   };
 
   const handleDeleteClick = () => {
+    // Reset deletion state when opening the modal
+    setIsDeleting(false);
     setShowDeleteConfirm(true);
   };
 
@@ -384,12 +402,20 @@ const SurveySettingsPage: React.FC = () => {
       await deleteSurvey(selectedSurvey.survey_id);
       setSuccess('Survey deleted successfully!');
       
+      // Close confirmation dialog and reset state
+      setShowDeleteConfirm(false);
+      setIsDeleting(false);
+      
       // Clear selection and refresh surveys list
       setSelectedSurvey(null);
-      await refreshSurveys();
+      const updatedSurveys = await refreshSurveys({ allowAutoSelect: false });
       
-      // Close confirmation dialog
-      setShowDeleteConfirm(false);
+      // Don't auto-select a survey after deletion - let user choose
+      // Use setTimeout to ensure this runs after refreshSurveys' state updates
+      setTimeout(() => {
+        setSelectedSurvey(null);
+        localStorage.removeItem('selectedSurveyId');
+      }, 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete survey');
       setIsDeleting(false);
@@ -398,6 +424,7 @@ const SurveySettingsPage: React.FC = () => {
 
   const handleDeleteCancel = () => {
     setShowDeleteConfirm(false);
+    setIsDeleting(false);
   };
 
   const handleSaveRule = useCallback(async (rule: Omit<StagedRule, 'id'>) => {
@@ -533,7 +560,16 @@ const SurveySettingsPage: React.FC = () => {
   if (!selectedSurvey) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center">
+        <div className="text-center max-w-lg w-full px-4">
+          <div className="mb-4 space-y-2">
+            <ErrorMessage error={error} className="text-base" />
+            <SuccessMessage
+              message={success}
+              onDismiss={() => setSuccess(null)}
+              autoHide={true}
+              autoHideDelay={5000}
+            />
+          </div>
           <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">No survey selected</p>
           <p className="text-gray-500 text-sm">Please select a survey from the sidebar to view its settings.</p>
         </div>

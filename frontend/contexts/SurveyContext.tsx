@@ -1,13 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { getSurveys, Survey } from '../services/progressApi';
 
+interface RefreshOptions {
+  allowAutoSelect?: boolean;
+}
+
 interface SurveyContextType {
   selectedSurvey: Survey | null;
   surveys: Survey[];
   isLoading: boolean;
   error: string | null;
   setSelectedSurvey: (survey: Survey | null) => void;
-  refreshSurveys: () => Promise<Survey[]>;
+  refreshSurveys: (options?: RefreshOptions) => Promise<Survey[]>;
 }
 
 const SurveyContext = createContext<SurveyContextType | undefined>(undefined);
@@ -30,7 +34,8 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refreshSurveys = useCallback(async () => {
+  const refreshSurveys = useCallback(async (options: RefreshOptions = {}) => {
+    const { allowAutoSelect = true } = options;
     setIsLoading(true);
     setError(null);
     try {
@@ -41,6 +46,14 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
       
       // Use functional update to get current selectedSurvey state
       setSelectedSurvey((currentSelected) => {
+        if (!allowAutoSelect) {
+          // Keep current selection if it still exists, otherwise clear
+          if (currentSelected && data.find(s => s.survey_id === currentSelected.survey_id)) {
+            return currentSelected;
+          }
+          return null;
+        }
+
         // Auto-select first survey if none selected and surveys available
         if (!currentSelected && data.length > 0) {
           return data[0];
