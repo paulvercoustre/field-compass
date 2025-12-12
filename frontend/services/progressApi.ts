@@ -130,16 +130,18 @@ export const progressApi = {
 
   /**
    * Fetch performance data from the API
-   * @param surveyId Optional survey ID to filter by (UUID string)
+   * @param surveyId Required survey ID (UUID string)
    */
-  getPerformanceData: async (surveyId?: string): Promise<PerformanceData> => {
+  getPerformanceData: async (surveyId: string): Promise<PerformanceData> => {
+    if (!surveyId) {
+      throw new Error('surveyId is required');
+    }
+    
     try {
       const params = new URLSearchParams();
-      if (surveyId) {
-        params.append('survey_id', surveyId);
-      }
+      params.append('survey_id', surveyId);
 
-      const url = `${API_BASE_URL}/api/performance${params.toString() ? `?${params}` : ''}`;
+      const url = `${API_BASE_URL}/api/performance?${params.toString()}`;
       const response = await fetch(url);
       
       if (!response.ok) {

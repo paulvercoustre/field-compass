@@ -22,7 +22,13 @@ const ProgressTracker: React.FC = () => {
       try {
         // Get the first survey (or we could add survey selection UI later)
         const surveys = await getSurveys();
-        const surveyId = surveys.length > 0 ? surveys[0].survey_id : undefined;
+        if (surveys.length === 0) {
+          setError('No surveys found. Please create a survey first.');
+          setIsLoading(false);
+          return;
+        }
+        
+        const surveyId = surveys[0].survey_id;
         
         const [progress, performance] = await Promise.all([
           progressApi.getProgressData(surveyId),

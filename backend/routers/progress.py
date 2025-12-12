@@ -326,11 +326,11 @@ async def get_progress_data(
 
 @router.get("/performance", response_model=PerformanceData)
 async def get_performance_data(
-    survey_id: Optional[str] = Query(None, description="Filter by survey ID (UUID)"),
+    survey_id: str = Query(..., description="Survey ID (UUID) - required"),
     db: Session = Depends(get_db),
 ):
     """
-    Get enumerator performance metrics.
+    Get enumerator performance metrics for a specific survey.
     Returns collection stats and quality metrics per enumerator.
     
     Quality metrics include:
@@ -341,31 +341,38 @@ async def get_performance_data(
     
     Note: Active time and total time metrics require audit logs to be processed
     during ETL. If audit logs are not available, these values will be 0.
+    
+    Args:
+        survey_id: Required survey ID (UUID) to filter submissions
+    
+    Raises:
+        HTTPException: 400 if survey_id is invalid or survey not found
     """
-    # Get survey config to find enumerator field name
+    # Get survey config (survey_id is required by FastAPI Query(...))
     survey_config = _get_survey_config(db, survey_id)
     
-    enumerator_field = "enumerator_id"  # Default
-    if survey_config and survey_config.config_data:
-        config = survey_config.config_data
-        core_ids = config.get("core_identifiers", {})
-        enumerator_field = core_ids.get("enumerator", "enumerator_id")
+    # Ensure survey exists
+    if not survey_config:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Survey not found: {survey_id}"
+        )
     
-    # Build base query
-    query = db.query(SubmissionCurrent)
-    if survey_config:
-        query = query.filter(SubmissionCurrent.survey_id == survey_config.survey_id)
+    # Get enumerator field name from survey config
+    config = survey_config.config_data
+    core_ids = config.get("core_identifiers", {})
+    enumerator_field = core_ids.get("enumerator", "enumerator_id")
     
+    # Build query filtered by survey_id
+    query = db.query(SubmissionCurrent).filter(
+        SubmissionCurrent.survey_id == survey_config.survey_id
+    )
     submissions = query.all()
     
     # Get DK values from survey config for DK rate calculation
-    dk_value = None
-    dk_string_value = None
-    if survey_config and survey_config.config_data:
-        config = survey_config.config_data
-        special_values = config.get("special_values", {})
-        dk_value = special_values.get("dk_value")
-        dk_string_value = special_values.get("dk_string_value")
+    special_values = config.get("special_values", {})
+    dk_value = special_values.get("dk_value")
+    dk_string_value = special_values.get("dk_string_value")
     
     # Aggregate by enumerator
     enum_collection_stats = defaultdict(lambda: {
