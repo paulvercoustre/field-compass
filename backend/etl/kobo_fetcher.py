@@ -190,6 +190,48 @@ class KoboFetcher:
             Asset information dictionary
         """
         return self._make_request(f'/assets/{asset_uid}/')
+    
+    def get_submission_by_uuid(self, asset_uid: str, submission_uuid: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch a single submission by UUID.
+        
+        Args:
+            asset_uid: KoboToolbox asset UID
+            submission_uuid: Submission UUID to search for
+            
+        Returns:
+            Submission dictionary if found, None otherwise
+        """
+        # Query submissions with UUID filter
+        # Kobo API v2 uses MongoDB-style query syntax as JSON string
+        import json
+        query_dict = {"_uuid": submission_uuid}
+        query_json = json.dumps(query_dict)
+        
+        params = {
+            'format': 'json',
+            'query': query_json,
+            'limit': 1
+        }
+        
+        try:
+            response = self._make_request(f'/assets/{asset_uid}/data/', params=params)
+            submissions = response.get('results', [])
+            
+            if submissions:
+                return submissions[0]
+            return None
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"HTTP error fetching submission by UUID {submission_uuid}: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"Response status: {e.response.status_code}")
+                logger.error(f"Response body: {e.response.text[:500]}")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching submission by UUID {submission_uuid}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
 
 
 def create_fetcher_from_env() -> KoboFetcher:

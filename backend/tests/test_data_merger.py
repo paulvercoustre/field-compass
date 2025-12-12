@@ -96,30 +96,33 @@ class TestMergeSubmission:
         assert submission.qa_status == "PENDING_APPROVAL"  # Will be updated by HFC engine
     
     def test_update_existing_submission(self, test_db, test_survey_config, sample_kobo_submission):
-        """Test updating an existing submission."""
+        """Test updating an existing submission with edit detection."""
         # Create initial submission
         parsed = parse_kobo_submission(sample_kobo_submission)
         submission1, _, _ = merge_submission(
             test_db,
             parsed,
             str(test_survey_config.survey_id),
-            kobo_asset_id=test_survey_config.kobo_asset_id
+            kobo_asset_id=test_survey_config.kobo_asset_id,
+            kobo_data=sample_kobo_submission
         )
         
         # Refresh to get the actual stored datetime (might be timezone-naive from SQLite)
         test_db.refresh(submission1)
         
-        # Update with new data (simulate edit) - use a time that's definitely > 300 seconds later
-        from datetime import datetime, timezone, timedelta
-        # Make sure the new end time is more than 300 seconds (5 minutes) after submission_time
-        new_end_time = submission1._submission_time + timedelta(seconds=400)
-        # Ensure it's timezone-aware
-        if new_end_time.tzinfo is None:
-            new_end_time = new_end_time.replace(tzinfo=timezone.utc)
-        
+        # Update with new data (simulate edit) - change UUID and add deprecatedID
         updated_submission = sample_kobo_submission.copy()
-        updated_submission["end"] = new_end_time.isoformat()
+        old_uuid = updated_submission["_uuid"]
+        new_uuid = "test-uuid-001-edited"  # New UUID after edit
+        updated_submission["_uuid"] = new_uuid
         updated_submission["age"] = 26  # Changed value
+        
+        # Add deprecatedID to indicate edit (this is how Kobo marks edited submissions)
+        updated_submission["meta"] = {
+            "deprecatedID": f"uuid:{old_uuid}",
+            "instanceID": f"uuid:{new_uuid}",
+            "rootUuid": f"uuid:{old_uuid}"
+        }
         
         parsed2 = parse_kobo_submission(updated_submission)
         submission2, history, is_new = merge_submission(
@@ -127,14 +130,15 @@ class TestMergeSubmission:
             parsed2,
             str(test_survey_config.survey_id),
             kobo_asset_id=test_survey_config.kobo_asset_id,
-            threshold_seconds=300
+            kobo_data=updated_submission  # Pass raw data for deprecatedID detection
         )
         
         assert is_new is False
         assert submission2._id == submission1._id  # Same submission
         assert submission2.is_edited is True  # Should be marked as edited
-        # History should be created if there's a significant edit
-        # (depends on threshold_seconds)
+        assert submission2._uuid == new_uuid  # UUID should be updated
+        assert history is not None  # History record should be created
+        assert history.deprecated_uuid == old_uuid  # History should contain old UUID
     
     def test_kobo_edit_url_construction(self, test_db, test_survey_config, sample_kobo_submission):
         """Test that Kobo edit URL is constructed correctly."""

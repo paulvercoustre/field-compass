@@ -137,8 +137,8 @@ class ETLPipeline:
                         self.db,
                         parsed,
                         survey_id,
-                        threshold_seconds=300,
-                        kobo_asset_id=survey_config.kobo_asset_id
+                        kobo_asset_id=survey_config.kobo_asset_id,
+                        kobo_data=kobo_sub  # Pass raw Kobo data for deprecatedID detection
                     )
                     
                     if is_new:
@@ -257,8 +257,8 @@ class ETLPipeline:
             self.db,
             parsed,
             survey_id,
-            threshold_seconds=300,
-            kobo_asset_id=survey_config.kobo_asset_id
+            kobo_asset_id=survey_config.kobo_asset_id,
+            kobo_data=kobo_submission  # Pass raw Kobo data for deprecatedID detection
         )
         
         # Run HFC checks

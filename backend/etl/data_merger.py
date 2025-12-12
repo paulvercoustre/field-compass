@@ -52,37 +52,40 @@ def calculate_json_diff(old_data: Dict[str, Any], new_data: Dict[str, Any]) -> L
 
 
 def is_edited_submission(
-    existing_submission: SubmissionCurrent,
-    new_end_timestamp: datetime,
-    threshold_seconds: int = 300
-) -> bool:
+    kobo_data: Optional[Dict[str, Any]] = None
+) -> Tuple[bool, str]:
     """
-    Check if a submission has been edited based on timestamp comparison.
+    Check if a submission has been edited by looking for deprecatedID.
     
-    A submission is considered edited if:
-    - The new 'end' timestamp is greater than the original '_submission_time' + threshold
+    Kobo sets the 'meta/deprecatedID' field when a submission is edited.
+    This is the most reliable indicator of an edit.
     
     Args:
-        existing_submission: Existing submission from database
-        new_end_timestamp: New 'end' timestamp from Kobo
-        threshold_seconds: Threshold in seconds (default: 300 = 5 minutes)
+        kobo_data: Raw Kobo data to check for deprecatedID
         
     Returns:
-        True if submission was edited, False otherwise
+        Tuple of (is_edited: bool, reason: str)
     """
-    # Handle timezone-aware vs timezone-naive datetime comparison
-    existing_time = existing_submission._submission_time
-    if existing_time.tzinfo is None and new_end_timestamp.tzinfo is not None:
-        # If existing is naive but new is aware, make existing aware (assume UTC)
-        from datetime import timezone
-        existing_time = existing_time.replace(tzinfo=timezone.utc)
-    elif existing_time.tzinfo is not None and new_end_timestamp.tzinfo is None:
-        # If existing is aware but new is naive, make new aware (assume UTC)
-        from datetime import timezone
-        new_end_timestamp = new_end_timestamp.replace(tzinfo=timezone.utc)
+    if not kobo_data:
+        return False, "No Kobo data provided"
     
-    time_diff = (new_end_timestamp - existing_time).total_seconds()
-    return time_diff > threshold_seconds
+    # Check for meta/deprecatedID field
+    # This field is set by Kobo when a submission is edited
+    deprecated_id = kobo_data.get('meta/deprecatedID')
+    if not deprecated_id:
+        # Also check nested meta dict if it exists
+        meta = kobo_data.get('meta', {})
+        if isinstance(meta, dict):
+            deprecated_id = meta.get('deprecatedID')
+    
+    if deprecated_id:
+        # Remove 'uuid:' prefix if present
+        deprecated_id_clean = deprecated_id.replace('uuid:', '').strip()
+        logger.info(f"Found deprecatedID: {deprecated_id_clean} - submission was edited")
+        return True, f"deprecatedID found: {deprecated_id_clean}"
+    
+    # No deprecatedID found - submission was not edited
+    return False, "No deprecatedID found"
 
 
 def parse_kobo_submission(kobo_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -197,6 +200,14 @@ def parse_kobo_submission(kobo_data: Dict[str, Any]) -> Dict[str, Any]:
                             logger.debug(f"Found audit URL in attachments: {audit_url}")
                             break
     
+    # Extract deprecatedID (indicates submission was edited)
+    # Check both 'meta/deprecatedID' (flat key) and nested 'meta' dict
+    deprecated_id = kobo_data.get('meta/deprecatedID')
+    if not deprecated_id:
+        meta = kobo_data.get('meta', {})
+        if isinstance(meta, dict):
+            deprecated_id = meta.get('deprecatedID')
+    
     return {
         '_id': submission_id,
         '_uuid': uuid,
@@ -204,7 +215,8 @@ def parse_kobo_submission(kobo_data: Dict[str, Any]) -> Dict[str, Any]:
         'end': end_time,
         'submission_data': submission_data,
         'audit_url': audit_url,
-        'kobo_validation_status': kobo_validation_status
+        'kobo_validation_status': kobo_validation_status,
+        'deprecated_id': deprecated_id  # Store deprecatedID for edit detection
     }
 
 
@@ -212,20 +224,26 @@ def merge_submission(
     db: Session,
     parsed_submission: Dict[str, Any],
     survey_id: str,
-    threshold_seconds: int = 300,
-    kobo_asset_id: Optional[str] = None
+    kobo_asset_id: Optional[str] = None,
+    kobo_data: Optional[Dict[str, Any]] = None
 ) -> Tuple[SubmissionCurrent, Optional[SubmissionHistory], bool]:
     """
     Merge a submission into the database (upsert with edit detection).
+    
+    Uses improved edit detection based on:
+    1. meta/deprecatedID field (primary indicator)
+    2. UUID comparison (secondary indicator)
+    3. Data change detection (tertiary indicator)
     
     Args:
         db: Database session
         parsed_submission: Parsed submission data from parse_kobo_submission
         survey_id: UUID of the survey configuration
-        threshold_seconds: Threshold for edit detection (default: 300)
+        kobo_asset_id: Optional Kobo asset ID for constructing edit URL
+        kobo_data: Optional raw Kobo data for checking deprecatedID
         
     Returns:
-        Tuple of (SubmissionCurrent, SubmissionHistory or None)
+        Tuple of (SubmissionCurrent, SubmissionHistory or None, is_new: bool)
     """
     submission_id = parsed_submission['_id']
     new_uuid = parsed_submission['_uuid']
@@ -233,6 +251,7 @@ def merge_submission(
     new_end = parsed_submission['end']
     new_data = parsed_submission['submission_data']
     kobo_validation_status = parsed_submission.get('kobo_validation_status')
+    deprecated_id = parsed_submission.get('deprecated_id')
     
     # Construct Kobo edit URL
     kobo_edit_url = None
@@ -250,19 +269,27 @@ def merge_submission(
         if str(existing.survey_id) != survey_id:
             logger.info(f"Submission {submission_id} exists but belongs to different survey. Updating survey_id from {existing.survey_id} to {survey_id}")
             existing.survey_id = survey_id
-        # Check if this is an edit
-        is_edited = is_edited_submission(existing, new_end, threshold_seconds)
+        
+        # Check if this is an edit by looking for deprecatedID
+        is_edited, edit_reason = is_edited_submission(kobo_data=kobo_data)
         
         if is_edited:
-            # Calculate diff before updating
+            # Calculate diff before updating (always calculate for edited submissions)
             old_data = existing.submission_data
             data_delta = calculate_json_diff(old_data, new_data)
+            
+            # Use deprecated_id from parsed data, or fall back to existing UUID
+            deprecated_uuid = existing._uuid
+            if deprecated_id:
+                # Remove 'uuid:' prefix if present
+                deprecated_uuid = deprecated_id.replace('uuid:', '').strip()
+                logger.debug(f"Using deprecatedID from Kobo: {deprecated_uuid}")
             
             # Create history record
             history_record = SubmissionHistory(
                 kobo_id=submission_id,
                 timestamp=new_end,
-                deprecated_uuid=existing._uuid,
+                deprecated_uuid=deprecated_uuid,
                 data_delta=data_delta
             )
             db.add(history_record)
@@ -277,26 +304,46 @@ def merge_submission(
             existing.kobo_edit_url = kobo_edit_url
             existing.updated_at = datetime.utcnow()
             
-            logger.info(f"Updated submission {submission_id} (edited, {len(data_delta)} changes)")
+            logger.info(f"Updated submission {submission_id} (edited: {edit_reason}, {len(data_delta)} data changes)")
         else:
-            # No significant edit, just update metadata if needed
+            # No edit detected, but still update metadata if it changed
+            # This handles cases where metadata updates but no actual edit occurred
+            metadata_changed = False
+            
             if existing._uuid != new_uuid:
                 existing._uuid = new_uuid
+                metadata_changed = True
+                logger.debug(f"UUID updated for submission {submission_id} (no edit detected)")
+            
             if existing._submission_time != new_submission_time:
                 existing._submission_time = new_submission_time
+                metadata_changed = True
+            
             if existing.end != new_end:
                 existing.end = new_end
-            existing.kobo_validation_status = kobo_validation_status
-            existing.kobo_edit_url = kobo_edit_url
+                metadata_changed = True
+            
+            if existing.kobo_validation_status != kobo_validation_status:
+                existing.kobo_validation_status = kobo_validation_status
+                metadata_changed = True
+            
+            if existing.kobo_edit_url != kobo_edit_url:
+                existing.kobo_edit_url = kobo_edit_url
+                metadata_changed = True
+            
             existing.updated_at = datetime.utcnow()
             
-            logger.debug(f"Updated submission {submission_id} metadata (no significant edit)")
+            if metadata_changed:
+                logger.debug(f"Updated submission {submission_id} metadata (no edit detected)")
         
         db.commit()
         db.refresh(existing)
         return existing, history_record, False  # False = not newly created
     else:
-        # New submission
+        # New submission - check if it has deprecatedID (unlikely but possible)
+        # If it has deprecatedID, it means it was edited before first import
+        is_edited_on_import = deprecated_id is not None
+        
         new_submission = SubmissionCurrent(
             _id=submission_id,
             survey_id=survey_id,
@@ -304,7 +351,7 @@ def merge_submission(
             _submission_time=parsed_submission['_submission_time'],
             end=new_end,
             submission_data=new_data,
-            is_edited=False,
+            is_edited=is_edited_on_import,  # Mark as edited if it has deprecatedID
             data_quality_issues=[],
             qa_status='PENDING_APPROVAL',  # Will be updated by HFC engine
             kobo_validation_status=kobo_validation_status,
@@ -315,7 +362,11 @@ def merge_submission(
         db.commit()
         db.refresh(new_submission)
         
-        logger.info(f"Created new submission {submission_id}")
+        if is_edited_on_import:
+            logger.info(f"Created new submission {submission_id} (was edited before import, deprecatedID: {deprecated_id})")
+        else:
+            logger.info(f"Created new submission {submission_id}")
+        
         return new_submission, None, True  # True = newly created
 
 
@@ -323,7 +374,6 @@ def merge_submissions_batch(
     db: Session,
     kobo_submissions: List[Dict[str, Any]],
     survey_id: str,
-    threshold_seconds: int = 300,
     kobo_asset_id: Optional[str] = None
 ) -> Dict[str, int]:
     """
@@ -333,7 +383,7 @@ def merge_submissions_batch(
         db: Database session
         kobo_submissions: List of raw Kobo submission dictionaries
         survey_id: UUID of the survey configuration
-        threshold_seconds: Threshold for edit detection
+        kobo_asset_id: Optional Kobo asset ID for constructing edit URLs
         
     Returns:
         Dictionary with statistics: {'created': int, 'updated': int, 'edited': int, 'errors': int}
@@ -343,7 +393,13 @@ def merge_submissions_batch(
     for kobo_sub in kobo_submissions:
         try:
             parsed = parse_kobo_submission(kobo_sub)
-            existing, history, is_new = merge_submission(db, parsed, survey_id, threshold_seconds, kobo_asset_id)
+            existing, history, is_new = merge_submission(
+                db, 
+                parsed, 
+                survey_id, 
+                kobo_asset_id=kobo_asset_id,
+                kobo_data=kobo_sub  # Pass raw Kobo data for deprecatedID detection
+            )
             
             if is_new:
                 stats['created'] += 1
