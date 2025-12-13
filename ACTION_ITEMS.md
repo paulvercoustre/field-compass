@@ -76,18 +76,34 @@
 ---
 
 ### 3. Update Kobo Link Wording and Target
-**Location**: Frontend components  
-**Status**: Not started
+**Location**: Frontend components and backend API  
+**Status**: ✅ **COMPLETED**
 
 **TODOs**:
-- [ ] Change "View in kobo" link text to "Edit in kobo"
-- [ ] Update link to redirect to Kobo form edit page (instead of view page)
-- [ ] Verify correct Kobo URL format for form editing
+- [x] Change "View in kobo" link text to "Edit in kobo"
+- [x] Update link to redirect to Kobo form edit page (instead of view page)
+- [x] Verify correct Kobo URL format for form editing
+- [x] Create backend endpoint to fetch Enketo edit URL from Kobo API
+- [x] Update frontend to fetch and use the actual edit URL
 
-**Files to modify**:
-- Frontend components that display Kobo links (likely `SubmissionDetail.tsx` or similar)
+**Context**: 
+- Kobo API endpoint `/assets/{asset_id}/data/{submission_id}/enketo/edit/?return_url=false` returns a JSON response with the actual Enketo edit URL
+- The URL format is: `https://ee.kobotoolbox.org/edit/{form_id}?instance_id={uuid}&return_url=false`
+- Frontend now fetches the URL dynamically from the backend API
 
-**Estimated Effort**: 1-2 hours
+**Files modified**:
+- `frontend/components/SubmissionDetail.tsx` - Updated to fetch and display edit URL, changed text to "Edit in Kobo"
+- `frontend/services/api.ts` - Added `getKoboEditUrl()` function
+- `backend/routers/submissions.py` - Added `/api/submissions/{kobo_id}/kobo-edit-url` endpoint
+
+**Implementation Details**:
+- Backend endpoint calls Kobo API to get the Enketo edit URL and returns it to frontend
+- Frontend fetches the URL when submission or survey changes
+- Shows loading state while fetching URL
+- Link text changed from "View in Kobo" to "Edit in Kobo"
+- Error handling in place for failed URL fetches
+
+**Actual Effort**: 2-3 hours (including backend endpoint creation and testing)
 
 ---
 
@@ -477,8 +493,10 @@
    - ✅ Removed flawed timestamp-based comparison
    - ✅ Simplified edit detection to use Kobo's explicit indicator
    
-3. **Update Kobo Link Wording and Target** (1-2 hours)
-   - Change "View in kobo" to "Edit in kobo"
+3. **Update Kobo Link Wording and Target** ✅ **COMPLETED** (2-3 hours)
+   - ✅ Changed "View in Kobo" to "Edit in Kobo"
+   - ✅ Created backend endpoint to fetch Enketo edit URL from Kobo API
+   - ✅ Updated frontend to dynamically fetch and use the actual edit URL
 
 ### This Week (Medium Priority)
 4. **Testing Suite Implementation** (3-5 days)
@@ -511,6 +529,7 @@
 
 - **Audit Log Processing**: ✅ **COMPLETED** - Metrics are calculated and aggregated correctly. Made `survey_id` required to ensure proper aggregation per survey with survey-specific configurations (enumerator field names, DK values).
 - **Form Edition Detection**: ✅ **COMPLETED** - Fixed edit detection to use Kobo's `meta/deprecatedID` field. Removed flawed timestamp comparison logic. Edit detection is now reliable and based on Kobo's explicit indicators.
+- **Kobo Link Update**: ✅ **COMPLETED** - Changed link text from "View in Kobo" to "Edit in Kobo". Created backend endpoint that calls Kobo API to get the actual Enketo edit URL. Frontend now dynamically fetches and displays the correct edit URL for each submission.
 - **GitHub Issue #7**: Comprehensive issue created with investigation plan
 - **Testing**: Manual testing is done, but automated tests are needed for production readiness
 - **Security**: Expression evaluator needs to be hardened before production use

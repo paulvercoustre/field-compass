@@ -102,5 +102,29 @@ export const api = {
       console.error(`Error fetching history for submission ${koboId}:`, error);
       throw error;
     }
+  },
+
+  /**
+   * Get Kobo edit URL for a submission
+   * @param koboId The Kobo submission ID
+   * @param surveyId The survey ID to get the Kobo asset ID
+   */
+  getKoboEditUrl: async (koboId: number, surveyId: string): Promise<string> => {
+    try {
+      const params = new URLSearchParams({
+        survey_id: surveyId,
+      });
+      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}/kobo-edit-url?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Kobo edit URL: ${response.statusText}`);
+      }
+
+      const data: { url: string } = await response.json();
+      return data.url;
+    } catch (error) {
+      console.error(`Error fetching Kobo edit URL for submission ${koboId}:`, error);
+      throw error;
+    }
   }
 };

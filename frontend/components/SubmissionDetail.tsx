@@ -7,6 +7,7 @@ import { Badge, EditIcon, AlertIcon } from './Badge';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, SurveyConfig, getValidationRules, ValidationRule } from '../services/progressApi';
 import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
+import { api } from '../services/api';
 
 interface SubmissionDetailProps {
   submission: Submission | null;
@@ -19,6 +20,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
   const [isLoadingRules, setIsLoadingRules] = useState(false);
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
+  const [koboEditUrl, setKoboEditUrl] = useState<string | null>(null);
+  const [isLoadingKoboUrl, setIsLoadingKoboUrl] = useState(false);
   const { selectedSurvey } = useSurvey();
 
   // Fetch survey config when submission or survey changes
@@ -76,6 +79,29 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     setExpandedRules(failedRuleIds);
   }, [submission, validationRules]);
 
+  // Fetch Kobo edit URL when submission or survey changes
+  useEffect(() => {
+    const fetchKoboEditUrl = async () => {
+      if (!submission || !selectedSurvey) {
+        setKoboEditUrl(null);
+        return;
+      }
+
+      setIsLoadingKoboUrl(true);
+      try {
+        const url = await api.getKoboEditUrl(submission._id, selectedSurvey.survey_id);
+        setKoboEditUrl(url);
+      } catch (error) {
+        console.error('Failed to fetch Kobo edit URL:', error);
+        setKoboEditUrl(null);
+      } finally {
+        setIsLoadingKoboUrl(false);
+      }
+    };
+
+    fetchKoboEditUrl();
+  }, [submission, selectedSurvey]);
+
   if (!submission) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
@@ -85,11 +111,6 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
   }
 
   const { _id, submission_data, is_edited, data_quality_issues, qa_status, kobo_validation_status, _submission_time, end } = submission;
-  
-  // Construct Kobo edit URL dynamically from selected survey's kobo_asset_id
-  const koboEditUrl = selectedSurvey?.kobo_asset_id && submission?._id
-    ? `https://kf.kobotoolbox.org/#/forms/${selectedSurvey.kobo_asset_id}/data/table`
-    : null;
 
   // Check if a rule passed or failed for this submission
   const checkRuleStatus = (rule: ValidationRule): { passed: boolean; issue?: QualityIssue } => {
@@ -239,7 +260,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
           
           <div className="flex flex-col items-end gap-2 ml-4">
             <Badge status={qa_status} size="lg" />
-            {koboEditUrl && (
+            {isLoadingKoboUrl ? (
+                <div className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-500 bg-gray-200 rounded-md">
+                    <Spinner />
+                    <span className="ml-1.5">Loading...</span>
+                </div>
+            ) : koboEditUrl ? (
                 <a
                     href={koboEditUrl}
                     target="_blank"
@@ -249,9 +275,9 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
-                    View in Kobo
+                    Edit in Kobo
                 </a>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

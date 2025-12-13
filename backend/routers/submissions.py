@@ -13,6 +13,8 @@ import json
 from services.database import get_db
 from database.models import SubmissionCurrent, SubmissionHistory as SubmissionHistoryORM, SurveyConfig
 from models import Submission, SubmissionHistory, SubmissionListResponse, QualityIssue, JsonPatch
+from etl.kobo_fetcher import create_fetcher_from_env
+import os
 
 router = APIRouter()
 
@@ -254,5 +256,67 @@ async def get_submission_history(
     history = [_orm_to_pydantic_history(h) for h in orm_history]
     
     return history
+
+
+@router.get("/submissions/{kobo_id}/kobo-edit-url")
+async def get_kobo_edit_url(
+    kobo_id: int,
+    survey_id: UUIDType = Query(..., description="Survey ID to get the Kobo asset ID"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get the Kobo edit URL for a submission.
+    
+    This endpoint calls the Kobo API to get the Enketo edit URL for a specific submission.
+    The Kobo API returns a JSON response with the actual edit URL.
+    
+    Args:
+        kobo_id: Submission ID (_id from Kobo)
+        survey_id: Survey ID to get the kobo_asset_id from survey config
+        
+    Returns:
+        JSON with 'url' field containing the Enketo edit URL
+    """
+    # Verify submission exists
+    submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
+    
+    # Get survey config to find kobo_asset_id
+    survey_config = db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_id).first()
+    if not survey_config:
+        raise HTTPException(status_code=404, detail=f"Survey {survey_id} not found")
+    
+    if not survey_config.kobo_asset_id:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Survey {survey_id} does not have a kobo_asset_id configured"
+        )
+    
+    try:
+        # Create Kobo fetcher
+        fetcher = create_fetcher_from_env()
+        
+        # Call Kobo API to get edit URL
+        # Format: /assets/{asset_id}/data/{submission_id}/enketo/edit/?return_url=false
+        endpoint = f"/assets/{survey_config.kobo_asset_id}/data/{kobo_id}/enketo/edit/"
+        params = {"return_url": "false"}
+        
+        response = fetcher._make_request(endpoint, params=params)
+        
+        # Kobo API returns: {"url": "...", "version_uid": "..."}
+        if "url" not in response:
+            raise HTTPException(
+                status_code=500,
+                detail="Kobo API did not return a URL in the response"
+            )
+        
+        return {"url": response["url"]}
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get Kobo edit URL: {str(e)}"
+        )
 
 
