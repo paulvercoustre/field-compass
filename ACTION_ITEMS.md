@@ -41,18 +41,37 @@
 
 ### 2. Form Edition Detection Fix
 **Location**: ETL pipeline  
-**Status**: Not started
+**Status**: ✅ **COMPLETED**
 
 **TODOs**:
-- [ ] Fix the logic that determines when a submission is marked as "edited" (currently incorrect)
-- [ ] This info could be used down the line to speed up the ETL by processing only new or edited submissions
-- [ ] Clarify source of truth (submission metadata vs audit vs delta logic)
+- [x] Fix the logic that determines when a submission is marked as "edited" (currently incorrect)
+- [x] Investigate Kobo API to find reliable edit indicators
+- [x] Implement edit detection using `meta/deprecatedID` field
+- [x] Remove flawed timestamp-based comparison logic
+- [x] Update merge_submission() to use new detection method
+- [x] Create comparison script to investigate edit indicators
 
-**Files to investigate**:
-- `backend/etl/data_merger.py` - Edit detection logic
-- `backend/etl/pipeline.py` - Submission processing
+**Context**: 
+- Previous logic compared `end` timestamp with `_submission_time + threshold`, which was incorrect
+- Investigation revealed that Kobo sets `meta/deprecatedID` field when a submission is edited
+- This field contains the previous UUID before the edit
+- Current UUID is in `_uuid` field, old UUID is in `meta/deprecatedID`
 
-**Estimated Effort**: 2-4 hours
+**Files modified**:
+- `backend/etl/data_merger.py` - Rewrote `is_edited_submission()` to check for `deprecatedID`
+- `backend/etl/kobo_fetcher.py` - Added `get_submission_by_uuid()` method
+- `backend/etl/pipeline.py` - Updated to pass `kobo_data` for deprecatedID detection
+- `backend/tests/test_data_merger.py` - Updated tests to use deprecatedID
+- `backend/scripts/compare_submissions.py` - New script for comparing edited/non-edited submissions
+
+**Implementation Details**:
+- Edit detection now uses `meta/deprecatedID` field as the primary (and only) indicator
+- If `deprecatedID` exists in Kobo data → submission was edited
+- Removed UUID comparison and JSON diff checks from detection (kept diff for history tracking)
+- Simplified function signature - only needs `kobo_data` parameter
+- JSON diff still calculated for history records (to show what changed)
+
+**Actual Effort**: 3-4 hours (investigation + implementation + testing)
 
 ---
 
@@ -453,8 +472,10 @@
    - ✅ Made survey_id required parameter
    - ✅ Added validation and error handling
    
-2. **Form Edition Detection Fix** (2-4 hours)
-   - Fix logic for detecting edited submissions
+2. **Form Edition Detection Fix** ✅ **COMPLETED** (3-4 hours)
+   - ✅ Fixed logic for detecting edited submissions using `meta/deprecatedID`
+   - ✅ Removed flawed timestamp-based comparison
+   - ✅ Simplified edit detection to use Kobo's explicit indicator
    
 3. **Update Kobo Link Wording and Target** (1-2 hours)
    - Change "View in kobo" to "Edit in kobo"
@@ -489,6 +510,7 @@
 ## 🔍 Notes
 
 - **Audit Log Processing**: ✅ **COMPLETED** - Metrics are calculated and aggregated correctly. Made `survey_id` required to ensure proper aggregation per survey with survey-specific configurations (enumerator field names, DK values).
+- **Form Edition Detection**: ✅ **COMPLETED** - Fixed edit detection to use Kobo's `meta/deprecatedID` field. Removed flawed timestamp comparison logic. Edit detection is now reliable and based on Kobo's explicit indicators.
 - **GitHub Issue #7**: Comprehensive issue created with investigation plan
 - **Testing**: Manual testing is done, but automated tests are needed for production readiness
 - **Security**: Expression evaluator needs to be hardened before production use
