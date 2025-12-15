@@ -185,21 +185,36 @@
 ---
 
 ### 5. Survey Deletion Cascade
-**Location**: `backend/routers/surveys.py` (line 199)  
-**Status**: Currently only deletes survey config
+**Location**: `backend/routers/surveys.py` (lines 180-257)  
+**Status**: ✅ **COMPLETED**
 
 **TODOs**:
-- [ ] Implement cascade delete for related data:
+- [x] Implement cascade delete for related data:
   - Submissions (submissions_current, submissions_history)
   - Validation rules
   - Other related records
-- [ ] Handle foreign key constraints properly
-- [ ] Add confirmation/soft delete option (optional)
+- [x] Handle foreign key constraints properly
+- [ ] Add confirmation/soft delete option (optional - future enhancement)
 
-**Files**:
-- `backend/routers/surveys.py` - `delete_survey()` function
+**Context**: 
+- The `delete_survey()` function already implements cascade deletion manually
+- Deletes all `submissions_current` for the survey (required due to `ON DELETE RESTRICT` constraint)
+- Deletes all `validation_rules` for the survey (redundant but explicit, since `ON DELETE CASCADE` handles it)
+- `submissions_history` is automatically deleted via CASCADE when `submissions_current` is deleted
+- All deletions are wrapped in a transaction with proper error handling and rollback
 
-**Estimated Effort**: 2-3 hours
+**Files modified**:
+- `backend/routers/surveys.py` - `delete_survey()` function (already implemented)
+- `backend/tests/test_api_endpoints.py` - Added comprehensive cascade deletion tests
+
+**Implementation Details**:
+- Manual deletion of `submissions_current` is required because schema uses `ON DELETE RESTRICT`
+- Manual deletion of `validation_rules` is explicit (though CASCADE would handle it)
+- `submissions_history` cascades automatically when parent submission is deleted
+- Transaction ensures atomicity - all or nothing deletion
+- Returns counts of deleted records for logging/auditing
+
+**Actual Effort**: Already implemented, added test coverage (1-2 hours)
 
 ---
 
@@ -501,7 +516,7 @@
 ### This Week (Medium Priority)
 4. **Testing Suite Implementation** (3-5 days)
 5. **HFC Engine Expression Evaluator Security** (1-2 days)
-6. **Survey Deletion Cascade** (2-3 hours)
+6. **Survey Deletion Cascade** ✅ **COMPLETED** (already implemented, added test coverage - 1-2 hours)
 7. **ETL Dry Run Mode** (2-3 hours)
 8. **Post-Basic-Info Quality Check Prompt** ✅ (4-5 hours - completed)
 9. **Dataset-Level Quality Checks** (3-5 days)
@@ -530,8 +545,9 @@
 - **Audit Log Processing**: ✅ **COMPLETED** - Metrics are calculated and aggregated correctly. Made `survey_id` required to ensure proper aggregation per survey with survey-specific configurations (enumerator field names, DK values).
 - **Form Edition Detection**: ✅ **COMPLETED** - Fixed edit detection to use Kobo's `meta/deprecatedID` field. Removed flawed timestamp comparison logic. Edit detection is now reliable and based on Kobo's explicit indicators.
 - **Kobo Link Update**: ✅ **COMPLETED** - Changed link text from "View in Kobo" to "Edit in Kobo". Created backend endpoint that calls Kobo API to get the actual Enketo edit URL. Frontend now dynamically fetches and displays the correct edit URL for each submission.
+- **Survey Deletion Cascade**: ✅ **COMPLETED** - Implementation was already in place. Added comprehensive test coverage verifying cascade deletion of submissions, validation rules, and submission history. All related data is properly deleted in a transaction.
 - **GitHub Issue #7**: Comprehensive issue created with investigation plan
-- **Testing**: Manual testing is done, but automated tests are needed for production readiness
+- **Testing**: Manual testing is done, automated tests added for survey deletion cascade. More automated tests needed for production readiness.
 - **Security**: Expression evaluator needs to be hardened before production use
 - **Performance**: Current implementation works but could be optimized for large datasets
 

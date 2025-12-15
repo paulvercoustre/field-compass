@@ -4,7 +4,7 @@ Tests for API endpoints.
 
 import pytest
 from fastapi.testclient import TestClient
-from database.models import Base, SurveyConfig, SubmissionCurrent
+from database.models import Base, SurveyConfig, SubmissionCurrent, ValidationRule, SubmissionHistory
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -202,6 +202,270 @@ class TestSurveysEndpoint:
         assert response.status_code == 200
         
         # Verify it's deleted
+        response = client.get(f"/api/surveys/{survey_id}")
+        assert response.status_code == 404
+    
+    def test_delete_survey_cascade_submissions(self, client, test_survey):
+        """Test that deleting a survey cascades to delete all submissions."""
+        survey_id = test_survey["survey_id"]
+        survey_uuid = UUID(survey_id)
+        
+        # Create test submissions
+        with TestingSessionLocal() as db:
+            submission1 = SubmissionCurrent(
+                _id=1001,
+                survey_id=survey_uuid,
+                _uuid=str(uuid4()),
+                _submission_time=datetime.utcnow(),
+                end=datetime.utcnow(),
+                submission_data={"enumerator_id": "enum-1", "age": 25},
+                qa_status="PENDING_APPROVAL",
+            )
+            submission2 = SubmissionCurrent(
+                _id=1002,
+                survey_id=survey_uuid,
+                _uuid=str(uuid4()),
+                _submission_time=datetime.utcnow(),
+                end=datetime.utcnow(),
+                submission_data={"enumerator_id": "enum-2", "age": 30},
+                qa_status="APPROVED",
+            )
+            db.add_all([submission1, submission2])
+            db.commit()
+        
+        # Verify submissions exist
+        with TestingSessionLocal() as db:
+            count = db.query(SubmissionCurrent).filter(
+                SubmissionCurrent.survey_id == survey_uuid
+            ).count()
+            assert count == 2
+        
+        # Delete the survey
+        response = client.delete(f"/api/surveys/{survey_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["deleted_submissions"] == 2
+        
+        # Verify submissions are deleted
+        with TestingSessionLocal() as db:
+            count = db.query(SubmissionCurrent).filter(
+                SubmissionCurrent.survey_id == survey_uuid
+            ).count()
+            assert count == 0
+    
+    def test_delete_survey_cascade_validation_rules(self, client, test_survey):
+        """Test that deleting a survey cascades to delete all validation rules."""
+        survey_id = test_survey["survey_id"]
+        survey_uuid = UUID(survey_id)
+        
+        # Create test validation rules
+        with TestingSessionLocal() as db:
+            rule1 = ValidationRule(
+                survey_id=survey_uuid,
+                rule_name="test_rule_1",
+                rule_data={
+                    "issue": "Test issue 1",
+                    "check_id": "check1",
+                    "check_expression": "age > 100"
+                },
+                is_active=True,
+            )
+            rule2 = ValidationRule(
+                survey_id=survey_uuid,
+                rule_name="test_rule_2",
+                rule_data={
+                    "issue": "Test issue 2",
+                    "check_id": "check2",
+                    "check_expression": "income < 0"
+                },
+                is_active=False,
+            )
+            db.add_all([rule1, rule2])
+            db.commit()
+        
+        # Verify rules exist
+        with TestingSessionLocal() as db:
+            count = db.query(ValidationRule).filter(
+                ValidationRule.survey_id == survey_uuid
+            ).count()
+            assert count == 2
+        
+        # Delete the survey
+        response = client.delete(f"/api/surveys/{survey_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["deleted_validation_rules"] == 2
+        
+        # Verify rules are deleted
+        with TestingSessionLocal() as db:
+            count = db.query(ValidationRule).filter(
+                ValidationRule.survey_id == survey_uuid
+            ).count()
+            assert count == 0
+    
+    def test_delete_survey_cascade_submission_history(self, client, test_survey):
+        """Test that deleting a survey cascades to delete submission history records."""
+        survey_id = test_survey["survey_id"]
+        survey_uuid = UUID(survey_id)
+        
+        # Create test submission with history
+        with TestingSessionLocal() as db:
+            submission = SubmissionCurrent(
+                _id=2001,
+                survey_id=survey_uuid,
+                _uuid=str(uuid4()),
+                _submission_time=datetime.utcnow(),
+                end=datetime.utcnow(),
+                submission_data={"enumerator_id": "enum-3", "age": 35},
+                qa_status="PENDING_APPROVAL",
+            )
+            db.add(submission)
+            db.commit()
+            db.refresh(submission)
+            
+            # Create history records
+            history1 = SubmissionHistory(
+                kobo_id=submission._id,
+                timestamp=datetime.utcnow(),
+                deprecated_uuid="old-uuid-1",
+                data_delta=[{"op": "replace", "path": "/age", "value": 35}],
+            )
+            history2 = SubmissionHistory(
+                kobo_id=submission._id,
+                timestamp=datetime.utcnow(),
+                deprecated_uuid="old-uuid-2",
+                data_delta=[{"op": "replace", "path": "/age", "value": 36}],
+            )
+            db.add_all([history1, history2])
+            db.commit()
+        
+        # Verify history exists
+        with TestingSessionLocal() as db:
+            count = db.query(SubmissionHistory).filter(
+                SubmissionHistory.kobo_id == 2001
+            ).count()
+            assert count == 2
+        
+        # Delete the survey
+        response = client.delete(f"/api/surveys/{survey_id}")
+        assert response.status_code == 200
+        
+        # Verify history is deleted (cascades from submission deletion)
+        with TestingSessionLocal() as db:
+            count = db.query(SubmissionHistory).filter(
+                SubmissionHistory.kobo_id == 2001
+            ).count()
+            assert count == 0
+    
+    def test_delete_survey_cascade_all_related_data(self, client, test_survey):
+        """Test that deleting a survey deletes all related data in one transaction."""
+        survey_id = test_survey["survey_id"]
+        survey_uuid = UUID(survey_id)
+        
+        # Create comprehensive test data
+        with TestingSessionLocal() as db:
+            # Create submissions
+            submission1 = SubmissionCurrent(
+                _id=3001,
+                survey_id=survey_uuid,
+                _uuid=str(uuid4()),
+                _submission_time=datetime.utcnow(),
+                end=datetime.utcnow(),
+                submission_data={"enumerator_id": "enum-4"},
+                qa_status="APPROVED",
+            )
+            submission2 = SubmissionCurrent(
+                _id=3002,
+                survey_id=survey_uuid,
+                _uuid=str(uuid4()),
+                _submission_time=datetime.utcnow(),
+                end=datetime.utcnow(),
+                submission_data={"enumerator_id": "enum-5"},
+                qa_status="PENDING_APPROVAL",
+            )
+            db.add_all([submission1, submission2])
+            db.commit()
+            db.refresh(submission1)
+            
+            # Create history for submission1
+            history = SubmissionHistory(
+                kobo_id=submission1._id,
+                timestamp=datetime.utcnow(),
+                deprecated_uuid="old-uuid-3",
+                data_delta=[{"op": "replace", "path": "/age", "value": 40}],
+            )
+            db.add(history)
+            
+            # Create validation rules
+            rule1 = ValidationRule(
+                survey_id=survey_uuid,
+                rule_name="comprehensive_rule_1",
+                rule_data={"issue": "Issue 1", "check_id": "c1"},
+                is_active=True,
+            )
+            rule2 = ValidationRule(
+                survey_id=survey_uuid,
+                rule_name="comprehensive_rule_2",
+                rule_data={"issue": "Issue 2", "check_id": "c2"},
+                is_active=False,
+            )
+            db.add_all([rule1, rule2])
+            db.commit()
+        
+        # Verify all data exists
+        with TestingSessionLocal() as db:
+            sub_count = db.query(SubmissionCurrent).filter(
+                SubmissionCurrent.survey_id == survey_uuid
+            ).count()
+            hist_count = db.query(SubmissionHistory).filter(
+                SubmissionHistory.kobo_id == 3001
+            ).count()
+            rule_count = db.query(ValidationRule).filter(
+                ValidationRule.survey_id == survey_uuid
+            ).count()
+            assert sub_count == 2
+            assert hist_count == 1
+            assert rule_count == 2
+        
+        # Delete the survey
+        response = client.delete(f"/api/surveys/{survey_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["deleted_submissions"] == 2
+        assert data["deleted_validation_rules"] == 2
+        
+        # Verify everything is deleted
+        with TestingSessionLocal() as db:
+            sub_count = db.query(SubmissionCurrent).filter(
+                SubmissionCurrent.survey_id == survey_uuid
+            ).count()
+            hist_count = db.query(SubmissionHistory).filter(
+                SubmissionHistory.kobo_id == 3001
+            ).count()
+            rule_count = db.query(ValidationRule).filter(
+                ValidationRule.survey_id == survey_uuid
+            ).count()
+            survey_exists = db.query(SurveyConfig).filter(
+                SurveyConfig.survey_id == survey_uuid
+            ).first() is not None
+            
+            assert sub_count == 0
+            assert hist_count == 0
+            assert rule_count == 0
+            assert not survey_exists
+    
+    def test_delete_survey_with_no_related_data(self, client, test_survey):
+        """Test deleting a survey that has no submissions or rules."""
+        survey_id = test_survey["survey_id"]
+        
+        # Delete the survey (should work even with no related data)
+        response = client.delete(f"/api/surveys/{survey_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["deleted_submissions"] == 0
+        assert data["deleted_validation_rules"] == 0
+        
+        # Verify survey is deleted
         response = client.get(f"/api/surveys/{survey_id}")
         assert response.status_code == 404
 
