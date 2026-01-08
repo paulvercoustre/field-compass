@@ -10,7 +10,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 from services.database import init_db
-from routers import submissions, progress, etl, surveys, validation_rules
+from routers import submissions, progress, etl, surveys, validation_rules, users
 import os
 
 # CORS origins - configurable via environment variable
@@ -66,6 +66,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(users.router, prefix="/api", tags=["users"])
 app.include_router(submissions.router, prefix="/api", tags=["submissions"])
 app.include_router(progress.router, prefix="/api", tags=["progress"])
 app.include_router(etl.router, prefix="/api", tags=["etl"])
