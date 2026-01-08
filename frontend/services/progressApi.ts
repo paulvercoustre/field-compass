@@ -4,10 +4,42 @@ import { ProgressData, PerformanceData } from '../types';
 // API base URL - defaults to localhost:8000 for development
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+// Helper to get auth token from localStorage
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('field_compass_token');
+};
+
+// Helper to create headers with optional auth
+const createAuthHeaders = (): HeadersInit => {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
+
 export interface Survey {
   survey_id: string;
   survey_name: string;
   kobo_asset_id: string | null;
+  permission?: 'owner' | 'editor' | 'viewer' | 'admin';
+  owner_id?: string | null;
+  is_owner?: boolean;
+}
+
+export interface SurveyAccessEntry {
+  user_id: string;
+  email: string;
+  username: string;
+  full_name: string | null;
+  permission_level: 'owner' | 'editor' | 'viewer';
+  granted_at: string;
+  granted_by?: string | null;
 }
 
 export interface SurveyConfig {
@@ -76,11 +108,13 @@ export interface SurveyCreate {
 }
 
 /**
- * Fetch list of surveys
+ * Fetch list of surveys (only surveys user has access to)
  */
 export const getSurveys = async (): Promise<Survey[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys`);
+    const response = await fetch(`${API_BASE_URL}/api/surveys`, {
+      headers: createAuthHeaders(),
+    });
     
     if (!response.ok) {
       throw new Error(`Failed to fetch surveys: ${response.statusText}`);
@@ -103,18 +137,22 @@ export interface ProgressQueryOptions {
 }
 
 export const progressApi = {
-  getProgressData: async (surveyId?: string, options: ProgressQueryOptions = {}): Promise<ProgressData> => {
+  getProgressData: async (surveyId: string, options: ProgressQueryOptions = {}): Promise<ProgressData> => {
+    if (!surveyId) {
+      throw new Error('surveyId is required');
+    }
+    
     try {
       const params = new URLSearchParams();
-      if (surveyId) {
-        params.append('survey_id', surveyId);
-      }
+      params.append('survey_id', surveyId);
       if (options.approvedOnly) {
         params.append('approved_only', 'true');
       }
 
-      const url = `${API_BASE_URL}/api/progress${params.toString() ? `?${params}` : ''}`;
-      const response = await fetch(url);
+      const url = `${API_BASE_URL}/api/progress?${params.toString()}`;
+      const response = await fetch(url, {
+        headers: createAuthHeaders(),
+      });
       
       if (!response.ok) {
         throw new Error(`Failed to fetch progress data: ${response.statusText}`);
@@ -142,7 +180,9 @@ export const progressApi = {
       params.append('survey_id', surveyId);
 
       const url = `${API_BASE_URL}/api/performance?${params.toString()}`;
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: createAuthHeaders(),
+      });
       
       if (!response.ok) {
         throw new Error(`Failed to fetch performance data: ${response.statusText}`);
@@ -160,15 +200,17 @@ export const progressApi = {
 /**
  * Fetch full survey configuration by ID
  */
-export const getSurveyConfig = async (surveyId: string): Promise<SurveyConfig> => {
+export const getSurveyConfig = async (surveyId: string): Promise<SurveyConfig & { permission?: string; is_owner?: boolean }> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}`);
+    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
+      headers: createAuthHeaders(),
+    });
     
     if (!response.ok) {
       throw new Error(`Failed to fetch survey config: ${response.statusText}`);
     }
 
-    const data: SurveyConfig = await response.json();
+    const data = await response.json();
     return data;
   } catch (error) {
     console.error('Error fetching survey config:', error);
@@ -183,9 +225,7 @@ export const createSurvey = async (surveyData: SurveyCreate): Promise<SurveyConf
   try {
     const response = await fetch(`${API_BASE_URL}/api/surveys`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: createAuthHeaders(),
       body: JSON.stringify(surveyData),
     });
     
@@ -212,9 +252,7 @@ export const updateSurvey = async (
   try {
     const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: createAuthHeaders(),
       body: JSON.stringify(updates),
     });
     
@@ -238,6 +276,7 @@ export const deleteSurvey = async (surveyId: string): Promise<void> => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
       method: 'DELETE',
+      headers: createAuthHeaders(),
     });
     
     if (!response.ok) {
@@ -246,6 +285,105 @@ export const deleteSurvey = async (surveyId: string): Promise<void> => {
     }
   } catch (error) {
     console.error('Error deleting survey:', error);
+    throw error;
+  }
+};
+
+// ============================================================================
+// Survey Sharing API
+// ============================================================================
+
+/**
+ * Get list of users with access to a survey
+ */
+export const getSurveyAccess = async (surveyId: string): Promise<SurveyAccessEntry[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/access`, {
+      headers: createAuthHeaders(),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(errorData.detail || `Failed to fetch survey access: ${response.statusText}`);
+    }
+
+    const data: SurveyAccessEntry[] = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching survey access:', error);
+    throw error;
+  }
+};
+
+/**
+ * Share a survey with another user
+ */
+export const shareSurvey = async (
+  surveyId: string,
+  email: string,
+  permissionLevel: 'editor' | 'viewer'
+): Promise<SurveyAccessEntry> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/access`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({ email, permission_level: permissionLevel }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(errorData.detail || `Failed to share survey: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error sharing survey:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update a user's access level for a survey
+ */
+export const updateSurveyAccess = async (
+  surveyId: string,
+  userId: string,
+  permissionLevel: 'editor' | 'viewer'
+): Promise<void> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/access/${userId}`, {
+      method: 'PUT',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({ permission_level: permissionLevel }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(errorData.detail || `Failed to update access: ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error('Error updating survey access:', error);
+    throw error;
+  }
+};
+
+/**
+ * Revoke a user's access to a survey
+ */
+export const revokeSurveyAccess = async (surveyId: string, userId: string): Promise<void> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/access/${userId}`, {
+      method: 'DELETE',
+      headers: createAuthHeaders(),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(errorData.detail || `Failed to revoke access: ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error('Error revoking survey access:', error);
     throw error;
   }
 };
@@ -299,7 +437,9 @@ export interface ValidationRuleUpdate {
  */
 export const getValidationRules = async (surveyId: string): Promise<ValidationRule[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules`);
+    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules`, {
+      headers: createAuthHeaders(),
+    });
     
     if (!response.ok) {
       throw new Error(`Failed to fetch validation rules: ${response.statusText}`);
@@ -323,9 +463,7 @@ export const createValidationRule = async (
   try {
     const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: createAuthHeaders(),
       body: JSON.stringify(ruleData),
     });
     
@@ -353,9 +491,7 @@ export const updateValidationRule = async (
   try {
     const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules/${ruleId}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: createAuthHeaders(),
       body: JSON.stringify(updates),
     });
     
@@ -379,6 +515,7 @@ export const deleteValidationRule = async (surveyId: string, ruleId: string): Pr
   try {
     const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules/${ruleId}`, {
       method: 'DELETE',
+      headers: createAuthHeaders(),
     });
     
     if (!response.ok) {
@@ -413,6 +550,9 @@ export interface ETLStats {
  * 3. Run High-Frequency Checks (HFC)
  * 4. Update database with results
  * 
+ * Note: If authenticated, will use the user's configured Kobo API key.
+ * Otherwise, falls back to server-side KOBO_API_TOKEN environment variable.
+ * 
  * @param surveyId Survey ID (UUID string)
  * @param limit Optional limit on number of submissions to process
  * @param startDate Optional start date (YYYY-MM-DD format) - only process submissions after this date
@@ -434,6 +574,7 @@ export const triggerETL = async (
     const url = `${API_BASE_URL}/api/etl/run/${surveyId}${params.toString() ? `?${params}` : ''}`;
     const response = await fetch(url, {
       method: 'POST',
+      headers: createAuthHeaders(), // Include auth token for per-user Kobo API key
     });
 
     if (!response.ok) {

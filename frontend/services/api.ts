@@ -5,6 +5,27 @@ import { buildFilterParams } from '../utils/filterUtils';
 // API base URL - defaults to localhost:8000 for development
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+// Helper to get auth token from localStorage
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('field_compass_token');
+};
+
+// Helper to create headers with optional auth
+const createHeaders = (includeAuth: boolean = true): HeadersInit => {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (includeAuth) {
+    const token = getAuthToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  
+  return headers;
+};
+
 interface SubmissionListResponse {
   submissions: Submission[];
   total: number;
@@ -44,10 +65,13 @@ export const api = {
         }
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/submissions?${params}`);
+      const response = await fetch(`${API_BASE_URL}/api/submissions?${params}`, {
+        headers: createHeaders(),
+      });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch submissions: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(errorData.detail || `Failed to fetch submissions: ${response.statusText}`);
       }
 
       const data: SubmissionListResponse = await response.json();
@@ -64,7 +88,9 @@ export const api = {
    */
   getSubmission: async (koboId: number): Promise<Submission> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}`);
+      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}`, {
+        headers: createHeaders(),
+      });
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -87,7 +113,9 @@ export const api = {
    */
   getSubmissionHistory: async (koboId: number): Promise<SubmissionHistory[]> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}/history`);
+      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}/history`, {
+        headers: createHeaders(),
+      });
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -114,7 +142,9 @@ export const api = {
       const params = new URLSearchParams({
         survey_id: surveyId,
       });
-      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}/kobo-edit-url?${params}`);
+      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}/kobo-edit-url?${params}`, {
+        headers: createHeaders(),
+      });
       
       if (!response.ok) {
         throw new Error(`Failed to fetch Kobo edit URL: ${response.statusText}`);

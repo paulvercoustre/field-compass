@@ -3,14 +3,13 @@ ETL Pipeline
 Main orchestrator for fetching, merging, and validating submissions.
 """
 
-import os
 import logging
 from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from etl.kobo_fetcher import KoboFetcher, create_fetcher_from_env
+from etl.kobo_fetcher import KoboFetcher
 from etl.data_merger import parse_kobo_submission, merge_submission
 from etl.hfc_engine import HFCEngine
 from etl.audit_processor import download_and_process_audit
@@ -23,16 +22,36 @@ logger = logging.getLogger(__name__)
 class ETLPipeline:
     """Main ETL pipeline orchestrator."""
     
-    def __init__(self, db: Session, kobo_fetcher: Optional[KoboFetcher] = None):
+    def __init__(
+        self,
+        db: Session,
+        kobo_fetcher: Optional[KoboFetcher] = None,
+        kobo_api_token: Optional[str] = None,
+        kobo_api_url: Optional[str] = None
+    ):
         """
         Initialize ETL pipeline.
         
         Args:
             db: Database session
-            kobo_fetcher: Optional KoboFetcher instance (will create from env if not provided)
+            kobo_fetcher: Optional KoboFetcher instance
+            kobo_api_token: Kobo API token (required if kobo_fetcher not provided)
+            kobo_api_url: Optional Kobo API URL (defaults to kf.kobotoolbox.org)
+        
+        Raises:
+            ValueError: If neither kobo_fetcher nor kobo_api_token is provided
         """
         self.db = db
-        self.kobo_fetcher = kobo_fetcher or create_fetcher_from_env()
+        self.kobo_api_token = kobo_api_token
+        self.kobo_api_url = kobo_api_url or 'https://kf.kobotoolbox.org/api/v2'
+        
+        if kobo_fetcher:
+            self.kobo_fetcher = kobo_fetcher
+        elif kobo_api_token:
+            # Create fetcher from provided token
+            self.kobo_fetcher = KoboFetcher(api_token=kobo_api_token, api_url=self.kobo_api_url)
+        else:
+            raise ValueError("Kobo API token is required. Please configure your API key in user settings.")
     
     def run_pipeline(
         self,
@@ -97,7 +116,7 @@ class ETLPipeline:
             hfc_engine.precompute_outlier_statistics()
 
             # Get Kobo API token for audit downloads
-            kobo_token = os.getenv('KOBO_API_TOKEN')
+            kobo_token = self.kobo_api_token
             
             # Step 3: Process each submission
             logger.info("Step 2: Processing submissions...")
@@ -237,7 +256,7 @@ class ETLPipeline:
         audit_url = parsed.get('audit_url')
         
         # Download and process audit log (if available)
-        kobo_token = os.getenv('KOBO_API_TOKEN')
+        kobo_token = self.kobo_api_token
         if audit_url:
             try:
                 audit_metrics = download_and_process_audit(

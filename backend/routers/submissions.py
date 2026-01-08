@@ -1,6 +1,6 @@
 """
 Submission API endpoints.
-Handles CRUD operations for survey submissions.
+Handles CRUD operations for survey submissions with permission checks.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,13 +8,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
-import json
 
 from services.database import get_db
-from database.models import SubmissionCurrent, SubmissionHistory as SubmissionHistoryORM, SurveyConfig
+from services.auth import get_current_active_user, get_user_kobo_token
+from services.permissions import require_survey_access, can_view_survey
+from database.models import SubmissionCurrent, SubmissionHistory as SubmissionHistoryORM, SurveyConfig, User
 from models import Submission, SubmissionHistory, SubmissionListResponse, QualityIssue, JsonPatch
-from etl.kobo_fetcher import create_fetcher_from_env
-import os
+from etl.kobo_fetcher import KoboFetcher
 
 router = APIRouter()
 
@@ -97,40 +97,43 @@ async def get_submissions(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get list of submissions with optional filtering and pagination.
+    
+    Requires authentication and access to the specified survey.
 
     Supports filtering by:
     - qa_status: Comma-separated QA statuses (e.g., "FLAGGED,PENDING_APPROVAL")
-    - survey_id: Filter by specific survey (UUID)
+    - survey_id: Filter by specific survey (UUID) - REQUIRED
     - enumerator: Comma-separated enumerator IDs/values (e.g., "enum1,enum2")
     - sampling_filters: Sampling filters in format "variable1=value1,value2;variable2=value3"
       (e.g., "district=kamdesh,nangarhar;livelihood=farming,trading")
 
     Returns paginated results with total count.
     """
-    # Build query
-    query = db.query(SubmissionCurrent)
-    
-    # Get survey config if survey_id is provided (needed for field name resolution)
-    survey_config = None
-    if survey_id:
-        try:
-            survey_uuid = UUIDType(survey_id)
-            query = query.filter(SubmissionCurrent.survey_id == survey_uuid)
-            survey_config = db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_uuid).first()
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
-            )
-    elif enumerator or sampling_filters:
-        # If filtering by enumerator or sampling filters, we need survey_id
+    # survey_id is required for access control
+    if not survey_id:
         raise HTTPException(
             status_code=400,
-            detail="survey_id is required when filtering by enumerator or sampling variables"
+            detail="survey_id is required"
         )
+    
+    # Validate and parse survey_id
+    try:
+        survey_uuid = UUIDType(survey_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
+        )
+    
+    # Check user has access to this survey
+    survey_config = require_survey_access(db, current_user, survey_uuid, min_level='viewer')
+    
+    # Build query
+    query = db.query(SubmissionCurrent).filter(SubmissionCurrent.survey_id == survey_uuid)
 
     # Apply qa_status filter
     if qa_status:
@@ -216,9 +219,11 @@ async def get_submissions(
 async def get_submission(
     kobo_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get a single submission by its KoboToolbox ID (_id).
+    Requires viewer access to the survey this submission belongs to.
     
     Returns the complete submission with all data and quality issues.
     """
@@ -227,6 +232,9 @@ async def get_submission(
     if not orm_submission:
         raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
     
+    # Check user has access to the survey
+    require_survey_access(db, current_user, orm_submission.survey_id, min_level='viewer')
+    
     return _orm_to_pydantic_submission(orm_submission)
 
 
@@ -234,15 +242,21 @@ async def get_submission(
 async def get_submission_history(
     kobo_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get edit history for a submission.
+    Requires viewer access to the survey this submission belongs to.
+    
     Returns all historical versions with JSON patch diffs, ordered by timestamp (newest first).
     """
     # First verify submission exists
     submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
+    
+    # Check user has access to the survey
+    require_survey_access(db, current_user, submission.survey_id, min_level='viewer')
     
     # Get all history records for this submission
     orm_history = (
@@ -263,12 +277,14 @@ async def get_kobo_edit_url(
     kobo_id: int,
     survey_id: UUIDType = Query(..., description="Survey ID to get the Kobo asset ID"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get the Kobo edit URL for a submission.
+    Requires editor access to the survey (since editing submissions is an edit action).
     
     This endpoint calls the Kobo API to get the Enketo edit URL for a specific submission.
-    The Kobo API returns a JSON response with the actual edit URL.
+    The user must have their own Kobo API key configured and have Kobo-level access to the form.
     
     Args:
         kobo_id: Submission ID (_id from Kobo)
@@ -282,10 +298,8 @@ async def get_kobo_edit_url(
     if not submission:
         raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
     
-    # Get survey config to find kobo_asset_id
-    survey_config = db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_id).first()
-    if not survey_config:
-        raise HTTPException(status_code=404, detail=f"Survey {survey_id} not found")
+    # Check user has editor access to the survey
+    survey_config = require_survey_access(db, current_user, survey_id, min_level='editor')
     
     if not survey_config.kobo_asset_id:
         raise HTTPException(
@@ -293,9 +307,18 @@ async def get_kobo_edit_url(
             detail=f"Survey {survey_id} does not have a kobo_asset_id configured"
         )
     
+    # Get user's Kobo API token
+    kobo_token = get_user_kobo_token(current_user)
+    if not kobo_token:
+        raise HTTPException(
+            status_code=400,
+            detail="You need to configure your Kobo API key in user settings to get edit URLs"
+        )
+    
     try:
-        # Create Kobo fetcher
-        fetcher = create_fetcher_from_env()
+        # Create Kobo fetcher with user's token
+        kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+        fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
         
         # Call Kobo API to get edit URL
         # Format: /assets/{asset_id}/data/{submission_id}/enketo/edit/?return_url=false
@@ -318,5 +341,3 @@ async def get_kobo_edit_url(
             status_code=500,
             detail=f"Failed to get Kobo edit URL: {str(e)}"
         )
-
-

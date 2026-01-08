@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { SurveyProvider } from './contexts/SurveyContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './components/Dashboard';
 import DataCollectionProgressPage from './pages/DataCollectionProgressPage';
 import EnumeratorPerformancePage from './pages/EnumeratorPerformancePage';
 import CreateSurveyPage from './pages/CreateSurveyPage';
 import SurveySettingsPage from './pages/SurveySettingsPage';
+import UserSettingsPage from './pages/UserSettingsPage';
+import LoginPage from './pages/LoginPage';
 import Sidebar from './components/Sidebar';
 
-type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'createSurvey' | 'settings';
+type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'createSurvey' | 'settings' | 'userSettings';
 
-const App: React.FC = () => {
+// Main app content (authenticated)
+const AppContent: React.FC = () => {
+  const { user, isLoading, logout } = useAuth();
   const [view, setView] = useState<View>('dashboard');
 
   // Listen for navigation events from CreateSurveyPage
@@ -29,6 +34,23 @@ const App: React.FC = () => {
       window.removeEventListener('navigateToDashboard', handleNavigateToDashboard);
     };
   }, []);
+
+  // Show loading state while checking auth
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!user) {
+    return <LoginPage onLoginSuccess={() => setView('dashboard')} />;
+  }
 
   const NavButton: React.FC<{ currentView: View; targetView: View; onClick: () => void; children: React.ReactNode }> = ({
     currentView,
@@ -55,6 +77,7 @@ const App: React.FC = () => {
     enumeratorPerformance: <EnumeratorPerformancePage />,
     createSurvey: <CreateSurveyPage />,
     settings: <SurveySettingsPage />,
+    userSettings: <UserSettingsPage />,
   };
 
   const handleAddSurvey = () => {
@@ -71,7 +94,14 @@ const App: React.FC = () => {
   return (
     <SurveyProvider>
       <div className="flex h-full font-sans text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900">
-        <Sidebar onAddSurvey={handleAddSurvey} onSurveySelect={handleSurveySelect} />
+        <Sidebar 
+          onAddSurvey={handleAddSurvey} 
+          onSurveySelect={handleSurveySelect}
+          user={user}
+          onUserSettings={() => setView('userSettings')}
+          onLogout={logout}
+          isUserSettingsActive={view === 'userSettings'}
+        />
         
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -100,6 +130,15 @@ const App: React.FC = () => {
         </div>
       </div>
     </SurveyProvider>
+  );
+};
+
+// Wrapper component with auth provider
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 

@@ -10,7 +10,9 @@ from uuid import UUID as UUIDType
 from collections import defaultdict
 
 from services.database import get_db
-from database.models import SubmissionCurrent, SurveyConfig
+from services.auth import get_current_active_user
+from services.permissions import require_survey_access
+from database.models import SubmissionCurrent, SurveyConfig, User
 from models import (
     ProgressData, PerformanceData,
     OverallProgress, ProgressByColumn, DetailedProgress,
@@ -40,20 +42,6 @@ def _is_target_column(column_name: str) -> bool:
     """Check if a column name is a target column."""
     normalized = column_name.lower().strip()
     return any(name in normalized for name in TARGET_COLUMN_NAMES)
-
-
-def _get_survey_config(db: Session, survey_id: Optional[str]) -> Optional[SurveyConfig]:
-    """Get survey configuration, optionally filtered by survey_id."""
-    if survey_id:
-        try:
-            survey_uuid = UUIDType(survey_id)
-            return db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_uuid).first()
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
-            )
-    return None
 
 
 def _get_field_value(submission_data: Dict[str, Any], field_name: str) -> Any:
@@ -170,28 +158,40 @@ def _calculate_targets_from_frame(
 
 @router.get("/progress", response_model=ProgressData)
 async def get_progress_data(
-    survey_id: Optional[str] = Query(None, description="Filter by survey ID (UUID)"),
+    survey_id: str = Query(..., description="Survey ID (UUID) - required"),
     approved_only: bool = Query(
         False,
         description="When true, only count submissions whose qa_status is APPROVED.",
     ),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
-    Get data collection progress metrics.
+    Get data collection progress metrics for a specific survey.
+    Requires viewer access to the survey.
+    
     Returns overall progress, by sampling column disaggregations, and detailed breakdown.
     
     Progress is calculated by counting completed surveys (submissions) against targets
     from the sampling frame. Disaggregations are dynamically generated based on
     the sampling_cols in the survey configuration.
     """
-    # Build base query
-    query = db.query(SubmissionCurrent)
+    # Parse and validate survey_id
+    try:
+        survey_uuid = UUIDType(survey_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
+        )
     
-    # Filter by survey if provided
-    survey_config = _get_survey_config(db, survey_id)
-    if survey_config:
-        query = query.filter(SubmissionCurrent.survey_id == survey_config.survey_id)
+    # Check user has access to this survey
+    survey_config = require_survey_access(db, current_user, survey_uuid, min_level='viewer')
+    
+    # Build query filtered by survey
+    query = db.query(SubmissionCurrent).filter(
+        SubmissionCurrent.survey_id == survey_config.survey_id
+    )
     
     # Filter to approved submissions if requested
     if approved_only:
@@ -328,9 +328,12 @@ async def get_progress_data(
 async def get_performance_data(
     survey_id: str = Query(..., description="Survey ID (UUID) - required"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get enumerator performance metrics for a specific survey.
+    Requires viewer access to the survey.
+    
     Returns collection stats and quality metrics per enumerator.
     
     Quality metrics include:
@@ -346,17 +349,19 @@ async def get_performance_data(
         survey_id: Required survey ID (UUID) to filter submissions
     
     Raises:
-        HTTPException: 400 if survey_id is invalid or survey not found
+        HTTPException: 400 if survey_id is invalid, 403 if no access, 404 if survey not found
     """
-    # Get survey config (survey_id is required by FastAPI Query(...))
-    survey_config = _get_survey_config(db, survey_id)
-    
-    # Ensure survey exists
-    if not survey_config:
+    # Parse and validate survey_id
+    try:
+        survey_uuid = UUIDType(survey_id)
+    except ValueError:
         raise HTTPException(
-            status_code=404,
-            detail=f"Survey not found: {survey_id}"
+            status_code=400,
+            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
         )
+    
+    # Check user has access to this survey
+    survey_config = require_survey_access(db, current_user, survey_uuid, min_level='viewer')
     
     # Get enumerator field name from survey config
     config = survey_config.config_data

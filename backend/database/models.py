@@ -4,14 +4,40 @@ These models map to the PostgreSQL schema defined in schema.sql.
 """
 
 from datetime import datetime
-from typing import Dict, Any
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON
+from typing import Dict, Any, Optional
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 import uuid
 
 Base = declarative_base()
+
+
+class User(Base):
+    """ORM model for users table."""
+    
+    __tablename__ = "users"
+    
+    user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    username = Column(String(100), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
+    # Kobo API credentials (encrypted at rest)
+    kobo_api_token_encrypted = Column(Text, nullable=True)
+    kobo_api_url = Column(String(500), default="https://kf.kobotoolbox.org/api/v2")
+    # Account status
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    owned_surveys = relationship("SurveyConfig", back_populates="owner", foreign_keys="SurveyConfig.user_id")
+    survey_access = relationship("SurveyAccess", back_populates="user", foreign_keys="SurveyAccess.user_id")
 
 
 class SurveyConfig(Base):
@@ -23,10 +49,14 @@ class SurveyConfig(Base):
     survey_name = Column(String(255), nullable=False, unique=True)
     kobo_asset_id = Column(String(255), nullable=True)
     config_data = Column(JSONB, nullable=False)
+    # User ownership (for multi-tenancy)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
+    owner = relationship("User", back_populates="owned_surveys", foreign_keys=[user_id])
+    shared_access = relationship("SurveyAccess", back_populates="survey", cascade="all, delete-orphan")
     validation_rules = relationship("ValidationRule", back_populates="survey_config", cascade="all, delete-orphan")
     submissions = relationship("SubmissionCurrent", back_populates="survey_config")
 
@@ -90,4 +120,21 @@ class SubmissionHistory(Base):
     
     # Relationships
     submission = relationship("SubmissionCurrent", back_populates="history")
+
+
+class SurveyAccess(Base):
+    """ORM model for survey_access table - manages shared access to surveys."""
+    
+    __tablename__ = "survey_access"
+    
+    survey_id = Column(UUID(as_uuid=True), ForeignKey("survey_configs.survey_id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
+    permission_level = Column(String(20), nullable=False)  # 'editor' or 'viewer'
+    granted_by = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    granted_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    
+    # Relationships
+    survey = relationship("SurveyConfig", back_populates="shared_access")
+    user = relationship("User", back_populates="survey_access", foreign_keys=[user_id])
+    granter = relationship("User", foreign_keys=[granted_by])
 

@@ -5,13 +5,18 @@ Endpoints for triggering and monitoring ETL pipelines.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import Optional
 from datetime import datetime
 from uuid import UUID as UUIDType
+import logging
 
 from services.database import get_db
+from services.auth import get_current_active_user, get_user_kobo_token
+from services.permissions import require_survey_access
 from etl.pipeline import ETLPipeline
 from models import BaseResponse
+from database.models import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -20,9 +25,10 @@ router = APIRouter()
 async def run_etl_pipeline(
     survey_id: str,
     background_tasks: BackgroundTasks,
-    limit: Optional[int] = Query(None, description="Maximum number of submissions to process"),
-    start_date: Optional[str] = Query(None, description="Only process submissions after this date (YYYY-MM-DD)"),
+    limit: int | None = Query(None, description="Maximum number of submissions to process"),
+    start_date: str | None = Query(None, description="Only process submissions after this date (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Trigger ETL pipeline for a survey.
@@ -32,6 +38,11 @@ async def run_etl_pipeline(
     2. Merge submissions (with edit detection)
     3. Run High-Frequency Checks
     4. Update database
+    
+    Authentication required. User must:
+    - Have at least 'editor' access to the survey
+    - Have a Kobo API key configured
+    - Have Kobo-level access to the form
     
     Note: This runs synchronously. For large datasets, consider using Airflow.
     """
@@ -45,6 +56,9 @@ async def run_etl_pipeline(
                 detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
             )
         
+        # Check user has editor access to this survey
+        require_survey_access(db, current_user, survey_uuid, min_level='editor')
+        
         # Parse start_date if provided
         start_datetime = None
         if start_date:
@@ -56,8 +70,22 @@ async def run_etl_pipeline(
                     detail=f"Invalid date format: {start_date}. Use YYYY-MM-DD"
                 )
         
-        # Create pipeline
-        pipeline = ETLPipeline(db)
+        # Get Kobo API credentials from user
+        kobo_api_token = get_user_kobo_token(current_user)
+        kobo_api_url = current_user.kobo_api_url
+        
+        if not kobo_api_token:
+            raise HTTPException(
+                status_code=400,
+                detail="Kobo API key not configured. Please set your API key in user settings."
+            )
+        
+        # Create pipeline with user's credentials
+        pipeline = ETLPipeline(
+            db,
+            kobo_api_token=kobo_api_token,
+            kobo_api_url=kobo_api_url
+        )
         
         # Run pipeline
         stats = pipeline.run_pipeline(
@@ -83,5 +111,6 @@ async def run_etl_pipeline(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        logger.error(f"ETL pipeline failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"ETL pipeline failed: {str(e)}")
 

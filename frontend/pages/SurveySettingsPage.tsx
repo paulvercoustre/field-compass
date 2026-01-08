@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
-import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule } from '../services/progressApi';
+import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
 import { parseKoboTool, KoboToolData } from '../services/koboParser';
 import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
@@ -23,7 +23,15 @@ const SurveySettingsPage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'settings' | 'quality'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'access' | 'quality'>('settings');
+
+  // Access management state
+  const [accessList, setAccessList] = useState<SurveyAccessEntry[]>([]);
+  const [isLoadingAccess, setIsLoadingAccess] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [sharePermission, setSharePermission] = useState<'editor' | 'viewer'>('viewer');
+  const [isSharing, setIsSharing] = useState(false);
+  const [canManageAccess, setCanManageAccess] = useState(false);
 
   // Validation rules state
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
@@ -121,6 +129,13 @@ const SurveySettingsPage: React.FC = () => {
       setIsDeleting(false);
     }
   }, [showDeleteConfirm]);
+
+  // Load access list when Access tab is selected
+  useEffect(() => {
+    if (activeTab === 'access' && selectedSurvey) {
+      loadAccessList();
+    }
+  }, [activeTab, selectedSurvey]);
 
   useEffect(() => {
     if (koboToolData && koboToolData.variableMap) {
@@ -243,6 +258,69 @@ const SurveySettingsPage: React.FC = () => {
       // Don't show error to user, just log it
     } finally {
       setIsLoadingRules(false);
+    }
+  };
+
+  const loadAccessList = async () => {
+    if (!selectedSurvey) return;
+    
+    setIsLoadingAccess(true);
+    try {
+      const access = await getSurveyAccess(selectedSurvey.survey_id);
+      setAccessList(access);
+      setCanManageAccess(true);
+    } catch (err: any) {
+      // If 403, user doesn't have permission to manage access
+      if (err.message?.includes('403') || err.message?.includes('owner')) {
+        setCanManageAccess(false);
+      } else {
+        console.error('Error loading access list:', err);
+      }
+    } finally {
+      setIsLoadingAccess(false);
+    }
+  };
+
+  const handleShare = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSurvey || !shareEmail.trim()) return;
+
+    setIsSharing(true);
+    setError(null);
+
+    try {
+      await shareSurvey(selectedSurvey.survey_id, shareEmail.trim(), sharePermission);
+      setSuccess(`Survey shared with ${shareEmail}`);
+      setShareEmail('');
+      loadAccessList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to share survey');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleUpdateAccess = async (userId: string, newLevel: 'editor' | 'viewer') => {
+    if (!selectedSurvey) return;
+    setError(null);
+    try {
+      await updateSurveyAccess(selectedSurvey.survey_id, userId, newLevel);
+      loadAccessList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update access');
+    }
+  };
+
+  const handleRevokeAccess = async (userId: string, userEmail: string) => {
+    if (!selectedSurvey) return;
+    if (!confirm(`Are you sure you want to revoke ${userEmail}'s access?`)) return;
+
+    setError(null);
+    try {
+      await revokeSurveyAccess(selectedSurvey.survey_id, userId);
+      loadAccessList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke access');
     }
   };
 
@@ -687,6 +765,13 @@ const SurveySettingsPage: React.FC = () => {
             General
           </SubTabButton>
           <SubTabButton
+            tabId="access"
+            activeTab={activeTab}
+            onClick={setActiveTab}
+          >
+            Access
+          </SubTabButton>
+          <SubTabButton
             tabId="quality"
             activeTab={activeTab}
             onClick={setActiveTab}
@@ -1024,6 +1109,133 @@ const SurveySettingsPage: React.FC = () => {
                   'DK String Value'
                 )}
               </div>
+            </section>
+          </div>
+        ) : activeTab === 'access' ? (
+          <div className="space-y-6">
+            {/* Access Management */}
+            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Share Survey</h2>
+              
+              {!canManageAccess ? (
+                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                  <p className="text-yellow-800 dark:text-yellow-200 text-sm">
+                    Only the survey owner can manage access permissions.
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleShare} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Invite by email
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={shareEmail}
+                        onChange={(e) => setShareEmail(e.target.value)}
+                        placeholder="user@example.com"
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
+                        required
+                      />
+                      <select
+                        value={sharePermission}
+                        onChange={(e) => setSharePermission(e.target.value as 'editor' | 'viewer')}
+                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                      </select>
+                      <button
+                        type="submit"
+                        disabled={isSharing || !shareEmail.trim()}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                      >
+                        {isSharing ? 'Sharing...' : 'Share'}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <strong>Viewer:</strong> Can view data and reports. <strong>Editor:</strong> Can also run ETL and resolve flags.
+                  </p>
+                </form>
+              )}
+            </section>
+
+            {/* Current Access List */}
+            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">People with Access</h2>
+              
+              {isLoadingAccess ? (
+                <div className="flex items-center justify-center py-8">
+                  <Spinner />
+                </div>
+              ) : accessList.length === 0 ? (
+                <p className="text-gray-500 dark:text-gray-400 text-sm py-4">
+                  {canManageAccess 
+                    ? "No one else has access to this survey yet." 
+                    : "Unable to load access list."}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {accessList.map((access) => (
+                    <div
+                      key={access.user_id}
+                      className="flex items-center justify-between py-3 px-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
+                          {access.username?.charAt(0).toUpperCase() || access.email?.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-white">
+                            {access.full_name || access.username}
+                          </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            {access.email}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        {access.permission_level === 'owner' ? (
+                          <span className="px-3 py-1 text-sm font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 rounded-full">
+                            Owner
+                          </span>
+                        ) : canManageAccess ? (
+                          <>
+                            <select
+                              value={access.permission_level}
+                              onChange={(e) => handleUpdateAccess(access.user_id, e.target.value as 'editor' | 'viewer')}
+                              className="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+                            >
+                              <option value="viewer">Viewer</option>
+                              <option value="editor">Editor</option>
+                            </select>
+                            <button
+                              onClick={() => handleRevokeAccess(access.user_id, access.email)}
+                              className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                              title="Revoke access"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </>
+                        ) : (
+                          <span className={`px-3 py-1 text-sm font-medium rounded-full ${
+                            access.permission_level === 'editor' 
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                              : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                          }`}>
+                            {access.permission_level === 'editor' ? 'Editor' : 'Viewer'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         ) : activeTab === 'quality' ? (
