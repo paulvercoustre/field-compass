@@ -25,6 +25,11 @@ const SurveySettingsPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'settings' | 'access' | 'quality'>('settings');
 
+  // Permission-based access control
+  const userPermission = selectedSurvey?.permission;
+  const canEditSurvey = userPermission === 'owner' || userPermission === 'admin';
+  const canDeleteSurvey = userPermission === 'owner' || userPermission === 'admin';
+
   // Access management state
   const [accessList, setAccessList] = useState<SurveyAccessEntry[]>([]);
   const [isLoadingAccess, setIsLoadingAccess] = useState(false);
@@ -677,22 +682,33 @@ const SurveySettingsPage: React.FC = () => {
     <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
       <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-4xl">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
+            {!canEditSurvey && userPermission && (
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                View only
+              </span>
+            )}
+          </div>
           <div className="flex gap-2">
             {!isEditing ? (
               <>
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={handleDeleteClick}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
-                >
-                  Delete
-                </button>
+                {canEditSurvey && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"
+                  >
+                    Edit
+                  </button>
+                )}
+                {canDeleteSurvey && (
+                  <button
+                    onClick={handleDeleteClick}
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
+                  >
+                    Delete
+                  </button>
+                )}
               </>
             ) : (
               <>
@@ -1630,6 +1646,7 @@ const SurveySettingsPage: React.FC = () => {
                             rules={stagedRules}
                             onEdit={handleEditRule}
                             onDelete={handleDeleteRule}
+                            canEdit={canEditSurvey}
                           />
                         )}
                       </div>

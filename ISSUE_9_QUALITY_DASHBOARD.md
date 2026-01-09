@@ -578,12 +578,15 @@ backend/
 - ❌ Router not registered in `backend/main.py`
 
 #### Frontend (0% complete)
-- ❌ No quality dashboard components
+- ⏳ Folder structure exists: `frontend/components/quality-dashboard/ui/` (empty)
+- ❌ No quality dashboard components implemented
 - ❌ No `frontend/services/qualityApi.ts`
 - ❌ No `QualityOverviewPage.tsx`
 - ❌ No navigation entry in `App.tsx`
 - ❌ No charting library installed (spec recommends `recharts`)
 - ❌ No global filters component
+
+**Note:** User authentication is now fully implemented (see `ACTION_ITEMS.md`), which will be required for the quality dashboard to function with proper permissions.
 
 ### What Already Exists (Related Features)
 
@@ -601,6 +604,9 @@ backend/
 ✅ **Related API Endpoints:**
 - `/api/submissions` returns quality issues
 - `/api/progress/performance` includes quality metrics
+- `/api/auth/*` - User authentication (login, register)
+- `/api/users/*` - User management and Kobo API key storage
+- `/api/surveys/{id}/rules` - Validation rules CRUD
 
 ---
 
@@ -645,6 +651,6 @@ backend/
 
 ---
 
-**Last Updated:** 2025-01-27  
-**Document Version:** 1.1
+**Last Updated:** January 2025  
+**Document Version:** 1.2
 

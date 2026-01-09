@@ -174,16 +174,29 @@ Tests will be added in a future update. For now, you can test the API using:
 - Change ports in `docker-compose.yml`
 - Or stop conflicting services
 
+## Features Implemented
+
+- [x] ETL pipeline (KoboToolbox integration, audit logs, data merging)
+- [x] User authentication (registration, login, JWT tokens)
+- [x] Per-user Kobo API key management (encrypted)
+- [x] Survey configuration management
+- [x] Validation rules builder with CRUD API
+- [x] Submission viewer with filters
+- [x] Enumerator performance metrics
+- [x] Data collection progress tracking
+- [x] Edit detection and history tracking
+- [x] CI/CD pipeline (GitHub Actions)
+- [x] Backend tests (~60 test functions)
+
 ## Next Steps
 
-- [x] Implement ETL pipeline components ✅
-- [ ] Add Airflow scheduler setup
-- [ ] Connect frontend to real API
-- [ ] Add authentication/authorization
-- [ ] Implement survey configuration management
-- [ ] Add comprehensive tests
+- [ ] Data Quality Overview Dashboard (Issue #9)
+- [ ] Frontend component tests
+- [ ] Airflow scheduler for automated ETL
+- [ ] Dataset-level quality checks
+- [ ] Export functionality (CSV/Excel)
 
-See [PROGRESS.md](PROGRESS.md) for detailed status and next steps.
+See [ACTION_ITEMS.md](ACTION_ITEMS.md) for detailed status and next steps.
 
 ## License
 

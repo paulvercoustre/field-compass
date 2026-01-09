@@ -1,557 +1,308 @@
 # Action Items & TODOs - Field Compass
 
-**Generated**: 2025-01-XX  
-**Source**: Review of all markdown files and codebase
+**Last Updated**: January 2025  
+**Source**: Review of codebase and implementation status
 
 ---
 
-## 🔴 HIGH PRIORITY - Critical Functionality
+## ✅ COMPLETED - Core Features Implemented
 
-### 1. Audit Log Processing - Performance Metrics (IMMEDIATE)
-**Location**: `backend/routers/progress.py` (lines 327-520)  
-**Status**: ✅ **COMPLETED** (Implementation was already working, improved with validation)
-
-**TODOs**:
-- [x] Calculate `avgActiveTime` from audit logs for enumerator performance
-- [x] Calculate `avgTotalTime` from audit logs for enumerator performance  
-- [x] Calculate `avgDkRate` from submission data for enumerator performance
-- [x] Make `survey_id` required parameter (improvement)
-- [x] Add validation and error handling (improvement)
-
-**Context**: 
-- Audit log processing is implemented in `backend/etl/audit_processor.py`
-- `active_interview_time` and `total_duration` are calculated and stored in `submission_data` during ETL
-- Metrics are aggregated per enumerator in `get_performance_data()` function
-- **Improvement**: Made `survey_id` required to ensure correct aggregation and use of survey-specific configs
-
-**Files modified**:
-- `backend/routers/progress.py` - `get_performance_data()` function (lines 327-520)
-- `frontend/services/progressApi.ts` - Updated to require `surveyId`
-- `frontend/pages/ProgressTracker.tsx` - Added validation for empty surveys
-
-**Implementation Details**:
-- Metrics are extracted from `submission_data.active_interview_time` and `submission_data.total_duration`
-- Aggregated per enumerator using survey-specific `enumerator_field` from config
-- DK rates calculated using survey-specific `dk_value` and `dk_string_value` from config
-- All metrics tested and verified working with real data
-
-**Actual Effort**: 2-3 hours (testing + improvements)
-
----
-
-### 2. Form Edition Detection Fix
-**Location**: ETL pipeline  
+### 1. User Authentication System
 **Status**: ✅ **COMPLETED**
 
-**TODOs**:
-- [x] Fix the logic that determines when a submission is marked as "edited" (currently incorrect)
-- [x] Investigate Kobo API to find reliable edit indicators
-- [x] Implement edit detection using `meta/deprecatedID` field
-- [x] Remove flawed timestamp-based comparison logic
-- [x] Update merge_submission() to use new detection method
-- [x] Create comparison script to investigate edit indicators
+**Implementation includes**:
+- [x] User registration with email/username/password
+- [x] JWT-based login/logout
+- [x] Profile management (update username, full name)
+- [x] Per-user Kobo API key management (encrypted at rest)
+- [x] Password change functionality
+- [x] Kobo API key testing endpoint
+- [x] User account deletion
+- [x] Login page UI
 
-**Context**: 
-- Previous logic compared `end` timestamp with `_submission_time + threshold`, which was incorrect
-- Investigation revealed that Kobo sets `meta/deprecatedID` field when a submission is edited
-- This field contains the previous UUID before the edit
-- Current UUID is in `_uuid` field, old UUID is in `meta/deprecatedID`
-
-**Files modified**:
-- `backend/etl/data_merger.py` - Rewrote `is_edited_submission()` to check for `deprecatedID`
-- `backend/etl/kobo_fetcher.py` - Added `get_submission_by_uuid()` method
-- `backend/etl/pipeline.py` - Updated to pass `kobo_data` for deprecatedID detection
-- `backend/tests/test_data_merger.py` - Updated tests to use deprecatedID
-- `backend/scripts/compare_submissions.py` - New script for comparing edited/non-edited submissions
-
-**Implementation Details**:
-- Edit detection now uses `meta/deprecatedID` field as the primary (and only) indicator
-- If `deprecatedID` exists in Kobo data → submission was edited
-- Removed UUID comparison and JSON diff checks from detection (kept diff for history tracking)
-- Simplified function signature - only needs `kobo_data` parameter
-- JSON diff still calculated for history records (to show what changed)
-
-**Actual Effort**: 3-4 hours (investigation + implementation + testing)
+**Files**:
+- `backend/routers/users.py` - Full user management endpoints
+- `backend/services/auth.py` - JWT authentication, password hashing, encryption
+- `backend/database/models.py` - User model with relationships
+- `frontend/contexts/AuthContext.tsx` - Auth state management
+- `frontend/pages/LoginPage.tsx` - Login/registration UI
+- `frontend/pages/UserSettingsPage.tsx` - Profile settings UI
 
 ---
 
-### 3. Update Kobo Link Wording and Target
-**Location**: Frontend components and backend API  
+### 2. Validation Rules CRUD API
 **Status**: ✅ **COMPLETED**
 
-**TODOs**:
-- [x] Change "View in kobo" link text to "Edit in kobo"
-- [x] Update link to redirect to Kobo form edit page (instead of view page)
-- [x] Verify correct Kobo URL format for form editing
-- [x] Create backend endpoint to fetch Enketo edit URL from Kobo API
-- [x] Update frontend to fetch and use the actual edit URL
+**Implementation includes**:
+- [x] Create validation rules for surveys
+- [x] Read validation rules (list all, get single)
+- [x] Update validation rules
+- [x] Delete validation rules
+- [x] Permission-based access (owner only can modify)
+- [x] Rule activation/deactivation
 
-**Context**: 
-- Kobo API endpoint `/assets/{asset_id}/data/{submission_id}/enketo/edit/?return_url=false` returns a JSON response with the actual Enketo edit URL
-- The URL format is: `https://ee.kobotoolbox.org/edit/{form_id}?instance_id={uuid}&return_url=false`
-- Frontend now fetches the URL dynamically from the backend API
-
-**Files modified**:
-- `frontend/components/SubmissionDetail.tsx` - Updated to fetch and display edit URL, changed text to "Edit in Kobo"
-- `frontend/services/api.ts` - Added `getKoboEditUrl()` function
-- `backend/routers/submissions.py` - Added `/api/submissions/{kobo_id}/kobo-edit-url` endpoint
-
-**Implementation Details**:
-- Backend endpoint calls Kobo API to get the Enketo edit URL and returns it to frontend
-- Frontend fetches the URL when submission or survey changes
-- Shows loading state while fetching URL
-- Link text changed from "View in Kobo" to "Edit in Kobo"
-- Error handling in place for failed URL fetches
-
-**Actual Effort**: 2-3 hours (including backend endpoint creation and testing)
+**Files**:
+- `backend/routers/validation_rules.py` - Full CRUD endpoints
+- `frontend/components/rule-builder/` - Rule builder UI components
+- `frontend/pages/RuleBuilder.tsx` - Rule management page
 
 ---
 
-### 4. User System with Kobo API Key Management
-**Location**: Backend authentication & user management  
-**Status**: Not started
+### 3. HFC Engine Expression Evaluator Security
+**Status**: ✅ **COMPLETED**
 
-**TODOs**:
-- [ ] Implement full user lifecycle (registration, management, deletion)
-- [ ] Move Kobo API key from hardcoded environment variable to user-owned configuration
-- [ ] Add user authentication system
-- [ ] Create user management UI
-- [ ] Secure API key storage (encryption at rest)
+**Implementation**:
+- [x] Replaced unsafe `eval()` with `simpleeval` library
+- [x] Safe expression evaluation for validation rules
+- [x] Tested with existing validation rules
 
-**Files to create/modify**:
-- `backend/routers/users.py` (create)
-- `backend/database/models.py` - Add user table
-- `backend/database/schema.sql` - Add user schema
-- Frontend user management components
-
-**Estimated Effort**: 1-2 weeks
+**Files**:
+- `backend/etl/hfc_engine.py` - Uses `simpleeval.SimpleEval`
+- `backend/requirements.txt` - Includes `simpleeval==0.9.13`
 
 ---
 
-### 5. GitHub Issue #7 - Kobo Modal Auto-Open
-**Location**: GitHub Issue #7  
-**Status**: Needs investigation
+### 4. Audit Log Processing - Performance Metrics
+**Status**: ✅ **COMPLETED**
 
-**Action Items**:
-- [ ] Investigate Kobo's URL format and deep linking capabilities
-- [ ] Test DOM structure and modal triggering mechanism
-- [ ] Determine timing and synchronization requirements
-- [ ] Choose appropriate solution approach
-- [ ] Implement solution in `SubmissionDetail.tsx`
-- [ ] Test all test cases
-- [ ] Verify browser compatibility
+**Implementation**:
+- [x] Calculate `avgActiveTime` from audit logs
+- [x] Calculate `avgTotalTime` from audit logs
+- [x] Calculate `avgDkRate` from submission data
+- [x] Survey-specific enumerator field configuration
+- [x] Aggregation per enumerator
+
+**Files**:
+- `backend/etl/audit_processor.py` - Audit log parsing
+- `backend/routers/progress.py` - Performance data endpoint
+- `frontend/pages/EnumeratorPerformancePage.tsx` - Performance UI
+
+---
+
+### 5. Form Edition Detection Fix
+**Status**: ✅ **COMPLETED**
+
+**Implementation**:
+- [x] Uses `meta/deprecatedID` field for reliable edit detection
+- [x] Removed flawed timestamp comparison logic
+- [x] JSON diff calculation for history tracking
+
+**Files**:
+- `backend/etl/data_merger.py` - Edit detection logic
+- `backend/etl/kobo_fetcher.py` - Kobo API integration
+
+---
+
+### 6. Update Kobo Link Wording and Target
+**Status**: ✅ **COMPLETED**
+
+**Implementation**:
+- [x] Changed link text to "Edit in Kobo"
+- [x] Backend endpoint fetches Enketo edit URL from Kobo API
+- [x] Frontend dynamically loads edit URL
 
 **Files**:
 - `frontend/components/SubmissionDetail.tsx`
-
-**Estimated Effort**: 1-2 days (depending on solution approach)
-
----
-
-## 🟡 MEDIUM PRIORITY - Important Improvements
-
-### 3. Testing Suite Implementation
-**Location**: `PROGRESS.md` (lines 129-142)  
-**Status**: 10% complete (manual testing done)
-
-**TODOs**:
-- [ ] Unit tests for ETL components
-- [ ] Integration tests for API endpoints
-- [ ] Frontend component tests
-- [ ] E2E tests
-
-**Files**:
-- `backend/tests/` (expand existing test files)
-- Create frontend test files
-
-**Estimated Effort**: 3-5 days
+- `backend/routers/submissions.py` - Edit URL endpoint
 
 ---
 
-### 4. HFC Engine Expression Evaluator Security
-**Location**: `PROGRESS.md` (lines 230-232), `CHANGES_REVIEW.md` (lines 222-224)  
-**Status**: Current implementation uses `eval()` which is unsafe
+### 7. Survey Deletion Cascade
+**Status**: ✅ **COMPLETED**
 
-**TODOs**:
-- [ ] Replace `eval()` with safe expression parser (e.g., `simpleeval`)
-- [ ] Improve security and reliability
-- [ ] Test all existing validation rules still work
+**Implementation**:
+- [x] Cascade delete submissions, validation rules, history
+- [x] Transaction-based atomic deletion
+- [x] Returns counts of deleted records
 
 **Files**:
-- `backend/etl/hfc_engine.py` - `_safe_eval()` method (lines 427-490)
+- `backend/routers/surveys.py` - `delete_survey()` function
+
+---
+
+### 8. Post-Basic-Info Quality Check Prompt
+**Status**: ✅ **COMPLETED**
+
+**Files**:
+- `frontend/components/QualityCheckPromptModal.tsx`
+- `frontend/pages/CreateSurveyPage.tsx`
+
+---
+
+### 9. CI/CD Pipeline
+**Status**: ✅ **COMPLETED**
+
+**Implementation**:
+- [x] GitHub Actions workflow
+- [x] Linting with ruff
+- [x] Unit tests with pytest
+- [x] Docker image build and push to GHCR
+- [x] Integration tests in Docker
+- [x] Azure deployment (when configured)
+
+**Files**:
+- `.github/workflows/ci-cd.yml`
+
+---
+
+### 10. Testing Suite
+**Status**: ✅ **PARTIAL** (~60 test functions, ~1650 lines)
+
+**What exists**:
+- [x] ETL component tests (audit processor, data merger, HFC engine)
+- [x] API endpoint tests
+- [x] Validation rules tests
+- [x] Fixtures and test database setup
+
+**Files**:
+- `backend/tests/` - 9 test files with comprehensive coverage
+
+---
+
+## 🔴 HIGH PRIORITY - Remaining Work
+
+### 1. Data Quality Overview Dashboard (Issue #9)
+**Status**: ❌ NOT STARTED
+
+**Requirements**:
+- [ ] Backend `/api/quality/overview` endpoint
+- [ ] Issue frequency aggregation
+- [ ] Temporal trends data
+- [ ] Quality health metrics
+- [ ] Frontend dashboard with charts (recharts)
+- [ ] Global filters (survey, date, enumerator)
+
+**Estimated Effort**: 1.5-2 weeks
+
+**Files to create**:
+- `backend/routers/quality.py`
+- `frontend/pages/QualityOverviewPage.tsx`
+- `frontend/components/quality-dashboard/*.tsx`
+- `frontend/services/qualityApi.ts`
+
+**Spec Document**: `ISSUE_9_QUALITY_DASHBOARD.md`
+
+---
+
+### 2. GitHub Issue #7 - Kobo Modal Auto-Open
+**Status**: ❌ NEEDS INVESTIGATION
+
+**Requirements**:
+- [ ] Investigate Kobo deep linking capabilities
+- [ ] Test DOM structure and modal triggering
+- [ ] Implement solution if feasible
 
 **Estimated Effort**: 1-2 days
 
 ---
 
-### 5. Survey Deletion Cascade
-**Location**: `backend/routers/surveys.py` (lines 180-257)  
-**Status**: ✅ **COMPLETED**
+## 🟡 MEDIUM PRIORITY
 
-**TODOs**:
-- [x] Implement cascade delete for related data:
-  - Submissions (submissions_current, submissions_history)
-  - Validation rules
-  - Other related records
-- [x] Handle foreign key constraints properly
-- [ ] Add confirmation/soft delete option (optional - future enhancement)
+### 3. ETL Dry Run Mode
+**Status**: ❌ NOT IMPLEMENTED (flag exists but not functional)
 
-**Context**: 
-- The `delete_survey()` function already implements cascade deletion manually
-- Deletes all `submissions_current` for the survey (required due to `ON DELETE RESTRICT` constraint)
-- Deletes all `validation_rules` for the survey (redundant but explicit, since `ON DELETE CASCADE` handles it)
-- `submissions_history` is automatically deleted via CASCADE when `submissions_current` is deleted
-- All deletions are wrapped in a transaction with proper error handling and rollback
+**Requirements**:
+- [ ] Implement dry run that fetches but doesn't write to DB
+- [ ] Preview statistics before commit
 
-**Files modified**:
-- `backend/routers/surveys.py` - `delete_survey()` function (already implemented)
-- `backend/tests/test_api_endpoints.py` - Added comprehensive cascade deletion tests
-
-**Implementation Details**:
-- Manual deletion of `submissions_current` is required because schema uses `ON DELETE RESTRICT`
-- Manual deletion of `validation_rules` is explicit (though CASCADE would handle it)
-- `submissions_history` cascades automatically when parent submission is deleted
-- Transaction ensures atomicity - all or nothing deletion
-- Returns counts of deleted records for logging/auditing
-
-**Actual Effort**: Already implemented, added test coverage (1-2 hours)
-
----
-
-### 6. ETL Dry Run Mode
-**Location**: `backend/scripts/run_etl.py` (line 59)  
-**Status**: Flag exists but not implemented
-
-**TODOs**:
-- [ ] Implement dry run mode that:
-  - Fetches submissions from Kobo
-  - Shows what would be processed
-  - Does NOT write to database
-  - Provides statistics preview
-
-**Files**:
-- `backend/scripts/run_etl.py`
-- `backend/etl/pipeline.py` (may need dry_run parameter)
+**Files**: `backend/scripts/run_etl.py`, `backend/etl/pipeline.py`
 
 **Estimated Effort**: 2-3 hours
 
 ---
 
-### 7. Post-Basic-Info Quality Check Prompt
-**Location**: Survey creation flow
-**Status**: ✅ Completed
+### 4. Dataset-Level Quality Checks
+**Status**: ❌ NOT STARTED
 
-**TODOs**:
-- [x] Add popup after basic survey info completion asking if user wants to configure data quality checks now or later
-- [x] If "Now", redirect to the survey's data quality check form in edit mode
-- [x] If "Later", allow user to continue and configure later
-
-**Files to modify**:
-- `frontend/components/QualityCheckPromptModal.tsx` (new)
-- `frontend/pages/CreateSurveyPage.tsx`
-- `frontend/pages/SurveySettingsPage.tsx`
-- `frontend/App.tsx`
-
-**Actual Effort**: 4-5 hours (including debugging survey selection issues)
-
----
-
-### 8. Form Validation Button
-**Location**: Survey/Kobo form interface  
-**Status**: Not started / Blocked on Kobo capabilities
-
-**TODOs**:
-- [ ] Investigate Kobo website capabilities for form validation
-- [ ] Add button that validates the form (depends on Kobo website build)
-- [ ] Determine if validation can be triggered programmatically or via URL parameters
-- [ ] Implement validation trigger if possible
-
-**Files to modify**:
-- Frontend components related to survey/form management
-
-**Estimated Effort**: 1-2 days (investigation + implementation, if feasible)
-
----
-
-### 9. Dataset-Level Quality Checks
-**Location**: Quality checks system  
-**Status**: Not started
-
-**TODOs**:
-- [ ] Implement dataset-level quality checks (as opposed to submission-level)
-- [ ] Decide placement: overview dashboard vs dedicated area
-- [ ] Design checks that analyze entire dataset (e.g., completeness across submissions, consistency, outliers)
-- [ ] Create UI to display dataset-level quality metrics
-
-**Files to create/modify**:
-- `backend/etl/quality_checks.py` (may need new module)
-- `backend/routers/quality.py` (may need new endpoint)
-- Frontend dashboard/quality components
+**Requirements**:
+- [ ] Aggregate quality analysis across entire dataset
+- [ ] Completeness, consistency, outlier detection
 
 **Estimated Effort**: 3-5 days
 
 ---
 
-### 10. Overview Dashboard
-**Location**: Frontend dashboard  
-**Status**: Not started
+### 5. Enumerator Performance Page UX Improvements
+**Status**: ⏳ PARTIAL (basic implementation exists)
 
-**TODOs**:
-- [ ] Build overview dashboard page
-- [ ] Decide whether dataset-level quality checks should be in this page or separate
-- [ ] Include key metrics, survey status, recent activity
-- [ ] Make it visually appealing and informative
-
-**Files to create/modify**:
-- `frontend/pages/DashboardPage.tsx` (create or expand)
-- Dashboard components
-
-**Estimated Effort**: 3-5 days
-
----
-
-### 11. Enumerator Performance Page UX Improvements
-**Location**: Enumerator performance page  
-**Status**: Not started
-
-**TODOs**:
-- [ ] Improve visuals and make it more action-oriented
-- [ ] Add charts/graphs for better data visualization
-- [ ] Make performance metrics more actionable
-- [ ] Incorporate new metrics once audit log aggregation is complete (item #1)
-
-**Files to modify**:
-- `frontend/pages/EnumeratorPerformancePage.tsx` (or similar)
-- Performance visualization components
+**Requirements**:
+- [ ] Add charts/graphs for visualization
+- [ ] Make metrics more actionable
+- [ ] Improve overall visual design
 
 **Estimated Effort**: 2-3 days
 
 ---
 
-### 12. Qualitative Data Checks
-**Location**: Quality checks system  
-**Status**: Not started
+### 6. Additional Frontend Tests
+**Status**: ❌ NOT STARTED
 
-**TODOs**:
-- [ ] Implement checks to assess if response is answering the question (not misunderstood)
-- [ ] Check if answer contains all elements required
-- [ ] Assess if answer is high quality/rich
-- [ ] Implement scoring system for qualitative checks
-- [ ] May require NLP/AI capabilities for text analysis
+**Requirements**:
+- [ ] React component tests
+- [ ] E2E tests (Playwright/Cypress)
 
-**Files to create/modify**:
-- `backend/etl/qualitative_checks.py` (create new module)
-- Quality scoring logic
-- Frontend display of qualitative scores
-
-**Estimated Effort**: 1-2 weeks (depending on complexity of NLP requirements)
+**Estimated Effort**: 3-5 days
 
 ---
 
 ## 🟢 LOW PRIORITY - Nice to Have
 
-### 13. Airflow DAG Setup
-**Location**: `PROGRESS.md` (lines 78-87, 196-200, 278-281)  
-**Status**: Not started (manual ETL trigger via UI is working)
+### 7. Airflow DAG Setup
+- Scheduled ETL automation (manual trigger works fine)
+- Estimated: 2-3 days
 
-**TODOs**:
-- [ ] Create Airflow DAG definition for scheduled ETL runs
-- [ ] Test locally with Airflow
-- [ ] Configure for Cloud Composer (GCP)
-- [ ] Add error handling and retry logic
-- [ ] Set up monitoring and alerting
+### 8. ETL Performance Optimization
+- Parallelization, batching for large datasets
+- Estimated: 2-3 days
 
-**Estimated Effort**: 2-3 days
+### 9. Audit File Management
+- Cleanup for old audit files
+- Retention policy
+- Estimated: 1-2 days
 
-**Note**: Lower priority since manual ETL trigger via UI is working
+### 10. Survey Management UX Improvements
+- Multi-step wizard approach
+- Better separation of list vs. creation
+- Estimated: 1-2 weeks
 
----
+### 11. Export Functionality
+- CSV/Excel export for submissions
+- Quality reports export
+- Estimated: 2-3 days
 
-### 14. ETL Performance Optimization
-**Location**: `PROGRESS.md` (lines 234-237), `backend/etl/README.md` (lines 158-160)  
-**Status**: Currently processes sequentially
+### 12. Documentation
+- User guide
+- Complete API documentation
+- Developer onboarding guide
+- Estimated: 2-3 days
 
-**TODOs**:
-- [ ] Parallelize ETL processing for large datasets
-- [ ] Batch database commits (instead of per-submission)
-- [ ] Optimize database queries
-- [ ] Add performance monitoring
-
-**Files**:
-- `backend/etl/pipeline.py`
-- `backend/etl/data_merger.py`
-
-**Estimated Effort**: 2-3 days
-
----
-
-### 15. Validation Rules API
-**Location**: `PROGRESS.md` (lines 248-251)  
-**Status**: Rules exist but no CRUD API
-
-**TODOs**:
-- [ ] Create CRUD endpoints for validation rules
-- [ ] Link rules to surveys properly
-- [ ] Support rule activation/deactivation
-- [ ] Add frontend UI for rule management
-
-**Files**:
-- `backend/routers/validation_rules.py` (create or expand)
-- Frontend components for rule management
-
-**Estimated Effort**: 3-4 days
+### 13. Qualitative Data Checks
+- NLP-based quality assessment for text responses
+- Estimated: 1-2 weeks (complex)
 
 ---
 
-### 16. Audit File Management
-**Location**: `CHANGES_REVIEW.md` (lines 226-228)  
-**Status**: Currently keeps all files
+## 📋 Summary
 
-**TODOs**:
-- [ ] Add cleanup for old audit files
-- [ ] Consider storing in database instead of filesystem
-- [ ] Add retention policy configuration
-
-**Files**:
-- `backend/etl/audit_processor.py`
-
-**Estimated Effort**: 1-2 days
+| Category | Completed | Remaining |
+|----------|-----------|-----------|
+| User Authentication | ✅ 100% | - |
+| Validation Rules API | ✅ 100% | - |
+| ETL Pipeline | ✅ 100% | Dry run mode |
+| CI/CD | ✅ 100% | - |
+| Backend Tests | ✅ ~70% | E2E tests |
+| Quality Dashboard | ❌ 0% | Full implementation |
+| Frontend Tests | ❌ 0% | Component & E2E tests |
 
 ---
 
-### 17. Survey Management UX Improvements
-**Location**: `PROGRESS.md` (lines 223-228)  
-**Status**: Current flow is confusing
+## 🎯 Recommended Next Steps
 
-**TODOs**:
-- [ ] Separate survey list from creation form
-- [ ] Implement multi-step wizard approach (like KoboToolbox)
-- [ ] Improve rule builder integration into survey setup flow
-- [ ] See `SURVEY_UX_IMPROVEMENTS.md` for detailed plan (if exists)
-
-**Files**:
-- `frontend/pages/CreateSurveyPage.tsx`
-- `frontend/components/rule-builder/`
-
-**Estimated Effort**: 1-2 weeks
+1. **Quality Dashboard (Issue #9)** - High impact for QA workflows
+2. **Frontend Tests** - Improve confidence before production
+3. **ETL Dry Run Mode** - Quick win (2-3 hours)
+4. **Enumerator Performance UX** - Polish existing feature
 
 ---
 
-### 18. Error Handling Improvements
-**Location**: `PROGRESS.md` (lines 239-242)  
-**Status**: Basic error handling exists
-
-**TODOs**:
-- [ ] More granular error messages
-- [ ] Better logging throughout application
-- [ ] Retry strategies for API calls
-- [ ] User-friendly error messages in frontend
-
-**Estimated Effort**: 2-3 days
-
----
-
-### 19. Additional Features
-**Location**: `PROGRESS.md` (lines 303-306)  
-**Status**: Not started
-
-**TODOs**:
-- [ ] Survey duplication functionality
-- [ ] Export functionality (CSV, Excel)
-- [ ] Advanced filtering/search for submissions
-- [ ] Bulk operations on submissions
-
-**Estimated Effort**: 1-2 weeks
-
----
-
-### 20. Deployment Configuration
-**Location**: `PROGRESS.md` (lines 144-155)  
-**Status**: Not started
-
-**TODOs**:
-- [ ] GCP Cloud Run configuration
-- [ ] Cloud SQL setup
-- [ ] Cloud Composer (Airflow) setup
-- [ ] Cloud Build CI/CD
-- [ ] Environment variable management
-- [ ] Monitoring and logging setup
-
-**Estimated Effort**: 3-5 days
-
----
-
-### 21. Documentation
-**Location**: `PROGRESS.md` (lines 214-217)  
-**Status**: Basic documentation exists
-
-**TODOs**:
-- [ ] User guide
-- [ ] Complete API documentation
-- [ ] Deployment guide
-- [ ] Developer onboarding guide
-
-**Estimated Effort**: 2-3 days
-
----
-
-## 📋 Summary by Priority
-
-### Today's Work (High Priority)
-1. **Audit Log Processing - Performance Metrics** ✅ **COMPLETED** (2-3 hours)
-   - ✅ Calculate avgActiveTime, avgTotalTime, avgDkRate from audit logs
-   - ✅ Made survey_id required parameter
-   - ✅ Added validation and error handling
-   
-2. **Form Edition Detection Fix** ✅ **COMPLETED** (3-4 hours)
-   - ✅ Fixed logic for detecting edited submissions using `meta/deprecatedID`
-   - ✅ Removed flawed timestamp-based comparison
-   - ✅ Simplified edit detection to use Kobo's explicit indicator
-   
-3. **Update Kobo Link Wording and Target** ✅ **COMPLETED** (2-3 hours)
-   - ✅ Changed "View in Kobo" to "Edit in Kobo"
-   - ✅ Created backend endpoint to fetch Enketo edit URL from Kobo API
-   - ✅ Updated frontend to dynamically fetch and use the actual edit URL
-
-### This Week (Medium Priority)
-4. **Testing Suite Implementation** (3-5 days)
-5. **HFC Engine Expression Evaluator Security** (1-2 days)
-6. **Survey Deletion Cascade** ✅ **COMPLETED** (already implemented, added test coverage - 1-2 hours)
-7. **ETL Dry Run Mode** (2-3 hours)
-8. **Post-Basic-Info Quality Check Prompt** ✅ (4-5 hours - completed)
-9. **Dataset-Level Quality Checks** (3-5 days)
-10. **Overview Dashboard** (3-5 days)
-11. **Enumerator Performance Page UX** (2-3 days)
-
-### Future Work (Low Priority)
-12. **Form Validation Button** (1-2 days, if feasible)
-13. **Airflow DAG Setup** (2-3 days)
-14. **ETL Performance Optimization** (2-3 days)
-15. **Validation Rules API** (3-4 days)
-16. **Audit File Management** (1-2 days)
-17. **Survey Management UX Improvements** (1-2 weeks)
-18. **Error Handling Improvements** (2-3 days)
-19. **Additional Features** (1-2 weeks)
-20. **Deployment Configuration** (3-5 days)
-21. **Documentation** (2-3 days)
-22. **User System with Kobo API Key Management** (1-2 weeks)
-23. **Qualitative Data Checks** (1-2 weeks)
-24. **GitHub Issue #7 - Kobo Modal Auto-Open** (1-2 days)
-
----
-
-## 🔍 Notes
-
-- **Audit Log Processing**: ✅ **COMPLETED** - Metrics are calculated and aggregated correctly. Made `survey_id` required to ensure proper aggregation per survey with survey-specific configurations (enumerator field names, DK values).
-- **Form Edition Detection**: ✅ **COMPLETED** - Fixed edit detection to use Kobo's `meta/deprecatedID` field. Removed flawed timestamp comparison logic. Edit detection is now reliable and based on Kobo's explicit indicators.
-- **Kobo Link Update**: ✅ **COMPLETED** - Changed link text from "View in Kobo" to "Edit in Kobo". Created backend endpoint that calls Kobo API to get the actual Enketo edit URL. Frontend now dynamically fetches and displays the correct edit URL for each submission.
-- **Survey Deletion Cascade**: ✅ **COMPLETED** - Implementation was already in place. Added comprehensive test coverage verifying cascade deletion of submissions, validation rules, and submission history. All related data is properly deleted in a transaction.
-- **GitHub Issue #7**: Comprehensive issue created with investigation plan
-- **Testing**: Manual testing is done, automated tests added for survey deletion cascade. More automated tests needed for production readiness.
-- **Security**: Expression evaluator needs to be hardened before production use
-- **Performance**: Current implementation works but could be optimized for large datasets
-
----
-
-*Last Updated: 2025-01-XX*
-
+*Document auto-generated from codebase review*

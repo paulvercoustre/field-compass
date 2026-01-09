@@ -6,6 +6,9 @@ Use this checklist to ensure all deployment steps are completed.
 
 ### Code Readiness
 - [x] Security vulnerability fixed (eval() → simpleeval)
+- [x] User authentication system implemented
+- [x] Per-user Kobo API key management (encrypted)
+- [x] CI/CD pipeline with automated tests
 - [ ] Code reviewed and tested locally
 - [ ] All environment variables documented
 - [ ] Database migrations tested
@@ -102,13 +105,14 @@ If deployment fails:
 
 ## Notes
 
-- **Authentication**: Currently not implemented. Plan to add later.
-- **Testing**: Limited automated tests. Manual testing required.
-- **Monitoring**: Basic health checks only. Consider Application Insights.
+- **Authentication**: ✅ Fully implemented with JWT tokens, user registration, and login.
+- **Kobo API Keys**: ✅ Per-user encrypted storage (no longer uses global ENV variable).
+- **Testing**: ~60 automated tests in backend. Frontend tests not yet implemented.
+- **Monitoring**: Basic health checks only. Consider Application Insights for production.
 
 ---
 
-**Last Updated**: 2025-01-XX
+**Last Updated**: January 2025
 **Deployed By**: ________________
 **Deployment Date**: ________________
 
