@@ -24,8 +24,10 @@ else:
     # Default to localhost for development
     ALLOWED_ORIGINS = [
         "http://localhost:3000",
+        "http://localhost:3001",  # Fallback when 3000 is in use
         "http://localhost:5173",  # Vite default port
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
         "http://127.0.0.1:5173",
     ]
 
