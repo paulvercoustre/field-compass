@@ -175,3 +175,61 @@ export interface FilterState {
   enumerators?: string[];
   samplingFilters?: SamplingFilter[];
 }
+
+// --- Quality Overview Types ---
+
+export interface SubmissionStatusSummary {
+  total_submissions: number;
+  approved_count: number;
+  approved_percentage: number;
+  pending_count: number;
+  pending_percentage: number;
+  flagged_count: number;
+  flagged_percentage: number;
+  rejected_count: number;
+  rejected_percentage: number;
+}
+
+export interface QualityMetricsSummary {
+  total_issues: number;
+  submissions_with_issues: number;
+  avg_issues_per_submission: number;
+}
+
+export interface IssueFrequency {
+  check: string;
+  count: number;
+  percentage: number;
+  affected_submissions: number;
+}
+
+export interface TemporalDataPoint {
+  date: string;
+  total_submissions: number;
+  approved_count: number;
+  pending_count: number;
+  flagged_count: number;
+  rejected_count: number;
+  total_issues: number;
+}
+
+export interface IssueTimeSeriesPoint {
+  date: string;
+  issue_counts: Record<string, number>;
+}
+
+export interface QualityOverviewResponse {
+  status_summary: SubmissionStatusSummary;
+  quality_metrics: QualityMetricsSummary;
+  issue_frequency: IssueFrequency[];
+  temporal_data: TemporalDataPoint[];
+  issue_time_series: IssueTimeSeriesPoint[];
+  date_range: { start: string; end: string };
+}
+
+export interface QualityOverviewFilters {
+  startDate?: string;
+  endDate?: string;
+  enumerator?: string;
+  samplingFilters?: string;
+}

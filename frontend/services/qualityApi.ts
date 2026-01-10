@@ -1,0 +1,74 @@
+/**
+ * Quality Overview API client
+ */
+
+import { QualityOverviewResponse, QualityOverviewFilters } from '../types';
+
+// API base URL - defaults to localhost:8000 for development
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// Helper to get auth token from localStorage
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('field_compass_token');
+};
+
+// Helper to create headers with auth
+const createHeaders = (): HeadersInit => {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
+
+/**
+ * Fetch quality overview data for a survey
+ * @param surveyId The survey ID (required)
+ * @param filters Optional filters (date range, enumerator, sampling variables)
+ */
+export const fetchQualityOverview = async (
+  surveyId: string,
+  filters?: QualityOverviewFilters
+): Promise<QualityOverviewResponse> => {
+  try {
+    const params = new URLSearchParams({
+      survey_id: surveyId,
+    });
+
+    if (filters?.startDate) {
+      params.append('start_date', filters.startDate);
+    }
+    if (filters?.endDate) {
+      params.append('end_date', filters.endDate);
+    }
+    if (filters?.enumerator) {
+      params.append('enumerator', filters.enumerator);
+    }
+    if (filters?.samplingFilters) {
+      params.append('sampling_filters', filters.samplingFilters);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/quality/overview?${params}`, {
+      headers: createHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      const errorMessage = typeof errorData.detail === 'string' 
+        ? errorData.detail 
+        : JSON.stringify(errorData.detail) || `Failed to fetch quality overview: ${response.statusText}`;
+      throw new Error(errorMessage);
+    }
+
+    const data: QualityOverviewResponse = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching quality overview:', error);
+    throw error;
+  }
+};

@@ -1,21 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { SurveyProvider } from './contexts/SurveyContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { FilterState } from './types';
 import Dashboard from './components/Dashboard';
 import DataCollectionProgressPage from './pages/DataCollectionProgressPage';
 import EnumeratorPerformancePage from './pages/EnumeratorPerformancePage';
+import QualityOverviewPage from './pages/QualityOverviewPage';
 import CreateSurveyPage from './pages/CreateSurveyPage';
 import SurveySettingsPage from './pages/SurveySettingsPage';
 import UserSettingsPage from './pages/UserSettingsPage';
 import LoginPage from './pages/LoginPage';
 import Sidebar from './components/Sidebar';
 
-type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'createSurvey' | 'settings' | 'userSettings';
+type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'qualityOverview' | 'createSurvey' | 'settings' | 'userSettings';
 
 // Main app content (authenticated)
 const AppContent: React.FC = () => {
   const { user, isLoading, logout } = useAuth();
   const [view, setView] = useState<View>('dashboard');
+  const [dashboardFilters, setDashboardFilters] = useState<FilterState>({});
 
   // Listen for navigation events from CreateSurveyPage
   useEffect(() => {
@@ -71,10 +74,39 @@ const AppContent: React.FC = () => {
     );
   };
 
+  // Cross-navigation handlers
+  const handleNavigateToSubmissionsWithEnumerator = (enumeratorId?: string) => {
+    if (enumeratorId) {
+      setDashboardFilters({ enumerators: [enumeratorId] });
+    } else {
+      setDashboardFilters({});
+    }
+    setView('dashboard');
+  };
+
+  const handleNavigateToQualityOverview = () => {
+    setView('qualityOverview');
+  };
+
+  const handleNavigateToEnumeratorPerformance = () => {
+    setView('enumeratorPerformance');
+  };
+
   const views: Record<View, React.ReactElement> = {
-    dashboard: <Dashboard />,
+    dashboard: <Dashboard initialFilters={dashboardFilters} />,
     dataCollectionProgress: <DataCollectionProgressPage />,
-    enumeratorPerformance: <EnumeratorPerformancePage />,
+    enumeratorPerformance: (
+      <EnumeratorPerformancePage 
+        onNavigateToSubmissions={handleNavigateToSubmissionsWithEnumerator}
+        onNavigateToQualityOverview={handleNavigateToQualityOverview}
+      />
+    ),
+    qualityOverview: (
+      <QualityOverviewPage 
+        onNavigateToEnumerators={handleNavigateToEnumeratorPerformance}
+        onNavigateToSubmissions={handleNavigateToSubmissionsWithEnumerator}
+      />
+    ),
     createSurvey: <CreateSurveyPage />,
     settings: <SurveySettingsPage />,
     userSettings: <UserSettingsPage />,
@@ -108,8 +140,11 @@ const AppContent: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 min-h-16 py-3 sm:py-0 sm:h-16 px-4 mx-auto max-w-screen-2xl sm:px-6 lg:px-8">
               <h1 className="text-xl font-bold text-gray-900 dark:text-white flex-shrink-0">Field Compass</h1>
               <nav className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
-                <NavButton currentView={view} targetView="dashboard" onClick={() => setView('dashboard')}>
+                <NavButton currentView={view} targetView="dashboard" onClick={() => { setDashboardFilters({}); setView('dashboard'); }}>
                   Submissions
+                </NavButton>
+                <NavButton currentView={view} targetView="qualityOverview" onClick={() => setView('qualityOverview')}>
+                  Quality Overview
                 </NavButton>
                 <NavButton currentView={view} targetView="dataCollectionProgress" onClick={() => setView('dataCollectionProgress')}>
                   Data Collection Progress

@@ -204,3 +204,62 @@ class SubmissionListResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+# ============================================================================
+# Quality Overview Models
+# ============================================================================
+
+class SubmissionStatusSummary(BaseModel):
+    """Summary of submission counts by QA status."""
+    total_submissions: int = Field(..., description="Total number of submissions")
+    approved_count: int = Field(..., description="Number of approved submissions")
+    approved_percentage: float = Field(..., description="Percentage of approved submissions")
+    pending_count: int = Field(..., description="Number of pending approval submissions")
+    pending_percentage: float = Field(..., description="Percentage of pending submissions")
+    flagged_count: int = Field(..., description="Number of flagged submissions")
+    flagged_percentage: float = Field(..., description="Percentage of flagged submissions")
+    rejected_count: int = Field(..., description="Number of rejected submissions")
+    rejected_percentage: float = Field(..., description="Percentage of rejected submissions")
+
+
+class QualityMetricsSummary(BaseModel):
+    """Summary of quality issue metrics."""
+    total_issues: int = Field(..., description="Total count of all quality issues")
+    submissions_with_issues: int = Field(..., description="Number of submissions with at least one issue")
+    avg_issues_per_submission: float = Field(..., description="Average issues per submission")
+
+
+class IssueFrequency(BaseModel):
+    """Frequency of a specific issue type."""
+    check: str = Field(..., description="Issue type/check name")
+    count: int = Field(..., description="Number of occurrences")
+    percentage: float = Field(..., description="Percentage of total submissions affected")
+    affected_submissions: int = Field(..., description="Number of unique submissions affected")
+
+
+class TemporalDataPoint(BaseModel):
+    """Quality data aggregated by date."""
+    date: str = Field(..., description="ISO date string (YYYY-MM-DD)")
+    total_submissions: int = Field(..., description="Submissions on this date")
+    approved_count: int = Field(default=0, description="Approved submissions on this date")
+    pending_count: int = Field(default=0, description="Pending submissions on this date")
+    flagged_count: int = Field(default=0, description="Flagged submissions on this date")
+    rejected_count: int = Field(default=0, description="Rejected submissions on this date")
+    total_issues: int = Field(default=0, description="Total issues found on this date")
+
+
+class IssueTimeSeriesPoint(BaseModel):
+    """Issue counts by type for a specific date."""
+    date: str = Field(..., description="ISO date string (YYYY-MM-DD)")
+    issue_counts: Dict[str, int] = Field(..., description="Map of check type to count")
+
+
+class QualityOverviewResponse(BaseModel):
+    """Complete quality overview response."""
+    status_summary: SubmissionStatusSummary = Field(..., description="Submission status breakdown")
+    quality_metrics: QualityMetricsSummary = Field(..., description="Quality issue metrics")
+    issue_frequency: List[IssueFrequency] = Field(..., description="Issue frequency sorted by count descending")
+    temporal_data: List[TemporalDataPoint] = Field(..., description="Daily aggregated status data")
+    issue_time_series: List[IssueTimeSeriesPoint] = Field(..., description="Daily aggregated issues by type")
+    date_range: Dict[str, str] = Field(..., description="Actual date range of the data")

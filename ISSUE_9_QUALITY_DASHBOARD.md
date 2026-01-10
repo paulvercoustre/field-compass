@@ -2,7 +2,7 @@
 
 **Repository:** [paulvercoustre/field-compass](https://github.com/paulvercoustre/field-compass)  
 **Issue Number:** #9  
-**Status:** Open / Not Implemented  
+**Status:** Open / Ready for Implementation  
 **Type:** Feature Request  
 **Priority:** Medium
 
@@ -10,7 +10,19 @@
 
 ## Issue Description
 
-This issue tracks the implementation of a comprehensive Data Quality Issues Overview Dashboard that provides a high-level, aggregated view of data quality across all survey submissions. The dashboard will help users identify common quality problems, track quality trends over time, and prioritize review efforts.
+This issue tracks the implementation of a comprehensive Data Quality Issues Overview Dashboard that provides a high-level, aggregated view of data quality for the selected survey. The dashboard will help users identify common quality problems, track quality trends over time, and prioritize review efforts.
+
+---
+
+## Key Design Decisions (Confirmed)
+
+| Decision | Value |
+|----------|-------|
+| **Default survey scope** | Selected survey only (not cross-survey) |
+| **Default date range** | All time (no date filter applied) |
+| **Issue frequency default** | Top 5 issues |
+| **Enumerator stats** | Separate page (Enumerator Performance) with cross-links |
+| **Chart library** | `recharts` (already installed) |
 
 ---
 
@@ -19,19 +31,22 @@ This issue tracks the implementation of a comprehensive Data Quality Issues Over
 ### 1. Overview
 
 #### 1.1 Purpose
-The Data Quality Issues Overview Dashboard provides a high-level, aggregated view of data quality across all survey submissions. It helps users identify common quality problems, track quality trends over time, and prioritize review efforts.
+The Data Quality Issues Overview Dashboard provides a high-level, aggregated view of data quality for the currently selected survey. It helps users identify common quality problems, track quality trends over time, and prioritize review efforts.
 
 #### 1.2 Goals
 - **Identify Patterns:** Quickly spot which quality checks are failing most frequently
 - **Track Trends:** Monitor if data quality is improving or deteriorating over time
 - **Focus Effort:** Highlight specific issues that need immediate attention
-- **Monitor Health:** Provide an overall "Quality Score" for the survey
+- **Monitor Health:** Provide submission status breakdown and issue metrics
 
 #### 1.3 Target Users
 - QA Managers
 - Field Supervisors
 - Data Analysts
 - Survey Coordinators
+
+#### 1.4 Relationship to Enumerator Performance Page
+This dashboard focuses on **aggregate quality patterns and trends**. For per-enumerator quality breakdown, users should navigate to the **Enumerator Performance** page. Cross-links between the two pages will be provided for easy navigation.
 
 ---
 
@@ -94,12 +109,11 @@ The Data Quality Issues Overview Dashboard provides a high-level, aggregated vie
 **Endpoint:** `GET /api/quality/overview`
 
 **Query Parameters:**
-- `survey_id` (optional, UUID): Filter by survey ID (default: all surveys)
-- `start_date` (optional, ISO date string): Start of date range (YYYY-MM-DD)
-- `end_date` (optional, ISO date string): End of date range (YYYY-MM-DD)
-- `enumerator` (optional, string): Filter by enumerator ID (default: all enumerators)
-- `sampling_filters` (optional, string): Filter by sampling variables (same format as submissions endpoint: `variable1=value1,value2;variable2=value3`, default: all)
-- `issue_types` (optional, string): Comma-separated list of issue types to filter (default: all issues)
+- `survey_id` (**required**, UUID): Filter by survey ID - the dashboard always shows data for one survey
+- `start_date` (optional, ISO date string): Start of date range (YYYY-MM-DD). Default: no filter (all time)
+- `end_date` (optional, ISO date string): End of date range (YYYY-MM-DD). Default: no filter (all time)
+- `enumerator` (optional, string): Filter by enumerator ID. Default: all enumerators
+- `sampling_filters` (optional, string): Filter by sampling variables (same format as submissions endpoint: `variable1=value1,value2;variable2=value3`). Default: all
 
 **Response Model:**
 
@@ -107,66 +121,76 @@ The Data Quality Issues Overview Dashboard provides a high-level, aggregated vie
 class IssueFrequency(BaseModel):
     check: str  # Issue type (e.g., "duration_too_short", "outlier_age")
     count: int  # Number of occurrences
-    percentage: float  # Percentage of total submissions
+    percentage: float  # Percentage of total submissions affected
     affected_submissions: int  # Number of unique submissions affected
 
-class TemporalIssuePoint(BaseModel):
+class TemporalDataPoint(BaseModel):
     date: str  # ISO date string (YYYY-MM-DD)
-    total_issues: int
-    issues_by_type: Dict[str, int]  # Map of check -> count
-    submissions_count: int
-    flagged_count: int
+    total_submissions: int  # Submissions on this date
     approved_count: int
     pending_count: int
+    flagged_count: int
     rejected_count: int
-
-class QualityHealthMetrics(BaseModel):
-    overall_quality_score: float  # 0-100
-    total_submissions: int
-    submissions_with_issues: int
-    submissions_approved: int
-    submissions_flagged: int
-    submissions_pending: int
-    submissions_rejected: int
-    avg_issues_per_submission: float
-    quality_trend: str  # "improving", "declining", "stable"
-    trend_percentage: float  # Percentage change in quality score
+    total_issues: int  # Total issues found on this date
 
 class IssueTimeSeriesPoint(BaseModel):
     date: str  # ISO date string (YYYY-MM-DD)
     issue_counts: Dict[str, int]  # Map of check -> count for this date
 
+class SubmissionStatusSummary(BaseModel):
+    total_submissions: int
+    approved_count: int
+    approved_percentage: float
+    pending_count: int
+    pending_percentage: float
+    flagged_count: int
+    flagged_percentage: float
+    rejected_count: int
+    rejected_percentage: float
+
+class QualityMetricsSummary(BaseModel):
+    total_issues: int  # Total count of all issues
+    submissions_with_issues: int  # Number of submissions that have at least one issue
+    avg_issues_per_submission: float  # total_issues / total_submissions
+
 class QualityOverviewResponse(BaseModel):
-    # Summary metrics
-    health: QualityHealthMetrics
+    # Submission status breakdown
+    status_summary: SubmissionStatusSummary
     
-    # Issue frequency (all issues, or filtered subset)
+    # Quality metrics
+    quality_metrics: QualityMetricsSummary
+    
+    # Issue frequency (sorted by count descending)
     issue_frequency: List[IssueFrequency]
     
-    # Temporal data (daily aggregation) - quality status over time
-    temporal_data: List[TemporalIssuePoint]
+    # Temporal data (daily aggregation) - submission status over time
+    temporal_data: List[TemporalDataPoint]
     
-    # Issue-specific time series (for selected issue types)
+    # Issue-specific time series
     issue_time_series: List[IssueTimeSeriesPoint]
     
-    # Date range of data
+    # Date range of data (actual min/max dates in the dataset)
     date_range: Dict[str, str]  # {"start": "2024-01-01", "end": "2024-01-31"}
 ```
 
 **Example Response:**
 ```json
 {
-  "health": {
-    "overall_quality_score": 78.5,
+  "status_summary": {
     "total_submissions": 1250,
+    "approved_count": 850,
+    "approved_percentage": 68.0,
+    "pending_count": 100,
+    "pending_percentage": 8.0,
+    "flagged_count": 280,
+    "flagged_percentage": 22.4,
+    "rejected_count": 20,
+    "rejected_percentage": 1.6
+  },
+  "quality_metrics": {
+    "total_issues": 562,
     "submissions_with_issues": 320,
-    "submissions_approved": 850,
-    "submissions_flagged": 280,
-    "submissions_pending": 100,
-    "submissions_rejected": 20,
-    "avg_issues_per_submission": 0.45,
-    "quality_trend": "improving",
-    "trend_percentage": 5.2
+    "avg_issues_per_submission": 0.45
   },
   "issue_frequency": [
     {
@@ -185,16 +209,12 @@ class QualityOverviewResponse(BaseModel):
   "temporal_data": [
     {
       "date": "2024-01-15",
-      "total_issues": 45,
-      "issues_by_type": {
-        "duration_too_short": 12,
-        "outlier_age": 8
-      },
-      "submissions_count": 50,
-      "flagged_count": 15,
+      "total_submissions": 50,
       "approved_count": 30,
       "pending_count": 5,
-      "rejected_count": 0
+      "flagged_count": 15,
+      "rejected_count": 0,
+      "total_issues": 45
     }
   ],
   "issue_time_series": [
@@ -218,8 +238,9 @@ class QualityOverviewResponse(BaseModel):
 - Use PostgreSQL JSONB functions (`jsonb_array_elements`, `jsonb_extract_path_text`) for aggregations
 - Leverage existing GIN index on `data_quality_issues` column
 - Cache results for 5 minutes to reduce database load
-- By default, return data for all submissions (no filters applied unless specified)
-- When `issue_types` parameter is provided, filter both issue frequency and issue time series to only those types
+- `survey_id` is required - the dashboard always operates on a single survey
+- When no date filters are provided, return all time data
+- Issue frequency is returned sorted by count (descending) - frontend handles top N display
 - Consider materialized view for performance if data volume is very large
 
 ---
@@ -229,62 +250,91 @@ class QualityOverviewResponse(BaseModel):
 ### 5.1 Page Layout
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Data Quality Overview Dashboard                    [Refresh]│
-├─────────────────────────────────────────────────────────────┤
-│  [Survey: All] [Date Range: Last 30 days] [Filters ▼]       │
-│  [Enumerator: All] [Sampling Variables: All]                 │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐         │
-│  │ Quality  │ │ Total   │ │ Flagged │ │ Avg      │         │
-│  │ Score    │ │ Issues  │ │ Subms   │ │ Issues   │         │
-│  │ 78.5%    │ │ 562      │ │ 280     │ │ 0.45     │         │
-│  │ ↗ +5.2%  │ │          │ │          │ │          │         │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘         │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ Issue Frequency [Top 5 ▼] [Select Issues...] [Show All]│   │
-│  │ ┌──────────────────────────────────────────────────┐ │   │
-│  │ │ duration_too_short        ████████████ 145 (12%) │ │   │
-│  │ │ outlier_age               ████████ 89 (7%)       │ │   │
-│  │ │ date_out_of_range         ██████ 67 (5%)          │ │   │
-│  │ │ interview_on_weekend      ████ 45 (4%)           │ │   │
-│  │ │ missing_required_field     ███ 32 (3%)           │ │   │
-│  │ └──────────────────────────────────────────────────┘ │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌──────────────────────────┐ ┌──────────────────────────┐   │
-│  │ Quality Trends Over Time  │ │ Issues Over Time         │   │
-│  │ [Line Chart]              │ │ [Line Chart]              │   │
-│  │                           │ │ [Filter: All Issues ▼]    │   │
-│  │  Issues ────             │ │  duration_too_short ──── │   │
-│  │  Approved ──              │ │  outlier_age ────        │   │
-│  │  Flagged ───              │ │  date_out_of_range ────  │   │
-│  └──────────────────────────┘ └──────────────────────────┘   │
-│                                                               │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Data Quality Overview                                         [Refresh]│
+├─────────────────────────────────────────────────────────────────────────┤
+│  Filters: [Date Range: All ▼] [Enumerator: All ▼] [Sampling Vars ▼]    │
+│           [View Enumerator Breakdown →]                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  SUBMISSION STATUS                                                       │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │ Total    │ │ Approved │ │ Pending  │ │ Flagged  │ │ Rejected │       │
+│  │ 1,250    │ │ 850      │ │ 100      │ │ 280      │ │ 20       │       │
+│  │          │ │ (68%)    │ │ (8%)     │ │ (22%)    │ │ (2%)     │       │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
+│                                                                          │
+│  QUALITY METRICS                                                         │
+│  ┌──────────────────────┐ ┌────────────────────────┐                    │
+│  │ Total Issues         │ │ Avg Issues/Submission  │                    │
+│  │ 562                  │ │ 0.45                   │                    │
+│  │ across 320 subms     │ │                        │                    │
+│  └──────────────────────┘ └────────────────────────┘                    │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │ Issue Frequency                               [Top 5 ▼] [Show All]│   │
+│  │ ┌────────────────────────────────────────────────────────────┐   │   │
+│  │ │ duration_too_short          ████████████████ 145 (11.6%)   │   │   │
+│  │ │ outlier_age                 ██████████ 89 (7.1%)           │   │   │
+│  │ │ date_out_of_range           ████████ 67 (5.4%)             │   │   │
+│  │ │ interview_on_weekend        █████ 45 (3.6%)                │   │   │
+│  │ │ missing_required_field      ████ 32 (2.6%)                 │   │   │
+│  │ └────────────────────────────────────────────────────────────┘   │   │
+│  │ Click on a bar to filter submissions by that issue type          │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  ┌────────────────────────────┐ ┌────────────────────────────┐          │
+│  │ Submission Status Over Time │ │ Issues Over Time           │          │
+│  │ [Line Chart]                │ │ [Line Chart]                │          │
+│  │                             │ │ [Filter: Top 5 Issues ▼]    │          │
+│  │  ── Total Submissions       │ │  ── duration_too_short      │          │
+│  │  ── Approved                │ │  ── outlier_age             │          │
+│  │  ── Flagged                 │ │  ── date_out_of_range       │          │
+│  │  ── Pending                 │ │                             │          │
+│  └────────────────────────────┘ └────────────────────────────┘          │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 5.2 Component Breakdown
 
-#### 5.2.1 Summary Cards (Top Row)
-- **Quality Score Card**
-  - Large number: Overall quality score (0-100%)
-  - Trend indicator: Arrow (↑/↓) + percentage change
-  - Color coding: Green (>80%), Yellow (60-80%), Red (<60%)
-  - Clickable: Links to filtered submission list
+#### 5.2.1 Summary Cards - Submission Status (Top Row)
+Five cards showing submission counts by QA status:
+
+- **Total Submissions Card**
+  - Total count of all submissions for the selected survey
+  - No percentage shown
   
-- **Total Issues Card**
-  - Total count of all quality issues
-  - Subtitle: "across X submissions"
+- **Approved Card**
+  - Count of submissions with `qa_status = APPROVED`
+  - Percentage of total shown below
+  - Clickable: Links to filtered submission list (status=APPROVED)
   
-- **Flagged Submissions Card**
+- **Pending Approval Card**
+  - Count of submissions with `qa_status = PENDING_APPROVAL`
+  - Percentage of total shown below
+  - Clickable: Links to filtered submission list (status=PENDING_APPROVAL)
+  
+- **Flagged Card**
   - Count of submissions with `qa_status = FLAGGED`
-  - Clickable: Links to filtered submission list
+  - Percentage of total shown below
+  - Clickable: Links to filtered submission list (status=FLAGGED)
   
-- **Average Issues Card**
-  - Average issues per submission
+- **Rejected Card**
+  - Count of submissions with `qa_status = REJECTED`
+  - Percentage of total shown below
+  - Clickable: Links to filtered submission list (status=REJECTED)
+
+#### 5.2.2 Summary Cards - Quality Metrics (Second Row)
+Two cards showing quality issue metrics:
+
+- **Total Issues Card**
+  - Total count of all quality issues across all submissions
+  - Subtitle: "across X submissions" (number of submissions that have at least one issue)
+  
+- **Average Issues per Submission Card**
+  - Average number of issues per submission
+  - Calculated as: total_issues / total_submissions
   - Tooltip: Explanation of calculation
 
 #### 5.2.2 Issue Frequency Chart
@@ -326,29 +376,35 @@ class QualityOverviewResponse(BaseModel):
 ### 5.3 Filters and Controls
 
 #### 5.3.1 Global Filters (Applied to All Data)
-- **Survey Selector:** Dropdown - "All Surveys" or specific survey
-  - **Default:** All surveys (or selected survey from context if available)
+- **Survey:** Uses the currently selected survey from `SurveyContext` (no selector on this page)
+  - Dashboard requires a survey to be selected
+  - If no survey selected, show prompt to select one from sidebar
 - **Date Range Picker:** 
-  - **Presets:** Last 7/30/90 days, This month, Last month, Custom
-  - **Default:** Last 30 days (or all time if no date filter)
+  - **Presets:** All Time, Last 7 days, Last 30 days, Last 90 days, This month, Custom
+  - **Default:** All Time (no date filter)
 - **Enumerator Filter:** Multi-select dropdown
   - **Default:** All enumerators
 - **Sampling Variables:** Dynamic filters based on survey config
   - **Default:** All values
 
-**Note:** All filters are applied globally to all dashboard components. When no filters are set, the dashboard shows data for all submissions across all surveys.
+**Note:** All filters are applied globally to all dashboard components. The dashboard always shows data for the selected survey only.
 
-#### 5.3.2 Issue Frequency Chart Controls
+#### 5.3.2 Cross-Page Navigation
+- **"View Enumerator Breakdown" button:** Links to Enumerator Performance page
+  - Preserves current filter context where applicable
+
+#### 5.3.3 Issue Frequency Chart Controls
 - **Display Limit:** Dropdown - "Top 5", "Top 10", "Top 20", "All"
   - **Default:** Top 5
-- **Issue Type Filter:** Multi-select dropdown to show specific issues
 - **Show All Button:** Display all issues regardless of limit
+- **Click Interaction:** Clicking a bar filters the Submissions view to show only submissions with that issue
 
-#### 5.3.3 Issues Over Time Chart Controls
+#### 5.3.4 Issues Over Time Chart Controls
 - **Issue Type Filter:** Multi-select dropdown to select which issue types to display
-  - **Default:** All issue types (or top 5 if too many for readability)
+  - **Default:** Top 5 issue types (by frequency)
+- **Legend Interaction:** Click legend items to toggle visibility
 
-#### 5.3.4 Export Button
+#### 5.3.5 Export Button (Future Enhancement)
 - **Format:** CSV/Excel
 - **Includes:** All metrics and charts data (respects current filters)
 
@@ -371,20 +427,17 @@ class QualityOverviewResponse(BaseModel):
 frontend/
 ├── components/
 │   └── quality-dashboard/
-│       ├── QualityOverviewDashboard.tsx (main container)
-│       ├── SummaryCards.tsx
-│       │   ├── QualityScoreCard.tsx
-│       │   ├── TotalIssuesCard.tsx
-│       │   ├── FlaggedSubmissionsCard.tsx
-│       │   └── AvgIssuesCard.tsx
-│       ├── IssueFrequencyChart.tsx
-│       ├── QualityTrendsChart.tsx
-│       ├── IssueTimeSeriesChart.tsx
-│       └── GlobalFilters.tsx
+│       ├── QualityOverviewDashboard.tsx  # Main container with state management
+│       ├── StatusSummaryCards.tsx        # 5 status cards (Total, Approved, Pending, Flagged, Rejected)
+│       ├── QualityMetricsCards.tsx       # 2 metric cards (Total Issues, Avg Issues)
+│       ├── IssueFrequencyChart.tsx       # Horizontal bar chart with top N selector
+│       ├── SubmissionStatusChart.tsx     # Line chart: status over time
+│       ├── IssueTimeSeriesChart.tsx      # Line chart: issues by type over time
+│       └── QualityFilters.tsx            # Date range, enumerator, sampling filters
 ├── pages/
-│   └── QualityOverviewPage.tsx
+│   └── QualityOverviewPage.tsx           # Page wrapper
 ├── services/
-│   └── qualityApi.ts (new)
+│   └── qualityApi.ts (new)               # API client for /api/quality/overview
 └── types.ts (add quality overview types)
 ```
 
@@ -394,13 +447,15 @@ frontend/
 backend/
 ├── routers/
 │   └── quality.py (new router)
-│       ├── get_quality_overview() (main endpoint)
-│       └── helpers/
-│           ├── aggregate_issue_frequency()
-│           ├── aggregate_temporal_data()
-│           ├── aggregate_issue_time_series()
-│           └── calculate_quality_health()
-└── models.py (add Pydantic models)
+│       └── get_quality_overview()        # Main endpoint
+├── models.py (add Pydantic models)
+│   ├── SubmissionStatusSummary
+│   ├── QualityMetricsSummary
+│   ├── IssueFrequency
+│   ├── TemporalDataPoint
+│   ├── IssueTimeSeriesPoint
+│   └── QualityOverviewResponse
+└── main.py (register quality router)
 ```
 
 ---
@@ -488,22 +543,40 @@ backend/
 
 ## 10. Acceptance Criteria
 
-- [ ] Dashboard displays all summary cards with accurate data
+### Backend
+- [ ] `/api/quality/overview` endpoint exists and returns correct data structure
+- [ ] Endpoint requires `survey_id` parameter
+- [ ] Endpoint supports optional `start_date`, `end_date`, `enumerator`, `sampling_filters` parameters
+- [ ] API response time < 2 seconds for typical data volumes
+
+### Frontend - Summary Cards
+- [ ] 5 status cards display: Total, Approved, Pending, Flagged, Rejected
+- [ ] 2 quality metric cards display: Total Issues, Avg Issues per Submission
+- [ ] Status cards show count and percentage (except Total which shows count only)
+- [ ] Clicking status cards filters the Submissions view to that status
+
+### Frontend - Charts
 - [ ] Issue frequency chart shows top 5 issues by default
-- [ ] Issue frequency chart allows filtering to specific issues or showing all
-- [ ] Quality trends chart displays temporal data accurately
-- [ ] Issues over time chart displays selected issue types correctly
-- [ ] Issues over time chart filter works correctly
-- [ ] Global filters (date, enumerator, sampling variables) work correctly and update all components
-- [ ] Dashboard shows all submissions by default when no filters are applied
+- [ ] Issue frequency chart has dropdown to show Top 5/10/20/All
+- [ ] Clicking issue bar filters Submissions view to that issue type
+- [ ] Submission status over time chart shows trends accurately
+- [ ] Issues over time chart displays issue-specific trends
+- [ ] Issues over time chart allows filtering which issues to display
+
+### Frontend - Filters & Navigation
+- [ ] Dashboard uses selected survey from SurveyContext
+- [ ] Date range filter defaults to "All Time"
+- [ ] Enumerator filter works correctly
+- [ ] Sampling variable filters work correctly
+- [ ] "View Enumerator Breakdown" link navigates to Enumerator Performance page
+- [ ] `'qualityOverview'` view added to App.tsx navigation
+
+### UX & Polish
 - [ ] Dashboard is responsive on mobile/tablet/desktop
 - [ ] Dark mode is supported
-- [ ] API endpoint returns data in < 2 seconds
-- [ ] Error states are handled gracefully
 - [ ] Loading states are shown during data fetch
-- [ ] Export functionality works correctly
-- [ ] Dashboard integrates with existing navigation
-- [ ] Clicking on issue types filters submissions correctly
+- [ ] Error states are handled gracefully
+- [ ] Charts have proper tooltips on hover
 
 ---
 
@@ -523,51 +596,72 @@ backend/
 
 ## 12. Implementation Plan
 
-### Phase 1: Backend API (Week 1)
-1. Create `backend/routers/quality.py`
-2. Implement aggregations for:
-   - Issue frequency (with filtering support)
-   - Temporal data (quality status over time)
-   - Issue-specific time series
-   - Quality health metrics
-3. Add Pydantic models to `backend/models.py`
-4. Register router in `backend/main.py`
+### Step 1: Backend API
+**Files to create/modify:**
+- `backend/models.py` - Add Pydantic response models
+- `backend/routers/quality.py` - New router with `/api/quality/overview` endpoint
+- `backend/main.py` - Register the quality router
+
+**Tasks:**
+1. Add Pydantic models: `SubmissionStatusSummary`, `QualityMetricsSummary`, `IssueFrequency`, `TemporalDataPoint`, `IssueTimeSeriesPoint`, `QualityOverviewResponse`
+2. Implement `get_quality_overview()` endpoint with:
+   - Status summary aggregation (count submissions by qa_status)
+   - Quality metrics aggregation (count issues, calculate avg)
+   - Issue frequency aggregation (unnest JSONB, group by check)
+   - Temporal data aggregation (group by date)
+   - Issue time series aggregation (group by date and check)
+3. Support optional filters: date range, enumerator, sampling variables
+4. Register router in main.py
 5. Write unit tests
 
-### Phase 2: Frontend Setup (Week 1-2)
-1. Install `recharts` dependency
-2. Add TypeScript types to `frontend/types.ts`
-3. Create `frontend/services/qualityApi.ts`
-4. Create component structure
+### Step 2: Frontend Setup
+**Files to create/modify:**
+- `frontend/types.ts` - Add TypeScript types matching API response
+- `frontend/services/qualityApi.ts` - API client function
+- `frontend/App.tsx` - Add `'qualityOverview'` to View type and navigation
 
-### Phase 3: Frontend Components (Week 2-3)
-1. Build summary cards
-2. Build global filters component
-3. Build issue frequency chart (with filtering controls)
-4. Build quality trends chart
-5. Build issues over time chart (with issue type filter)
-6. Assemble main dashboard page
+**Tasks:**
+1. Add TypeScript interfaces for API response
+2. Create `fetchQualityOverview(surveyId, filters)` function
+3. Add navigation button "Quality Overview" in App.tsx header
+4. Add view case in App.tsx
 
-### Phase 4: Integration & Testing (Week 3-4)
-1. Add navigation in `App.tsx`
-2. Integrate with survey context
-3. Test with real data
-4. Performance optimization
-5. Responsive design testing
-6. Dark mode testing
+### Step 3: Frontend Components
+**Files to create:**
+- `frontend/components/quality-dashboard/QualityOverviewDashboard.tsx`
+- `frontend/components/quality-dashboard/StatusSummaryCards.tsx`
+- `frontend/components/quality-dashboard/QualityMetricsCards.tsx`
+- `frontend/components/quality-dashboard/IssueFrequencyChart.tsx`
+- `frontend/components/quality-dashboard/SubmissionStatusChart.tsx`
+- `frontend/components/quality-dashboard/IssueTimeSeriesChart.tsx`
+- `frontend/components/quality-dashboard/QualityFilters.tsx`
+- `frontend/pages/QualityOverviewPage.tsx`
 
-### Phase 5: Polish & Documentation (Week 4)
-1. Error handling
-2. Loading states
-3. Export functionality
-4. Documentation
-5. User acceptance testing
+**Tasks:**
+1. Build `StatusSummaryCards` - 5 cards showing submission status counts
+2. Build `QualityMetricsCards` - 2 cards showing issue metrics
+3. Build `IssueFrequencyChart` - Horizontal bar chart with recharts
+4. Build `SubmissionStatusChart` - Line chart showing status trends
+5. Build `IssueTimeSeriesChart` - Line chart showing issue trends
+6. Build `QualityFilters` - Date range, enumerator, sampling filters
+7. Assemble `QualityOverviewDashboard` - Main container with state
+8. Create `QualityOverviewPage` - Page wrapper
+
+### Step 4: Integration & Polish
+**Tasks:**
+1. Connect dashboard to SurveyContext
+2. Implement click-through to filtered Submissions view
+3. Add "View Enumerator Breakdown" navigation link
+4. Add loading states and error handling
+5. Test responsive design
+6. Test dark mode
+7. Performance testing with real data
 
 ---
 
 ## 13. Current Implementation Status
 
-### Status: **NOT IMPLEMENTED** ❌
+### Status: **READY FOR IMPLEMENTATION** 🚀
 
 ### What's Missing
 
@@ -578,15 +672,17 @@ backend/
 - ❌ Router not registered in `backend/main.py`
 
 #### Frontend (0% complete)
-- ⏳ Folder structure exists: `frontend/components/quality-dashboard/ui/` (empty)
+- ⏳ Folder structure exists: `frontend/components/quality-dashboard/` (empty)
 - ❌ No quality dashboard components implemented
 - ❌ No `frontend/services/qualityApi.ts`
 - ❌ No `QualityOverviewPage.tsx`
 - ❌ No navigation entry in `App.tsx`
-- ❌ No charting library installed (spec recommends `recharts`)
-- ❌ No global filters component
+- ❌ No `'qualityOverview'` view type in `App.tsx`
 
-**Note:** User authentication is now fully implemented (see `ACTION_ITEMS.md`), which will be required for the quality dashboard to function with proper permissions.
+### What Already Exists (Ready to Use)
+- ✅ `recharts@3.5.1` already installed in `package.json`
+- ✅ User authentication fully implemented
+- ✅ `SurveyContext` for survey selection
 
 ### What Already Exists (Related Features)
 
@@ -617,9 +713,12 @@ backend/
 - Quality issues are stored as JSONB array with structure: `[{check, field, value, message}, ...]`
 - The system already has filtering infrastructure that can be reused
 - Consider reusing existing UI patterns from `ProgressDataView` and `PerformanceDataView` components
-- **Enumerator Analysis:** Enumerator-level quality analysis is intentionally excluded from this dashboard as it's already available in the Enumerator Performance tab. This dashboard focuses on aggregate quality patterns and trends.
-- **Default Behavior:** By default, the dashboard shows data for all submissions across all surveys. Users can apply filters to narrow down the view.
-- **Issue Frequency:** Defaults to top 5 issues for better readability, with options to show more or filter to specific issues.
+- **Enumerator Analysis:** Enumerator-level quality analysis is intentionally excluded from this dashboard as it's already available in the Enumerator Performance page. This dashboard focuses on aggregate quality patterns and trends. Cross-links between pages will be provided.
+- **Default Behavior:** 
+  - Dashboard shows data for the **selected survey only** (survey_id is required)
+  - Date range defaults to **All Time** (no date filter)
+  - Issue frequency shows **Top 5** by default
+- **Cross-Page Navigation:** "View Enumerator Breakdown" button links to Enumerator Performance page
 
 ---
 
@@ -651,6 +750,11 @@ backend/
 
 ---
 
-**Last Updated:** January 2025  
-**Document Version:** 1.2
+**Last Updated:** January 10, 2025  
+**Document Version:** 2.0
+
+### Revision History
+- **v2.0** (Jan 10, 2025): Confirmed design decisions - selected survey only, all time default, revised summary cards (5 status + 2 metrics), Option A for enumerator stats (separate pages with cross-links)
+- **v1.2** (Jan 2025): Simplified scope - removed enumerator stats and correlations from Phase 1
+- **v1.0** (Jan 2025): Initial specification
 

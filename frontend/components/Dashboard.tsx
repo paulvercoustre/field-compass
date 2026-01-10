@@ -11,12 +11,16 @@ import { Spinner } from './Spinner';
 
 const MAX_PAGE_SIZE = 100; // Matches backend validation limit for page_size
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+  initialFilters?: FilterState;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   const { selectedSurvey } = useSurvey();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [allSubmissions, setAllSubmissions] = useState<Submission[]>([]); // For filter options
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
-  const [filterState, setFilterState] = useState<FilterState>({});
+  const [filterState, setFilterState] = useState<FilterState>(initialFilters || {});
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
   const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(false);
@@ -130,9 +134,17 @@ const Dashboard: React.FC = () => {
     if (selectedSurvey) {
       fetchAllSubmissions();
       fetchSurveyConfig();
-      setFilterState({}); // Reset filters when survey changes
+      // Reset to initial filters or empty when survey changes
+      setFilterState(initialFilters || {});
     }
   }, [selectedSurvey, fetchAllSubmissions, fetchSurveyConfig]);
+
+  // Update filter state when initialFilters prop changes (cross-navigation)
+  useEffect(() => {
+    if (initialFilters) {
+      setFilterState(initialFilters);
+    }
+  }, [initialFilters]);
 
   // Fetch filtered submissions when filters change
   useEffect(() => {
