@@ -34,11 +34,9 @@ This workflow runs on:
    - Verifies database connectivity
    - **Duration**: ~1-2 minutes
 
-4. **Deploy to Azure** (Job: `deploy-azure`)
-   - Only runs on pushes to `main` branch
-   - Deploys to Azure App Service
-   - Uses existing Azure publish profile
-   - **Duration**: ~2-3 minutes
+4. **Deploy**
+   - Deployment is intentionally not handled by this workflow right now.
+   - For demos/low-traffic environments we deploy via **Azure VM + Docker Compose** (see `VM_DEPLOYMENT_AZURE.md`).
 
 #### Image Tagging Strategy
 
@@ -49,8 +47,7 @@ Images are tagged based on context:
 
 #### Required Secrets
 
-- `AZURE_WEBAPP_PUBLISH_PROFILE`: Azure App Service publish profile
-  - Get this from Azure Portal → App Service → Get publish profile
+- None for deployment (CI only). Docker images are pushed to GHCR using `GITHUB_TOKEN`.
 
 #### Required Permissions
 
@@ -113,10 +110,8 @@ To test the workflow locally:
 - Verify all dependencies in `requirements.txt`
 - Check for missing system dependencies
 
-### Azure deployment fails
-- Verify `AZURE_WEBAPP_PUBLISH_PROFILE` secret is set
-- Check Azure App Service is running
-- Verify publish profile hasn't expired
+### Deployment notes
+- For VM-based deployment, you pull the latest GHCR image (or rebuild on the VM) and restart compose.
 
 ## Workflow Status
 

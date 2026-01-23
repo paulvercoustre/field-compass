@@ -1,0 +1,82 @@
+services:
+  # Reverse proxy (TLS termination + serving frontend + proxy /api -> backend)
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: field-compass-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - frontend_dist:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+      - frontend-build
+    networks:
+      - field-compass-network
+
+  # Build frontend static assets into a shared volume
+  frontend-build:
+    build:
+      context: .
+      dockerfile: ./deploy/frontend/Dockerfile
+      args:
+        # Set this to your public API base URL (or keep default "/api" if using nginx proxy)
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    container_name: field-compass-frontend-build
+    command: ["sh", "-c", "cp -r /app/dist/* /out/ && echo 'Frontend built'"]
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-/api}
+    # Write built assets to shared volume
+    volumes:
+      - frontend_dist:/out
+    networks:
+      - field-compass-network
+
+  # PostgreSQL Database (single-VM mode)
+  postgres:
+    image: postgres:15-alpine
+    container_name: field-compass-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-field_compass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - field-compass-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: field-compass-api
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/field_compass}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # In single-VM mode, CORS can typically be your public domain(s)
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8000"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    networks:
+      - field-compass-network
+
+networks:
+  field-compass-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  frontend_dist:
+

@@ -123,6 +123,13 @@ Once the backend is running, visit:
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
+## Demo Deployment (Azure VM)
+
+If you want to quickly deploy a demo environment (low traffic) while iterating rapidly, use the single-VM deployment:
+
+- `VM_DEPLOYMENT_AZURE.md`
+- `docker-compose.prod.yml` (nginx + backend + postgres + frontend build)
+
 ## Environment Variables
 
 **Important**: Create a `.env` file in the root directory before starting the services. This file is excluded from git (see `.gitignore`).

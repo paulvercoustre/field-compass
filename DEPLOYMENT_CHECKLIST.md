@@ -13,26 +13,23 @@ Use this checklist to ensure all deployment steps are completed.
 - [ ] All environment variables documented
 - [ ] Database migrations tested
 
-### Azure Setup
+### Azure Setup (VM Demo Deployment)
 - [ ] Azure account and subscription ready
-- [ ] Azure CLI installed and logged in
 - [ ] Resource group created
-- [ ] PostgreSQL database created and configured
-- [ ] Database schema initialized
-- [ ] App Service plan created
-- [ ] App Service (backend) created
-- [ ] Static Web App or Storage account created (frontend)
+- [ ] Ubuntu VM created (ports 22/80/443)
+- [ ] Docker + docker compose installed on VM
+- [ ] Repo deployed to VM
+- [ ] `docker-compose.prod.yml` running (nginx + backend + postgres + frontend build)
+- [ ] Basic backup approach for postgres volume documented (even for demos)
 
 ### Configuration
-- [ ] Backend environment variables configured:
-  - [ ] `DATABASE_URL` (PostgreSQL connection string)
-  - [ ] `KOBO_API_TOKEN` (KoboToolbox API token)
-  - [ ] `KOBO_API_URL` (default: `https://kf.kobotoolbox.org/api/v2`)
-  - [ ] `ENVIRONMENT` (set to `production`)
-  - [ ] `LOG_LEVEL` (set to `INFO` or `WARNING`)
-  - [ ] `CORS_ORIGINS` (frontend URL(s), comma-separated)
-- [ ] Frontend environment variable configured:
-  - [ ] `VITE_API_URL` (backend API URL)
+- [ ] VM `.env` configured:
+  - [ ] `POSTGRES_PASSWORD` (strong password)
+  - [ ] `DATABASE_URL` (points to `postgres` service in compose)
+  - [ ] `ENVIRONMENT` (`production`)
+  - [ ] `LOG_LEVEL`
+  - [ ] `CORS_ORIGINS` (your domain/IP)
+  - [ ] `VITE_API_URL` (`/api` when served through nginx)
 
 ### Security
 - [ ] Database firewall rules configured
@@ -44,18 +41,16 @@ Use this checklist to ensure all deployment steps are completed.
 ## Deployment
 
 ### Backend
-- [ ] Code deployed to App Service
-- [ ] Health check endpoint working: `/health`
-- [ ] API docs accessible: `/docs`
+- [ ] Containers started
+- [ ] Health check endpoint working: `http://<VM_IP>/health`
+- [ ] API docs accessible: `http://<VM_IP>/docs`
 - [ ] Database connection verified
-- [ ] Application logs reviewed (no errors)
+- [ ] Container logs reviewed (no errors)
 
 ### Frontend
-- [ ] Frontend built successfully (`npm run build`)
-- [ ] Frontend deployed to Static Web App or Storage
-- [ ] `VITE_API_URL` environment variable set
-- [ ] Frontend loads without errors
-- [ ] API calls from frontend working
+- [ ] Frontend builds successfully via `docker-compose.prod.yml`
+- [ ] Frontend loads without errors at `http://<VM_IP>/`
+- [ ] API calls from frontend working (`/api/*`)
 
 ### Integration Testing
 - [ ] Can access frontend URL
