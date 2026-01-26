@@ -12,14 +12,12 @@ interface QualityOverviewDashboardProps {
   surveyId: string;
   onStatusClick?: (status: string) => void;
   onIssueClick?: (check: string) => void;
-  onNavigateToEnumerators?: () => void;
 }
 
 const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({ 
   surveyId,
   onStatusClick,
   onIssueClick,
-  onNavigateToEnumerators,
 }) => {
   const [data, setData] = useState<QualityOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,48 +112,40 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Header with filters */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+      <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 -mx-6 -mt-6 mb-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Quality Overview
           </h2>
-          {data.date_range.start && data.date_range.end && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              {data.date_range.start} to {data.date_range.end}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={datePreset}
-            onChange={(e) => handleDatePresetChange(e.target.value)}
-            className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-gray-700 dark:text-gray-300"
-          >
-            <option value="all">All Time</option>
-            <option value="last7">Last 7 Days</option>
-            <option value="last30">Last 30 Days</option>
-            <option value="last90">Last 90 Days</option>
-          </select>
-          <button
-            onClick={handleRefresh}
-            className="text-sm px-3 py-1.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-          >
-            Refresh
-          </button>
-          {onNavigateToEnumerators && (
-            <button
-              onClick={onNavigateToEnumerators}
-              className="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+          <div className="flex items-center gap-3">
+            <select
+              value={datePreset}
+              onChange={(e) => handleDatePresetChange(e.target.value)}
+              className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-gray-700 dark:text-gray-300"
             >
-              View by Enumerator →
+              <option value="all">All Time</option>
+              <option value="last7">Last 7 Days</option>
+              <option value="last30">Last 30 Days</option>
+              <option value="last90">Last 90 Days</option>
+            </select>
+            <button
+              onClick={handleRefresh}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Refresh from Kobo</span>
             </button>
-          )}
+          </div>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <StatusSummaryCards data={data.status_summary} onStatusClick={onStatusClick} />
-      <QualityMetricsCards data={data.quality_metrics} />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <StatusSummaryCards data={data.status_summary} onStatusClick={onStatusClick} />
+        <QualityMetricsCards data={data.quality_metrics} />
+      </div>
 
       {/* Issue Frequency Chart */}
       <IssueFrequencyChart data={data.issue_frequency} onIssueClick={onIssueClick} />

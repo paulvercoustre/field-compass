@@ -107,7 +107,7 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700 w-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
           {showBottom ? 'Bottom 5' : 'Top 5'} Performers
@@ -143,7 +143,7 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
       </div>
 
       {/* Rankings List */}
-      <div className="space-y-2">
+      <div className="space-y-2 flex-1 overflow-y-auto">
         {rankings.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
             Need at least 3 submissions to rank
@@ -155,7 +155,7 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
               <div
                 key={item.id}
                 onClick={() => onEnumeratorClick?.(item.id)}
-                className={`flex items-center gap-3 p-2 rounded-lg bg-gray-50 dark:bg-gray-750 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                className={`flex items-center gap-3 p-2 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${
                   onEnumeratorClick ? 'cursor-pointer' : ''
                 }`}
               >

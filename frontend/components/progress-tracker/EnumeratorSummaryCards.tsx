@@ -84,7 +84,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
       </div>
       
       {/* Best Performer */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border-2 border-amber-300 dark:border-amber-600">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
         <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">Top Performer</div>
         <div className="text-lg font-bold text-amber-600 dark:text-amber-400 mt-1 truncate" title={bestPerformer?.id}>
           {bestPerformer ? bestPerformer.id : 'N/A'}

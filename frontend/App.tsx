@@ -84,26 +84,16 @@ const AppContent: React.FC = () => {
     setView('dashboard');
   };
 
-  const handleNavigateToQualityOverview = () => {
-    setView('qualityOverview');
-  };
-
-  const handleNavigateToEnumeratorPerformance = () => {
-    setView('enumeratorPerformance');
-  };
-
   const views: Record<View, React.ReactElement> = {
     dashboard: <Dashboard initialFilters={dashboardFilters} />,
     dataCollectionProgress: <DataCollectionProgressPage />,
     enumeratorPerformance: (
       <EnumeratorPerformancePage 
         onNavigateToSubmissions={handleNavigateToSubmissionsWithEnumerator}
-        onNavigateToQualityOverview={handleNavigateToQualityOverview}
       />
     ),
     qualityOverview: (
       <QualityOverviewPage 
-        onNavigateToEnumerators={handleNavigateToEnumeratorPerformance}
         onNavigateToSubmissions={handleNavigateToSubmissionsWithEnumerator}
       />
     ),

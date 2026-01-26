@@ -31,7 +31,7 @@ interface QualityMetricsCardsProps {
 
 const QualityMetricsCards: React.FC<QualityMetricsCardsProps> = ({ data }) => {
   return (
-    <div className="mb-6">
+    <div>
       <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">
         Quality Metrics
       </h3>

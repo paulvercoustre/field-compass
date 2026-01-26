@@ -39,7 +39,7 @@ interface StatusSummaryCardsProps {
 
 const StatusSummaryCards: React.FC<StatusSummaryCardsProps> = ({ data, onStatusClick }) => {
   return (
-    <div className="mb-6">
+    <div>
       <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">
         Submission Status
       </h3>

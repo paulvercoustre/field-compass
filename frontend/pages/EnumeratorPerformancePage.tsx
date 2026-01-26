@@ -11,12 +11,10 @@ import EnumeratorLeaderboard from '../components/progress-tracker/EnumeratorLead
 
 interface EnumeratorPerformancePageProps {
   onNavigateToSubmissions?: (enumeratorFilter?: string) => void;
-  onNavigateToQualityOverview?: () => void;
 }
 
 const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
   onNavigateToSubmissions,
-  onNavigateToQualityOverview,
 }) => {
   const { selectedSurvey } = useSurvey();
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
@@ -100,22 +98,9 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
       {/* Header with Refresh Button */}
       <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Enumerator Performance
-            </h2>
-            {onNavigateToQualityOverview && (
-              <button
-                onClick={onNavigateToQualityOverview}
-                className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                Quality Overview
-              </button>
-            )}
-          </div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Enumerator Performance
+          </h2>
           <div className="flex items-center gap-3">
             {etlStats && (
               <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -169,14 +154,14 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
             <EnumeratorSummaryCards data={performanceData} />
             
             {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 xl:col-span-2">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
+              <div className="lg:col-span-1 xl:col-span-2 flex">
                 <SubmissionsBarChart 
                   data={performanceData.collection} 
                   onEnumeratorClick={handleEnumeratorClick}
                 />
               </div>
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 flex">
                 <EnumeratorLeaderboard 
                   data={performanceData}
                   onEnumeratorClick={handleEnumeratorClick}

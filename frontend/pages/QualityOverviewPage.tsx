@@ -4,12 +4,10 @@ import QualityOverviewDashboard from '../components/quality-dashboard/QualityOve
 
 interface QualityOverviewPageProps {
   onNavigateToSubmissions?: (enumeratorFilter?: string) => void;
-  onNavigateToEnumerators?: () => void;
 }
 
 const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({ 
   onNavigateToSubmissions,
-  onNavigateToEnumerators,
 }) => {
   const { selectedSurvey } = useSurvey();
 
@@ -50,7 +48,6 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
         surveyId={selectedSurvey.survey_id}
         onStatusClick={handleStatusClick}
         onIssueClick={handleIssueClick}
-        onNavigateToEnumerators={onNavigateToEnumerators}
       />
     </div>
   );
