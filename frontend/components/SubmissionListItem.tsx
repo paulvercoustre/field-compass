@@ -10,11 +10,14 @@ interface SubmissionListItemProps {
 }
 
 const SubmissionListItem: React.FC<SubmissionListItemProps> = ({ submission, onSelect, isSelected }) => {
-    const { _id, _submission_time, qa_status, data_quality_issues } = submission;
+    const { _id, _submission_time, kobo_validation_status, data_quality_issues } = submission;
 
     const baseClasses = "block w-full text-left p-4 border-b border-gray-200 dark:border-gray-800 transition-colors duration-150 focus:outline-none";
     const selectedClasses = "bg-gray-200 dark:bg-gray-700/50";
     const hoverClasses = "hover:bg-gray-100 dark:hover:bg-gray-800";
+
+    // Display validation status, default to "Not Reviewed" if null
+    const displayStatus = kobo_validation_status || 'Not Reviewed';
 
     return (
         <button
@@ -23,7 +26,7 @@ const SubmissionListItem: React.FC<SubmissionListItemProps> = ({ submission, onS
         >
             <div className="flex items-center justify-between mb-2">
                 <p className="font-mono text-sm font-semibold text-gray-900 dark:text-white">ID: {_id}</p>
-                <Badge status={qa_status} />
+                <Badge status={displayStatus} />
             </div>
             <div className="text-xs text-gray-600 dark:text-gray-400">
                 Submitted: {new Date(_submission_time).toLocaleString()}

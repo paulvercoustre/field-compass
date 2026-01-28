@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Submission, FilterState, QAStatus, SamplingFilter } from '../types';
+import { Submission, FilterState, SamplingFilter } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { Spinner } from './Spinner';
 import {
@@ -230,13 +230,13 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
   }, [activeFilters.samplingFilters, handleFilterChange]);
 
   // Handle removing a specific filter
-  const handleRemoveFilter = useCallback((filterType: 'qaStatuses' | 'enumerators' | 'samplingFilters', value?: string, variable?: string) => {
+  const handleRemoveFilter = useCallback((filterType: 'validationStatuses' | 'enumerators' | 'samplingFilters', value?: string, variable?: string) => {
     const updatedFilters = { ...activeFilters };
 
-    if (filterType === 'qaStatuses' && value) {
-      updatedFilters.qaStatuses = (activeFilters.qaStatuses || []).filter(s => s !== value);
-      if (updatedFilters.qaStatuses.length === 0) {
-        updatedFilters.qaStatuses = undefined;
+    if (filterType === 'validationStatuses' && value) {
+      updatedFilters.validationStatuses = (activeFilters.validationStatuses || []).filter(s => s !== value);
+      if (updatedFilters.validationStatuses.length === 0) {
+        updatedFilters.validationStatuses = undefined;
       }
     } else if (filterType === 'enumerators' && value) {
       updatedFilters.enumerators = (activeFilters.enumerators || []).filter(e => e !== value);
@@ -266,24 +266,13 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
   // Get active filter count
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (activeFilters.qaStatuses) count += activeFilters.qaStatuses.length;
+    if (activeFilters.validationStatuses) count += activeFilters.validationStatuses.length;
     if (activeFilters.enumerators) count += activeFilters.enumerators.length;
     if (activeFilters.samplingFilters) {
       count += activeFilters.samplingFilters.reduce((sum, filter) => sum + filter.values.length, 0);
     }
     return count;
   }, [activeFilters]);
-
-  // Get display text for QA status
-  const getQAStatusDisplay = (status: QAStatus) => {
-    switch (status) {
-      case QAStatus.FLAGGED: return 'Flagged';
-      case QAStatus.PENDING_APPROVAL: return 'Pending Approval';
-      case QAStatus.APPROVED: return 'Approved';
-      case QAStatus.REJECTED: return 'Rejected';
-      default: return status;
-    }
-  };
 
   return (
     <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -331,12 +320,12 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
                 Active filters ({activeFilterCount})
               </div>
               <div className="flex flex-wrap gap-2">
-                {/* QA Status Chips */}
-                {(activeFilters.qaStatuses || []).map((status) => (
+                {/* Validation Status Chips */}
+                {(activeFilters.validationStatuses || []).map((status) => (
                   <span key={status} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-600/20 text-indigo-800 dark:text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
-                    QA: {getQAStatusDisplay(status)}
+                    Status: {status}
                     <button
-                      onClick={() => handleRemoveFilter('qaStatuses', status)}
+                      onClick={() => handleRemoveFilter('validationStatuses', status)}
                       className="ml-1 hover:text-indigo-900 dark:hover:text-white"
                     >
                       ×
@@ -377,18 +366,18 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
 
           {/* Filter Controls */}
           <div className="flex flex-col gap-6">
-            {/* QA Status Multi-Select */}
+            {/* Validation Status Multi-Select */}
             <MultiSelectDropdown
-              label="QA Status"
+              label="Validation Status"
               options={[
-                { value: QAStatus.FLAGGED, label: 'Flagged' },
-                { value: QAStatus.PENDING_APPROVAL, label: 'Pending Approval' },
-                { value: QAStatus.APPROVED, label: 'Approved' },
-                { value: QAStatus.REJECTED, label: 'Rejected' },
+                { value: 'Approved', label: 'Approved' },
+                { value: 'Not Approved', label: 'Not Approved' },
+                { value: 'On Hold', label: 'On Hold' },
+                { value: 'Not Reviewed', label: 'Not Reviewed' },
               ]}
-              selectedValues={activeFilters.qaStatuses || []}
-              onChange={(values) => handleFilterChange({ qaStatuses: values.length > 0 ? values as QAStatus[] : undefined })}
-              placeholder="Select QA statuses..."
+              selectedValues={activeFilters.validationStatuses || []}
+              onChange={(values) => handleFilterChange({ validationStatuses: values.length > 0 ? values : undefined })}
+              placeholder="Select validation statuses..."
             />
 
             {/* Enumerator Multi-Select */}

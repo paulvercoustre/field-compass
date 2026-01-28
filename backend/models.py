@@ -80,6 +80,14 @@ class Submission(BaseModel):
     )
 
 
+class ValidationStatusUpdate(BaseModel):
+    """Request model for updating Kobo validation status."""
+    validation_status: Optional[str] = Field(
+        None, 
+        description="Kobo validation status: 'Approved', 'Not Approved', 'On Hold', or null to clear"
+    )
+
+
 # ============================================================================
 # History Models
 # ============================================================================

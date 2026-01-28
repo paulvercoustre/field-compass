@@ -232,6 +232,61 @@ class KoboFetcher:
             import traceback
             logger.error(traceback.format_exc())
             return None
+    
+    def update_validation_status(
+        self, 
+        asset_uid: str, 
+        submission_id: int, 
+        validation_status: Optional[str]
+    ) -> Dict[str, Any]:
+        """
+        Update validation status for a submission in KoboToolbox.
+        
+        Args:
+            asset_uid: KoboToolbox asset UID
+            submission_id: Submission ID (_id from Kobo)
+            validation_status: One of: 'Approved', 'Not Approved', 'On Hold', or None to clear
+            
+        Returns:
+            Response from Kobo API (or empty dict for DELETE)
+        """
+        # Use the validation_status endpoint
+        endpoint = f'/assets/{asset_uid}/data/{submission_id}/validation_status/'
+        url = f"{self.api_url}/{endpoint.lstrip('/')}"
+        
+        # To clear validation status, use DELETE instead of PATCH
+        if validation_status is None:
+            logger.debug(f"Clearing validation status with DELETE to {url}")
+            response = self.session.delete(url, timeout=30)
+            
+            # Log response for debugging
+            if not response.ok:
+                logger.error(f"Kobo API error response: Status {response.status_code}, Body: {response.text[:1000]}")
+            
+            response.raise_for_status()
+            # DELETE may return empty response
+            return {} if not response.content else response.json()
+        else:
+            # Map labels to Kobo UIDs
+            uid_map = {
+                'Approved': 'validation_status_approved',
+                'Not Approved': 'validation_status_not_approved',
+                'On Hold': 'validation_status_on_hold'
+            }
+            # Build the payload - Kobo expects dot notation key: "validation_status.uid"
+            payload = {"validation_status.uid": uid_map.get(validation_status)}
+            
+            logger.debug(f"Sending validation status update to {url} with payload: {payload}")
+            
+            # Use PATCH to update the validation status
+            response = self.session.patch(url, json=payload, timeout=30)
+            
+            # Log response for debugging
+            if not response.ok:
+                logger.error(f"Kobo API error response: Status {response.status_code}, Body: {response.text[:1000]}")
+            
+            response.raise_for_status()
+            return response.json()
 
 
 def create_fetcher_from_env() -> KoboFetcher:

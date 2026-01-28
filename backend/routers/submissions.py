@@ -8,15 +8,19 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from typing import List, Optional, Dict, Any
 from uuid import UUID as UUIDType
+from datetime import datetime
+import requests
+import logging
 
 from services.database import get_db
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.permissions import require_survey_access, can_view_survey
 from database.models import SubmissionCurrent, SubmissionHistory as SubmissionHistoryORM, SurveyConfig, User
-from models import Submission, SubmissionHistory, SubmissionListResponse, QualityIssue, JsonPatch
+from models import Submission, SubmissionHistory, SubmissionListResponse, QualityIssue, JsonPatch, ValidationStatusUpdate
 from etl.kobo_fetcher import KoboFetcher
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _orm_to_pydantic_submission(orm_submission: SubmissionCurrent) -> Submission:
@@ -91,6 +95,7 @@ def _get_field_value_from_jsonb(submission_data: Dict[str, Any], field_name: str
 @router.get("/submissions", response_model=SubmissionListResponse)
 async def get_submissions(
     qa_status: Optional[str] = Query(None, description="Filter by QA status (comma-separated for multiple)"),
+    validation_status: Optional[str] = Query(None, description="Filter by validation status (comma-separated: Approved,Not Approved,On Hold,Not Reviewed)"),
     survey_id: Optional[str] = Query(None, description="Filter by survey ID (UUID)"),
     enumerator: Optional[str] = Query(None, description="Filter by enumerator ID/value (comma-separated for multiple)"),
     sampling_filters: Optional[str] = Query(None, description="Filter by sampling variables (format: variable1=value1,value2;variable2=value3)"),
@@ -106,6 +111,7 @@ async def get_submissions(
 
     Supports filtering by:
     - qa_status: Comma-separated QA statuses (e.g., "FLAGGED,PENDING_APPROVAL")
+    - validation_status: Comma-separated validation statuses (e.g., "Approved,Not Approved,On Hold,Not Reviewed")
     - survey_id: Filter by specific survey (UUID) - REQUIRED
     - enumerator: Comma-separated enumerator IDs/values (e.g., "enum1,enum2")
     - sampling_filters: Sampling filters in format "variable1=value1,value2;variable2=value3"
@@ -142,6 +148,30 @@ async def get_submissions(
             query = query.filter(SubmissionCurrent.qa_status == qa_statuses[0])
         else:
             query = query.filter(SubmissionCurrent.qa_status.in_(qa_statuses))
+    
+    # Apply validation_status filter
+    if validation_status:
+        validation_statuses = [s.strip() for s in validation_status.split(',') if s.strip()]
+        # Handle "Not Reviewed" as NULL
+        if "Not Reviewed" in validation_statuses:
+            validation_statuses.remove("Not Reviewed")
+            if len(validation_statuses) == 0:
+                # Only "Not Reviewed" was specified
+                query = query.filter(SubmissionCurrent.kobo_validation_status.is_(None))
+            else:
+                # "Not Reviewed" plus other statuses
+                query = query.filter(
+                    or_(
+                        SubmissionCurrent.kobo_validation_status.is_(None),
+                        SubmissionCurrent.kobo_validation_status.in_(validation_statuses)
+                    )
+                )
+        else:
+            # No "Not Reviewed" specified
+            if len(validation_statuses) == 1:
+                query = query.filter(SubmissionCurrent.kobo_validation_status == validation_statuses[0])
+            else:
+                query = query.filter(SubmissionCurrent.kobo_validation_status.in_(validation_statuses))
     
     # Get all submissions (we'll filter by JSONB fields in Python)
     # Note: This could be optimized with PostgreSQL JSONB queries, but filtering
@@ -340,4 +370,100 @@ async def get_kobo_edit_url(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get Kobo edit URL: {str(e)}"
+        )
+
+
+@router.patch("/submissions/{kobo_id}/validation-status", response_model=Submission)
+async def update_submission_validation_status(
+    kobo_id: int,
+    status_update: ValidationStatusUpdate,
+    survey_id: UUIDType = Query(..., description="Survey ID to get the Kobo asset ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Update the Kobo validation status for a submission.
+    Requires editor access to the survey.
+    
+    This updates the validation status in KoboToolbox via API and stores it locally.
+    Field Compass qa_status remains computed and will sync on next ETL run.
+    
+    Args:
+        kobo_id: Submission ID (_id from Kobo)
+        status_update: Validation status to set (Approved, Not Approved, On Hold, or null)
+        survey_id: Survey ID to get the kobo_asset_id
+        
+    Returns:
+        Updated submission
+    """
+    # Verify submission exists
+    submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
+    
+    # Check user has editor access
+    survey_config = require_survey_access(db, current_user, survey_id, min_level='editor')
+    
+    if not survey_config.kobo_asset_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Survey {survey_id} does not have a kobo_asset_id configured"
+        )
+    
+    # Get user's Kobo API token
+    kobo_token = get_user_kobo_token(current_user)
+    if not kobo_token:
+        raise HTTPException(
+            status_code=400,
+            detail="You need to configure your Kobo API key in user settings"
+        )
+    
+    # Validate status value
+    valid_statuses = ['Approved', 'Not Approved', 'On Hold', None]
+    if status_update.validation_status not in valid_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid validation status. Must be one of: {valid_statuses}"
+        )
+    
+    try:
+        # Update validation status in Kobo
+        kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+        fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
+        
+        fetcher.update_validation_status(
+            asset_uid=survey_config.kobo_asset_id,
+            submission_id=kobo_id,
+            validation_status=status_update.validation_status
+        )
+        
+        # Update local database
+        submission.kobo_validation_status = status_update.validation_status
+        submission.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(submission)
+        
+        logger.info(
+            f"Updated validation status for submission {kobo_id} to '{status_update.validation_status}' "
+            f"by user {current_user.email}"
+        )
+        
+        # Return updated submission
+        return _orm_to_pydantic_submission(submission)
+        
+    except requests.exceptions.HTTPError as e:
+        db.rollback()
+        logger.error(f"Kobo API error updating validation status: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response: {e.response.text[:500]}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to update validation status in Kobo: {str(e)}"
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating validation status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update validation status: {str(e)}"
         )

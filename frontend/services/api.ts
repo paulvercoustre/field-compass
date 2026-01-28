@@ -156,5 +156,43 @@ export const api = {
       console.error(`Error fetching Kobo edit URL for submission ${koboId}:`, error);
       throw error;
     }
+  },
+
+  /**
+   * Update Kobo validation status for a submission
+   * @param koboId The Kobo submission ID
+   * @param surveyId The survey ID
+   * @param validationStatus Kobo validation status ('Approved', 'Not Approved', 'On Hold', or null)
+   */
+  updateValidationStatus: async (
+    koboId: number,
+    surveyId: string,
+    validationStatus: string | null
+  ): Promise<Submission> => {
+    try {
+      const params = new URLSearchParams({
+        survey_id: surveyId,
+      });
+      
+      const response = await fetch(
+        `${API_BASE_URL}/api/submissions/${koboId}/validation-status?${params}`,
+        {
+          method: 'PATCH',
+          headers: createHeaders(),
+          body: JSON.stringify({ validation_status: validationStatus }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(errorData.detail || `Failed to update validation status: ${response.statusText}`);
+      }
+
+      const data: Submission = await response.json();
+      return data;
+    } catch (error) {
+      console.error(`Error updating validation status for submission ${koboId}:`, error);
+      throw error;
+    }
   }
 };

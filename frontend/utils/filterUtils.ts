@@ -102,6 +102,10 @@ export function buildFilterParams(filters: FilterState): URLSearchParams {
     params.append('qa_status', apiStatuses.join(','));
   }
 
+  if (filters.validationStatuses && filters.validationStatuses.length > 0) {
+    params.append('validation_status', filters.validationStatuses.join(','));
+  }
+
   if (filters.enumerators && filters.enumerators.length > 0) {
     params.append('enumerator', filters.enumerators.join(','));
   }
@@ -128,6 +132,7 @@ export function buildFilterParams(filters: FilterState): URLSearchParams {
 export function hasActiveFilters(filters: FilterState): boolean {
   return !!(
     (filters.qaStatuses && filters.qaStatuses.length > 0) ||
+    (filters.validationStatuses && filters.validationStatuses.length > 0) ||
     (filters.enumerators && filters.enumerators.length > 0) ||
     (filters.samplingFilters && filters.samplingFilters.length > 0)
   );

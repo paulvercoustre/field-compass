@@ -171,7 +171,8 @@ export interface SamplingFilter {
 }
 
 export interface FilterState {
-  qaStatuses?: QAStatus[];
+  qaStatuses?: QAStatus[];  // Keep for backward compatibility if needed
+  validationStatuses?: string[];  // Kobo validation statuses: Approved, Not Approved, On Hold, Not Reviewed
   enumerators?: string[];
   samplingFilters?: SamplingFilter[];
 }

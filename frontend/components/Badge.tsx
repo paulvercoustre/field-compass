@@ -13,6 +13,11 @@ const statusStyles: Record<string, string> = {
   [QAStatus.FLAGGED]: 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200',
   [QAStatus.APPROVED]: 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200',
   [QAStatus.REJECTED]: 'bg-orange-100 dark:bg-orange-800 text-orange-800 dark:text-orange-200',
+  // Kobo validation status values
+  'Approved': 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200',
+  'Not Approved': 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200',
+  'On Hold': 'bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200',
+  'Not Reviewed': 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
   // Backward compatibility with old status values
   'HFC_FLAGGED': 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200',
   'PENDING_QA': 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200',
@@ -24,6 +29,11 @@ const statusText: Record<string, string> = {
   [QAStatus.FLAGGED]: 'Flagged',
   [QAStatus.APPROVED]: 'Approved',
   [QAStatus.REJECTED]: 'Rejected',
+  // Kobo validation status values (keep as-is, they're already user-friendly)
+  'Approved': 'Approved',
+  'Not Approved': 'Not Approved',
+  'On Hold': 'On Hold',
+  'Not Reviewed': 'Not Reviewed',
   // Backward compatibility with old status values
   'HFC_FLAGGED': 'Flagged',
   'PENDING_QA': 'Pending Approval',

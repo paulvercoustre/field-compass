@@ -8,6 +8,9 @@ import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, SurveyConfig, getValidationRules, ValidationRule } from '../services/progressApi';
 import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
 import { api } from '../services/api';
+import ValidationStatusDropdown from './ValidationStatusDropdown';
+import SuccessMessage from './ui/SuccessMessage';
+import ErrorMessage from './ui/ErrorMessage';
 
 interface SubmissionDetailProps {
   submission: Submission | null;
@@ -22,6 +25,9 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
   const [koboEditUrl, setKoboEditUrl] = useState<string | null>(null);
   const [isLoadingKoboUrl, setIsLoadingKoboUrl] = useState(false);
+  const [isUpdatingValidation, setIsUpdatingValidation] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const { selectedSurvey } = useSurvey();
 
   // Fetch survey config when submission or survey changes
@@ -230,56 +236,117 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     });
   };
 
+  // Handle validation status change
+  const handleValidationStatusChange = async (newStatus: string | null) => {
+    if (!selectedSurvey) return;
+    
+    setIsUpdatingValidation(true);
+    setValidationError(null);
+    setSuccess(null);
+    
+    try {
+      const updatedSubmission = await api.updateValidationStatus(
+        submission._id,
+        selectedSurvey.survey_id,
+        newStatus
+      );
+      
+      // Update the submission prop (this would ideally trigger a re-fetch from parent)
+      // For now, we'll update the local display
+      Object.assign(submission, updatedSubmission);
+      
+      // Show success message
+      const statusText = newStatus || 'cleared';
+      setSuccess(`Validation status updated to: ${statusText}`);
+    } catch (error) {
+      console.error('Failed to update validation status:', error);
+      setValidationError(error instanceof Error ? error.message : 'Failed to update validation status');
+    } finally {
+      setIsUpdatingValidation(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900 min-w-0">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Submission <span className="font-mono">#{_id}</span></h2>
-            
-            <div className="flex items-center mt-3 space-x-4 flex-wrap gap-2">
-                {is_edited && (
-                    <div className="flex items-center text-sm text-blue-600 dark:text-blue-400">
-                        <EditIcon />
-                        <span>Edited Submission</span>
-                    </div>
-                )}
-                {data_quality_issues.length > 0 && (
-                    <div className="flex items-center text-sm text-yellow-600 dark:text-yellow-400">
-                        <AlertIcon />
-                        <span>{data_quality_issues.length} Quality Issues Found</span>
-                    </div>
-                )}
-                {kobo_validation_status && (
-                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                        <span>Kobo Status: <span className="font-semibold">{kobo_validation_status}</span></span>
-                    </div>
-                )}
-            </div>
-          </div>
-          
-          <div className="flex flex-col items-end gap-2 ml-4">
-            <Badge status={qa_status} size="lg" />
-            {isLoadingKoboUrl ? (
-                <div className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-500 bg-gray-200 rounded-md">
-                    <Spinner />
-                    <span className="ml-1.5">Loading...</span>
-                </div>
-            ) : koboEditUrl ? (
-                <a
-                    href={koboEditUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    Edit in Kobo
-                </a>
-            ) : null}
-          </div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Submission <span className="font-mono">#{_id}</span></h2>
+        
+        {/* Inline metadata badges */}
+        <div className="flex items-center gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
+          {is_edited && (
+            <span className="flex items-center gap-1">
+              <EditIcon />
+              Edited
+            </span>
+          )}
+          {data_quality_issues.length > 0 && (
+            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+              <AlertIcon />
+              {data_quality_issues.length} issue{data_quality_issues.length > 1 ? 's' : ''}
+            </span>
+          )}
         </div>
+        
+        {/* Action row */}
+        <div className="flex items-center gap-2 mt-3">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            Actions:
+          </span>
+          
+          {/* Edit in Kobo button - compact */}
+          {isLoadingKoboUrl ? (
+            <div className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Loading...</span>
+            </div>
+          ) : koboEditUrl ? (
+            <a
+              href={koboEditUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Edit in Kobo
+            </a>
+          ) : null}
+          
+          {/* Validation dropdown */}
+          <ValidationStatusDropdown 
+            currentStatus={kobo_validation_status}
+            onChange={handleValidationStatusChange}
+            isUpdating={isUpdatingValidation}
+            disabled={isUpdatingValidation}
+          />
+        </div>
+
+        {/* Success/Error messages */}
+        {success && (
+          <SuccessMessage message={success} onDismiss={() => setSuccess(null)} className="mt-3" />
+        )}
+        {validationError && (
+          <ErrorMessage message={validationError} onDismiss={() => setValidationError(null)} className="mt-3" />
+        )}
+
+        {/* Quality issues warning */}
+        {data_quality_issues.length > 0 && (
+          kobo_validation_status === 'Approved' ? (
+            <div className="mt-2 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded flex items-center gap-1.5">
+              <AlertIcon className="w-3.5 h-3.5" />
+              This submission has {data_quality_issues.length} quality issue{data_quality_issues.length > 1 ? 's' : ''} but is marked as approved
+            </div>
+          ) : !kobo_validation_status && (
+            <div className="mt-2 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded flex items-center gap-1.5">
+              <AlertIcon className="w-3.5 h-3.5" />
+              Review {data_quality_issues.length} quality issue{data_quality_issues.length > 1 ? 's' : ''} below before validation
+            </div>
+          )
+        )}
       </div>
 
       <div className="flex-1 p-4 overflow-y-auto min-w-0">
