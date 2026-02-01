@@ -12,6 +12,7 @@ jsonpatch==1.33
 jsondiff==2.0.0
 python-multipart==0.0.12
 simpleeval==0.9.13
+openai==1.54.0
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0

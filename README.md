@@ -188,12 +188,38 @@ Tests will be added in a future update. For now, you can test the API using:
 - [x] Per-user Kobo API key management (encrypted)
 - [x] Survey configuration management
 - [x] Validation rules builder with CRUD API
+- [x] **AI-powered rule generation from natural language**
+- [x] **AI-suggested validation rules based on form analysis**
 - [x] Submission viewer with filters
 - [x] Enumerator performance metrics
 - [x] Data collection progress tracking
 - [x] Edit detection and history tracking
 - [x] CI/CD pipeline (GitHub Actions)
 - [x] Backend tests (~60 test functions)
+
+## AI-Powered Features
+
+Field Compass includes AI-powered features to simplify validation rule creation:
+
+### Natural Language Rule Generation
+Describe your validation rule in plain English, and AI will convert it to a structured rule:
+- "Flag if respondent age is greater than 100"
+- "Flag any survey completed in under 10 minutes"
+- "Check if consent is not given"
+
+### AI Rule Suggestions
+AI analyzes your survey form and suggests relevant validation rules based on best practices:
+- Range validation for numeric fields
+- Required field checks
+- Duration anomaly detection
+- Date validity checks
+- Logical consistency rules
+
+**Setup:** Add your OpenAI API key to `.env`:
+```bash
+OPENAI_API_KEY=sk-your-openai-api-key-here
+OPENAI_MODEL=gpt-4o-mini
+```
 
 ## Next Steps
 

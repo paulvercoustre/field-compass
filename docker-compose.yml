@@ -34,6 +34,11 @@ services:
       # Kobo API settings (must be set in .env)
       KOBO_API_TOKEN: ${KOBO_API_TOKEN:-}
       KOBO_API_URL: ${KOBO_API_URL:-https://kf.kobotoolbox.org/api/v2}
+      # OpenAI API settings (for AI-powered rule generation)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-1000}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
       # Application settings
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

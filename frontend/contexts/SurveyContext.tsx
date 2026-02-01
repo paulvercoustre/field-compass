@@ -16,6 +16,8 @@ interface SurveyContextType {
 
 const SurveyContext = createContext<SurveyContextType | undefined>(undefined);
 
+export { SurveyContext };
+
 export const useSurvey = () => {
   const context = useContext(SurveyContext);
   if (!context) {

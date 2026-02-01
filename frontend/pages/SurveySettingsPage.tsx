@@ -8,6 +8,8 @@ import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConvert
 import { StagedRule } from '../types';
 import RuleEditor from '../components/rule-builder/RuleEditor';
 import StagedRulesList from '../components/rule-builder/StagedRulesList';
+import AINaturalLanguageInput from '../components/rule-builder/AINaturalLanguageInput';
+import AISuggestedRules from '../components/rule-builder/AISuggestedRules';
 import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
@@ -563,6 +565,35 @@ const SurveySettingsPage: React.FC = () => {
   const handleCancelEdit = useCallback(() => {
     setCurrentlyEditing(null);
   }, []);
+
+  const handleAIRuleGenerated = useCallback(async (rule: StagedRule) => {
+    // AI-generated rule is added directly to the database
+    if (currentlyEditing) {
+      setCurrentlyEditing(null);
+    }
+    // Save the AI-generated rule immediately
+    await handleSaveRule(rule);
+  }, [currentlyEditing, handleSaveRule]);
+
+  const handleAISuggestedRulesAdded = useCallback(async (rules: StagedRule[]) => {
+    // Save all suggested rules to the database
+    if (!selectedSurvey) return;
+    
+    try {
+      for (const rule of rules) {
+        const dbRule = stagedRuleToDbFormat({ ...rule, id: '' });
+        await createValidationRule(selectedSurvey.survey_id, {
+          rule_name: rule.description,
+          rule_data: dbRule,
+          is_active: true,
+        });
+      }
+      await loadValidationRules(); // Refresh from server
+      setSuccess(`${rules.length} rule${rules.length !== 1 ? 's' : ''} added successfully!`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save suggested rules');
+    }
+  }, [selectedSurvey]);
 
   const handleWeekendDayToggle = (day: number) => {
     setQualityChecks(prev => {
@@ -1629,12 +1660,50 @@ const SurveySettingsPage: React.FC = () => {
                     </p>
                   ) : (
                     <>
-                      <RuleEditor
-                        koboToolData={koboToolData}
-                        onSave={handleSaveRule}
-                        onCancel={handleCancelEdit}
-                        editingRule={currentlyEditing}
-                      />
+                      {/* AI Rule Builder Section */}
+                      {selectedSurvey && (
+                        <div className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-indigo-200 dark:border-indigo-800">
+                          <div className="flex items-center mb-4">
+                            <span className="text-2xl mr-2">✨</span>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Rule Builder</h3>
+                            <span className="ml-2 text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full">
+                              Beta
+                            </span>
+                          </div>
+                          <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
+                            Describe your rule in plain English, and AI will convert it to a validation rule.
+                          </p>
+                          <AINaturalLanguageInput 
+                            surveyId={selectedSurvey.survey_id}
+                            onRuleGenerated={handleAIRuleGenerated}
+                          />
+                        </div>
+                      )}
+
+                      {/* AI Suggestions Section */}
+                      {selectedSurvey && (
+                        <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                          <div className="flex items-center mb-4">
+                            <span className="text-2xl mr-2">💡</span>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Suggestions</h3>
+                          </div>
+                          <AISuggestedRules 
+                            surveyId={selectedSurvey.survey_id}
+                            onRulesAdded={handleAISuggestedRulesAdded}
+                          />
+                        </div>
+                      )}
+
+                      {/* Manual Rule Editor */}
+                      <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Create Rule Manually</h3>
+                        <RuleEditor
+                          koboToolData={koboToolData}
+                          onSave={handleSaveRule}
+                          onCancel={handleCancelEdit}
+                          editingRule={currentlyEditing}
+                        />
+                      </div>
                       <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Saved Rules</h3>
                         {isLoadingRules ? (
