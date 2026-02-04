@@ -567,13 +567,33 @@ const SurveySettingsPage: React.FC = () => {
   }, []);
 
   const handleAIRuleGenerated = useCallback(async (rule: StagedRule) => {
-    // AI-generated rule is added directly to the database
+    if (!selectedSurvey) {
+      throw new Error('No survey selected');
+    }
+
+    // Clear any currently editing rule
     if (currentlyEditing) {
       setCurrentlyEditing(null);
     }
-    // Save the AI-generated rule immediately
-    await handleSaveRule(rule);
-  }, [currentlyEditing, handleSaveRule]);
+
+    try {
+      const dbRule = stagedRuleToDbFormat({ ...rule, id: '' });
+      
+      // Create new rule
+      await createValidationRule(selectedSurvey.survey_id, {
+        rule_name: rule.description,
+        rule_data: dbRule,
+        is_active: true,
+      });
+      
+      // Refresh the rules list from server
+      await loadValidationRules();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save validation rule';
+      setError(errorMessage);
+      throw new Error(errorMessage); // Re-throw so the AI component can catch it
+    }
+  }, [currentlyEditing, selectedSurvey]);
 
   const handleAISuggestedRulesAdded = useCallback(async (rules: StagedRule[]) => {
     // Save all suggested rules to the database

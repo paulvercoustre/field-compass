@@ -82,8 +82,8 @@ async def generate_rule_from_natural_language(
             detail=f"Invalid survey_id format: {request.survey_id}"
         )
     
-    # Check user has access to this survey
-    require_survey_access(db, current_user, survey_uuid, min_level='owner')
+    # Check user has access to this survey (editors can create rules too)
+    require_survey_access(db, current_user, survey_uuid, min_level='editor')
     
     # Fetch survey config
     survey_config = db.query(SurveyConfig).filter(
@@ -105,11 +105,37 @@ async def generate_rule_from_natural_language(
             detail="No variables found in survey configuration. Please ensure the survey is properly configured."
         )
     
+    # Get existing rules to provide as context
+    from database.models import ValidationRule
+    existing_rules = db.query(ValidationRule).filter(
+        ValidationRule.survey_id == survey_uuid,
+        ValidationRule.is_active == True
+    ).all()
+    
+    existing_rules_context = [
+        {
+            "name": rule.rule_name,
+            "issue": rule.rule_data.get('issue', ''),
+            "expression": rule.rule_data.get('check_expression', '')
+        }
+        for rule in existing_rules
+    ]
+    
+    # Extract survey context
+    config_data = survey_config.config_data
+    survey_context = {
+        "global_parameters": config_data.get('global_parameters', {}),
+        "core_identifiers": config_data.get('core_identifiers', {}),
+        "special_values": config_data.get('special_values', {}),
+    }
+    
     # Generate rule using AI service
     try:
         rule_data = ai_service.generate_rule_from_text(
             prompt=request.prompt,
-            kobo_variables=kobo_variables
+            kobo_variables=kobo_variables,
+            existing_rules=existing_rules_context,
+            survey_context=survey_context
         )
         
         logger.info(f"Successfully generated rule for survey {request.survey_id}: {rule_data.get('description')}")
@@ -160,8 +186,8 @@ async def suggest_validation_rules(
             detail=f"Invalid survey_id format: {request.survey_id}"
         )
     
-    # Check user has access to this survey
-    require_survey_access(db, current_user, survey_uuid, min_level='owner')
+    # Check user has access to this survey (editors can create rules too)
+    require_survey_access(db, current_user, survey_uuid, min_level='editor')
     
     # Fetch survey config
     survey_config = db.query(SurveyConfig).filter(
@@ -184,11 +210,28 @@ async def suggest_validation_rules(
             detail="No variables found in survey configuration. Please ensure the survey is properly configured."
         )
     
+    # Get existing rules to avoid suggesting duplicates
+    from database.models import ValidationRule
+    existing_rules = db.query(ValidationRule).filter(
+        ValidationRule.survey_id == survey_uuid,
+        ValidationRule.is_active == True
+    ).all()
+    
+    existing_rules_context = [
+        {
+            "name": rule.rule_name,
+            "issue": rule.rule_data.get('issue', ''),
+            "expression": rule.rule_data.get('check_expression', '')
+        }
+        for rule in existing_rules
+    ]
+    
     # Generate suggestions using AI service
     try:
         suggestions = ai_service.suggest_rules(
             kobo_variables=kobo_variables,
-            global_parameters=global_parameters
+            global_parameters=global_parameters,
+            existing_rules=existing_rules_context
         )
         
         logger.info(f"Successfully generated {len(suggestions)} rule suggestions for survey {request.survey_id}")
@@ -237,8 +280,8 @@ def _extract_variables_from_config(survey_config: SurveyConfig) -> List[Dict[str
         q_name = question.get('name', '')
         q_label = question.get('label::English (en)', question.get('label', ''))
         
-        # Skip metadata fields and groups
-        if not q_name or q_type in ['begin_group', 'end_group', 'begin_repeat', 'end_repeat', 'note', 'calculate']:
+        # Skip metadata fields and groups (but keep 'calculate' as it can contain numeric calculations)
+        if not q_name or q_type in ['begin_group', 'end_group', 'begin_repeat', 'end_repeat', 'note']:
             continue
         
         var_info = {

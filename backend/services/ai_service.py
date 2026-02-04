@@ -37,7 +37,9 @@ class AIService:
     def generate_rule_from_text(
         self,
         prompt: str,
-        kobo_variables: List[Dict[str, Any]]
+        kobo_variables: List[Dict[str, Any]],
+        existing_rules: Optional[List[Dict[str, str]]] = None,
+        survey_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Generate a validation rule from natural language description.
@@ -46,6 +48,9 @@ class AIService:
             prompt: Natural language description of the rule
             kobo_variables: List of variable metadata from Kobo form
                            [{"name": "age", "type": "integer", "label": "Respondent Age"}, ...]
+            existing_rules: Optional list of existing rules to avoid duplicates
+                           [{"name": "...", "issue": "...", "expression": "..."}, ...]
+            survey_context: Optional dict with global_parameters, core_identifiers, special_values
         
         Returns:
             Dict with structure: {
@@ -64,37 +69,131 @@ class AIService:
         # Build variable context for the prompt
         variables_context = self._format_variables_context(kobo_variables)
         
-        # Create system prompt
-        system_prompt = """You are a data quality validation expert. Your task is to convert natural language rule descriptions into structured validation rules.
+        # Build existing rules context
+        existing_rules_text = ""
+        if existing_rules and len(existing_rules) > 0:
+            existing_rules_text = "\n\nEXISTING RULES (avoid creating duplicates):\n"
+            for rule in existing_rules[:20]:  # Limit to 20 to save tokens
+                existing_rules_text += f"- {rule.get('name', 'Unnamed')}: {rule.get('expression', '')}\n"
+        
+        # Build survey context
+        survey_context_text = ""
+        if survey_context:
+            survey_context_text = "\n\nSURVEY CONFIGURATION:\n"
+            gp = survey_context.get('global_parameters', {})
+            if gp.get('min_survey_duration_minutes'):
+                survey_context_text += f"- Expected survey duration: {gp.get('min_survey_duration_minutes')}-{gp.get('max_survey_duration_minutes')} minutes\n"
+            if gp.get('data_collection_start_date'):
+                survey_context_text += f"- Data collection period: {gp.get('data_collection_start_date')} to {gp.get('data_collection_end_date')}\n"
+            
+            sv = survey_context.get('special_values', {})
+            if sv:
+                survey_context_text += f"- Special values: DK numeric = {sv.get('dk_value', -99)}, DK string = {sv.get('dk_string_value', 'dk')}\n"
+        
+        # Create system prompt (simplified since structured outputs handles format)
+        system_prompt = """You are a data quality validation expert. Convert natural language rule descriptions into structured validation rules.
 
-You must return ONLY valid JSON matching this exact schema:
-{
-  "description": "Short descriptive name for the rule (e.g., 'Age under 18')",
-  "issue_message": "Clear message shown when rule triggers (e.g., 'Respondent is a minor')",
-  "conditions": [
-    {"variable": "variable_name", "operator": "==", "value": "value", "valueType": "static"}
-  ],
-  "roster_name": null
-}
+Your response will be automatically structured according to the provided schema. Focus on creating accurate, useful validation rules.
 
-Supported operators: ==, !=, >, <, >=, <=, %in%
-- For %in%, use comma-separated values in the value field (e.g., "yes,maybe")
-- valueType is either "static" (for literal values) or "variable" (for comparing two variables)
-- For multiple conditions, include {"joiner": "&"} or {"joiner": "|"} between conditions
-- Always quote string values in the value field
-- Numeric values should be unquoted
+CONDITION STRUCTURE:
+- Each condition has: variable (string), operator (==, !=, >, <, >=, <=, %in%), value (string), valueType ("static" or "variable")
+- Multiple conditions are joined with {"joiner": "&"} for AND or {"joiner": "|"} for OR
+- Example: [{"variable": "age", "operator": ">", "value": "100", "valueType": "static"}, {"joiner": "&"}, {"variable": "age", "operator": "<", "value": "150", "valueType": "static"}]
 
-Important: Return ONLY the JSON object, no markdown formatting or explanations."""
+OPERATORS:
+- ==, !=, >, <, >=, <= : standard comparisons
+- %in% : value is in a list (use comma-separated values like "yes,no,maybe")
 
-        # Create user prompt
-        user_prompt = f"""Survey Variables:
-{variables_context}
+VALUE TYPE:
+- "static": literal value (numbers, strings, select choices)
+- "variable": comparing with another variable name
 
-User Request: {prompt}
+ROSTER_NAME:
+- null for main survey questions
+- roster name string if rule applies to a repeat group"""
 
-Generate a validation rule for this request."""
+        # Create user prompt with all context
+        user_prompt = f"""SURVEY VARIABLES (name: type - label [choices if applicable]):
+{variables_context}{existing_rules_text}{survey_context_text}
+
+USER REQUEST: {prompt}
+
+Generate a validation rule matching the exact JSON schema."""
+
+        # Define JSON schema for structured outputs
+        rule_schema = {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "Short descriptive name for the rule (e.g., 'Age exceeds 100')"
+                },
+                "issue_message": {
+                    "type": "string",
+                    "description": "Clear message shown when rule triggers (e.g., 'Respondent age is suspiciously high')"
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Array of conditions and joiners. Each element is either a condition object or a joiner object",
+                    "items": {
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "variable": {
+                                        "type": "string",
+                                        "description": "Variable name from the survey"
+                                    },
+                                    "operator": {
+                                        "type": "string",
+                                        "enum": ["==", "!=", ">", "<", ">=", "<=", "%in%"],
+                                        "description": "Comparison operator"
+                                    },
+                                    "value": {
+                                        "type": "string",
+                                        "description": "Value to compare against (for %in%, use comma-separated values)"
+                                    },
+                                    "valueType": {
+                                        "type": "string",
+                                        "enum": ["static", "variable"],
+                                        "description": "Whether value is a literal (static) or another variable"
+                                    }
+                                },
+                                "required": ["variable", "operator", "value", "valueType"],
+                                "additionalProperties": False
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "joiner": {
+                                        "type": "string",
+                                        "enum": ["&", "|"],
+                                        "description": "Logical operator to join conditions (AND or OR)"
+                                    }
+                                },
+                                "required": ["joiner"],
+                                "additionalProperties": False
+                            }
+                        ]
+                    },
+                    "minItems": 1
+                },
+                "roster_name": {
+                    "type": ["string", "null"],
+                    "description": "Name of roster/repeat group if rule applies to one, otherwise null"
+                }
+            },
+            "required": ["description", "issue_message", "conditions", "roster_name"],
+            "additionalProperties": False
+        }
 
         try:
+            # #region agent log
+            import json as log_json
+            with open('/Users/paulvercoustre/Documents/data_science/field-compass/.cursor/debug.log', 'a') as f:
+                f.write(log_json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"A,C","location":"ai_service.py:190","message":"generate_rule_from_text called","data":{"prompt":prompt,"num_variables":len(kobo_variables),"has_existing_rules":existing_rules is not None and len(existing_rules) > 0,"has_survey_context":survey_context is not None,"model":self.model},"timestamp":int(time.time()*1000)}) + '\n')
+            # #endregion
+            
             logger.info(f"Generating rule with OpenAI model {self.model}")
             start_time = time.time()
             
@@ -107,17 +206,29 @@ Generate a validation rule for this request."""
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 timeout=self.timeout,
-                response_format={"type": "json_object"}  # Ensure JSON response
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "validation_rule",
+                        "strict": True,
+                        "schema": rule_schema
+                    }
+                }
             )
             
             elapsed = time.time() - start_time
             logger.info(f"OpenAI API call completed in {elapsed:.2f}s")
             
+            # Check for refusals
+            if hasattr(response.choices[0].message, 'refusal') and response.choices[0].message.refusal:
+                logger.warning(f"Model refused to generate rule: {response.choices[0].message.refusal}")
+                raise ValueError(f"AI refused to generate rule: {response.choices[0].message.refusal}")
+            
             # Extract and parse response
             content = response.choices[0].message.content
             rule_data = json.loads(content)
             
-            # Validate structure
+            # Validate structure (structured outputs should guarantee this, but double-check)
             self._validate_rule_structure(rule_data)
             
             logger.info(f"Successfully generated rule: {rule_data.get('description')}")
@@ -136,7 +247,8 @@ Generate a validation rule for this request."""
     def suggest_rules(
         self,
         kobo_variables: List[Dict[str, Any]],
-        global_parameters: Optional[Dict[str, Any]] = None
+        global_parameters: Optional[Dict[str, Any]] = None,
+        existing_rules: Optional[List[Dict[str, str]]] = None
     ) -> List[Dict[str, Any]]:
         """
         Suggest validation rules based on Kobo form structure.
@@ -144,6 +256,7 @@ Generate a validation rule for this request."""
         Args:
             kobo_variables: List of variable metadata from Kobo form
             global_parameters: Optional global parameters (date ranges, duration limits)
+            existing_rules: Optional list of existing rules to avoid suggesting duplicates
         
         Returns:
             List of rule dictionaries with same structure as generate_rule_from_text
@@ -160,46 +273,118 @@ Generate a validation rule for this request."""
         # Build context about global parameters
         params_context = ""
         if global_parameters:
-            params_context = "\n\nGlobal Parameters:\n"
+            params_context = "\n\nGLOBAL PARAMETERS:\n"
             if global_parameters.get('data_collection_start_date'):
                 params_context += f"- Data collection period: {global_parameters.get('data_collection_start_date')} to {global_parameters.get('data_collection_end_date')}\n"
             if global_parameters.get('min_survey_duration_minutes'):
                 params_context += f"- Expected survey duration: {global_parameters.get('min_survey_duration_minutes')}-{global_parameters.get('max_survey_duration_minutes')} minutes\n"
         
-        # Create system prompt
-        system_prompt = """You are a data quality expert reviewing a survey form. Your task is to suggest 5-10 validation rules based on the form structure.
+        # Build existing rules context
+        existing_rules_text = ""
+        if existing_rules and len(existing_rules) > 0:
+            existing_rules_text = "\n\nEXISTING RULES (do NOT suggest similar rules):\n"
+            for rule in existing_rules[:20]:  # Limit to 20 to save tokens
+                existing_rules_text += f"- {rule.get('name', 'Unnamed')}: {rule.get('expression', '')}\n"
+        
+        # Create system prompt (simplified since structured outputs handles format)
+        system_prompt = """You are a data quality expert reviewing a survey form. Suggest 5-10 practical validation rules based on the form structure.
 
-Focus on:
+FOCUS AREAS:
 1. Range validation for numeric fields (age, household_size, income, etc.)
-2. Required field checks for important fields
-3. Duration anomalies (too short/long interviews)
-4. Date validity (within collection period, not on weekends)
-5. Logical consistency (e.g., if age < 18, check guardian consent)
-6. Outlier detection for key variables
+2. Duration anomalies (too short/long interviews)
+3. Date validity (within collection period)
+4. Logical consistency (e.g., if age < 18, check guardian consent)
+5. Outlier detection for key variables (extreme values)
+6. Required field checks for critical fields
 7. Data type validation
 
-Return ONLY valid JSON array:
-[
-  {
-    "description": "Short descriptive name",
-    "issue_message": "Clear error message",
-    "conditions": [{"variable": "name", "operator": "op", "value": "val", "valueType": "static"}],
-    "roster_name": null
-  }
-]
+Your response will be automatically structured. Focus on creating diverse, practical, actionable rules.
 
-Supported operators: ==, !=, >, <, >=, <=, %in%
-- Use %in% for multiple choice validation
-- Include {"joiner": "&"} or {"joiner": "|"} between conditions
+REQUIREMENTS:
+- Suggest 5-10 diverse rules
 - Prioritize practical, actionable rules
-- Return 5-10 diverse rules
+- Avoid suggesting rules similar to existing ones
+- Use appropriate operators (==, !=, >, <, >=, <=, %in%)
+- Set roster_name to null unless rule applies to a repeat group"""
 
-Important: Return ONLY the JSON array, no markdown or explanations."""
+        user_prompt = f"""SURVEY VARIABLES:
+{variables_context}{params_context}{existing_rules_text}
 
-        user_prompt = f"""Survey Variables:
-{variables_context}{params_context}
+Analyze this survey form and suggest 5-10 validation rules."""
 
-Analyze this survey form and suggest validation rules."""
+        # Define JSON schema for structured outputs (array wrapped in object)
+        # Note: Root must be an object, so we wrap the array in a "rules" property
+        rule_item_schema = {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "Short descriptive name for the rule"
+                },
+                "issue_message": {
+                    "type": "string",
+                    "description": "Clear message shown when rule triggers"
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Array of conditions and joiners",
+                    "items": {
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "variable": {"type": "string"},
+                                    "operator": {
+                                        "type": "string",
+                                        "enum": ["==", "!=", ">", "<", ">=", "<=", "%in%"]
+                                    },
+                                    "value": {"type": "string"},
+                                    "valueType": {
+                                        "type": "string",
+                                        "enum": ["static", "variable"]
+                                    }
+                                },
+                                "required": ["variable", "operator", "value", "valueType"],
+                                "additionalProperties": False
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "joiner": {
+                                        "type": "string",
+                                        "enum": ["&", "|"]
+                                    }
+                                },
+                                "required": ["joiner"],
+                                "additionalProperties": False
+                            }
+                        ]
+                    },
+                    "minItems": 1
+                },
+                "roster_name": {
+                    "type": ["string", "null"],
+                    "description": "Name of roster/repeat group if rule applies to one, otherwise null"
+                }
+            },
+            "required": ["description", "issue_message", "conditions", "roster_name"],
+            "additionalProperties": False
+        }
+
+        suggestions_schema = {
+            "type": "object",
+            "properties": {
+                "rules": {
+                    "type": "array",
+                    "description": "Array of suggested validation rules",
+                    "items": rule_item_schema,
+                    "minItems": 5,
+                    "maxItems": 10
+                }
+            },
+            "required": ["rules"],
+            "additionalProperties": False
+        }
 
         try:
             logger.info(f"Generating rule suggestions with OpenAI model {self.model}")
@@ -214,31 +399,35 @@ Analyze this survey form and suggest validation rules."""
                 temperature=self.temperature,
                 max_tokens=self.max_tokens * 2,  # More tokens for multiple rules
                 timeout=self.timeout,
-                response_format={"type": "json_object"}
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "suggested_rules",
+                        "strict": True,
+                        "schema": suggestions_schema
+                    }
+                }
             )
             
             elapsed = time.time() - start_time
             logger.info(f"OpenAI API call completed in {elapsed:.2f}s")
             
+            # Check for refusals
+            if hasattr(response.choices[0].message, 'refusal') and response.choices[0].message.refusal:
+                logger.warning(f"Model refused to generate suggestions: {response.choices[0].message.refusal}")
+                raise ValueError(f"AI refused to generate suggestions: {response.choices[0].message.refusal}")
+            
             # Extract and parse response
             content = response.choices[0].message.content
             parsed = json.loads(content)
             
-            # Handle both array and object with array wrapper
-            if isinstance(parsed, list):
-                rules_list = parsed
-            elif isinstance(parsed, dict) and 'rules' in parsed:
+            # Extract rules array from the structured response
+            if isinstance(parsed, dict) and 'rules' in parsed:
                 rules_list = parsed['rules']
             else:
-                # Try to extract first array-like value
-                for value in parsed.values():
-                    if isinstance(value, list):
-                        rules_list = value
-                        break
-                else:
-                    raise ValueError("Response doesn't contain a list of rules")
+                raise ValueError("Response doesn't contain a 'rules' array")
             
-            # Validate each rule
+            # Validate each rule (structured outputs should guarantee this, but double-check)
             validated_rules = []
             for rule in rules_list:
                 try:

@@ -7,7 +7,7 @@ import SuccessMessage from '../ui/SuccessMessage';
 
 interface AINaturalLanguageInputProps {
   surveyId: string;
-  onRuleGenerated: (rule: StagedRule) => void;
+  onRuleGenerated: (rule: StagedRule) => Promise<void>;
 }
 
 const EXAMPLE_PROMPTS = [
@@ -61,14 +61,23 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
     }
   };
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     if (generatedRule) {
-      onRuleGenerated(generatedRule);
-      setShowSuccess(true);
-      setGeneratedRule(null);
-      setPrompt('');
+      setIsGenerating(true);
+      setError(null);
       
-      setTimeout(() => setShowSuccess(false), 3000);
+      try {
+        await onRuleGenerated(generatedRule);
+        setShowSuccess(true);
+        setGeneratedRule(null);
+        setPrompt('');
+        
+        setTimeout(() => setShowSuccess(false), 3000);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to save rule');
+      } finally {
+        setIsGenerating(false);
+      }
     }
   };
 
@@ -144,7 +153,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
       {error && <ErrorMessage error={error} />}
 
       {showSuccess && (
-        <SuccessMessage message="Rule added to editor successfully!" />
+        <SuccessMessage message="Rule saved successfully!" />
       )}
 
       {generatedRule && (
@@ -191,13 +200,15 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
           <div className="flex space-x-3 pt-2">
             <button
               onClick={handleAccept}
-              className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
+              disabled={isGenerating}
+              className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
             >
-              ✓ Accept & Add to Editor
+              {isGenerating ? 'Saving...' : '✓ Accept & Add to Editor'}
             </button>
             <button
               onClick={handleReject}
-              className="flex-1 px-4 py-2 font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
+              disabled={isGenerating}
+              className="flex-1 px-4 py-2 font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ✗ Reject
             </button>
