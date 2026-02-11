@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class AIService:
-    """Service for AI-powered validation rule generation and suggestions."""
+    """Service for AI-powered validation rue generation and suggestions."""
     
     def __init__(self):
         """Initialize OpenAI client with API key from environment."""
@@ -28,7 +28,7 @@ class AIService:
         self.model = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
         self.max_completion_tokens = int(os.getenv('OPENAI_MAX_TOKENS', '2500'))
         self.temperature = float(os.getenv('OPENAI_TEMPERATURE', '0.2'))
-        self.timeout = 30  # seconds
+        self.timeout = 120  # seconds - GPT-5 models with reasoning can take longer
     
     def is_available(self) -> bool:
         """Check if AI service is available (API key configured)."""
