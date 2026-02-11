@@ -200,9 +200,11 @@ async def suggest_validation_rules(
             detail=f"Survey configuration not found for survey_id: {request.survey_id}"
         )
     
-    # Extract variables and global parameters from config
+    # Extract variables, global parameters, and special values from config
+    config_data = survey_config.config_data
     kobo_variables = _extract_variables_from_config(survey_config)
-    global_parameters = survey_config.config_data.get('global_parameters', {})
+    global_parameters = config_data.get('global_parameters', {})
+    special_values = config_data.get('special_values', {})
     
     if not kobo_variables:
         raise HTTPException(
@@ -231,6 +233,7 @@ async def suggest_validation_rules(
         suggestions = ai_service.suggest_rules(
             kobo_variables=kobo_variables,
             global_parameters=global_parameters,
+            special_values=special_values,
             existing_rules=existing_rules_context
         )
         
@@ -252,7 +255,8 @@ def _extract_variables_from_config(survey_config: SurveyConfig) -> List[Dict[str
     """
     Extract variable information from survey config for AI context.
     
-    Returns list of dicts with: name, type, label, choices (if applicable)
+    Returns list of dicts with: name, type, label, roster_name, relevant, constraint,
+    choices (if applicable - list of {name, label} for select questions)
     """
     variables = []
     config_data = survey_config.config_data
@@ -264,21 +268,28 @@ def _extract_variables_from_config(survey_config: SurveyConfig) -> List[Dict[str
     survey_sheet = kobo_tool.get('survey', [])
     choices_sheet = kobo_tool.get('choices', [])
     
-    # Build choices lookup
-    choices_by_list = {}
+    # Use configured label column for choices
+    label_col_choices = kobo_tool.get('label_column_choices', 'label::English (en)')
+    
+    # Build choices lookup: list_name -> [{"name": "yes", "label": "Yes"}, ...]
+    choices_by_list: Dict[str, List[Dict[str, str]]] = {}
     for choice in choices_sheet:
         list_name = choice.get('list_name')
         choice_name = choice.get('name')
         if list_name and choice_name:
+            choice_label = choice.get(label_col_choices, choice.get('label', choice_name))
             if list_name not in choices_by_list:
                 choices_by_list[list_name] = []
-            choices_by_list[list_name].append(choice_name)
+            choices_by_list[list_name].append({'name': choice_name, 'label': choice_label})
+    
+    # Use configured label column for survey questions
+    label_col_survey = kobo_tool.get('label_column_survey', 'label::English (en)')
     
     # Extract variables from survey
     for question in survey_sheet:
         q_type = question.get('type', '')
         q_name = question.get('name', '')
-        q_label = question.get('label::English (en)', question.get('label', ''))
+        q_label = question.get(label_col_survey, question.get('label::English (en)', question.get('label', '')))
         
         # Skip metadata fields and groups (but keep 'calculate' as it can contain numeric calculations)
         if not q_name or q_type in ['begin_group', 'end_group', 'begin_repeat', 'end_repeat', 'note']:
@@ -290,14 +301,34 @@ def _extract_variables_from_config(survey_config: SurveyConfig) -> List[Dict[str
             'label': q_label
         }
         
-        # Add choices if select question
-        if 'select_one' in q_type or 'select_multiple' in q_type:
-            # Extract list name from type (e.g., "select_one yes_no" -> "yes_no")
+        # Add roster_name if question belongs to a repeat group
+        roster_name = question.get('roster_name')
+        if roster_name:
+            var_info['roster_name'] = roster_name
+        
+        # Add relevant (skip logic) if present
+        relevant = question.get('relevant', '')
+        if relevant:
+            var_info['relevant'] = relevant
+        
+        # Add constraint if present
+        constraint = question.get('constraint', '')
+        if constraint:
+            var_info['constraint'] = constraint
+        
+        # Add required field if present
+        required = question.get('required', '')
+        if required:
+            var_info['required'] = required
+        
+        # Add choices if select question (with name and label)
+        list_name = question.get('list_name')
+        if not list_name and ('select_one' in q_type or 'select_multiple' in q_type):
             type_parts = q_type.split()
             if len(type_parts) > 1:
                 list_name = type_parts[1]
-                if list_name in choices_by_list:
-                    var_info['choices'] = choices_by_list[list_name]
+        if list_name and list_name in choices_by_list:
+            var_info['choices'] = choices_by_list[list_name]
         
         variables.append(var_info)
     

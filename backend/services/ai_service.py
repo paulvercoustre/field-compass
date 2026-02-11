@@ -25,8 +25,8 @@ class AIService:
         else:
             self.client = OpenAI(api_key=self.api_key)
         
-        self.model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
-        self.max_tokens = int(os.getenv('OPENAI_MAX_TOKENS', '1000'))
+        self.model = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
+        self.max_completion_tokens = int(os.getenv('OPENAI_MAX_TOKENS', '2500'))
         self.temperature = float(os.getenv('OPENAI_TEMPERATURE', '0.2'))
         self.timeout = 30  # seconds
     
@@ -90,19 +90,45 @@ class AIService:
             if sv:
                 survey_context_text += f"- Special values: DK numeric = {sv.get('dk_value', -99)}, DK string = {sv.get('dk_string_value', 'dk')}\n"
         
-        # Create system prompt (simplified since structured outputs handles format)
+        # Create system prompt
         system_prompt = """You are a data quality validation expert. Convert natural language rule descriptions into structured validation rules.
 
 Your response will be automatically structured according to the provided schema. Focus on creating accurate, useful validation rules.
+
+RULE LOGIC:
+Rules use "flag when" logic: the condition describes the bad situation.
+When the condition is TRUE, a quality issue is raised.
+- CORRECT: age > 120 (flags impossibly high age)
+- WRONG: age <= 120 (would flag every valid submission)
+
+EXAMPLES:
+1. Integer vs static value:
+   Check: "Flag if age is over 120"
+   Conditions: [{"variable": "age", "operator": ">", "value": "120", "valueType": "static"}]
+
+2. Integer vs integer variable:
+   Check: "Flag if child's age is greater than parent's age"
+   Conditions: [{"variable": "age_child", "operator": ">", "value": "age_parent", "valueType": "variable"}]
+
+3. Choice vs choice (logical consistency):
+   Check: "Flag if respondent is male and pregnant"
+   Conditions: [{"variable": "gender", "operator": "==", "value": "male", "valueType": "static"}, {"joiner": "&"}, {"variable": "pregnant", "operator": "==", "value": "yes", "valueType": "static"}]
+
+DON'T KNOW VALUES:
+- For categorical/choice questions: generally do NOT flag "don't know" responses unless they are critical required fields
+- For numeric/integer questions: ALWAYS account for "don't know" values in range checks to avoid false flags
+  Example: If DK = -999, use conditions like: (age > 120 & age != -999) OR (age < 0 & age != -999)
 
 CONDITION STRUCTURE:
 - Each condition has: variable (string), operator (==, !=, >, <, >=, <=, %in%), value (string), valueType ("static" or "variable")
 - Multiple conditions are joined with {"joiner": "&"} for AND or {"joiner": "|"} for OR
 - Example: [{"variable": "age", "operator": ">", "value": "100", "valueType": "static"}, {"joiner": "&"}, {"variable": "age", "operator": "<", "value": "150", "valueType": "static"}]
 
-OPERATORS:
+OPERATORS (STRICT - use ONLY these):
 - ==, !=, >, <, >=, <= : standard comparisons
 - %in% : value is in a list (use comma-separated values like "yes,no,maybe")
+- Do NOT use XLSForm functions (count-selected, position, etc.)
+- Do NOT create custom operators or expressions
 
 VALUE TYPE:
 - "static": literal value (numbers, strings, select choices)
@@ -188,25 +214,19 @@ Generate a validation rule matching the exact JSON schema."""
         }
 
         try:
-            # #region agent log
-            import json as log_json
-            with open('/Users/paulvercoustre/Documents/data_science/field-compass/.cursor/debug.log', 'a') as f:
-                f.write(log_json.dumps({"sessionId":"debug-session","runId":"initial","hypothesisId":"A,C","location":"ai_service.py:190","message":"generate_rule_from_text called","data":{"prompt":prompt,"num_variables":len(kobo_variables),"has_existing_rules":existing_rules is not None and len(existing_rules) > 0,"has_survey_context":survey_context is not None,"model":self.model},"timestamp":int(time.time()*1000)}) + '\n')
-            # #endregion
-            
             logger.info(f"Generating rule with OpenAI model {self.model}")
             start_time = time.time()
             
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            # Build API call parameters
+            api_params = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                timeout=self.timeout,
-                response_format={
+                "max_completion_tokens": self.max_completion_tokens,
+                "timeout": self.timeout,
+                "response_format": {
                     "type": "json_schema",
                     "json_schema": {
                         "name": "validation_rule",
@@ -214,7 +234,13 @@ Generate a validation rule matching the exact JSON schema."""
                         "schema": rule_schema
                     }
                 }
-            )
+            }
+            
+            # Only add temperature for models that support it (GPT-5 models use default of 1)
+            if not self.model.startswith('gpt-5'):
+                api_params["temperature"] = self.temperature
+            
+            response = self.client.chat.completions.create(**api_params)
             
             elapsed = time.time() - start_time
             logger.info(f"OpenAI API call completed in {elapsed:.2f}s")
@@ -248,6 +274,7 @@ Generate a validation rule matching the exact JSON schema."""
         self,
         kobo_variables: List[Dict[str, Any]],
         global_parameters: Optional[Dict[str, Any]] = None,
+        special_values: Optional[Dict[str, Any]] = None,
         existing_rules: Optional[List[Dict[str, str]]] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -256,6 +283,7 @@ Generate a validation rule matching the exact JSON schema."""
         Args:
             kobo_variables: List of variable metadata from Kobo form
             global_parameters: Optional global parameters (date ranges, duration limits)
+            special_values: Optional special values (dk_value, dk_string_value)
             existing_rules: Optional list of existing rules to avoid suggesting duplicates
         
         Returns:
@@ -279,38 +307,85 @@ Generate a validation rule matching the exact JSON schema."""
             if global_parameters.get('min_survey_duration_minutes'):
                 params_context += f"- Expected survey duration: {global_parameters.get('min_survey_duration_minutes')}-{global_parameters.get('max_survey_duration_minutes')} minutes\n"
         
+        # Build special values context (DK values)
+        special_values_context = ""
+        if special_values:
+            sv = special_values
+            dk_num = sv.get('dk_value', -99)
+            dk_str = sv.get('dk_string_value', 'dk')
+            special_values_context = f"\n\nSPECIAL VALUES (Don't Know / Refused):\n- DK numeric value: {dk_num}\n- DK string value: \"{dk_str}\"\n"
+        
         # Build existing rules context
         existing_rules_text = ""
         if existing_rules and len(existing_rules) > 0:
-            existing_rules_text = "\n\nEXISTING RULES (do NOT suggest similar rules):\n"
+            existing_rules_text = "\n\nEXISTING RULES (do NOT suggest rules similar to these - suggest DIFFERENT rules):\n"
             for rule in existing_rules[:20]:  # Limit to 20 to save tokens
                 existing_rules_text += f"- {rule.get('name', 'Unnamed')}: {rule.get('expression', '')}\n"
         
         # Create system prompt (simplified since structured outputs handles format)
         system_prompt = """You are a data quality expert reviewing a survey form. Suggest 5-10 practical validation rules based on the form structure.
+Your response should be structured according to the provided schema. Focus on creating accurate, useful validation rules.
 
-FOCUS AREAS:
-1. Range validation for numeric fields (age, household_size, income, etc.)
-2. Duration anomalies (too short/long interviews)
-3. Date validity (within collection period)
-4. Logical consistency (e.g., if age < 18, check guardian consent)
-5. Outlier detection for key variables (extreme values)
-6. Required field checks for critical fields
-7. Data type validation
+DO NOT suggest rules for:
+- Out of period (interview date outside collection period)
+- Weekend interviews
+- Office hours checks
+- Sampling frame checks
+- Survey duration min/max (too short/long)
 
-Your response will be automatically structured. Focus on creating diverse, practical, actionable rules.
+DO NOT suggest rules for:
+- Statistical outliers (IQR, MAD, Z-score) on numeric variables
+
+FOCUS on custom rules that require the Rule Builder:
+1. Field-level range validation (age, income, household_size, counts, etc.)
+2. Required/critical field checks (consent, key identifiers)
+3. Logical consistency (e.g., if age < 18, check guardian consent)
+4. Choice validation (DK in critical fields, invalid combinations)
+5. Roster rules (min/max members, roster-specific ranges)
+6. Impossible values (e.g., male + pregnant)
+7. Business logic (ratios, referential integrity)
+
+RULE LOGIC:
+Rules use "flag when" logic: the condition describes the bad situation.
+When the condition is TRUE, a quality issue is raised.
+- CORRECT: age > 120 (flags impossibly high age)
+- WRONG: age <= 120 (would flag every valid submission)
+
+EXAMPLES:
+1. Integer vs static value:
+   Check: "Flag if age is over 120"
+   Conditions: [{"variable": "age", "operator": ">", "value": "120", "valueType": "static"}]
+
+2. Integer vs integer variable:
+   Check: "Flag if child's age is greater than parent's age"
+   Conditions: [{"variable": "age_child", "operator": ">", "value": "age_parent", "valueType": "variable"}]
+
+3. Choice vs choice (logical consistency):
+   Check: "Flag if respondent is male and pregnant"
+   Conditions: [{"variable": "gender", "operator": "==", "value": "male", "valueType": "static"}, {"joiner": "&"}, {"variable": "pregnant", "operator": "==", "value": "yes", "valueType": "static"}]
+
+DON'T KNOW VALUES:
+- For categorical/choice questions: generally do NOT flag "don't know" responses unless they are critical required fields
+- For numeric/integer questions: ALWAYS account for "don't know" values in range checks to avoid false flags
+  Example: If DK = -999, use conditions like: (age > 120 & age != -999) OR (age < 0 & age != -999)
+
+OPERATORS (STRICT - use ONLY these):
+- ==, !=, >, <, >=, <= : standard comparisons
+- %in% : value is in a list (use comma-separated values)
+- Do NOT use XLSForm functions (count-selected, position, etc.)
+- Do NOT create custom operators or expressions
 
 REQUIREMENTS:
 - Suggest 5-10 diverse rules
+- Each rule must be different from existing rules, do not suggest duplicates or near-duplicates.
 - Prioritize practical, actionable rules
-- Avoid suggesting rules similar to existing ones
-- Use appropriate operators (==, !=, >, <, >=, <=, %in%)
+- Use ONLY the operators listed above (==, !=, >, <, >=, <=, %in%)
 - Set roster_name to null unless rule applies to a repeat group"""
 
         user_prompt = f"""SURVEY VARIABLES:
-{variables_context}{params_context}{existing_rules_text}
+{variables_context}{params_context}{special_values_context}{existing_rules_text}
 
-Analyze this survey form and suggest 5-10 validation rules."""
+Analyze this survey form and suggest 5-10 validation rules. Each suggested rule must be different from existing rules."""
 
         # Define JSON schema for structured outputs (array wrapped in object)
         # Note: Root must be an object, so we wrap the array in a "rules" property
@@ -390,16 +465,16 @@ Analyze this survey form and suggest 5-10 validation rules."""
             logger.info(f"Generating rule suggestions with OpenAI model {self.model}")
             start_time = time.time()
             
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            # Build API call parameters
+            api_params = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens * 2,  # More tokens for multiple rules
-                timeout=self.timeout,
-                response_format={
+                "max_completion_tokens": self.max_completion_tokens * 2,  # More tokens for multiple rules
+                "timeout": self.timeout,
+                "response_format": {
                     "type": "json_schema",
                     "json_schema": {
                         "name": "suggested_rules",
@@ -407,7 +482,13 @@ Analyze this survey form and suggest 5-10 validation rules."""
                         "schema": suggestions_schema
                     }
                 }
-            )
+            }
+            
+            # Only add temperature for models that support it (GPT-5 models use default of 1)
+            if not self.model.startswith('gpt-5'):
+                api_params["temperature"] = self.temperature
+            
+            response = self.client.chat.completions.create(**api_params)
             
             elapsed = time.time() - start_time
             logger.info(f"OpenAI API call completed in {elapsed:.2f}s")
@@ -462,9 +543,23 @@ Analyze this survey form and suggest 5-10 validation rules."""
             line = f"- {name}: {var_type}"
             if label:
                 line += f" ({label})"
+            if var.get('roster_name'):
+                line += f" [roster: {var['roster_name']}]"
+            if var.get('required'):
+                line += f" [required: {var['required']}]"
+            if var.get('relevant'):
+                line += f" [relevant: {var['relevant']}]"
+            if var.get('constraint'):
+                line += f" [constraint: {var['constraint']}]"
             if choices:
-                choice_str = ', '.join(choices[:10])  # Limit choices displayed
-                line += f" [choices: {choice_str}]"
+                # Format choices: support both {"name": "x", "label": "y"} and plain strings
+                choice_parts = []
+                for c in choices[:10]:
+                    if isinstance(c, dict):
+                        choice_parts.append(f"{c.get('name', '')} ({c.get('label', '')})")
+                    else:
+                        choice_parts.append(str(c))
+                line += f" [choices: {', '.join(choice_parts)}]"
             
             lines.append(line)
         
