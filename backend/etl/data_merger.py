@@ -308,6 +308,13 @@ def merge_submission(
         else:
             # No edit detected, but still update metadata if it changed
             # This handles cases where metadata updates but no actual edit occurred
+            
+            # CRITICAL FIX: Reset is_edited flag if it was previously True
+            # This ensures submissions that were once edited but are now unchanged get reset
+            if existing.is_edited:
+                existing.is_edited = False
+                logger.info(f"Reset is_edited flag for submission {submission_id} (no deprecatedID found in current import)")
+            
             metadata_changed = False
             
             if existing._uuid != new_uuid:

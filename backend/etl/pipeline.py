@@ -125,6 +125,7 @@ class ETLPipeline:
                     # Parse submission
                     parsed = parse_kobo_submission(kobo_sub)
                     submission_uuid = parsed['_uuid']
+                    submission_id = parsed['_id']
                     audit_url = parsed.get('audit_url')
                     
                     # Log audit URL for debugging
