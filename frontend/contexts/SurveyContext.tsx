@@ -46,31 +46,44 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
       // Update surveys state
       setSurveys(data);
       
+      // Check for saved survey ID in localStorage BEFORE any state updates
+      const savedSurveyId = localStorage.getItem('selectedSurveyId');
+      
       // Use functional update to get current selectedSurvey state
       setSelectedSurvey((currentSelected) => {
         if (!allowAutoSelect) {
-          // Keep current selection if it still exists, otherwise clear
           if (currentSelected && data.find(s => s.survey_id === currentSelected.survey_id)) {
             return currentSelected;
           }
           return null;
         }
 
-        // Auto-select first survey if none selected and surveys available
+        // Priority 1: Restore from localStorage if no current selection
+        if (!currentSelected && savedSurveyId) {
+          const savedSurvey = data.find(s => s.survey_id === savedSurveyId);
+          if (savedSurvey) {
+            return savedSurvey;
+          }
+        }
+
+        // Priority 2: Keep current selection if it still exists
+        if (currentSelected && data.find(s => s.survey_id === currentSelected.survey_id)) {
+          return currentSelected;
+        }
+
+        // Priority 3: If selected survey no longer exists, select first available
+        if (currentSelected && !data.find(s => s.survey_id === currentSelected.survey_id)) {
+          return data.length > 0 ? data[0] : null;
+        }
+
+        // Priority 4: Auto-select first survey if none selected
         if (!currentSelected && data.length > 0) {
           return data[0];
         }
         
-        // If selected survey no longer exists, select first available
-        if (currentSelected && !data.find(s => s.survey_id === currentSelected.survey_id)) {
-          return data.length > 0 ? data[0] : null;
-        }
-        
-        // Keep current selection if it still exists
         return currentSelected;
       });
       
-      // Return the data so callers can use it immediately
       return data;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load surveys');
@@ -79,29 +92,18 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, []); // No dependencies - this function should always fetch fresh data
+  }, []);
 
   useEffect(() => {
     refreshSurveys();
   }, [refreshSurveys]);
 
-  // Load selected survey from localStorage on mount
-  useEffect(() => {
-    const savedSurveyId = localStorage.getItem('selectedSurveyId');
-    if (savedSurveyId && surveys.length > 0) {
-      const survey = surveys.find(s => s.survey_id === savedSurveyId);
-      if (survey) {
-        setSelectedSurvey(survey);
-      }
-    }
-  }, [surveys]);
-
-  // Save selected survey to localStorage
+  // Save selected survey to localStorage.
+  // Only write when we have a selection; never remove on null (null is the initial loading state).
+  // Explicit removal is handled in survey deletion flow (SurveySettingsPage).
   useEffect(() => {
     if (selectedSurvey) {
       localStorage.setItem('selectedSurveyId', selectedSurvey.survey_id);
-    } else {
-      localStorage.removeItem('selectedSurveyId');
     }
   }, [selectedSurvey]);
 
@@ -120,4 +122,3 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
     </SurveyContext.Provider>
   );
 };
-

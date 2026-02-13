@@ -17,8 +17,19 @@ type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | '
 // Main app content (authenticated)
 const AppContent: React.FC = () => {
   const { user, isLoading, logout } = useAuth();
-  const [view, setView] = useState<View>('dashboard');
+  
+  // Load view from localStorage on mount, default to 'dashboard' if not found
+  const [view, setView] = useState<View>(() => {
+    const savedView = localStorage.getItem('currentView');
+    return (savedView as View) || 'dashboard';
+  });
+  
   const [dashboardFilters, setDashboardFilters] = useState<FilterState>({});
+
+  // Save current view to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('currentView', view);
+  }, [view]);
 
   // Listen for navigation events from CreateSurveyPage
   useEffect(() => {
