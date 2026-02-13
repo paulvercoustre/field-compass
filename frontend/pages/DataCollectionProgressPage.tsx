@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { progressApi, triggerETL, ETLStats } from '../services/progressApi';
+import { progressApi, triggerETL, ETLStats, getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import { useSurvey } from '../contexts/SurveyContext';
 import { ProgressData } from '../types';
 import { Spinner } from '../components/Spinner';
@@ -9,6 +9,7 @@ import ProgressDataView, { ProgressSubTab } from '../components/progress-tracker
 const DataCollectionProgressPage: React.FC = () => {
   const { selectedSurvey } = useSurvey();
   const [progressData, setProgressData] = useState<ProgressData | null>(null);
+  const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunningETL, setIsRunningETL] = useState(false);
   const [etlStats, setEtlStats] = useState<ETLStats | null>(null);
@@ -24,8 +25,12 @@ const DataCollectionProgressPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const progress = await progressApi.getProgressData(selectedSurvey.survey_id, { approvedOnly });
+      const [progress, config] = await Promise.all([
+        progressApi.getProgressData(selectedSurvey.survey_id, { approvedOnly }),
+        getSurveyConfig(selectedSurvey.survey_id)
+      ]);
       setProgressData(progress);
+      setSurveyConfig(config);
     } catch (e) {
       setError('Failed to fetch tracking data.');
       console.error(e);
@@ -142,7 +147,8 @@ const DataCollectionProgressPage: React.FC = () => {
           <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-screen-2xl">
             {progressData && (
               <ProgressDataView 
-                data={progressData} 
+                data={progressData}
+                surveyConfig={surveyConfig}
                 approvedOnly={approvedOnly}
                 activeSubTab={activeSubTab}
                 setActiveSubTab={setActiveSubTab}

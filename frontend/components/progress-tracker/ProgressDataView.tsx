@@ -1,6 +1,8 @@
 
 import React, { useMemo } from 'react';
 import { ProgressData } from '../../types';
+import { SurveyConfig } from '../../services/progressApi';
+import { getQuestionInfo, getChoiceLabel } from '../../utils/koboLabelUtils';
 import ProgressBar from './ProgressBar';
 import { SubTabButton } from '../ui/SubTabButton';
 
@@ -8,6 +10,7 @@ export type ProgressSubTab = 'overall' | string; // string will be column name f
 
 interface ProgressDataViewProps {
     data: ProgressData;
+    surveyConfig: SurveyConfig | null;
     approvedOnly?: boolean;
     activeSubTab: ProgressSubTab;
     setActiveSubTab: (tab: ProgressSubTab) => void;
@@ -16,7 +19,8 @@ interface ProgressDataViewProps {
 }
 
 const ProgressDataView: React.FC<ProgressDataViewProps> = ({ 
-    data, 
+    data,
+    surveyConfig,
     approvedOnly = false,
     activeSubTab,
     setActiveSubTab,
@@ -30,17 +34,46 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
     const hasColumnTabs = Object.keys(data.byColumn || {}).length > 0;
     const hasDetailed = data.detailed.length > 0;
 
-    // Filter detailed data based on all column values
+    /**
+     * Resolve a raw Kobo value to its label using the survey config
+     * @param colName - The column/variable name from the sampling frame
+     * @param value - The raw value to resolve
+     * @returns The resolved label, or the original value if label not found
+     */
+    const resolveLabel = (colName: string, value: string | null | undefined): string => {
+        // Handle null/undefined values
+        if (value === null || value === undefined) return 'Unknown';
+        
+        // If no survey config, return raw value
+        if (!surveyConfig) return String(value);
+        
+        // Get question info for this column
+        const questionInfo = getQuestionInfo(colName, surveyConfig);
+        
+        // If no listName (camelCase!), this isn't a select_one/select_multiple question
+        // Return raw value
+        if (!questionInfo?.listName) return String(value);
+        
+        // Resolve the choice label
+        const label = getChoiceLabel(String(value), questionInfo.listName, surveyConfig);
+        
+        // Return the label (or raw value if label not found)
+        return label;
+    };
+
+    // Filter detailed data based on all column values (both raw and label)
     const filteredDetailedData = useMemo(() => {
         if (!filter) return data.detailed;
         const lowercasedFilter = filter.toLowerCase();
         return data.detailed.filter(row => {
-            // Check if any column value matches the filter
-            return Object.values(row.values || {}).some(value =>
-                String(value).toLowerCase().includes(lowercasedFilter)
-            );
+            // Check if any column value (or its label) matches the filter
+            return Object.entries(row.values || {}).some(([colName, value]) => {
+                const rawValue = String(value).toLowerCase();
+                const labelValue = resolveLabel(colName, value).toLowerCase();
+                return rawValue.includes(lowercasedFilter) || labelValue.includes(lowercasedFilter);
+            });
         });
-    }, [data.detailed, filter]);
+    }, [data.detailed, filter, surveyConfig]);
     
     const renderContent = () => {
         if (activeSubTab === 'overall') {
@@ -80,14 +113,17 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                         </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-850">
-                        {columnData.map(row => (
-                            <tr key={row.value}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{row.value}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{row.conducted}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{row.target}</td>
-                                <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
-                            </tr>
-                        ))}
+                        {columnData.map(row => {
+                            const displayLabel = resolveLabel(columnName, row.value);
+                            return (
+                                <tr key={row.value}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{displayLabel}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{row.conducted}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{row.target}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             );
@@ -127,11 +163,15 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                                     const rowKey = Object.values(row.values || {}).join('-') + `-${index}`;
                                     return (
                                         <tr key={rowKey}>
-                                            {columnNames.map(colName => (
-                                                <td key={colName} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                    {row.values?.[colName] || 'Unknown'}
-                                                </td>
-                                            ))}
+                                            {columnNames.map(colName => {
+                                                const rawValue = row.values?.[colName];
+                                                const displayLabel = resolveLabel(colName, rawValue);
+                                                return (
+                                                    <td key={colName} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                        {displayLabel}
+                                                    </td>
+                                                );
+                                            })}
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center">{row.target}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center">{row.conducted}</td>
                                             <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>

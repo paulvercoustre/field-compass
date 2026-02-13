@@ -182,7 +182,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
       config.sampling_frame.sampling_cols.forEach((col: string) => {
         const value = getFieldValue(col);
         // Show all configured columns, even if empty
-        metadata.sampling[col] = value !== undefined && value !== null && value !== '' ? value : 'N/A';
+        // Use formatValueForDisplay to show labels for select_one/select_multiple fields
+        if (value !== undefined && value !== null && value !== '') {
+          metadata.sampling[col] = formatValueForDisplay(value, col, surveyConfig);
+        } else {
+          metadata.sampling[col] = 'N/A';
+        }
       });
     }
 
