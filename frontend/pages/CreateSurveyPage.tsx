@@ -33,6 +33,8 @@ const CreateSurveyPage: React.FC = () => {
   const [samplingFrameFileName, setSamplingFrameFileName] = useState<string>('');
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
   const [frameValidationError, setFrameValidationError] = useState<string | null>(null);
+  const [frameValidationWarning, setFrameValidationWarning] = useState<string | null>(null);
+  const [showSamplingFrameHelp, setShowSamplingFrameHelp] = useState(false);
 
   // Form state
   const [surveyName, setSurveyName] = useState('');
@@ -121,6 +123,7 @@ const CreateSurveyPage: React.FC = () => {
 
     setIsLoadingFrame(true);
     setFrameValidationError(null);
+    setFrameValidationWarning(null);
     setSamplingFrameFileName('');
     
     try {
@@ -135,26 +138,29 @@ const CreateSurveyPage: React.FC = () => {
       const validation = validateSamplingFrameColumns(headers, toolVars);
       
       if (!validation.isValid) {
-        const targetInfo = validation.targetColumn 
-          ? ` (Note: "${validation.targetColumn}" is recognized as a target column and doesn't need to match Kobo variables)`
-          : '';
         throw new Error(
-          `The following columns are not found in the Kobo tool: ${validation.missingColumns.join(', ')}${targetInfo}`
+          'No matching columns found in the Kobo tool. Please ensure your sampling frame has at least one column that matches a Kobo variable.'
         );
       }
       
       setSamplingFrameData(rows);
       setSamplingFrameFileName(file.name);
       
-      // Auto-populate sampling_cols from headers (excluding target column if present)
-      const samplingCols = validation.targetColumn 
-        ? headers.filter(h => h !== validation.targetColumn)
-        : headers;
+      // Show warning if there are unmatched columns
+      if (validation.hasUnmatchedColumns) {
+        const targetInfo = validation.targetColumn 
+          ? ` (Note: "${validation.targetColumn}" is recognized as a target column)`
+          : '';
+        setFrameValidationWarning(
+          `The following columns don't match Kobo variables and won't be used in the sampling frame: ${validation.unmatchedColumns.join(', ')}.${targetInfo} Only matching columns will be used: ${validation.matchingColumns.join(', ')}.`
+        );
+      }
       
+      // Auto-populate sampling_cols with only matching columns
       setSamplingFrame(prev => ({
         ...prev,
-        sampling_cols: samplingCols,
-        admin_level_for_label: samplingCols[0] || prev.admin_level_for_label,
+        sampling_cols: validation.matchingColumns,
+        admin_level_for_label: validation.matchingColumns[0] || prev.admin_level_for_label,
       }));
     } catch (err) {
       setFrameValidationError(err instanceof Error ? err.message : 'Failed to parse sampling frame file');
@@ -558,9 +564,41 @@ const CreateSurveyPage: React.FC = () => {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                  Upload Sampling Frame (CSV or XLSX)
-                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Upload Sampling Frame (CSV or XLSX)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowSamplingFrameHelp(!showSamplingFrameHelp)}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    File Format Requirements
+                  </button>
+                </div>
+                {showSamplingFrameHelp && (
+                  <div className="mb-3 p-3 bg-blue-50 dark:bg-gray-800/50 border border-blue-200 dark:border-gray-700 rounded-md text-xs text-gray-700 dark:text-gray-300 space-y-2">
+                    <ul className="list-disc list-inside space-y-1.5 ml-2">
+                      <li><strong>Format:</strong> CSV or Excel (.xlsx, .xls)</li>
+                      <li><strong>Column Headers:</strong> Must match variable names from your Kobo tool (e.g., <code className="bg-white dark:bg-gray-900 px-1 rounded">district</code>, <code className="bg-white dark:bg-gray-900 px-1 rounded">village</code>, <code className="bg-white dark:bg-gray-900 px-1 rounded">sector</code>)</li>
+                      <li>
+                        <strong>Target Column (Optional):</strong> A column for interview targets/sample size that doesn't need to match Kobo variables. Recognized names: target, target_interviews, sample_size, interview_target, expected_interviews, etc.
+                      </li>
+                    </ul>
+                    <div className="mt-2 pt-2 border-t border-blue-200 dark:border-gray-700">
+                      <p className="font-medium text-gray-900 dark:text-gray-200 mb-1">Example file structure:</p>
+                      <div className="bg-white dark:bg-gray-900 p-2 rounded text-xs overflow-x-auto font-mono">
+                        <div>region,district,village,target</div>
+                        <div>North,District A,Village 1,50</div>
+                        <div>North,District A,Village 2,45</div>
+                        <div>South,District B,Village 3,60</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <input
                   type="file"
                   accept=".csv,.xlsx,.xls"
@@ -571,6 +609,11 @@ const CreateSurveyPage: React.FC = () => {
                 {frameValidationError && (
                   <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-md text-red-800 dark:text-red-200 text-sm">
                     {frameValidationError}
+                  </div>
+                )}
+                {frameValidationWarning && !frameValidationError && (
+                  <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/50 border border-yellow-200 dark:border-yellow-700 rounded-md text-yellow-800 dark:text-yellow-200 text-sm">
+                    ⚠ {frameValidationWarning}
                   </div>
                 )}
                 {samplingFrameFileName && !frameValidationError && !samplingFrameData && (

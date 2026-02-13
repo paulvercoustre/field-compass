@@ -145,13 +145,21 @@ export const isTargetColumn = (columnName: string): boolean => {
 /**
  * Validate sampling frame columns against Kobo tool variables
  * Allows one target column that doesn't need to match
- * @returns Object with validation result and any missing columns
+ * Now accepts files with unmatched columns but warns about them
+ * @returns Object with validation result, matching/unmatched columns, and target column
  */
 export const validateSamplingFrameColumns = (
   frameHeaders: string[],
   koboVariables: string[]
-): { isValid: boolean; missingColumns: string[]; targetColumn: string | null } => {
-  const missingColumns: string[] = [];
+): { 
+  isValid: boolean; 
+  matchingColumns: string[]; 
+  unmatchedColumns: string[]; 
+  targetColumn: string | null;
+  hasUnmatchedColumns: boolean;
+} => {
+  const matchingColumns: string[] = [];
+  const unmatchedColumns: string[] = [];
   let targetColumn: string | null = null;
   
   // Find target column if it exists
@@ -160,17 +168,30 @@ export const validateSamplingFrameColumns = (
     targetColumn = targetCol;
   }
   
-  // Check all columns except the target column
+  // Categorize all columns (except target column)
   frameHeaders.forEach(header => {
-    if (header !== targetColumn && !koboVariables.includes(header)) {
-      missingColumns.push(header);
+    if (header === targetColumn) {
+      // Skip target column - it's handled separately
+      return;
+    }
+    
+    if (koboVariables.includes(header)) {
+      matchingColumns.push(header);
+    } else {
+      unmatchedColumns.push(header);
     }
   });
   
+  // File is valid as long as we have at least one matching column
+  // or if the only column is a target column
+  const isValid = matchingColumns.length > 0 || (frameHeaders.length === 1 && targetColumn !== null);
+  
   return {
-    isValid: missingColumns.length === 0,
-    missingColumns,
+    isValid,
+    matchingColumns,
+    unmatchedColumns,
     targetColumn,
+    hasUnmatchedColumns: unmatchedColumns.length > 0,
   };
 };
 
