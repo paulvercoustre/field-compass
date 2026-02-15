@@ -57,7 +57,8 @@ class ETLPipeline:
         self,
         survey_id: str,
         limit: Optional[int] = None,
-        start_date: Optional[datetime] = None
+        start_date: Optional[datetime] = None,
+        force_validation: bool = False
     ) -> Dict[str, Any]:
         """
         Run the complete ETL pipeline for a survey.
@@ -66,6 +67,8 @@ class ETLPipeline:
             survey_id: UUID of the survey configuration
             limit: Maximum number of submissions to process (optional)
             start_date: Only process submissions after this date (optional)
+            force_validation: Force revalidation of all submissions (default: False)
+                            If False, uses incremental validation (only new/edited/rule-changed)
             
         Returns:
             Dictionary with pipeline statistics
@@ -94,6 +97,9 @@ class ETLPipeline:
             'updated': 0,
             'edited': 0,
             'hfc_flagged': 0,
+            'validated': 0,  # NEW: Count of submissions validated
+            'skipped': 0,  # NEW: Count of submissions skipped
+            'validation_reasons': {},  # NEW: Reasons for validation
             'errors': 0,
             'start_time': datetime.utcnow()
         }
@@ -114,6 +120,10 @@ class ETLPipeline:
 
             # Pre-compute outlier statistics for consistency across all submissions
             hfc_engine.precompute_outlier_statistics()
+            
+            # Compute current validation hash (do once at start of ETL run)
+            current_rule_hash = hfc_engine.compute_validation_hash()
+            logger.info(f"Current validation rule hash: {current_rule_hash}")
 
             # Get Kobo API token for audit downloads
             kobo_token = self.kobo_api_token
@@ -169,38 +179,67 @@ class ETLPipeline:
                     else:
                         stats['updated'] += 1
                     
-                    # Run HFC checks
-                    # Note: Duration check uses audit logs (active_interview_time) or form fields (start/end)
-                    # Metadata timestamps (_submission_time, end) are NOT used for duration
-                    issues = hfc_engine.run_checks(
-                        submission_data=submission.submission_data,
-                        submission_uuid=submission_uuid
-                    )
+                    # Check if validation is needed (incremental validation)
+                    needs_check, reason = hfc_engine.needs_validation(submission, current_rule_hash)
                     
-                    # Update submission with HFC results
-                    submission.data_quality_issues = [
-                        {
-                            'check': issue.check,
-                            'field': issue.field,
-                            'value': issue.value,
-                            'message': issue.message,
-                            'metadata': issue.metadata
-                        }
-                        for issue in issues
-                    ]
+                    # Override with force_validation if requested
+                    if force_validation and not needs_check:
+                        needs_check = True
+                        reason = "forced"
                     
-                    # Determine status based on HFC issues and Kobo validation status
-                    new_status = hfc_engine.determine_qa_status(
-                        issues, 
-                        kobo_validation_status=submission.kobo_validation_status
-                    )
-                    
-                    # If status is None (On Hold), keep current status, otherwise update
-                    if new_status is not None:
-                        submission.qa_status = new_status
-                    
-                    if submission.qa_status == 'FLAGGED':
-                        stats['hfc_flagged'] += 1
+                    if needs_check:
+                        logger.info(f"Running validation for submission {submission_uuid}: {reason}")
+                        
+                        # Run HFC checks
+                        # Note: Duration check uses audit logs (active_interview_time) or form fields (start/end)
+                        # Metadata timestamps (_submission_time, end) are NOT used for duration
+                        issues = hfc_engine.run_checks(
+                            submission_data=submission.submission_data,
+                            submission_uuid=submission_uuid
+                        )
+                        
+                        # Update submission with HFC results
+                        submission.data_quality_issues = [
+                            {
+                                'check': issue.check,
+                                'field': issue.field,
+                                'value': issue.value,
+                                'message': issue.message,
+                                'metadata': issue.metadata
+                            }
+                            for issue in issues
+                        ]
+                        
+                        # Determine status based on HFC issues and Kobo validation status
+                        new_status = hfc_engine.determine_qa_status(
+                            issues, 
+                            kobo_validation_status=submission.kobo_validation_status
+                        )
+                        
+                        # If status is None (On Hold), keep current status, otherwise update
+                        if new_status is not None:
+                            submission.qa_status = new_status
+                        
+                        # Update validation tracking
+                        submission.last_validated_at = datetime.utcnow()
+                        submission.validation_rule_hash = current_rule_hash
+                        
+                        # CRITICAL FIX: Reset is_edited flag after validation
+                        # Once we've validated an edited submission, clear the flag
+                        # so it won't be re-validated unless it's edited again
+                        if submission.is_edited and reason == "submission_edited":
+                            submission.is_edited = False
+                            logger.info(f"Reset is_edited flag for submission {submission_uuid} after validation")
+                        
+                        stats['validated'] += 1
+                        # Track reason for validation
+                        stats['validation_reasons'][reason] = stats['validation_reasons'].get(reason, 0) + 1
+                        
+                        if submission.qa_status == 'FLAGGED':
+                            stats['hfc_flagged'] += 1
+                    else:
+                        logger.debug(f"Skipping validation for submission {submission_uuid}: {reason}")
+                        stats['skipped'] += 1
                     
                     self.db.commit()
                     

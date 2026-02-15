@@ -27,6 +27,7 @@ async def run_etl_pipeline(
     background_tasks: BackgroundTasks,
     limit: int | None = Query(None, description="Maximum number of submissions to process"),
     start_date: str | None = Query(None, description="Only process submissions after this date (YYYY-MM-DD)"),
+    force_validation: bool = Query(False, description="Force revalidation of all submissions (ignores incremental optimization)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -36,8 +37,14 @@ async def run_etl_pipeline(
     This endpoint will:
     1. Fetch submissions from KoboToolbox
     2. Merge submissions (with edit detection)
-    3. Run High-Frequency Checks
+    3. Run High-Frequency Checks (incrementally by default)
     4. Update database
+    
+    Parameters:
+    - limit: Cap the number of submissions processed
+    - start_date: Only process submissions after this date
+    - force_validation: If True, revalidate all fetched submissions regardless of their validation status.
+                       If False (default), use incremental validation (only new/edited/rule-changed submissions)
     
     Authentication required. User must:
     - Have at least 'editor' access to the survey
@@ -91,7 +98,8 @@ async def run_etl_pipeline(
         stats = pipeline.run_pipeline(
             survey_id=survey_id,
             limit=limit,
-            start_date=start_datetime
+            start_date=start_datetime,
+            force_validation=force_validation
         )
         
         return BaseResponse(
@@ -102,6 +110,9 @@ async def run_etl_pipeline(
                 "created": stats['created'],
                 "updated": stats['updated'],
                 "edited": stats['edited'],
+                "validated": stats.get('validated', 0),
+                "skipped": stats.get('skipped', 0),
+                "validation_reasons": stats.get('validation_reasons', {}),
                 "hfc_flagged": stats['hfc_flagged'],
                 "errors": stats['errors'],
                 "duration_seconds": stats.get('duration_seconds', 0)

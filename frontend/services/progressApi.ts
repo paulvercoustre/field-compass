@@ -537,6 +537,9 @@ export interface ETLStats {
   created: number;
   updated: number;
   edited: number;
+  validated: number;  // Number of submissions that went through validation checks
+  skipped: number;    // Number of submissions that skipped validation (incremental optimization)
+  validation_reasons?: Record<string, number>;  // Breakdown of why submissions were validated
   hfc_flagged: number;
   errors: number;
   duration_seconds: number;

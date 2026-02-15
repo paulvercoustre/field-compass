@@ -283,6 +283,105 @@ class HFCEngine:
         
         return issues
     
+    def compute_validation_hash(self) -> str:
+        """
+        Compute hash of current validation configuration.
+        
+        This hash is used to detect when validation rules have changed,
+        triggering revalidation of submissions. The hash includes:
+        - All active validation rule IDs, expressions, and timestamps
+        - Outlier detection configuration
+        - Global parameters that affect validation
+        
+        Returns:
+            SHA256 hash (first 16 chars for storage efficiency)
+        """
+        import hashlib
+        import json
+        
+        # Fetch all active validation rules
+        rules = self.db.query(ValidationRule).filter(
+            ValidationRule.survey_id == self.survey_config.survey_id,
+            ValidationRule.is_active == True
+        ).order_by(ValidationRule.rule_id).all()
+        
+        # Build hashable configuration
+        config = {
+            "rules": [
+                {
+                    "id": str(rule.rule_id),
+                    "expression": rule.rule_data.get("check_expression", ""),
+                    "updated_at": rule.updated_at.isoformat() if rule.updated_at else ""
+                }
+                for rule in rules
+            ],
+            "outlier_config": {
+                "enabled": self.flag_outliers,
+                "variables": sorted(self.outlier_variables) if self.outlier_variables else [],
+                "method": self.outlier_method,
+                "threshold": self.outlier_threshold
+            },
+            "global_parameters": {
+                "date_range": f"{self.data_collection_start_date}_{self.data_collection_end_date}",
+                "duration": f"{self.min_survey_duration_minutes}_{self.max_survey_duration_minutes}",
+                "weekend_check": self.flag_weekend,
+                "office_hours_check": self.flag_office_hours
+            }
+        }
+        
+        # Convert to JSON string (sorted keys for consistency)
+        config_json = json.dumps(config, sort_keys=True)
+        
+        # Compute SHA256 hash, truncate to 16 characters for efficiency
+        return hashlib.sha256(config_json.encode()).hexdigest()[:16]
+    
+    def needs_validation(
+        self, 
+        submission: SubmissionCurrent,
+        current_rule_hash: str
+    ) -> Tuple[bool, str]:
+        """
+        Determine if a submission needs validation checks rerun.
+        
+        This method enables incremental validation by checking if any conditions
+        require revalidation. This avoids unnecessary revalidation and saves
+        computation time and API costs (especially for expensive LLM checks).
+        
+        Args:
+            submission: SubmissionCurrent ORM object
+            current_rule_hash: Hash of current validation configuration
+            
+        Returns:
+            Tuple of (needs_check: bool, reason: str)
+            
+        Reasons for revalidation:
+        - never_validated: Submission has never been validated
+        - rules_changed: Validation rules have been added/modified/deleted
+        - submission_edited: Submission was edited in Kobo after last validation
+        - data_updated: Submission data changed after last validation
+        - up_to_date: No revalidation needed
+        """
+        # Never validated
+        if submission.last_validated_at is None:
+            return (True, "never_validated")
+        
+        # Rules changed (most important check for correctness)
+        if submission.validation_rule_hash != current_rule_hash:
+            return (True, "rules_changed")
+        
+        # Submission was edited after last validation
+        # (is_edited flag indicates this was edited in Kobo)
+        if submission.is_edited and submission.updated_at > submission.last_validated_at:
+            return (True, "submission_edited")
+        
+        # Submission data updated after validation (catches edge cases)
+        # This handles cases where data changed without is_edited being set
+        if submission.updated_at > submission.last_validated_at:
+            return (True, "data_updated")
+        
+        # No revalidation needed
+        return (False, "up_to_date")
+    
     def _run_basic_checks(
         self, 
         submission_data: Dict[str, Any], 

@@ -44,7 +44,8 @@ class Submission(BaseModel):
     submission_time: datetime = Field(..., description="Original submission timestamp", validation_alias="_submission_time", serialization_alias="_submission_time")
     end: datetime = Field(..., description="End timestamp (used for edit detection)")
     submission_data: Dict[str, Any] = Field(..., description="Complete submission data as JSON")
-    is_edited: bool = Field(default=False, description="Whether submission has been edited")
+    is_edited: bool = Field(default=False, description="Whether submission needs validation due to recent edit")
+    has_edit_history: bool = Field(default=False, description="Whether submission was ever edited (permanent audit flag)")
     data_quality_issues: List[QualityIssue] = Field(
         default_factory=list, description="Array of quality issues found"
     )

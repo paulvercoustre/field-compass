@@ -193,3 +193,152 @@ class TestDurationChecks:
         assert len(duration_issues) == 0
 
 
+class TestIncrementalValidation:
+    """Tests for incremental validation methods."""
+    
+    def test_compute_validation_hash_consistency(self, test_db, test_survey_config):
+        """Test that hash is consistent for same configuration."""
+        engine = HFCEngine(test_db, test_survey_config)
+        
+        hash1 = engine.compute_validation_hash()
+        hash2 = engine.compute_validation_hash()
+        
+        assert hash1 == hash2
+        assert len(hash1) == 16  # Should be 16 characters
+    
+    def test_compute_validation_hash_changes_with_rules(self, test_db, test_survey_config):
+        """Test that hash changes when rules change."""
+        from database.models import ValidationRule
+        
+        engine = HFCEngine(test_db, test_survey_config)
+        hash_before = engine.compute_validation_hash()
+        
+        # Add a new validation rule
+        new_rule = ValidationRule(
+            survey_id=test_survey_config.survey_id,
+            rule_name="Test Rule",
+            rule_data={"check_expression": "age > 100", "issue": "Age too high"},
+            is_active=True
+        )
+        test_db.add(new_rule)
+        test_db.commit()
+        
+        hash_after = engine.compute_validation_hash()
+        
+        assert hash_before != hash_after
+    
+    def test_needs_validation_never_validated(self, test_db, test_survey_config):
+        """Test that submissions never validated need validation."""
+        from database.models import SubmissionCurrent
+        
+        engine = HFCEngine(test_db, test_survey_config)
+        current_hash = engine.compute_validation_hash()
+        
+        # Create submission with no validation timestamp
+        submission = SubmissionCurrent(
+            _id=999999,
+            survey_id=test_survey_config.survey_id,
+            _uuid="test-uuid-999",
+            _submission_time=datetime.utcnow(),
+            end=datetime.utcnow(),
+            submission_data={"test": "data"},
+            last_validated_at=None,  # Never validated
+            validation_rule_hash=None
+        )
+        test_db.add(submission)
+        test_db.commit()
+        
+        needs_check, reason = engine.needs_validation(submission, current_hash)
+        
+        assert needs_check is True
+        assert reason == "never_validated"
+    
+    def test_needs_validation_rules_changed(self, test_db, test_survey_config):
+        """Test that submissions need revalidation when rules change."""
+        from database.models import SubmissionCurrent
+        
+        engine = HFCEngine(test_db, test_survey_config)
+        old_hash = "old_hash_value"
+        current_hash = engine.compute_validation_hash()
+        
+        # Create submission validated with old rule hash
+        submission = SubmissionCurrent(
+            _id=999998,
+            survey_id=test_survey_config.survey_id,
+            _uuid="test-uuid-998",
+            _submission_time=datetime.utcnow(),
+            end=datetime.utcnow(),
+            submission_data={"test": "data"},
+            last_validated_at=datetime.utcnow(),
+            validation_rule_hash=old_hash  # Different from current
+        )
+        test_db.add(submission)
+        test_db.commit()
+        
+        needs_check, reason = engine.needs_validation(submission, current_hash)
+        
+        assert needs_check is True
+        assert reason == "rules_changed"
+    
+    def test_needs_validation_submission_edited(self, test_db, test_survey_config):
+        """Test that edited submissions need revalidation."""
+        from database.models import SubmissionCurrent
+        
+        engine = HFCEngine(test_db, test_survey_config)
+        current_hash = engine.compute_validation_hash()
+        
+        # Create submission that was edited after validation
+        validated_at = datetime.utcnow() - timedelta(hours=1)
+        updated_at = datetime.utcnow()  # More recent than validation
+        
+        submission = SubmissionCurrent(
+            _id=999997,
+            survey_id=test_survey_config.survey_id,
+            _uuid="test-uuid-997",
+            _submission_time=datetime.utcnow(),
+            end=datetime.utcnow(),
+            submission_data={"test": "data"},
+            is_edited=True,  # Marked as edited
+            last_validated_at=validated_at,
+            validation_rule_hash=current_hash,
+            updated_at=updated_at
+        )
+        test_db.add(submission)
+        test_db.commit()
+        
+        needs_check, reason = engine.needs_validation(submission, current_hash)
+        
+        assert needs_check is True
+        assert reason == "submission_edited"
+    
+    def test_needs_validation_up_to_date(self, test_db, test_survey_config):
+        """Test that up-to-date submissions don't need revalidation."""
+        from database.models import SubmissionCurrent
+        
+        engine = HFCEngine(test_db, test_survey_config)
+        current_hash = engine.compute_validation_hash()
+        
+        # Create submission that was recently validated with current rules
+        now = datetime.utcnow()
+        
+        submission = SubmissionCurrent(
+            _id=999996,
+            survey_id=test_survey_config.survey_id,
+            _uuid="test-uuid-996",
+            _submission_time=now,
+            end=now,
+            submission_data={"test": "data"},
+            is_edited=False,
+            last_validated_at=now,
+            validation_rule_hash=current_hash,
+            updated_at=now - timedelta(minutes=1)  # Updated before validation
+        )
+        test_db.add(submission)
+        test_db.commit()
+        
+        needs_check, reason = engine.needs_validation(submission, current_hash)
+        
+        assert needs_check is False
+        assert reason == "up_to_date"
+
+

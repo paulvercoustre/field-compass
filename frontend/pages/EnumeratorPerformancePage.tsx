@@ -61,8 +61,10 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
       
       await fetchData();
       
+      const checkedCount = (stats.validated || 0);
+      const skippedCount = (stats.skipped || 0);
       setSuccess(
-        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated`
+        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run ETL pipeline');

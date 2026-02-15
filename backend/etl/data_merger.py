@@ -285,26 +285,70 @@ def merge_submission(
                 deprecated_uuid = deprecated_id.replace('uuid:', '').strip()
                 logger.debug(f"Using deprecatedID from Kobo: {deprecated_uuid}")
             
-            # Create history record
-            history_record = SubmissionHistory(
-                kobo_id=submission_id,
-                timestamp=new_end,
-                deprecated_uuid=deprecated_uuid,
-                data_delta=data_delta
-            )
-            db.add(history_record)
+            # Only create history record and mark as edited if data actually changed
+            # deprecatedID persists in Kobo even after edits are processed, so we need
+            # to check if there are actual data changes to avoid re-processing
+            if len(data_delta) > 0:
+                # Create history record
+                history_record = SubmissionHistory(
+                    kobo_id=submission_id,
+                    timestamp=new_end,
+                    deprecated_uuid=deprecated_uuid,
+                    data_delta=data_delta
+                )
+                db.add(history_record)
+                
+                # Update existing submission
+                existing._uuid = new_uuid
+                existing._submission_time = new_submission_time
+                existing.end = new_end
+                existing.submission_data = new_data
+                existing.is_edited = True  # Temporary flag: needs validation
+                existing.has_edit_history = True  # Permanent flag: was edited at least once
+                existing.kobo_validation_status = kobo_validation_status
+                existing.kobo_edit_url = kobo_edit_url
+                existing.updated_at = datetime.utcnow()
+                
+                logger.info(f"Updated submission {submission_id} (edited: {edit_reason}, {len(data_delta)} data changes)")
+            else:
+                # No data changes despite deprecatedID being present
+                # This means the edit was already processed in a previous run
+                # Just update metadata if needed, and ensure has_edit_history is set
+                
+                # Set has_edit_history if not already set (for submissions edited before this flag existed)
+                if not existing.has_edit_history:
+                    existing.has_edit_history = True
+                    logger.debug(f"Set has_edit_history for submission {submission_id} (deprecatedID present)")
+                
+                metadata_changed = False
+                
+                if existing._uuid != new_uuid:
+                    existing._uuid = new_uuid
+                    metadata_changed = True
+                
+                if existing._submission_time != new_submission_time:
+                    existing._submission_time = new_submission_time
+                    metadata_changed = True
+                
+                if existing.end != new_end:
+                    existing.end = new_end
+                    metadata_changed = True
+                
+                if existing.kobo_validation_status != kobo_validation_status:
+                    existing.kobo_validation_status = kobo_validation_status
+                    metadata_changed = True
+                
+                if existing.kobo_edit_url != kobo_edit_url:
+                    existing.kobo_edit_url = kobo_edit_url
+                    metadata_changed = True
+                
+                # Don't set is_edited=True since no data changed
+                # Don't update updated_at since this is not a real change
+                if metadata_changed:
+                    logger.debug(f"Updated metadata for submission {submission_id} (deprecatedID present but no data changes)")
+                else:
+                    logger.debug(f"No changes for submission {submission_id} (deprecatedID present but already processed)")
             
-            # Update existing submission
-            existing._uuid = new_uuid
-            existing._submission_time = new_submission_time
-            existing.end = new_end
-            existing.submission_data = new_data
-            existing.is_edited = True
-            existing.kobo_validation_status = kobo_validation_status
-            existing.kobo_edit_url = kobo_edit_url
-            existing.updated_at = datetime.utcnow()
-            
-            logger.info(f"Updated submission {submission_id} (edited: {edit_reason}, {len(data_delta)} data changes)")
         else:
             # No edit detected, but still update metadata if it changed
             # This handles cases where metadata updates but no actual edit occurred
@@ -338,9 +382,9 @@ def merge_submission(
                 existing.kobo_edit_url = kobo_edit_url
                 metadata_changed = True
             
-            existing.updated_at = datetime.utcnow()
-            
+            # Only update updated_at if something actually changed
             if metadata_changed:
+                existing.updated_at = datetime.utcnow()
                 logger.debug(f"Updated submission {submission_id} metadata (no edit detected)")
         
         db.commit()

@@ -18,6 +18,7 @@ from services.permissions import require_survey_access, can_view_survey
 from database.models import SubmissionCurrent, SubmissionHistory as SubmissionHistoryORM, SurveyConfig, User
 from models import Submission, SubmissionHistory, SubmissionListResponse, QualityIssue, JsonPatch, ValidationStatusUpdate
 from etl.kobo_fetcher import KoboFetcher
+from etl.hfc_engine import HFCEngine
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ def _orm_to_pydantic_submission(orm_submission: SubmissionCurrent) -> Submission
         end=orm_submission.end,
         submission_data=orm_submission.submission_data,
         is_edited=orm_submission.is_edited,
+        has_edit_history=orm_submission.has_edit_history,
         data_quality_issues=quality_issues,
         qa_status=orm_submission.qa_status,
         kobo_validation_status=orm_submission.kobo_validation_status,
@@ -439,13 +441,34 @@ async def update_submission_validation_status(
         
         # Update local database
         submission.kobo_validation_status = status_update.validation_status
+        
+        # Recalculate qa_status based on new validation status and existing quality issues
+        # This ensures the Quality Overview counters update immediately without needing ETL
+        hfc_engine = HFCEngine(db, survey_config)
+        
+        # Convert JSONB quality issues to QualityIssue objects
+        quality_issues = []
+        if submission.data_quality_issues:
+            for issue_dict in submission.data_quality_issues:
+                quality_issues.append(QualityIssue(**issue_dict))
+        
+        # Determine new qa_status
+        new_qa_status = hfc_engine.determine_qa_status(
+            quality_issues, 
+            status_update.validation_status
+        )
+        
+        # Handle "On Hold" case (returns None to indicate no change)
+        if new_qa_status is not None:
+            submission.qa_status = new_qa_status
+        
         submission.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(submission)
         
         logger.info(
             f"Updated validation status for submission {kobo_id} to '{status_update.validation_status}' "
-            f"by user {current_user.email}"
+            f"and qa_status to '{submission.qa_status}' by user {current_user.email}"
         )
         
         # Return updated submission

@@ -35,6 +35,7 @@ export interface Submission {
   end: string;
   submission_data: Record<string, any>;
   is_edited: boolean;
+  has_edit_history: boolean;
   data_quality_issues: QualityIssue[];
   qa_status: QAStatus;
   kobo_validation_status?: string | null;  // Kobo's validation status (Approved, Not Approved, On Hold, etc.)

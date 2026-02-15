@@ -93,11 +93,15 @@ class SubmissionCurrent(Base):
     _submission_time = Column(DateTime(timezone=True), nullable=False)
     end = Column("end", DateTime(timezone=True), nullable=False)  # "end" is quoted because it's a PostgreSQL reserved word
     submission_data = Column(JSONB, nullable=False)
-    is_edited = Column(Boolean, default=False)
+    is_edited = Column(Boolean, default=False)  # Temporary flag: submission needs validation due to recent edit
+    has_edit_history = Column(Boolean, default=False)  # Permanent flag: submission was edited at least once
     data_quality_issues = Column(JSONB, default=[])
     qa_status = Column(String(50), default="PENDING_APPROVAL")
     kobo_validation_status = Column(String(50), nullable=True)  # Stores Kobo's _validation_status
     kobo_edit_url = Column(String(500), nullable=True)  # URL to view/edit in Kobo
+    # Validation tracking fields (for incremental validation)
+    last_validated_at = Column(DateTime(timezone=True), nullable=True)  # When validation checks were last run
+    validation_rule_hash = Column(String(64), nullable=True)  # Hash of rule config used for validation
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     

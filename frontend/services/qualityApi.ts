@@ -72,3 +72,55 @@ export const fetchQualityOverview = async (
     throw error;
   }
 };
+
+/**
+ * Trigger ETL pipeline for a survey
+ * @param surveyId The survey ID (required)
+ * @param limit Optional limit on number of submissions to process
+ * @param startDate Optional start date filter (YYYY-MM-DD)
+ */
+export interface ETLStats {
+  fetched: number;
+  created: number;
+  updated: number;
+  edited: number;
+  validated: number;  // Number of submissions that went through validation checks
+  skipped: number;    // Number of submissions that skipped validation (incremental optimization)
+  validation_reasons?: Record<string, number>;  // Breakdown of why submissions were validated
+  hfc_flagged: number;
+  errors: number;
+  duration_seconds: number;
+}
+
+export const triggerETL = async (
+  surveyId: string,
+  limit?: number,
+  startDate?: string
+): Promise<ETLStats> => {
+  try {
+    const params = new URLSearchParams();
+    if (limit) {
+      params.append('limit', limit.toString());
+    }
+    if (startDate) {
+      params.append('start_date', startDate);
+    }
+
+    const url = `${API_BASE_URL}/api/etl/run/${surveyId}${params.toString() ? `?${params}` : ''}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: createHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(errorData.detail || `Failed to trigger ETL: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.data as ETLStats;
+  } catch (error) {
+    console.error('Error triggering ETL:', error);
+    throw error;
+  }
+};

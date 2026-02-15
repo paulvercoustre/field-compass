@@ -30,6 +30,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
   const [success, setSuccess] = useState<string | null>(null);
   const { selectedSurvey } = useSurvey();
 
+  // Clear success and error messages when submission changes
+  useEffect(() => {
+    setSuccess(null);
+    setValidationError(null);
+  }, [submission?._id]);
+
   // Fetch survey config when submission or survey changes
   useEffect(() => {
     const fetchConfig = async () => {
@@ -116,7 +122,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     );
   }
 
-  const { _id, submission_data, is_edited, data_quality_issues, qa_status, kobo_validation_status, _submission_time, end } = submission;
+  const { _id, submission_data, has_edit_history, data_quality_issues, qa_status, kobo_validation_status, _submission_time, end } = submission;
 
   // Check if a rule passed or failed for this submission
   const checkRuleStatus = (rule: ValidationRule): { passed: boolean; issue?: QualityIssue } => {
@@ -278,7 +284,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
         
         {/* Inline metadata badges */}
         <div className="flex items-center gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
-          {is_edited && (
+          {has_edit_history && (
             <span className="flex items-center gap-1">
               <EditIcon />
               Edited

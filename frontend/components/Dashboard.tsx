@@ -173,8 +173,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       await fetchAllSubmissions();
       await fetchFilteredSubmissions();
       
+      const checkedCount = (stats.validated || 0);
+      const skippedCount = (stats.skipped || 0);
       setSuccess(
-        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${stats.hfc_flagged} flagged`
+        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}, ${stats.hfc_flagged} flagged`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run ETL pipeline');
