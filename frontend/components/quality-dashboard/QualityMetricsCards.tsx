@@ -45,6 +45,12 @@ const QualityMetricsCards: React.FC<QualityMetricsCardsProps> = ({ data }) => {
           label="Avg Issues / Submission"
           value={data.avg_issues_per_submission.toFixed(2)}
         />
+        {data.avg_dk_percentage != null && (
+          <MetricCard
+            label="Avg DK % / Submission"
+            value={`${data.avg_dk_percentage.toFixed(1)}%`}
+          />
+        )}
       </div>
     </div>
   );
