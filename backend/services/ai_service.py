@@ -25,8 +25,16 @@ class AIService:
         else:
             self.client = OpenAI(api_key=self.api_key)
         
-        self.model = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
+        base_model = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
+        self.rule_gen_model = os.getenv('OPENAI_RULE_GEN_MODEL', base_model)
+        self.qual_check_model = os.getenv('OPENAI_QUAL_CHECK_MODEL', base_model)
         self.max_completion_tokens = int(os.getenv('OPENAI_MAX_TOKENS', '2500'))
+        self.rule_gen_max_completion_tokens = int(
+            os.getenv('OPENAI_RULE_GEN_MAX_TOKENS', str(self.max_completion_tokens))
+        )
+        self.qual_check_max_completion_tokens = int(
+            os.getenv('OPENAI_QUAL_CHECK_MAX_TOKENS', str(self.max_completion_tokens))
+        )
         self.temperature = float(os.getenv('OPENAI_TEMPERATURE', '0.2'))
         self.timeout = 120  # seconds - GPT-5 models with reasoning can take longer
     
@@ -214,17 +222,17 @@ Generate a validation rule matching the exact JSON schema."""
         }
 
         try:
-            logger.info(f"Generating rule with OpenAI model {self.model}")
+            logger.info(f"Generating rule with OpenAI model {self.rule_gen_model}")
             start_time = time.time()
             
             # Build API call parameters
             api_params = {
-                "model": self.model,
+                "model": self.rule_gen_model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_completion_tokens": self.max_completion_tokens,
+                "max_completion_tokens": self.rule_gen_max_completion_tokens,
                 "timeout": self.timeout,
                 "response_format": {
                     "type": "json_schema",
@@ -237,7 +245,7 @@ Generate a validation rule matching the exact JSON schema."""
             }
             
             # Only add temperature for models that support it (GPT-5 models use default of 1)
-            if not self.model.startswith('gpt-5'):
+            if not self.rule_gen_model.startswith('gpt-5'):
                 api_params["temperature"] = self.temperature
             
             response = self.client.chat.completions.create(**api_params)
@@ -462,17 +470,17 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         }
 
         try:
-            logger.info(f"Generating rule suggestions with OpenAI model {self.model}")
+            logger.info(f"Generating rule suggestions with OpenAI model {self.rule_gen_model}")
             start_time = time.time()
             
             # Build API call parameters
             api_params = {
-                "model": self.model,
+                "model": self.rule_gen_model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                "max_completion_tokens": self.max_completion_tokens * 2,  # More tokens for multiple rules
+                "max_completion_tokens": self.rule_gen_max_completion_tokens * 2,  # More tokens for multiple rules
                 "timeout": self.timeout,
                 "response_format": {
                     "type": "json_schema",
@@ -485,7 +493,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
             }
             
             # Only add temperature for models that support it (GPT-5 models use default of 1)
-            if not self.model.startswith('gpt-5'):
+            if not self.rule_gen_model.startswith('gpt-5'):
                 api_params["temperature"] = self.temperature
             
             response = self.client.chat.completions.create(**api_params)
@@ -567,6 +575,124 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
             lines.append(f"... and {len(kobo_variables) - 50} more variables")
         
         return '\n'.join(lines)
+
+    def check_qualitative_responses(
+        self,
+        field_values: Dict[str, str],
+        question_contexts: Dict[str, str],
+        dk_numeric: int,
+        dk_string: str,
+        check_types: List[str],
+    ) -> List[Dict[str, Any]]:
+        """
+        Check qualitative text responses for quality issues using a cheap model.
+
+        Returns:
+            List of issues with keys: field, value, check_type, message, reasoning
+        """
+        if not self.is_available():
+            return []
+
+        if not field_values:
+            return []
+
+        allowed_check_types = {"content_quality", "relevance", "completeness"}
+        selected_types = [c for c in check_types if c in allowed_check_types]
+        if not selected_types:
+            selected_types = ["content_quality", "relevance", "completeness"]
+
+        fields_text = []
+        for field, value in field_values.items():
+            context = question_contexts.get(field, field)
+            fields_text.append(f"Field: {field}\nQuestion: {context}\nResponse: {value}")
+
+        fields_combined = "\n\n".join(fields_text)
+
+        system_prompt = f"""You are a data quality expert analyzing survey text responses.
+
+IMPORTANT CONTEXT:
+- "Don't Know" responses are coded as {dk_numeric} (numeric) or "{dk_string}" (text)
+- These are valid responses and should not be flagged
+- Support multilingual responses and evaluate in the response's language
+- Be conservative and only flag clear quality issues
+"""
+        user_prompt = f"""Analyze these survey responses for quality issues:
+
+{fields_combined}
+
+Check only these issue types: {", ".join(selected_types)}.
+
+Issue definitions:
+- content_quality: gibberish, repeated characters, obvious low-effort noise
+- relevance: response clearly does not answer the question
+- completeness: response is too vague/insufficient for the asked question
+
+Return only clear issues. If no clear issue exists, return an empty list.
+Remember: "{dk_string}" and {dk_numeric} are valid "Don't Know" values."""
+
+        response_schema = {
+            "type": "object",
+            "properties": {
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "field": {"type": "string"},
+                            "value": {"type": "string"},
+                            "check_type": {
+                                "type": "string",
+                                "enum": ["content_quality", "relevance", "completeness"],
+                            },
+                            "message": {"type": "string"},
+                            "reasoning": {"type": "string"},
+                        },
+                        "required": ["field", "value", "check_type", "message", "reasoning"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["issues"],
+            "additionalProperties": False,
+        }
+
+        try:
+            logger.info(f"Running qualitative checks with OpenAI model {self.qual_check_model}")
+            start_time = time.time()
+            api_params = {
+                "model": self.qual_check_model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "max_completion_tokens": self.qual_check_max_completion_tokens,
+                "timeout": self.timeout,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "qualitative_check_results",
+                        "strict": True,
+                        "schema": response_schema,
+                    },
+                },
+            }
+            if not self.qual_check_model.startswith("gpt-5"):
+                api_params["temperature"] = self.temperature
+
+            response = self.client.chat.completions.create(**api_params)
+            elapsed = time.time() - start_time
+            logger.info(f"Qualitative LLM check completed in {elapsed:.2f}s")
+
+            content = response.choices[0].message.content
+            parsed = json.loads(content)
+            issues = parsed.get("issues", [])
+            return [issue for issue in issues if issue.get("check_type") in selected_types]
+        except OpenAIError as e:
+            logger.error(f"OpenAI API error in qualitative checks: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error in qualitative checks: {e}")
+            return []
     
     def _validate_rule_structure(self, rule: Dict[str, Any]) -> None:
         """
