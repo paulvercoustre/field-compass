@@ -988,38 +988,53 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
               </p>
             ) : (
               <div className="space-y-3">
-                {qualitativeIssues.map((issue, index) => {
-                  const issueType = issue.check.replace(/^qual_/, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                  const question = issue.field ? getQuestionLabel(issue.field, surveyConfig) : null;
-                  const answer = issue.value !== null && issue.value !== undefined ? String(issue.value) : 'N/A';
-                  const aiAnalysis = (issue.metadata as Record<string, any> | undefined)?.llm_reasoning || issue.message;
-
-                  return (
-                    <div
-                      key={`${issue.check}-${index}`}
-                      className="p-3 rounded-md border bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700/40"
-                    >
-                      <div className="space-y-2 text-sm">
-                        <p className="text-gray-800 dark:text-gray-200">
-                          <span className="font-semibold">Question:</span>{' '}
-                          <span>{question || issue.field || 'Unknown'}</span>
-                        </p>
-                        <p className="text-gray-800 dark:text-gray-200">
-                          <span className="font-semibold">Answer:</span>{' '}
-                          <span>{answer}</span>
-                        </p>
-                        <p className="text-gray-800 dark:text-gray-200">
-                          <span className="font-semibold">Issue type:</span>{' '}
-                          <span>{issueType}</span>
-                        </p>
-                        <p className="text-purple-900 dark:text-purple-100">
-                          <span className="font-semibold">AI analysis:</span>{' '}
-                          <span>{aiAnalysis}</span>
-                        </p>
-                      </div>
-                    </div>
+                {(() => {
+                  const groupedByField = qualitativeIssues.reduce<Record<string, typeof qualitativeIssues>>(
+                    (acc, issue) => {
+                      const key = issue.field ?? 'unknown';
+                      if (!acc[key]) acc[key] = [];
+                      acc[key].push(issue);
+                      return acc;
+                    },
+                    {}
                   );
-                })}
+                  return Object.entries(groupedByField).map(([field, issues]) => {
+                    const first = issues[0];
+                    const question = field !== 'unknown' ? getQuestionLabel(field, surveyConfig) : null;
+                    const answer = first.value !== null && first.value !== undefined ? String(first.value) : 'N/A';
+                    return (
+                      <div
+                        key={field}
+                        className="p-3 rounded-md border bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700/40"
+                      >
+                        <div className="space-y-2 text-sm">
+                          <p className="text-gray-800 dark:text-gray-200">
+                            <span className="font-semibold">Question:</span>{' '}
+                            <span>{question || field || 'Unknown'}</span>
+                          </p>
+                          <p className="text-gray-800 dark:text-gray-200">
+                            <span className="font-semibold">Answer:</span>{' '}
+                            <span>{answer}</span>
+                          </p>
+                          <div className="space-y-2 mt-3">
+                            {issues.map((issue) => {
+                              const issueType = issue.check.replace(/^qual_/, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                              const aiAnalysis = (issue.metadata as Record<string, any> | undefined)?.llm_reasoning || issue.message;
+                              return (
+                                <div key={issue.check} className="pl-3 border-l-2 border-purple-300 dark:border-purple-600/50">
+                                  <p className="text-gray-800 dark:text-gray-200">
+                                    <span className="font-semibold">{issueType}:</span>{' '}
+                                    <span className="text-purple-900 dark:text-purple-100">{aiAnalysis}</span>
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>

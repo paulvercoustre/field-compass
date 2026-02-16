@@ -22,6 +22,15 @@ from services.qualitative_worker import run_qualitative_check_task
 logger = logging.getLogger(__name__)
 
 
+def _is_llm_qual_issue(issue: Dict[str, Any]) -> bool:
+    """Identify stored qualitative LLM issues in mixed issue lists."""
+    metadata = issue.get("metadata", {}) or {}
+    return bool(
+        issue.get("check", "").startswith("qual_")
+        or metadata.get("source") == "llm_qualitative_v1"
+    )
+
+
 class ETLPipeline:
     """Main ETL pipeline orchestrator."""
     
@@ -213,8 +222,12 @@ class ETLPipeline:
                         submission.dk_eligible_count = dk_eligible_count
                         submission.dk_percentage = round(dk_percentage, 2) if dk_percentage is not None else None
                         
-                        # Update submission with HFC results
-                        submission.data_quality_issues = [
+                        # Update deterministic issues while preserving existing LLM qualitative issues.
+                        existing_issues = submission.data_quality_issues or []
+                        preserved_llm_issues = [
+                            issue for issue in existing_issues if _is_llm_qual_issue(issue)
+                        ]
+                        deterministic_issues = [
                             {
                                 'check': issue.check,
                                 'field': issue.field,
@@ -224,6 +237,7 @@ class ETLPipeline:
                             }
                             for issue in issues
                         ]
+                        submission.data_quality_issues = deterministic_issues + preserved_llm_issues
                         
                         # Determine status based on HFC issues and Kobo validation status
                         new_status = hfc_engine.determine_qa_status(
