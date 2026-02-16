@@ -113,6 +113,8 @@ async def run_etl_pipeline(
                 "validated": stats.get('validated', 0),
                 "skipped": stats.get('skipped', 0),
                 "validation_reasons": stats.get('validation_reasons', {}),
+                "llm_queued": stats.get('llm_queued', 0),
+                "llm_skipped": stats.get('llm_skipped', 0),
                 "hfc_flagged": stats['hfc_flagged'],
                 "errors": stats['errors'],
                 "duration_seconds": stats.get('duration_seconds', 0)

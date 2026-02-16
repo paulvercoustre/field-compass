@@ -6,6 +6,7 @@ Main orchestrator for fetching, merging, and validating submissions.
 import logging
 from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime
+import hashlib
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -15,6 +16,8 @@ from etl.hfc_engine import HFCEngine
 from etl.audit_processor import download_and_process_audit
 from database.models import SurveyConfig, SubmissionCurrent
 from services.database import get_db
+from services.ai_service import AIService
+from services.qualitative_worker import run_qualitative_check_task
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +103,8 @@ class ETLPipeline:
             'validated': 0,  # NEW: Count of submissions validated
             'skipped': 0,  # NEW: Count of submissions skipped
             'validation_reasons': {},  # NEW: Reasons for validation
+            'llm_queued': 0,
+            'llm_skipped': 0,
             'errors': 0,
             'start_time': datetime.utcnow()
         }
@@ -124,6 +129,8 @@ class ETLPipeline:
             # Compute current validation hash (do once at start of ETL run)
             current_rule_hash = hfc_engine.compute_validation_hash()
             logger.info(f"Current validation rule hash: {current_rule_hash}")
+            ai_service = AIService()
+            llm_rules_hash = hfc_engine.compute_llm_rules_hash(ai_service.qual_check_model)
 
             # Get Kobo API token for audit downloads
             kobo_token = self.kobo_api_token
@@ -197,6 +204,14 @@ class ETLPipeline:
                             submission_data=submission.submission_data,
                             submission_uuid=submission_uuid
                         )
+
+                        # Always compute/store DK metrics for validated submissions.
+                        dk_count, dk_eligible_count, dk_percentage = hfc_engine.compute_dk_metrics(
+                            submission.submission_data
+                        )
+                        submission.dk_count = dk_count
+                        submission.dk_eligible_count = dk_eligible_count
+                        submission.dk_percentage = round(dk_percentage, 2) if dk_percentage is not None else None
                         
                         # Update submission with HFC results
                         submission.data_quality_issues = [
@@ -240,6 +255,59 @@ class ETLPipeline:
                     else:
                         logger.debug(f"Skipping validation for submission {submission_uuid}: {reason}")
                         stats['skipped'] += 1
+
+                    # Queue asynchronous qualitative checks (independent from deterministic checks)
+                    current_llm_input_hash = hfc_engine.compute_llm_input_hash(submission.submission_data)
+                    llm_needs_check, llm_reason = hfc_engine.needs_llm_qualitative_check(
+                        submission=submission,
+                        llm_rules_hash=llm_rules_hash,
+                        llm_input_hash=current_llm_input_hash,
+                    )
+
+                    if llm_needs_check:
+                        dedupe_key = (
+                            f"{submission.survey_id}:{submission._id}:{llm_rules_hash}:{current_llm_input_hash}"
+                        )
+                        task_id = hashlib.sha256(dedupe_key.encode("utf-8")).hexdigest()
+                        payload = {
+                            "survey_id": str(submission.survey_id),
+                            "submission_id": submission._id,
+                            "submission_uuid": submission._uuid,
+                            "llm_rules_hash": llm_rules_hash,
+                            "llm_input_hash": current_llm_input_hash,
+                        }
+                        try:
+                            async_result = run_qualitative_check_task.apply_async(
+                                kwargs={"payload": payload},
+                                task_id=task_id,
+                            )
+                            submission.llm_check_status = "pending"
+                            submission.llm_job_id = async_result.id
+                            submission.llm_queued_at = datetime.utcnow()
+                            submission.llm_started_at = None
+                            submission.llm_checked_at = None
+                            submission.llm_last_error = None
+                            submission.llm_rules_hash = llm_rules_hash
+                            submission.llm_input_hash = current_llm_input_hash
+                            submission.llm_model_used = ai_service.qual_check_model
+                            stats["llm_queued"] += 1
+                        except Exception as queue_error:
+                            logger.error(
+                                "Failed to enqueue qualitative check for submission %s: %s",
+                                submission_uuid,
+                                queue_error,
+                                exc_info=True,
+                            )
+                            submission.llm_check_status = "failed"
+                            submission.llm_last_error = str(queue_error)[:1000]
+                            submission.llm_checked_at = datetime.utcnow()
+                    else:
+                        logger.debug(
+                            "Skipping qualitative queue for submission %s: %s",
+                            submission_uuid,
+                            llm_reason,
+                        )
+                        stats["llm_skipped"] += 1
                     
                     self.db.commit()
                     
@@ -328,6 +396,13 @@ class ETLPipeline:
             submission_data=submission.submission_data,
             submission_uuid=submission_uuid
         )
+
+        dk_count, dk_eligible_count, dk_percentage = hfc_engine.compute_dk_metrics(
+            submission.submission_data
+        )
+        submission.dk_count = dk_count
+        submission.dk_eligible_count = dk_eligible_count
+        submission.dk_percentage = round(dk_percentage, 2) if dk_percentage is not None else None
         
         # Update submission with HFC results
         submission.data_quality_issues = [
