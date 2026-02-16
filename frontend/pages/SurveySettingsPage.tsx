@@ -102,6 +102,7 @@ const SurveySettingsPage: React.FC = () => {
     flag_sampling_frame: false,
     flag_outliers: false,
     outlier_variables: [] as string[],
+    outlier_log_transform_variables: [] as string[],
     outlier_method: 'iqr' as 'iqr' | 'mad' | 'zscore',
     outlier_threshold: 1.5,
     flag_dk_percentage: false,
@@ -170,10 +171,13 @@ const SurveySettingsPage: React.FC = () => {
         }));
       setTextVariables(textQuestions);
       
-      // Clean up outlier_variables to remove any non-numeric variables
+      // Clean up outlier_variables and outlier_log_transform_variables to remove any non-numeric variables
       setQualityChecks((prev) => ({
         ...prev,
         outlier_variables: prev.outlier_variables.filter((v) => vars.includes(v)),
+        outlier_log_transform_variables: prev.outlier_log_transform_variables.filter((v) =>
+          vars.includes(v) && prev.outlier_variables.includes(v)
+        ),
         llm_qualitative_fields: prev.llm_qualitative_fields.filter((v) =>
           textQuestions.some((t) => t.name === v)
         ),
@@ -243,6 +247,11 @@ const SurveySettingsPage: React.FC = () => {
             })
           : savedOutlierVars; // If no tool data, keep all (will be filtered later)
         
+        const savedLogTransformVars = cd.quality_checks.outlier_log_transform_variables ?? [];
+        const validLogTransformVars = savedLogTransformVars.filter((v: string) =>
+          validOutlierVars.includes(v)
+        );
+
         setQualityChecks({
           flag_out_of_period: cd.quality_checks.flag_out_of_period ?? false,
           flag_weekend: cd.quality_checks.flag_weekend ?? false,
@@ -253,6 +262,7 @@ const SurveySettingsPage: React.FC = () => {
           flag_sampling_frame: cd.quality_checks.flag_sampling_frame ?? false,
           flag_outliers: cd.quality_checks.flag_outliers ?? false,
           outlier_variables: validOutlierVars,
+          outlier_log_transform_variables: validLogTransformVars,
           outlier_method: cd.quality_checks.outlier_method ?? 'iqr',
           outlier_threshold: cd.quality_checks.outlier_threshold ?? 1.5,
           flag_dk_percentage: cd.quality_checks.flag_dk_percentage ?? false,
@@ -1690,6 +1700,7 @@ const SurveySettingsPage: React.FC = () => {
                                         setQualityChecks({
                                           ...qualityChecks,
                                           outlier_variables: qualityChecks.outlier_variables.filter((v) => v !== variable),
+                                          outlier_log_transform_variables: qualityChecks.outlier_log_transform_variables.filter((v) => v !== variable),
                                         });
                                       }
                                     }}
@@ -1721,6 +1732,60 @@ const SurveySettingsPage: React.FC = () => {
                           </div>
                         )}
                       </div>
+
+                      {/* Log transform per variable */}
+                      {qualityChecks.outlier_variables.length > 0 && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Log transform (signed)
+                          </label>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            Use signed log transform for skewed or mixed-sign variables: sign(x) × log(1 + |x|)
+                          </p>
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              {qualityChecks.outlier_variables.map((variable) => (
+                                <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
+                                  <input
+                                    type="checkbox"
+                                    checked={qualityChecks.outlier_log_transform_variables.includes(variable)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setQualityChecks({
+                                          ...qualityChecks,
+                                          outlier_log_transform_variables: [...qualityChecks.outlier_log_transform_variables, variable],
+                                        });
+                                      } else {
+                                        setQualityChecks({
+                                          ...qualityChecks,
+                                          outlier_log_transform_variables: qualityChecks.outlier_log_transform_variables.filter((v) => v !== variable),
+                                        });
+                                      }
+                                    }}
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                  />
+                                  <span className="text-sm text-gray-700 dark:text-gray-300">{variable}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              {qualityChecks.outlier_log_transform_variables.length > 0 ? (
+                                qualityChecks.outlier_log_transform_variables.map((variable) => (
+                                  <span
+                                    key={variable}
+                                    className="inline-block mr-2 mb-1 px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded dark:bg-amber-900 dark:text-amber-200"
+                                  >
+                                    {variable} (log)
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">None</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Method Selection */}
                       <div>

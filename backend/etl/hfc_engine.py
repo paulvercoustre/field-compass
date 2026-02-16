@@ -89,6 +89,10 @@ class HFCEngine:
         # Outlier detection configuration
         self.flag_outliers = quality_checks.get('flag_outliers', False)
         self.outlier_variables = quality_checks.get('outlier_variables', [])
+        outlier_log_transform_raw = quality_checks.get('outlier_log_transform_variables', []) or []
+        self.outlier_log_transform_variables = [
+            v for v in outlier_log_transform_raw if v in self.outlier_variables
+        ]
         self.outlier_method = quality_checks.get('outlier_method', 'iqr')  # 'iqr', 'mad', or 'zscore'
         self.outlier_threshold = quality_checks.get('outlier_threshold', 1.5)  # For IQR multiplier or Z-score threshold
         self.flag_dk_percentage = quality_checks.get('flag_dk_percentage', False)
@@ -133,8 +137,8 @@ class HFCEngine:
 
         for variable in self.outlier_variables:
             try:
-                # Extract values for this variable from all submissions
-                values = []
+                # Extract raw values for this variable from all submissions
+                raw_values: List[float] = []
                 for submission in submissions:
                     value, _ = self._get_field_value(submission.submission_data, variable)
                     if value is None:
@@ -149,18 +153,38 @@ class HFCEngine:
                     if isinstance(numeric_value, (int, float)) and numeric_value == self.dk_value:
                         continue
 
-                    values.append(float(numeric_value))
+                    raw_values.append(float(numeric_value))
 
-                # Compute statistics
-                if len(values) >= 2:  # Need at least 2 values
-                    stats = self._compute_statistics_from_values(values)
-                    if stats:
-                        self._outlier_stats_cache[variable] = stats
-                        logger.debug(f"Pre-computed stats for {variable}: mean={stats['mean']:.3f}, count={stats['count']}")
-                    else:
-                        logger.warning(f"Failed to compute statistics for variable {variable}")
-                else:
-                    logger.warning(f"Insufficient data for outlier statistics on variable {variable} (only {len(values)} values)")
+                if len(raw_values) < 2:
+                    logger.warning(f"Insufficient data for outlier statistics on variable {variable} (only {len(raw_values)} values)")
+                    continue
+
+                # Build detection values: transformed when configured, else raw
+                use_log_transform = variable in self.outlier_log_transform_variables
+                detection_values = (
+                    [self._signed_log_transform(v) for v in raw_values]
+                    if use_log_transform
+                    else raw_values
+                )
+
+                # Compute detection stats (for IQR/MAD/Z-score) from detection values
+                detection_stats = self._compute_statistics_from_values(detection_values)
+                if not detection_stats:
+                    logger.warning(f"Failed to compute statistics for variable {variable}")
+                    continue
+
+                # Display stats (mean, median) always from raw values
+                raw_mean = statistics.mean(raw_values)
+                raw_median = statistics.median(raw_values)
+
+                # Merge: detection stats for outlier logic, raw mean/median for user display
+                stats = {
+                    **detection_stats,
+                    "raw_mean": raw_mean,
+                    "raw_median": raw_median,
+                }
+                self._outlier_stats_cache[variable] = stats
+                logger.debug(f"Pre-computed stats for {variable}: mean={raw_mean:.3f}, count={stats['count']}")
 
             except Exception as e:
                 logger.error(f"Error pre-computing statistics for variable {variable}: {e}", exc_info=True)
@@ -246,6 +270,16 @@ class HFCEngine:
         except (ValueError, TypeError):
             # Not a numeric string, return original value
             return value
+
+    def _signed_log_transform(self, x: float) -> float:
+        """Signed log transform: sign(x) × log(1 + |x|). Handles zero, positive, and negative values."""
+        return (1 if x > 0 else -1 if x < 0 else 0) * math.log(1 + abs(x))
+
+    def _signed_log_inverse(self, y: float) -> float:
+        """Inverse of signed log transform for bounds display."""
+        if y >= 0:
+            return math.exp(y) - 1
+        return 1 - math.exp(-y)
 
     def _get_field_value(self, submission_data: Dict[str, Any], field_name: str) -> Tuple[Any, Optional[str]]:
         """
@@ -852,27 +886,49 @@ class HFCEngine:
                     sample_size_warning = "WARNING: Very small sample size"
                 elif stats['count'] < 10:
                     sample_size_warning = "NOTE: Small sample size"
-                
+
+                # Keep raw value for display; use transformed value only for detection
+                raw_value = float(numeric_value)
+                use_log_transform = variable in self.outlier_log_transform_variables
+                value_for_detection = (
+                    self._signed_log_transform(raw_value) if use_log_transform else raw_value
+                )
+
                 # Check if value is an outlier using the configured method
-                is_outlier = self._is_outlier(numeric_value, stats, self.outlier_method, self.outlier_threshold)
-                
+                is_outlier = self._is_outlier(
+                    value_for_detection, stats, self.outlier_method, self.outlier_threshold
+                )
+
                 if is_outlier:
                     method_name = self.outlier_method.upper()
 
-                    # Calculate bounds for display
-                    bounds_info = self._get_outlier_bounds(numeric_value, stats, self.outlier_method, self.outlier_threshold)
+                    # Calculate bounds for display (inverse-transform to raw space when needed)
+                    bounds_info = self._get_outlier_bounds(
+                        value_for_detection,
+                        stats,
+                        self.outlier_method,
+                        self.outlier_threshold,
+                        log_transform=use_log_transform,
+                    )
+
+                    # Display stats: always raw scale (raw_mean, raw_median)
+                    display_mean = stats.get("raw_mean", stats["mean"])
+                    display_median = stats.get("raw_median", stats["median"])
 
                     # Include statistical context in metadata
-                    metadata = {
+                    metadata: Dict[str, Any] = {
                         "method": self.outlier_method,
                         "threshold": self.outlier_threshold,
                         "bounds": bounds_info,
                         "statistics": {
-                            "mean": round(stats['mean'], 3),
-                            "median": round(stats['median'], 3),
-                            "count": stats['count']
-                        }
+                            "mean": round(display_mean, 3),
+                            "median": round(display_median, 3),
+                            "count": stats["count"],
+                        },
                     }
+                    if use_log_transform:
+                        metadata["log_transformed"] = True
+                        metadata["transformation"] = "signed_log1p"
 
                     # Add sample size warning if applicable
                     if sample_size_warning:
@@ -881,11 +937,11 @@ class HFCEngine:
                     issues.append(QualityIssue(
                         check=f"outlier_{variable}",
                         field=field_path or variable,
-                        value=numeric_value,
-                        message=f"Value {numeric_value} is an outlier ({method_name} method, threshold: {self.outlier_threshold})",
-                        metadata=metadata
+                        value=raw_value,
+                        message=f"Value {raw_value} is an outlier ({method_name} method, threshold: {self.outlier_threshold})",
+                        metadata=metadata,
                     ))
-                    logger.debug(f"Outlier detected: {variable}={numeric_value} using {self.outlier_method}")
+                    logger.debug(f"Outlier detected: {variable}={raw_value} using {self.outlier_method}")
                     
             except Exception as e:
                 logger.warning(f"Error checking outlier for variable '{variable}': {e}", exc_info=True)
@@ -1036,7 +1092,14 @@ class HFCEngine:
             logger.warning(f"Unknown outlier method: {method}")
             return False
 
-    def _get_outlier_bounds(self, value: float, stats: Dict[str, float], method: str, threshold: float) -> Dict[str, float]:
+    def _get_outlier_bounds(
+        self,
+        value: float,
+        stats: Dict[str, float],
+        method: str,
+        threshold: float,
+        log_transform: bool = False,
+    ) -> Dict[str, Any]:
         """
         Calculate the upper and lower bounds for an outlier based on the detection method.
 
@@ -1045,9 +1108,10 @@ class HFCEngine:
             stats: Statistics dictionary
             method: Detection method ('iqr', 'mad', or 'zscore')
             threshold: Threshold value
+            log_transform: If True, inverse-transform bounds to raw space for display
 
         Returns:
-            Dictionary with lower_bound and upper_bound
+            Dictionary with lower_bound and upper_bound (in raw space when log_transform=True)
         """
         if method == 'iqr':
             q1 = stats['q1']
@@ -1055,43 +1119,47 @@ class HFCEngine:
             iqr = stats['iqr']
 
             if iqr == 0:
-                return {"lower_bound": q1, "upper_bound": q3, "note": "No variation in data"}
-
-            lower_bound = q1 - threshold * iqr
-            upper_bound = q3 + threshold * iqr
-
-            return {"lower_bound": round(lower_bound, 3), "upper_bound": round(upper_bound, 3)}
+                result = {"lower_bound": q1, "upper_bound": q3, "note": "No variation in data"}
+            else:
+                lower_bound = q1 - threshold * iqr
+                upper_bound = q3 + threshold * iqr
+                result = {"lower_bound": round(lower_bound, 3), "upper_bound": round(upper_bound, 3)}
 
         elif method == 'mad':
             median = stats['median']
             mad = stats['mad']
 
             if mad == 0:
-                return {"lower_bound": median, "upper_bound": median, "note": "No variation in data"}
-
-            # For MAD, the bounds are theoretical - we show the threshold distance from median
-            # The actual bounds depend on the MAD value and threshold
-            bound_distance = (threshold * mad) / 0.6745  # Convert back to approximate std units
-
-            lower_bound = median - bound_distance
-            upper_bound = median + bound_distance
-
-            return {"lower_bound": round(lower_bound, 3), "upper_bound": round(upper_bound, 3)}
+                result = {"lower_bound": median, "upper_bound": median, "note": "No variation in data"}
+            else:
+                bound_distance = (threshold * mad) / 0.6745
+                lower_bound = median - bound_distance
+                upper_bound = median + bound_distance
+                result = {"lower_bound": round(lower_bound, 3), "upper_bound": round(upper_bound, 3)}
 
         elif method == 'zscore':
             mean = stats['mean']
             std = stats['std']
 
             if std == 0:
-                return {"lower_bound": mean, "upper_bound": mean, "note": "No variation in data"}
-
-            lower_bound = mean - threshold * std
-            upper_bound = mean + threshold * std
-
-            return {"lower_bound": round(lower_bound, 3), "upper_bound": round(upper_bound, 3)}
+                result = {"lower_bound": mean, "upper_bound": mean, "note": "No variation in data"}
+            else:
+                lower_bound = mean - threshold * std
+                upper_bound = mean + threshold * std
+                result = {"lower_bound": round(lower_bound, 3), "upper_bound": round(upper_bound, 3)}
 
         else:
-            return {"lower_bound": 0, "upper_bound": 0, "note": "Unknown method"}
+            result = {"lower_bound": 0, "upper_bound": 0, "note": "Unknown method"}
+
+        # Inverse-transform bounds to raw space when detection used log transform
+        if log_transform and "note" not in result:
+            lb = result.get("lower_bound")
+            ub = result.get("upper_bound")
+            if lb is not None and ub is not None:
+                result["lower_bound"] = round(self._signed_log_inverse(lb), 3)
+                result["upper_bound"] = round(self._signed_log_inverse(ub), 3)
+
+        return result
     
     def _run_custom_rules(self, submission_data: Dict[str, Any], submission_uuid: str) -> List[QualityIssue]:
         """Run custom validation rules from database."""

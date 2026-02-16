@@ -87,6 +87,7 @@ export interface SurveyConfig {
       flag_sampling_frame?: boolean;
       flag_outliers?: boolean;
       outlier_variables?: string[];
+      outlier_log_transform_variables?: string[];
       outlier_method?: 'iqr' | 'mad' | 'zscore';
       outlier_threshold?: number;
       flag_dk_percentage?: boolean;

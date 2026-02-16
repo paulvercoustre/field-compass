@@ -418,3 +418,242 @@ class TestPrecomputeOutlierStatistics:
         assert stats["count"] == 2
         assert abs(stats["mean"] - 31.0) < 0.01  # (30 + 32) / 2 = 31
 
+
+class TestSignedLogTransform:
+    """Tests for signed log transform and inverse."""
+
+    def test_signed_log_zero(self, test_db, test_survey_config):
+        """Zero maps to zero."""
+        engine = HFCEngine(test_db, test_survey_config)
+        assert engine._signed_log_transform(0) == 0
+
+    def test_signed_log_positive(self, test_db, test_survey_config):
+        """Positive values: sign(x) * log(1 + |x|) = log(1 + x)."""
+        engine = HFCEngine(test_db, test_survey_config)
+        import math
+        x = 10.0
+        y = engine._signed_log_transform(x)
+        assert abs(y - math.log(1 + x)) < 1e-10
+        assert engine._signed_log_inverse(y) == pytest.approx(x, rel=1e-10)
+
+    def test_signed_log_negative(self, test_db, test_survey_config):
+        """Negative values: -log(1 + |x|)."""
+        engine = HFCEngine(test_db, test_survey_config)
+        import math
+        x = -5.0
+        y = engine._signed_log_transform(x)
+        assert abs(y - (-math.log(1 + 5))) < 1e-10
+        assert engine._signed_log_inverse(y) == pytest.approx(x, rel=1e-10)
+
+    def test_signed_log_roundtrip(self, test_db, test_survey_config):
+        """Round-trip: inverse(transform(x)) == x for various x."""
+        engine = HFCEngine(test_db, test_survey_config)
+        for x in [0, 1, 10, 100, -1, -10, 0.5, -0.5]:
+            y = engine._signed_log_transform(x)
+            x_back = engine._signed_log_inverse(y)
+            assert x_back == pytest.approx(x, rel=1e-9)
+
+
+class TestOutlierLogTransform:
+    """Tests for outlier detection with log transform."""
+
+    def test_outlier_with_log_transform_detection_and_raw_display(self, test_db):
+        """Detection uses transformed values; displayed stats/bounds remain raw scale."""
+        survey_id = uuid4()
+        survey_config = SurveyConfig(
+            survey_id=survey_id,
+            survey_name="Log Transform Outlier Survey",
+            kobo_asset_id="log_outlier_asset",
+            config_data={
+                "core_identifiers": {"uuid": "_uuid", "enumerator": "enumerator_id"},
+                "special_values": {"dk_value": -99},
+                "global_parameters": {},
+                "quality_checks": {
+                    "flag_outliers": True,
+                    "outlier_variables": ["profit"],
+                    "outlier_log_transform_variables": ["profit"],
+                    "outlier_method": "iqr",
+                    "outlier_threshold": 1.5,
+                },
+            },
+        )
+        test_db.add(survey_config)
+        test_db.commit()
+        test_db.refresh(survey_config)
+
+        now = datetime.utcnow()
+        # Baseline: profit values 10, 20, 30, 40, 50 (raw)
+        for i, val in enumerate([10, 20, 30, 40, 50]):
+            sub = SubmissionCurrent(
+                _id=900100 + i,
+                survey_id=survey_id,
+                _uuid=f"log-baseline-{i}",
+                _submission_time=now,
+                end=now,
+                submission_data={"profit": val, "_uuid": f"log-baseline-{i}"},
+                kobo_validation_status="Approved",
+            )
+            test_db.add(sub)
+        test_db.commit()
+
+        engine = HFCEngine(test_db, survey_config)
+        engine.precompute_outlier_statistics()
+
+        stats = engine._outlier_stats_cache.get("profit")
+        assert stats is not None
+        # Display stats must be raw scale
+        assert abs(stats["raw_mean"] - 30.0) < 0.01  # (10+20+30+40+50)/5
+        assert abs(stats["raw_median"] - 30.0) < 0.01
+
+        # Submit extreme outlier in raw space (e.g. 10000) - should be flagged
+        issues = engine.run_checks(
+            {"profit": 10000, "_uuid": "log-outlier-sub", "enumerator_id": "enum1"},
+            "log-outlier-sub",
+        )
+        outlier_issues = [i for i in issues if i.check == "outlier_profit"]
+        assert len(outlier_issues) == 1
+        assert outlier_issues[0].check == "outlier_profit"
+        assert outlier_issues[0].value == 10000  # Raw value shown to user
+        assert outlier_issues[0].metadata.get("log_transformed") is True
+        assert outlier_issues[0].metadata.get("transformation") == "signed_log1p"
+        # Bounds and statistics in metadata should be raw scale
+        bounds = outlier_issues[0].metadata.get("bounds", {})
+        if "lower_bound" in bounds and "upper_bound" in bounds:
+            assert bounds["lower_bound"] > 0  # Raw space, not transformed
+        st = outlier_issues[0].metadata.get("statistics", {})
+        assert abs(st.get("mean", 0) - 30.0) < 1  # Raw mean
+
+
+class TestOutlierBackwardCompat:
+    """Backward compatibility: no outlier_log_transform_variables."""
+
+    def test_no_log_transform_config_unchanged_behavior(self, test_db):
+        """Without outlier_log_transform_variables, behavior matches original implementation."""
+        survey_id = uuid4()
+        survey_config = SurveyConfig(
+            survey_id=survey_id,
+            survey_name="Backward Compat Survey",
+            kobo_asset_id="backward_asset",
+            config_data={
+                "core_identifiers": {"uuid": "_uuid", "enumerator": "enumerator_id"},
+                "special_values": {"dk_value": -99},
+                "global_parameters": {},
+                "quality_checks": {
+                    "flag_outliers": True,
+                    "outlier_variables": ["age"],
+                    # No outlier_log_transform_variables
+                    "outlier_method": "iqr",
+                    "outlier_threshold": 1.5,
+                },
+            },
+        )
+        test_db.add(survey_config)
+        test_db.commit()
+        test_db.refresh(survey_config)
+
+        now = datetime.utcnow()
+        for i, val in enumerate([25, 30, 35, 40, 45]):
+            sub = SubmissionCurrent(
+                _id=900200 + i,
+                survey_id=survey_id,
+                _uuid=f"backward-{i}",
+                _submission_time=now,
+                end=now,
+                submission_data={"age": val, "_uuid": f"backward-{i}"},
+                kobo_validation_status="Approved",
+            )
+            test_db.add(sub)
+        test_db.commit()
+
+        engine = HFCEngine(test_db, survey_config)
+        assert engine.outlier_log_transform_variables == []
+        engine.precompute_outlier_statistics()
+
+        # Normal value - no outlier issue
+        issues = engine.run_checks(
+            {"age": 32, "_uuid": "backward-normal", "enumerator_id": "enum1"},
+            "backward-normal",
+        )
+        assert len([i for i in issues if i.check == "outlier_age"]) == 0
+
+        # Extreme outlier - flagged
+        issues = engine.run_checks(
+            {"age": 500, "_uuid": "backward-outlier", "enumerator_id": "enum1"},
+            "backward-outlier",
+        )
+        outlier_issues = [i for i in issues if i.check == "outlier_age"]
+        assert len(outlier_issues) == 1
+        assert outlier_issues[0].value == 500
+        assert outlier_issues[0].metadata.get("log_transformed") is None
+
+
+class TestOutlierMixedConfig:
+    """One variable transformed, another not."""
+
+    def test_mixed_log_transform_per_variable(self, test_db):
+        """age: no transform; profit: log transform."""
+        survey_id = uuid4()
+        survey_config = SurveyConfig(
+            survey_id=survey_id,
+            survey_name="Mixed Config Survey",
+            kobo_asset_id="mixed_asset",
+            config_data={
+                "core_identifiers": {"uuid": "_uuid", "enumerator": "enumerator_id"},
+                "special_values": {"dk_value": -99},
+                "global_parameters": {},
+                "quality_checks": {
+                    "flag_outliers": True,
+                    "outlier_variables": ["age", "profit"],
+                    "outlier_log_transform_variables": ["profit"],
+                    "outlier_method": "iqr",
+                    "outlier_threshold": 1.5,
+                },
+            },
+        )
+        test_db.add(survey_config)
+        test_db.commit()
+        test_db.refresh(survey_config)
+
+        now = datetime.utcnow()
+        for i in range(5):
+            sub = SubmissionCurrent(
+                _id=900300 + i,
+                survey_id=survey_id,
+                _uuid=f"mixed-{i}",
+                _submission_time=now,
+                end=now,
+                submission_data={
+                    "age": 25 + i * 5,
+                    "profit": 10 * (i + 1),
+                    "_uuid": f"mixed-{i}",
+                },
+                kobo_validation_status="Approved",
+            )
+            test_db.add(sub)
+        test_db.commit()
+
+        engine = HFCEngine(test_db, survey_config)
+        engine.precompute_outlier_statistics()
+
+        assert "age" not in engine.outlier_log_transform_variables
+        assert "profit" in engine.outlier_log_transform_variables
+
+        # age outlier (raw) - no log transform
+        issues = engine.run_checks(
+            {"age": 500, "profit": 30, "_uuid": "mixed-age-outlier"},
+            "mixed-age-outlier",
+        )
+        age_issues = [i for i in issues if i.check == "outlier_age"]
+        assert len(age_issues) == 1
+        assert age_issues[0].metadata.get("log_transformed") is None
+
+        # profit outlier (raw) - with log transform
+        issues = engine.run_checks(
+            {"age": 30, "profit": 100000, "_uuid": "mixed-profit-outlier"},
+            "mixed-profit-outlier",
+        )
+        profit_issues = [i for i in issues if i.check == "outlier_profit"]
+        assert len(profit_issues) == 1
+        assert profit_issues[0].value == 100000
+        assert profit_issues[0].metadata.get("log_transformed") is True
+
