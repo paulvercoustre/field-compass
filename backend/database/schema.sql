@@ -73,6 +73,19 @@ CREATE TABLE submissions_current (
     is_edited BOOLEAN DEFAULT FALSE,
     data_quality_issues JSONB DEFAULT '[]'::JSONB,
     qa_status VARCHAR(50) DEFAULT 'PENDING_QA',
+    dk_count INTEGER,
+    dk_eligible_count INTEGER,
+    dk_percentage NUMERIC(5,2),
+    reviewer_notes TEXT,
+    llm_check_status VARCHAR(20) DEFAULT 'skipped' NOT NULL,
+    llm_rules_hash VARCHAR(64),
+    llm_input_hash VARCHAR(64),
+    llm_model_used VARCHAR(128),
+    llm_job_id VARCHAR(128),
+    llm_queued_at TIMESTAMP WITH TIME ZONE,
+    llm_started_at TIMESTAMP WITH TIME ZONE,
+    llm_checked_at TIMESTAMP WITH TIME ZONE,
+    llm_last_error TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(_uuid)
@@ -88,6 +101,19 @@ COMMENT ON COLUMN submissions_current.submission_data IS 'Complete survey data a
 COMMENT ON COLUMN submissions_current.is_edited IS 'Whether this submission has been edited after initial submission';
 COMMENT ON COLUMN submissions_current.data_quality_issues IS 'JSONB array of quality issues found by HFC: [{check, field, value, message}, ...]';
 COMMENT ON COLUMN submissions_current.qa_status IS 'QA status: HFC_FLAGGED, PENDING_QA, PENDING_RE_QA, APPROVED';
+COMMENT ON COLUMN submissions_current.dk_count IS 'Count of DK answers for eligible questions in this submission';
+COMMENT ON COLUMN submissions_current.dk_eligible_count IS 'Count of eligible question instances included in DK denominator';
+COMMENT ON COLUMN submissions_current.dk_percentage IS 'DK percentage for this submission (dk_count / dk_eligible_count * 100)';
+COMMENT ON COLUMN submissions_current.reviewer_notes IS 'Optional free-text notes entered by reviewers';
+COMMENT ON COLUMN submissions_current.llm_check_status IS 'Status of qualitative LLM checks: pending, running, success, failed, skipped';
+COMMENT ON COLUMN submissions_current.llm_rules_hash IS 'Hash of LLM qualitative rule/config at last run';
+COMMENT ON COLUMN submissions_current.llm_input_hash IS 'Hash of normalized qualitative input values at last run';
+COMMENT ON COLUMN submissions_current.llm_model_used IS 'Model name used for the latest LLM qualitative check';
+COMMENT ON COLUMN submissions_current.llm_job_id IS 'Queue job id for the last qualitative check task';
+COMMENT ON COLUMN submissions_current.llm_queued_at IS 'When qualitative check was queued';
+COMMENT ON COLUMN submissions_current.llm_started_at IS 'When qualitative check processing started';
+COMMENT ON COLUMN submissions_current.llm_checked_at IS 'When qualitative check completed';
+COMMENT ON COLUMN submissions_current.llm_last_error IS 'Most recent error for qualitative checks';
 
 -- ============================================================================
 -- Table: submissions_history
@@ -133,6 +159,9 @@ CREATE INDEX idx_submissions_is_edited ON submissions_current(is_edited);
 CREATE INDEX idx_submissions_submission_time ON submissions_current(_submission_time);
 CREATE INDEX idx_submissions_submission_data ON submissions_current USING GIN(submission_data);
 CREATE INDEX idx_submissions_quality_issues ON submissions_current USING GIN(data_quality_issues);
+CREATE INDEX idx_submissions_llm_status ON submissions_current(llm_check_status);
+CREATE INDEX idx_submissions_llm_hashes ON submissions_current(survey_id, llm_rules_hash, llm_input_hash);
+CREATE INDEX idx_submissions_llm_job_id ON submissions_current(llm_job_id);
 -- Composite index for common triage queue queries
 CREATE INDEX idx_submissions_triage ON submissions_current(qa_status, survey_id) 
     WHERE qa_status IN ('HFC_FLAGGED', 'PENDING_RE_QA');

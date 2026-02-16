@@ -5,7 +5,7 @@ These models map to the PostgreSQL schema defined in schema.sql.
 
 from datetime import datetime
 from typing import Dict, Any, Optional
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text, Numeric
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -97,11 +97,25 @@ class SubmissionCurrent(Base):
     has_edit_history = Column(Boolean, default=False)  # Permanent flag: submission was edited at least once
     data_quality_issues = Column(JSONB, default=[])
     qa_status = Column(String(50), default="PENDING_APPROVAL")
+    dk_count = Column(Integer, nullable=True)  # Number of DK answers in eligible fields
+    dk_eligible_count = Column(Integer, nullable=True)  # Denominator used for DK percentage
+    dk_percentage = Column(Numeric(5, 2), nullable=True)  # DK percentage for the submission
     kobo_validation_status = Column(String(50), nullable=True)  # Stores Kobo's _validation_status
     kobo_edit_url = Column(String(500), nullable=True)  # URL to view/edit in Kobo
+    reviewer_notes = Column(Text, nullable=True)  # Reviewer-provided notes for this submission
     # Validation tracking fields (for incremental validation)
     last_validated_at = Column(DateTime(timezone=True), nullable=True)  # When validation checks were last run
     validation_rule_hash = Column(String(64), nullable=True)  # Hash of rule config used for validation
+    # LLM qualitative check tracking fields
+    llm_check_status = Column(String(20), nullable=False, default="skipped")  # pending|running|success|failed|skipped
+    llm_rules_hash = Column(String(64), nullable=True)  # Hash of qualitative rules/config used
+    llm_input_hash = Column(String(64), nullable=True)  # Hash of normalized monitored field values
+    llm_model_used = Column(String(128), nullable=True)  # Model used for qualitative checks
+    llm_job_id = Column(String(128), nullable=True)  # Async job id for queue tracking
+    llm_queued_at = Column(DateTime(timezone=True), nullable=True)  # Time job was enqueued
+    llm_started_at = Column(DateTime(timezone=True), nullable=True)  # Time worker started processing
+    llm_checked_at = Column(DateTime(timezone=True), nullable=True)  # Time worker completed processing
+    llm_last_error = Column(Text, nullable=True)  # Last worker/API error (if any)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     
