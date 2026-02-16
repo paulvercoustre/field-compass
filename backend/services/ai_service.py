@@ -615,7 +615,14 @@ IMPORTANT CONTEXT:
 - These are valid responses and should not be flagged
 - Support multilingual responses and evaluate in the response's language
 - Always provide your response in english
-- Be conservative and only flag clear quality issues
+- Only flag when the issue is severe enough to make the response unusable for analysis. When in doubt, do not flag.
+
+DO NOT FLAG:
+- Spelling mistakes, typos, or translation errors when the meaning is understandable
+- Grammar mistakes or awkward phrasing when the intent is clear
+- Doubled/repeated words (e.g., "the the")
+- Minor formatting issues (numbering gaps, extra list items beyond requested range)
+- Ambiguous terms that could be typos when the overall response is coherent
 """
         user_prompt = f"""Analyze these survey responses for quality issues:
 
@@ -624,9 +631,14 @@ IMPORTANT CONTEXT:
 Check only these issue types: {", ".join(selected_types)}.
 
 Issue definitions:
-- content_quality: gibberish, repeated characters, obvious low-effort noise
-- relevance: response clearly does not answer the question
-- completeness: response is too vague/insufficient for the asked question
+- content_quality: Only flag when the response is unintelligible: random characters, nonsensical strings, or text that conveys no meaningful information. Do NOT flag typos, spelling errors, or awkward wording when meaning is clear.
+- relevance: Only flag when the response is clearly off-topic and does not address the question at all. Do NOT flag imperfect or tangential answers.
+- completeness: Only flag when the response is too vague or empty to be useful. Do NOT flag: listing more items than requested, numbering gaps, or minor structural issues.
+
+Examples of responses to NOT flag (meaning is clear):
+- "Due to low price of the the products" (typo, meaning clear)
+- "1. Pot 2. Heater 5. Cast 6. Dish" (numbering gap, possible typo, but list is interpretable)
+- Listing 6 items when asked for 3-5 (over-complete is acceptable)
 
 Return only clear issues. If no clear issue exists, return an empty list.
 Remember: "{dk_string}" and {dk_numeric} are valid "Don't Know" values."""
