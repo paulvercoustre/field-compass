@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 import logging
+import os
+import sys
 from typing import Any, Dict, List
 from uuid import UUID
+
+# Ensure worker subprocesses can resolve top-level backend modules reliably.
+if "/app" not in sys.path and os.path.isdir("/app"):
+    sys.path.insert(0, "/app")
 
 from database.models import SubmissionCurrent, SurveyConfig
 from etl.hfc_engine import HFCEngine

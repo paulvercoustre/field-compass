@@ -614,6 +614,7 @@ IMPORTANT CONTEXT:
 - "Don't Know" responses are coded as {dk_numeric} (numeric) or "{dk_string}" (text)
 - These are valid responses and should not be flagged
 - Support multilingual responses and evaluate in the response's language
+- Always provide your response in english
 - Be conservative and only flag clear quality issues
 """
         user_prompt = f"""Analyze these survey responses for quality issues:

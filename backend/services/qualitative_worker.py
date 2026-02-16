@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
+from sqlalchemy import text
+
 from services.job_queue import celery_app
+from services.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -25,5 +28,30 @@ def run_qualitative_check_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return run_qualitative_check_job(payload=payload, job_id=self.request.id)
     except Exception as exc:
         logger.error("Qualitative check task failed (job=%s): %s", self.request.id, exc, exc_info=True)
+        # Best-effort fallback so jobs do not remain indefinitely pending.
+        try:
+            submission_id = int(payload.get("submission_id"))
+            survey_id = str(payload.get("survey_id"))
+            with SessionLocal() as db:
+                db.execute(
+                    text(
+                        """
+                        UPDATE submissions_current
+                        SET llm_check_status = 'failed',
+                            llm_last_error = :error,
+                            llm_checked_at = NOW()
+                        WHERE survey_id = CAST(:survey_id AS UUID)
+                          AND _id = :submission_id
+                        """
+                    ),
+                    {
+                        "error": str(exc)[:1000],
+                        "survey_id": survey_id,
+                        "submission_id": submission_id,
+                    },
+                )
+                db.commit()
+        except Exception:
+            logger.exception("Failed to persist fallback worker failure state")
         raise self.retry(exc=exc, countdown=30)
 

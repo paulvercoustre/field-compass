@@ -7,7 +7,12 @@ from celery import Celery
 BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
 RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", BROKER_URL)
 
-celery_app = Celery("field_compass_jobs", broker=BROKER_URL, backend=RESULT_BACKEND)
+celery_app = Celery(
+    "field_compass_jobs",
+    broker=BROKER_URL,
+    backend=RESULT_BACKEND,
+    include=["services.qualitative_worker"],
+)
 
 celery_app.conf.update(
     task_serializer="json",
@@ -28,6 +33,6 @@ if os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() in {"1", "true", "yes"
     celery_app.conf.task_always_eager = True
     celery_app.conf.task_eager_propagates = True
 
-# Ensure tasks are discoverable in worker process.
+# Keep autodiscovery for future conventional task modules.
 celery_app.autodiscover_tasks(["services"])
 
