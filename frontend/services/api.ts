@@ -194,5 +194,43 @@ export const api = {
       console.error(`Error updating validation status for submission ${koboId}:`, error);
       throw error;
     }
+  },
+
+  /**
+   * Update reviewer notes for a submission
+   * @param koboId The Kobo submission ID
+   * @param surveyId The survey ID
+   * @param reviewerNotes Free-text reviewer notes (or null to clear)
+   */
+  updateReviewerNotes: async (
+    koboId: number,
+    surveyId: string,
+    reviewerNotes: string | null
+  ): Promise<Submission> => {
+    try {
+      const params = new URLSearchParams({
+        survey_id: surveyId,
+      });
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/submissions/${koboId}/reviewer-notes?${params}`,
+        {
+          method: 'PATCH',
+          headers: createHeaders(),
+          body: JSON.stringify({ reviewer_notes: reviewerNotes }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(errorData.detail || `Failed to update reviewer notes: ${response.statusText}`);
+      }
+
+      const data: Submission = await response.json();
+      return data;
+    } catch (error) {
+      console.error(`Error updating reviewer notes for submission ${koboId}:`, error);
+      throw error;
+    }
   }
 };

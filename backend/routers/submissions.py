@@ -16,7 +16,15 @@ from services.database import get_db
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.permissions import require_survey_access, can_view_survey
 from database.models import SubmissionCurrent, SubmissionHistory as SubmissionHistoryORM, SurveyConfig, User
-from models import Submission, SubmissionHistory, SubmissionListResponse, QualityIssue, JsonPatch, ValidationStatusUpdate
+from models import (
+    Submission,
+    SubmissionHistory,
+    SubmissionListResponse,
+    QualityIssue,
+    JsonPatch,
+    ValidationStatusUpdate,
+    ReviewerNotesUpdate,
+)
 from etl.kobo_fetcher import KoboFetcher
 from etl.hfc_engine import HFCEngine
 
@@ -44,6 +52,13 @@ def _orm_to_pydantic_submission(orm_submission: SubmissionCurrent) -> Submission
         qa_status=orm_submission.qa_status,
         kobo_validation_status=orm_submission.kobo_validation_status,
         kobo_edit_url=orm_submission.kobo_edit_url,
+        reviewer_notes=orm_submission.reviewer_notes,
+        llm_check_status=orm_submission.llm_check_status,
+        llm_job_id=orm_submission.llm_job_id,
+        llm_queued_at=orm_submission.llm_queued_at,
+        llm_started_at=orm_submission.llm_started_at,
+        llm_checked_at=orm_submission.llm_checked_at,
+        llm_last_error=orm_submission.llm_last_error,
     )
 
 
@@ -489,4 +504,52 @@ async def update_submission_validation_status(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to update validation status: {str(e)}"
+        )
+
+
+@router.patch("/submissions/{kobo_id}/reviewer-notes", response_model=Submission)
+async def update_submission_reviewer_notes(
+    kobo_id: int,
+    notes_update: ReviewerNotesUpdate,
+    survey_id: UUIDType = Query(..., description="Survey ID for access control"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Update reviewer notes for a submission.
+    Requires editor access to the survey.
+
+    Args:
+        kobo_id: Submission ID (_id from Kobo)
+        notes_update: Reviewer notes (text or null to clear)
+        survey_id: Survey ID for permission checks
+
+    Returns:
+        Updated submission
+    """
+    # Verify submission exists
+    submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
+
+    # Check user has editor access
+    require_survey_access(db, current_user, survey_id, min_level='editor')
+
+    try:
+        submission.reviewer_notes = notes_update.reviewer_notes
+        submission.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(submission)
+
+        logger.info(
+            f"Updated reviewer notes for submission {kobo_id} by user {current_user.email}"
+        )
+
+        return _orm_to_pydantic_submission(submission)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating reviewer notes: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update reviewer notes: {str(e)}"
         )

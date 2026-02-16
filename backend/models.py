@@ -52,6 +52,13 @@ class Submission(BaseModel):
     qa_status: str = Field(..., description="Current QA status")
     kobo_validation_status: Optional[str] = Field(None, description="KoboToolbox validation status (Approved, Not Approved, On Hold, etc.)")
     kobo_edit_url: Optional[str] = Field(None, description="URL to view/edit this submission in KoboToolbox")
+    reviewer_notes: Optional[str] = Field(None, description="Optional reviewer notes for this submission")
+    llm_check_status: Optional[str] = Field(None, description="Qualitative LLM check status")
+    llm_job_id: Optional[str] = Field(None, description="Background job ID for qualitative checks")
+    llm_queued_at: Optional[datetime] = Field(None, description="When qualitative checks were queued")
+    llm_started_at: Optional[datetime] = Field(None, description="When qualitative checks started")
+    llm_checked_at: Optional[datetime] = Field(None, description="When qualitative checks completed")
+    llm_last_error: Optional[str] = Field(None, description="Last qualitative check error message")
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -86,6 +93,14 @@ class ValidationStatusUpdate(BaseModel):
     validation_status: Optional[str] = Field(
         None, 
         description="Kobo validation status: 'Approved', 'Not Approved', 'On Hold', or null to clear"
+    )
+
+
+class ReviewerNotesUpdate(BaseModel):
+    """Request model for updating reviewer notes."""
+    reviewer_notes: Optional[str] = Field(
+        None,
+        description="Free-text reviewer notes, or null to clear"
     )
 
 
@@ -237,6 +252,7 @@ class QualityMetricsSummary(BaseModel):
     total_issues: int = Field(..., description="Total count of all quality issues")
     submissions_with_issues: int = Field(..., description="Number of submissions with at least one issue")
     avg_issues_per_submission: float = Field(..., description="Average issues per submission")
+    avg_dk_percentage: Optional[float] = Field(None, description="Average DK percentage across submissions")
 
 
 class IssueFrequency(BaseModel):
