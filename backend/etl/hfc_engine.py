@@ -6,6 +6,7 @@ Performs data quality checks on submissions based on validation rules.
 import re
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 import logging
 from simpleeval import SimpleEval
@@ -14,6 +15,15 @@ import math
 
 from database.models import ValidationRule, SurveyConfig, SubmissionCurrent
 from models import QualityIssue
+from utils.rule_versioning import (
+    generate_llm_input_hash,
+    generate_llm_rules_hash,
+    should_enqueue_llm_check,
+)
+from etl.dk_utils import (
+    build_eligible_dk_question_index,
+    compute_dk_metrics as compute_submission_dk_metrics,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +57,7 @@ class HFCEngine:
         self.end_time_field = core_identifiers.get('end_time', 'end')
         
         # Special values
+        self.special_values = special_values
         self.dk_value = special_values.get('dk_value', -99)
         self.dk_string_value = special_values.get('dk_string_value', 'dk')
         
@@ -80,6 +91,14 @@ class HFCEngine:
         self.outlier_variables = quality_checks.get('outlier_variables', [])
         self.outlier_method = quality_checks.get('outlier_method', 'iqr')  # 'iqr', 'mad', or 'zscore'
         self.outlier_threshold = quality_checks.get('outlier_threshold', 1.5)  # For IQR multiplier or Z-score threshold
+        self.flag_dk_percentage = quality_checks.get('flag_dk_percentage', False)
+        self.dk_percentage_threshold = quality_checks.get('dk_percentage_threshold', 50.0)
+        self.flag_llm_qualitative = quality_checks.get('flag_llm_qualitative', False)
+        self.llm_qualitative_fields = quality_checks.get('llm_qualitative_fields', []) or []
+        self.llm_check_types = quality_checks.get(
+            'llm_check_types',
+            ['content_quality', 'relevance', 'completeness'],
+        ) or ['content_quality', 'relevance', 'completeness']
 
         # Statistics cache for outlier detection - computed once per ETL run
         self._outlier_stats_cache: Dict[str, Dict[str, float]] = {}
@@ -88,6 +107,7 @@ class HFCEngine:
         sampling_frame_config = self.config_data.get('sampling_frame', {})
         self.sampling_cols = sampling_frame_config.get('sampling_cols', [])
         self.frame_data = sampling_frame_config.get('frame_data', [])
+        self.dk_eligible_index = build_eligible_dk_question_index(self.config_data)
 
     def precompute_outlier_statistics(self) -> None:
         """
@@ -100,10 +120,16 @@ class HFCEngine:
 
         logger.info(f"Pre-computing outlier statistics for variables: {self.outlier_variables}")
 
-        # Get all existing submissions for this survey
+        # Get all existing submissions for this survey, excluding "Not Approved"
+        # (NULL != 'Not Approved' is unknown in SQL, so we explicitly include NULL)
         submissions = self.db.query(SubmissionCurrent).filter(
-            SubmissionCurrent.survey_id == self.survey_config.survey_id
+            SubmissionCurrent.survey_id == self.survey_config.survey_id,
+            or_(
+                SubmissionCurrent.kobo_validation_status.is_(None),
+                SubmissionCurrent.kobo_validation_status != 'Not Approved'
+            )
         ).all()
+        logger.debug(f"Outlier baseline: {len(submissions)} submissions (excluding Not Approved)")
 
         for variable in self.outlier_variables:
             try:
@@ -282,6 +308,19 @@ class HFCEngine:
         issues.extend(self._run_custom_rules(submission_data, submission_uuid))
         
         return issues
+
+    def compute_dk_metrics(self, submission_data: Dict[str, Any]) -> Tuple[int, int, Optional[float]]:
+        """
+        Compute DK metrics for one submission.
+
+        Returns:
+            (dk_count, dk_eligible_count, dk_percentage_or_none)
+        """
+        return compute_submission_dk_metrics(
+            submission_data=submission_data,
+            eligible_index=self.dk_eligible_index,
+            special_values=self.special_values,
+        )
     
     def compute_validation_hash(self) -> str:
         """
@@ -320,6 +359,12 @@ class HFCEngine:
                 "variables": sorted(self.outlier_variables) if self.outlier_variables else [],
                 "method": self.outlier_method,
                 "threshold": self.outlier_threshold
+            },
+            "dk_config": {
+                "enabled": self.flag_dk_percentage,
+                "threshold": self.dk_percentage_threshold,
+                "dk_value": self.dk_value,
+                "dk_string_value": self.dk_string_value,
             },
             "global_parameters": {
                 "date_range": f"{self.data_collection_start_date}_{self.data_collection_end_date}",
@@ -381,6 +426,39 @@ class HFCEngine:
         
         # No revalidation needed
         return (False, "up_to_date")
+
+    def compute_llm_rules_hash(self, qualitative_model: str) -> str:
+        """Compute a dedicated hash for qualitative LLM checks."""
+        return generate_llm_rules_hash(self.config_data, qualitative_model)
+
+    def compute_llm_input_hash(self, submission_data: Dict[str, Any]) -> str:
+        """Compute hash for monitored qualitative text inputs."""
+        return generate_llm_input_hash(
+            submission_data=submission_data,
+            llm_fields=self.llm_qualitative_fields,
+            dk_string_value=self.dk_string_value,
+        )
+
+    def needs_llm_qualitative_check(
+        self,
+        submission: SubmissionCurrent,
+        llm_rules_hash: str,
+        llm_input_hash: str,
+    ) -> Tuple[bool, str]:
+        """Determine if a submission needs (re)running qualitative LLM checks."""
+        if not self.flag_llm_qualitative:
+            return False, "llm_disabled"
+
+        if not self.llm_qualitative_fields:
+            return False, "no_llm_fields"
+
+        return should_enqueue_llm_check(
+            llm_check_status=submission.llm_check_status,
+            previous_rules_hash=submission.llm_rules_hash,
+            previous_input_hash=submission.llm_input_hash,
+            current_rules_hash=llm_rules_hash,
+            current_input_hash=llm_input_hash,
+        )
     
     def _run_basic_checks(
         self, 
@@ -530,7 +608,40 @@ class HFCEngine:
         if self.flag_outliers and self.outlier_variables:
             outlier_issues = self._check_outliers(submission_data, submission_uuid)
             issues.extend(outlier_issues)
+
+        # 7. Check DK percentage (if flag is enabled)
+        if self.flag_dk_percentage:
+            dk_percentage_issues = self._check_dk_percentage(submission_data)
+            issues.extend(dk_percentage_issues)
         
+        return issues
+
+    def _check_dk_percentage(self, submission_data: Dict[str, Any]) -> List[QualityIssue]:
+        """Flag submission when DK percentage exceeds configured threshold."""
+        issues: List[QualityIssue] = []
+
+        dk_count, dk_eligible_count, dk_percentage = self.compute_dk_metrics(submission_data)
+
+        if dk_percentage is None:
+            return issues
+
+        if dk_percentage >= self.dk_percentage_threshold:
+            issues.append(QualityIssue(
+                check="dk_percentage_high",
+                field="submission",
+                value=round(dk_percentage, 2),
+                message=(
+                    f"Don't know percentage is high ({dk_count}/{dk_eligible_count} = "
+                    f"{dk_percentage:.2f}%), above threshold {self.dk_percentage_threshold}%"
+                ),
+                metadata={
+                    "dk_count": dk_count,
+                    "dk_eligible_count": dk_eligible_count,
+                    "dk_percentage": round(dk_percentage, 2),
+                    "threshold": self.dk_percentage_threshold,
+                },
+            ))
+
         return issues
     
     def _check_duration(

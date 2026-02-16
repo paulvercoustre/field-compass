@@ -5,7 +5,7 @@ Tests for HFC engine, especially status determination logic.
 import pytest
 from datetime import datetime, timedelta
 from etl.hfc_engine import HFCEngine, QualityIssue
-from database.models import SurveyConfig
+from database.models import SurveyConfig, SubmissionCurrent
 from uuid import uuid4
 
 
@@ -341,4 +341,80 @@ class TestIncrementalValidation:
         assert needs_check is False
         assert reason == "up_to_date"
 
+
+class TestPrecomputeOutlierStatistics:
+    """Tests for precompute_outlier_statistics excluding Not Approved submissions."""
+
+    def test_excludes_not_approved_from_outlier_baseline(self, test_db):
+        """Not Approved submissions must not be included in outlier statistics baseline."""
+        # Create survey config with outlier detection enabled from the start
+        survey_id = uuid4()
+        survey_config = SurveyConfig(
+            survey_id=survey_id,
+            survey_name="Outlier Test Survey",
+            kobo_asset_id="outlier_test_asset",
+            config_data={
+                "core_identifiers": {"uuid": "_uuid", "enumerator": "enumerator_id"},
+                "special_values": {"dk_value": -99},
+                "global_parameters": {},
+                "quality_checks": {
+                    "flag_outliers": True,
+                    "outlier_variables": ["age"],
+                    "outlier_method": "iqr",
+                    "outlier_threshold": 1.5,
+                },
+            },
+        )
+        test_db.add(survey_config)
+        test_db.commit()
+        test_db.refresh(survey_config)
+
+        now = datetime.utcnow()
+
+        # Approved: age=30
+        sub_approved = SubmissionCurrent(
+            _id=900001,
+            survey_id=survey_id,
+            _uuid="outlier-test-approved",
+            _submission_time=now,
+            end=now,
+            submission_data={"age": 30, "_uuid": "outlier-test-approved"},
+            kobo_validation_status="Approved",
+        )
+        test_db.add(sub_approved)
+
+        # Not Approved: age=1000 (extreme - would heavily skew mean if included)
+        sub_not_approved = SubmissionCurrent(
+            _id=900002,
+            survey_id=survey_id,
+            _uuid="outlier-test-not-approved",
+            _submission_time=now,
+            end=now,
+            submission_data={"age": 1000, "_uuid": "outlier-test-not-approved"},
+            kobo_validation_status="Not Approved",
+        )
+        test_db.add(sub_not_approved)
+
+        # Not Reviewed (NULL): age=32
+        sub_not_reviewed = SubmissionCurrent(
+            _id=900003,
+            survey_id=survey_id,
+            _uuid="outlier-test-not-reviewed",
+            _submission_time=now,
+            end=now,
+            submission_data={"age": 32, "_uuid": "outlier-test-not-reviewed"},
+            kobo_validation_status=None,
+        )
+        test_db.add(sub_not_reviewed)
+
+        test_db.commit()
+
+        engine = HFCEngine(test_db, survey_config)
+        engine.precompute_outlier_statistics()
+
+        stats = engine._outlier_stats_cache.get("age")
+        assert stats is not None
+        # Baseline should include only Approved (30) and Not Reviewed (32), not Not Approved (1000)
+        assert stats["count"] == 2
+        assert abs(stats["mean"] - 31.0) < 0.01  # (30 + 32) / 2 = 31
 
