@@ -15,7 +15,7 @@ const DataCollectionProgressPage: React.FC = () => {
   const [etlStats, setEtlStats] = useState<ETLStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [approvedOnly, setApprovedOnly] = useState(true);
+  const [approvedOnly, setApprovedOnly] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>('overall');
   const [filter, setFilter] = useState('');
 

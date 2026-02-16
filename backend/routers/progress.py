@@ -175,6 +175,10 @@ async def get_progress_data(
     Progress is calculated by counting completed surveys (submissions) against targets
     from the sampling frame. Disaggregations are dynamically generated based on
     the sampling_cols in the survey configuration.
+    
+    Submissions included:
+    - approved_only=False (default): all submissions except REJECTED (Not accepted).
+    - approved_only=True: only submissions with qa_status APPROVED.
     """
     # Parse and validate survey_id
     try:
@@ -193,9 +197,12 @@ async def get_progress_data(
         SubmissionCurrent.survey_id == survey_config.survey_id
     )
     
-    # Filter to approved submissions if requested
+    # Filter submissions by qa_status
     if approved_only:
         query = query.filter(SubmissionCurrent.qa_status == "APPROVED")
+    else:
+        # Default: exclude REJECTED (Not accepted)
+        query = query.filter(SubmissionCurrent.qa_status != "REJECTED")
 
     # Get all submissions (completed surveys)
     submissions = query.all()

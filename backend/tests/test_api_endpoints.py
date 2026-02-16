@@ -530,7 +530,10 @@ class TestProgressEndpoint:
         assert any(row["values"]["district"] == "South" and row["target"] == 15 and row["conducted"] == 0 for row in detailed)
 
     def test_progress_filters_approved_only(self, client, test_survey):
-        """Progress endpoint should respect the approved_only flag."""
+        """Progress endpoint should respect the approved_only flag.
+        Default (no param): exclude REJECTED, count APPROVED + PENDING_APPROVAL + etc.
+        approved_only=true: count only APPROVED.
+        """
         survey_uuid = UUID(test_survey["survey_id"])
 
         with TestingSessionLocal() as db:
@@ -552,14 +555,25 @@ class TestProgressEndpoint:
                 submission_data={"enumerator_id": "enum-b"},
                 qa_status="PENDING_APPROVAL",
             )
-            db.add_all([submission_approved, submission_pending])
+            submission_rejected = SubmissionCurrent(
+                _id=3,
+                survey_id=survey_uuid,
+                _uuid=str(uuid4()),
+                _submission_time=datetime.utcnow(),
+                end=datetime.utcnow(),
+                submission_data={"enumerator_id": "enum-c"},
+                qa_status="REJECTED",
+            )
+            db.add_all([submission_approved, submission_pending, submission_rejected])
             db.commit()
 
+        # Default: exclude REJECTED, so conducted = 2 (APPROVED + PENDING_APPROVAL)
         response_all = client.get(f"/api/progress?survey_id={test_survey['survey_id']}")
         assert response_all.status_code == 200
         overall_all = response_all.json()["overall"]
         assert overall_all["conducted"] == 2
 
+        # approved_only=true: only APPROVED
         response_approved = client.get(
             f"/api/progress?survey_id={test_survey['survey_id']}&approved_only=true"
         )
