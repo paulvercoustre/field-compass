@@ -59,6 +59,14 @@ services:
     container_name: field-compass-api
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/field_compass}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_RULE_GEN_MODEL: ${OPENAI_RULE_GEN_MODEL:-gpt-5}
+      OPENAI_QUAL_CHECK_MODEL: ${OPENAI_QUAL_CHECK_MODEL:-gpt-5-mini}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-2500}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # In single-VM mode, CORS can typically be your public domain(s)
@@ -66,9 +74,45 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
     expose:
       - "8000"
     command: uvicorn main:app --host 0.0.0.0 --port 8000
+    networks:
+      - field-compass-network
+
+  # Redis broker for async jobs
+  redis:
+    image: redis:7-alpine
+    container_name: field-compass-redis
+    networks:
+      - field-compass-network
+
+  # Celery worker for qualitative checks
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: field-compass-worker
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/field_compass}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_RULE_GEN_MODEL: ${OPENAI_RULE_GEN_MODEL:-gpt-5}
+      OPENAI_QUAL_CHECK_MODEL: ${OPENAI_QUAL_CHECK_MODEL:-gpt-5-mini}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-2500}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: celery -A services.job_queue.celery_app worker --loglevel=INFO -Q qualitative_checks
     networks:
       - field-compass-network
 

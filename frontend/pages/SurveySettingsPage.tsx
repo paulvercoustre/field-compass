@@ -51,6 +51,7 @@ const SurveySettingsPage: React.FC = () => {
   const [koboToolFileName, setKoboToolFileName] = useState<string>('');
   const [isLoadingTool, setIsLoadingTool] = useState(false);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
+  const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
   const [labelColumnSurvey, setLabelColumnSurvey] = useState<string>('label::English (en)');
   const [labelColumnChoices, setLabelColumnChoices] = useState<string>('label::English (en)');
 
@@ -103,6 +104,11 @@ const SurveySettingsPage: React.FC = () => {
     outlier_variables: [] as string[],
     outlier_method: 'iqr' as 'iqr' | 'mad' | 'zscore',
     outlier_threshold: 1.5,
+    flag_dk_percentage: false,
+    dk_percentage_threshold: 50,
+    flag_llm_qualitative: false,
+    llm_qualitative_fields: [] as string[],
+    llm_check_types: ['content_quality', 'relevance', 'completeness'] as Array<'content_quality' | 'relevance' | 'completeness'>,
   });
 
   useEffect(() => {
@@ -154,11 +160,23 @@ const SurveySettingsPage: React.FC = () => {
         .filter(([_, variable]) => numericTypes.includes(variable.type))
         .map(([name, _]) => name);
       setAvailableVariables(vars);
+
+      const textQuestions = koboToolData.survey
+        .filter((q) => q.name && (q.type === 'text' || q.type.startsWith('text')))
+        .map((q) => ({
+          name: q.name,
+          label: q['label::English (en)'] || q.name,
+          type: q.type,
+        }));
+      setTextVariables(textQuestions);
       
       // Clean up outlier_variables to remove any non-numeric variables
       setQualityChecks((prev) => ({
         ...prev,
         outlier_variables: prev.outlier_variables.filter((v) => vars.includes(v)),
+        llm_qualitative_fields: prev.llm_qualitative_fields.filter((v) =>
+          textQuestions.some((t) => t.name === v)
+        ),
       }));
     }
   }, [koboToolData]);
@@ -237,6 +255,11 @@ const SurveySettingsPage: React.FC = () => {
           outlier_variables: validOutlierVars,
           outlier_method: cd.quality_checks.outlier_method ?? 'iqr',
           outlier_threshold: cd.quality_checks.outlier_threshold ?? 1.5,
+          flag_dk_percentage: cd.quality_checks.flag_dk_percentage ?? false,
+          dk_percentage_threshold: cd.quality_checks.dk_percentage_threshold ?? 50,
+          flag_llm_qualitative: cd.quality_checks.flag_llm_qualitative ?? false,
+          llm_qualitative_fields: cd.quality_checks.llm_qualitative_fields ?? [],
+          llm_check_types: cd.quality_checks.llm_check_types ?? ['content_quality', 'relevance', 'completeness'],
         });
       }
 
@@ -1514,6 +1537,60 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* DK Percentage Flag */}
+                <div className="space-y-2">
+                  <div className="flex items-start">
+                    <div className="flex h-5 items-center">
+                      <input
+                        type="checkbox"
+                        disabled={!isEditing}
+                        checked={qualityChecks.flag_dk_percentage}
+                        onChange={(e) => setQualityChecks({ ...qualityChecks, flag_dk_percentage: e.target.checked })}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                      />
+                    </div>
+                    <div className="ml-3">
+                      <label className="text-sm font-medium text-gray-900 dark:text-white">
+                        Flag submissions with high Don't know percentage
+                      </label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Create a flag when the percentage of Don't know answers in eligible questions exceeds a threshold.
+                      </p>
+                    </div>
+                  </div>
+
+                  {qualityChecks.flag_dk_percentage && (
+                    <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Threshold (%)
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={qualityChecks.dk_percentage_threshold}
+                          onChange={(e) =>
+                            setQualityChecks({
+                              ...qualityChecks,
+                              dk_percentage_threshold: Math.max(
+                                0,
+                                Math.min(100, Number.parseFloat(e.target.value) || 0)
+                              ),
+                            })
+                          }
+                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      ) : (
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {qualityChecks.dk_percentage_threshold}%
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Survey Duration Limits */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                   <h3 className="text-md font-medium text-gray-900 dark:text-white mb-3">Survey Duration Limits</h3>
@@ -1726,6 +1803,80 @@ const SurveySettingsPage: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            </section>
+
+            {/* AI Qualitative Checks */}
+            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">AI Qualitative Text Analysis</h2>
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="flex h-5 items-center">
+                    <input
+                      type="checkbox"
+                      disabled={!isEditing}
+                      checked={qualityChecks.flag_llm_qualitative}
+                      onChange={(e) =>
+                        setQualityChecks({
+                          ...qualityChecks,
+                          flag_llm_qualitative: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                    />
+                  </div>
+                  <div className="ml-3">
+                    <label className="text-sm font-medium text-gray-900 dark:text-white">
+                      Enable AI-powered analysis of qualitative responses
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Uses asynchronous checks and only re-runs when monitored text responses or LLM rules change.
+                    </p>
+                  </div>
+                </div>
+
+                {qualityChecks.flag_llm_qualitative && (
+                  <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Text Fields to Analyze</h3>
+                    {textVariables.length === 0 ? (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        No text fields found. Upload Kobo tool metadata with text questions to enable field selection.
+                      </p>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto space-y-1">
+                        {textVariables.map((variable) => (
+                          <label key={variable.name} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              disabled={!isEditing}
+                              checked={qualityChecks.llm_qualitative_fields.includes(variable.name)}
+                              onChange={(e) => {
+                                const selected = qualityChecks.llm_qualitative_fields;
+                                if (e.target.checked) {
+                                  setQualityChecks({
+                                    ...qualityChecks,
+                                    llm_qualitative_fields: [...selected, variable.name],
+                                  });
+                                } else {
+                                  setQualityChecks({
+                                    ...qualityChecks,
+                                    llm_qualitative_fields: selected.filter((name) => name !== variable.name),
+                                  });
+                                }
+                              }}
+                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                            />
+                            <span className="text-gray-900 dark:text-white">{variable.label}</span>
+                            <span className="text-xs text-gray-500">({variable.name})</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                      Enabled checks: content quality, relevance, and completeness.
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
 

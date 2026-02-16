@@ -40,6 +40,13 @@ export interface Submission {
   qa_status: QAStatus;
   kobo_validation_status?: string | null;  // Kobo's validation status (Approved, Not Approved, On Hold, etc.)
   kobo_edit_url?: string | null;  // URL to view/edit this submission in KoboToolbox
+  reviewer_notes?: string | null;
+  llm_check_status?: 'pending' | 'running' | 'success' | 'failed' | 'skipped' | null;
+  llm_job_id?: string | null;
+  llm_queued_at?: string | null;
+  llm_started_at?: string | null;
+  llm_checked_at?: string | null;
+  llm_last_error?: string | null;
 }
 
 export interface JsonPatch {
@@ -196,6 +203,7 @@ export interface QualityMetricsSummary {
   total_issues: number;
   submissions_with_issues: number;
   avg_issues_per_submission: number;
+  avg_dk_percentage?: number | null;
 }
 
 export interface IssueFrequency {

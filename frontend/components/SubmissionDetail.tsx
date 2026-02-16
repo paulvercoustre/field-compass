@@ -27,13 +27,18 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
   const [isLoadingKoboUrl, setIsLoadingKoboUrl] = useState(false);
   const [isUpdatingValidation, setIsUpdatingValidation] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [reviewerNotesError, setReviewerNotesError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [reviewerNotes, setReviewerNotes] = useState('');
+  const [isSavingReviewerNotes, setIsSavingReviewerNotes] = useState(false);
   const { selectedSurvey } = useSurvey();
 
   // Clear success and error messages when submission changes
   useEffect(() => {
     setSuccess(null);
     setValidationError(null);
+    setReviewerNotesError(null);
+    setReviewerNotes(submission?.reviewer_notes || '');
   }, [submission?._id]);
 
   // Fetch survey config when submission or survey changes
@@ -122,7 +127,19 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     );
   }
 
-  const { _id, submission_data, has_edit_history, data_quality_issues, qa_status, kobo_validation_status, _submission_time, end } = submission;
+  const {
+    _id,
+    submission_data,
+    has_edit_history,
+    data_quality_issues,
+    qa_status,
+    kobo_validation_status,
+    _submission_time,
+    end,
+    llm_check_status,
+    llm_checked_at,
+    llm_last_error,
+  } = submission;
 
   // Check if a rule passed or failed for this submission
   const checkRuleStatus = (rule: ValidationRule): { passed: boolean; issue?: QualityIssue } => {
@@ -277,6 +294,34 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     }
   };
 
+  // Handle reviewer notes save
+  const handleSaveReviewerNotes = async () => {
+    if (!selectedSurvey) return;
+
+    setIsSavingReviewerNotes(true);
+    setReviewerNotesError(null);
+    setSuccess(null);
+
+    try {
+      const notesToSave = reviewerNotes.trim() === '' ? null : reviewerNotes;
+      const updatedSubmission = await api.updateReviewerNotes(
+        submission._id,
+        selectedSurvey.survey_id,
+        notesToSave
+      );
+
+      // Update local display
+      Object.assign(submission, updatedSubmission);
+      setReviewerNotes(updatedSubmission.reviewer_notes || '');
+      setSuccess('Reviewer notes saved');
+    } catch (error) {
+      console.error('Failed to save reviewer notes:', error);
+      setReviewerNotesError(error instanceof Error ? error.message : 'Failed to save reviewer notes');
+    } finally {
+      setIsSavingReviewerNotes(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900 min-w-0">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -295,6 +340,25 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
               <AlertIcon />
               {data_quality_issues.length} issue{data_quality_issues.length > 1 ? 's' : ''}
             </span>
+          )}
+          {(llm_check_status === 'pending' || llm_check_status === 'running') && (
+            <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+              </svg>
+              AI qualitative check in progress
+            </span>
+          )}
+        </div>
+
+        <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+          <span className="font-medium">AI check status:</span> {llm_check_status || 'skipped'}
+          {llm_checked_at && (
+            <span> · Last checked: {new Date(llm_checked_at).toLocaleString()}</span>
+          )}
+          {llm_last_error && (
+            <span className="text-red-600 dark:text-red-400"> · Error: {llm_last_error}</span>
           )}
         </div>
         
@@ -440,6 +504,37 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                   </div>
                 </div>
               )}
+
+              {/* Reviewer Notes */}
+              <div className="md:col-span-2 lg:col-span-3">
+                <span className="text-xs text-gray-600 dark:text-gray-400 block mb-2">Reviewer Notes</span>
+                <div className="space-y-2">
+                  <textarea
+                    value={reviewerNotes}
+                    onChange={(e) => setReviewerNotes(e.target.value)}
+                    placeholder="Add reviewer notes for this submission..."
+                    rows={3}
+                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    disabled={isSavingReviewerNotes}
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Notes are saved to this submission and visible to reviewers with access.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleSaveReviewerNotes}
+                      disabled={isSavingReviewerNotes}
+                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isSavingReviewerNotes ? 'Saving...' : 'Save notes'}
+                    </button>
+                  </div>
+                  {reviewerNotesError && (
+                    <ErrorMessage message={reviewerNotesError} onDismiss={() => setReviewerNotesError(null)} />
+                  )}
+                </div>
+              </div>
               </div>
             </div>
           </div>

@@ -89,6 +89,11 @@ export interface SurveyConfig {
       outlier_variables?: string[];
       outlier_method?: 'iqr' | 'mad' | 'zscore';
       outlier_threshold?: number;
+      flag_dk_percentage?: boolean;
+      dk_percentage_threshold?: number;
+      flag_llm_qualitative?: boolean;
+      llm_qualitative_fields?: string[];
+      llm_check_types?: ('content_quality' | 'relevance' | 'completeness')[];
     };
     kobo_tool?: {
       survey: any[];
@@ -540,6 +545,8 @@ export interface ETLStats {
   validated: number;  // Number of submissions that went through validation checks
   skipped: number;    // Number of submissions that skipped validation (incremental optimization)
   validation_reasons?: Record<string, number>;  // Breakdown of why submissions were validated
+  llm_queued?: number;
+  llm_skipped?: number;
   hfc_flagged: number;
   errors: number;
   duration_seconds: number;

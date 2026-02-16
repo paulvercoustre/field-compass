@@ -153,6 +153,21 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     }
   }, [selectedSurvey, filterState, fetchFilteredSubmissions]);
 
+  // Auto-refresh while any LLM qualitative checks are pending/running.
+  useEffect(() => {
+    if (!selectedSurvey) return;
+    const hasActiveLLMJobs = submissions.some(
+      (s) => s.llm_check_status === 'pending' || s.llm_check_status === 'running'
+    );
+    if (!hasActiveLLMJobs) return;
+
+    const intervalId = window.setInterval(() => {
+      fetchFilteredSubmissions();
+    }, 8000);
+
+    return () => window.clearInterval(intervalId);
+  }, [selectedSurvey, submissions, fetchFilteredSubmissions]);
+
   const handleRefresh = async () => {
     if (!selectedSurvey) {
       setError('Please select a survey first');
@@ -175,8 +190,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       
       const checkedCount = (stats.validated || 0);
       const skippedCount = (stats.skipped || 0);
+      const llmQueuedCount = stats.llm_queued || 0;
       setSuccess(
-        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}, ${stats.hfc_flagged} flagged`
+        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}, ${stats.hfc_flagged} flagged, ${llmQueuedCount} AI qualitative checks queued`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run ETL pipeline');
