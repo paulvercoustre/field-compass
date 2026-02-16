@@ -17,6 +17,50 @@ interface SubmissionDetailProps {
   isLoading: boolean;
 }
 
+// Helper to get value from submission data (path-based lookup like backend)
+const getFieldValueFromData = (submissionData: Record<string, any>, fieldName: string): any => {
+  if (!submissionData || !fieldName) return undefined;
+  if (fieldName in submissionData) return submissionData[fieldName];
+  for (const key in submissionData) {
+    if (key.endsWith(`/${fieldName}`) || key === fieldName) return submissionData[key];
+  }
+  return undefined;
+};
+
+const getDurationMinutes = (config: SurveyConfig | null, data: Record<string, any>): number | null => {
+  const v = data?.active_interview_time;
+  if (v != null) try { return parseFloat(String(v)); } catch { return null; }
+  const startF = config?.config_data?.core_identifiers?.start_time;
+  const endF = config?.config_data?.core_identifiers?.end_time;
+  if (!startF || !endF) return null;
+  const s = getFieldValueFromData(data, startF);
+  const e = getFieldValueFromData(data, endF);
+  if (!s || !e) return null;
+  try {
+    return (new Date(e).getTime() - new Date(s).getTime()) / 60000;
+  } catch {
+    return null;
+  }
+};
+
+// General check definitions - only checks enabled in survey settings are shown
+const GENERAL_CHECK_DEFINITIONS: Array<{
+  id: string;
+  label: string;
+  enabled: (config: SurveyConfig | null) => boolean;
+  getDetails: (config: SurveyConfig | null, submissionData: Record<string, any>) => { field: string; value: any } | null;
+}> = [
+  { id: 'missing_uuid', label: 'Missing UUID', enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.uuid || '_uuid'; const v = getFieldValueFromData(d, f) ?? d?._uuid; return v != null ? { field: f, value: v } : null; } },
+  { id: 'missing_enumerator', label: 'Missing Enumerator', enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.enumerator; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
+  { id: 'date_out_of_range', label: 'Date Out Of Range', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_out_of_period && (c?.config_data?.global_parameters?.data_collection_start_date || c?.config_data?.global_parameters?.data_collection_end_date)), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
+  { id: 'interview_on_weekend', label: 'Interview On Weekend', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_weekend), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
+  { id: 'interview_out_of_office_hours', label: 'Interview Out Of Office Hours', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_office_hours), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.start_time; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
+  { id: 'dk_percentage_high', label: 'DK Percentage High', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_dk_percentage), getDetails: () => ({ field: 'submission', value: 'Within threshold' }) },
+  { id: 'duration_too_short', label: 'Duration Too Short', enabled: (c) => c?.config_data?.global_parameters?.min_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
+  { id: 'duration_too_long', label: 'Duration Too Long', enabled: (c) => c?.config_data?.global_parameters?.max_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
+  { id: 'sampling_frame_mismatch', label: 'Sampling Frame Mismatch', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && c?.config_data?.sampling_frame?.sampling_cols?.length), getDetails: (c, d) => { const cols = c?.config_data?.sampling_frame?.sampling_cols; if (!cols?.length) return null; const combo = cols.map((col: string) => `${col}=${getFieldValueFromData(d, col) ?? 'N/A'}`).join(', '); return { field: cols.join(', '), value: combo }; } },
+];
+
 const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoading }) => {
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
@@ -32,7 +76,19 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
   const [reviewerNotes, setReviewerNotes] = useState('');
   const [isSavingReviewerNotes, setIsSavingReviewerNotes] = useState(false);
   const [showOutlierDetails, setShowOutlierDetails] = useState(false);
+  const [showChecksList, setShowChecksList] = useState(false);
+  const [showGeneralChecksList, setShowGeneralChecksList] = useState(false);
+  const [expandedGeneralChecks, setExpandedGeneralChecks] = useState<Set<string>>(new Set());
   const { selectedSurvey } = useSurvey();
+
+  const toggleGeneralCheckExpansion = (checkId: string) => {
+    setExpandedGeneralChecks(prev => {
+      const next = new Set(prev);
+      if (next.has(checkId)) next.delete(checkId);
+      else next.add(checkId);
+      return next;
+    });
+  };
 
   // Clear success and error messages when submission changes
   useEffect(() => {
@@ -40,6 +96,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     setValidationError(null);
     setReviewerNotesError(null);
     setReviewerNotes(submission?.reviewer_notes || '');
+    setShowChecksList(false);
+    setShowGeneralChecksList(false);
   }, [submission?._id]);
 
   // Fetch survey config when submission or survey changes
@@ -95,6 +153,20 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     });
 
     setExpandedRules(failedRuleIds);
+  }, [submission, validationRules]);
+
+  // Initialize expanded general checks: expand all failed checks by default
+  useEffect(() => {
+    if (!submission) return;
+    const validationIds = new Set(validationRules.map(r => r.rule_data.check_id || r.rule_name));
+    const isQual = (i: { check: string; metadata?: unknown }) =>
+      i.check.startsWith('qual_') || (i.metadata as Record<string, unknown>)?.source === 'llm_qualitative_v1';
+    const failedGeneralIds = new Set(
+      submission.data_quality_issues
+        .filter(i => !validationIds.has(i.check) && !i.check.startsWith('outlier_') && !isQual(i))
+        .map(i => i.check)
+    );
+    setExpandedGeneralChecks(failedGeneralIds);
   }, [submission, validationRules]);
 
   // Fetch Kobo edit URL when submission or survey changes
@@ -190,6 +262,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
       sampling?: Record<string, any>;
       dateInterview?: string;
       duration?: number;
+      activeDuration?: number;
     } = {};
 
     // Get enumerator - always try to get it if field is configured
@@ -239,6 +312,20 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
       }
     }
 
+    // Fallback: total_duration from audit logs if form fields didn't provide it
+    if (metadata.duration === undefined) {
+      const totalFromAudit = submission_data.total_duration;
+      if (typeof totalFromAudit === 'number' && !isNaN(totalFromAudit)) {
+        metadata.duration = Math.round(totalFromAudit);
+      }
+    }
+
+    // Active duration from audit logs (time user was actively interacting)
+    const activeTime = submission_data.active_interview_time;
+    if (typeof activeTime === 'number' && !isNaN(activeTime)) {
+      metadata.activeDuration = Math.round(activeTime);
+    }
+
     return metadata;
   };
 
@@ -271,6 +358,23 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
       return newSet;
     });
   };
+
+  // Compute pass/fail counts for Custom Quality Checks
+  const passedCount = validationRules.filter(rule => checkRuleStatus(rule).passed).length;
+  const allPassed = validationRules.length > 0 && passedCount === validationRules.length;
+
+  // General quality issues (excludes validation rules, outliers, qualitative)
+  const validationRuleCheckIds = new Set(
+    validationRules.map(rule => rule.rule_data.check_id || rule.rule_name)
+  );
+  const generalIssues = data_quality_issues.filter(
+    issue => !validationRuleCheckIds.has(issue.check) && !issue.check.startsWith('outlier_') && !isQualitativeIssue(issue)
+  );
+  const allGeneralPassed = generalIssues.length === 0;
+
+  // General checks enabled in survey settings (only these are shown)
+  const enabledGeneralChecks = GENERAL_CHECK_DEFINITIONS.filter(d => d.enabled(surveyConfig));
+  const generalPassedCount = enabledGeneralChecks.filter(c => !generalIssues.some(i => i.check === c.id)).length;
 
   // Handle validation status change
   const handleValidationStatusChange = async (newStatus: string | null) => {
@@ -420,7 +524,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
           <div className="mb-6">
             <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Submission Overview</h3>
             <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Enumerator - Always show if field is configured */}
               {metadata.enumeratorField && (
                 <div className="md:col-span-1">
@@ -474,9 +578,22 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                 </div>
               )}
 
+              {/* Active Duration */}
+              {metadata.activeDuration !== undefined && (
+                <div>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 block mb-1">Active Duration</span>
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-2 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">{metadata.activeDuration} min</span>
+                  </div>
+                </div>
+              )}
+
               {/* Sampling Information - Always show if configured */}
               {metadata.sampling && Object.keys(metadata.sampling).length > 0 && (
-                <div className="md:col-span-2 lg:col-span-3">
+                <div className="md:col-span-2 lg:col-span-4">
                   <span className="text-xs text-gray-600 dark:text-gray-400 block mb-2">Sampling Information</span>
                   <div className="flex flex-wrap gap-3">
                     {Object.entries(metadata.sampling).map(([key, value]) => (
@@ -496,7 +613,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
               )}
 
               {/* Reviewer Notes */}
-              <div className="md:col-span-2 lg:col-span-3">
+              <div className="md:col-span-2 lg:col-span-4">
                 <span className="text-xs text-gray-600 dark:text-gray-400 block mb-2">Reviewer Notes</span>
                 <div className="space-y-2">
                   <textarea
@@ -530,9 +647,311 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
           </div>
         )}
 
-        {/* Qualitative data checks */}
+        {/* General Quality Checks Section - Collapsed when all passed, full list when any failed */}
         <div className="mb-6">
-          <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Qualitative data checks</h3>
+            <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">General Quality Checks</h3>
+                {enabledGeneralChecks.length > 0 && (
+                    <span className={`text-sm font-medium ${
+                        allGeneralPassed
+                            ? 'text-green-700 dark:text-green-400'
+                            : 'text-orange-700 dark:text-orange-400'
+                    }`}>
+                        {`${generalPassedCount}/${enabledGeneralChecks.length} tests passed`}
+                    </span>
+                )}
+                {enabledGeneralChecks.length > 0 && allGeneralPassed && (
+                    <button
+                        type="button"
+                        onClick={() => setShowGeneralChecksList(prev => !prev)}
+                        className="inline-flex items-center p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        aria-label={showGeneralChecksList ? 'Hide checks list' : 'Show checks list'}
+                    >
+                        <svg
+                            className={`w-4 h-4 transition-transform ${showGeneralChecksList ? 'rotate-180' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                )}
+            </div>
+            {(allGeneralPassed && !showGeneralChecksList) ? null : (
+                <div className="space-y-3">
+                    {enabledGeneralChecks.length === 0 ? (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">No general checks configured for this survey.</p>
+                    ) : (
+                        enabledGeneralChecks.map((check) => {
+                            const issue = generalIssues.find(i => i.check === check.id);
+                            const passed = !issue;
+                            const isExpanded = expandedGeneralChecks.has(check.id);
+                            const details = passed
+                                ? check.getDetails(surveyConfig, submission_data || {})
+                                : null;
+                            const shouldShowDetails = isExpanded && (passed ? details : !!issue);
+                            return (
+                                <div
+                                    key={check.id}
+                                    className={`p-4 rounded-md border ${
+                                        passed
+                                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/50'
+                                            : 'bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleGeneralCheckExpansion(check.id)}
+                                                    className={`flex-shrink-0 p-1 rounded transition-colors ${
+                                                        passed
+                                                            ? 'hover:bg-green-100 dark:hover:bg-green-900/40'
+                                                            : 'hover:bg-orange-100 dark:hover:bg-orange-900/40'
+                                                    }`}
+                                                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                                                >
+                                                    <svg
+                                                        className={`w-4 h-4 transition-transform ${
+                                                            isExpanded ? 'rotate-180' : ''
+                                                        } ${passed ? 'text-green-700 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </button>
+                                                <h4 className={`font-semibold text-sm ${
+                                                    passed ? 'text-green-800 dark:text-green-300' : 'text-orange-800 dark:text-orange-300'
+                                                }`}>
+                                                    {check.label}
+                                                </h4>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-4">
+                                            {passed ? (
+                                                <>
+                                                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    <span className="text-sm font-medium text-green-700 dark:text-green-400">Passed</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                    <span className="text-sm font-medium text-red-700 dark:text-red-400">Flagged</span>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {shouldShowDetails && (
+                                        <div className="mt-3 space-y-2">
+                                            {!passed && issue && (
+                                                <p className="text-sm text-orange-700 dark:text-orange-400">{issue.message}</p>
+                                            )}
+                                            {!passed && issue ? (
+                                                <>
+                                                    {issue.field && (
+                                                        <div className="text-sm">
+                                                            <span className="font-medium text-gray-700 dark:text-gray-300">Field: </span>
+                                                            <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">{issue.field}</span>
+                                                        </div>
+                                                    )}
+                                                    {issue.value !== null && issue.value !== undefined && (
+                                                        <div className="text-sm">
+                                                            <span className="font-medium text-gray-700 dark:text-gray-300">Value: </span>
+                                                            <span className="text-gray-600 dark:text-gray-400">{String(issue.value)}</span>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : details ? (
+                                                <>
+                                                    <div className="text-sm">
+                                                        <span className="font-medium text-gray-700 dark:text-gray-300">Field: </span>
+                                                        <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">{details.field}</span>
+                                                    </div>
+                                                    <div className="text-sm">
+                                                        <span className="font-medium text-gray-700 dark:text-gray-300">Value: </span>
+                                                        <span className="text-gray-600 dark:text-gray-400">
+                                                            {typeof details.value === 'object' ? JSON.stringify(details.value) : String(details.value)}
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            ) : null}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+        </div>
+
+
+        {/* Quality Checks Section - Collapsed when all passed, full list when any failed */}
+        {validationRules.length > 0 && (
+            <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Custom Quality Checks</h3>
+                    {!isLoadingRules && (
+                        <span className={`text-sm font-medium ${
+                            allPassed
+                                ? 'text-green-700 dark:text-green-400'
+                                : 'text-orange-700 dark:text-orange-400'
+                        }`}>
+                            {passedCount}/{validationRules.length} tests passed
+                        </span>
+                    )}
+                    {!isLoadingRules && allPassed && (
+                        <button
+                            type="button"
+                            onClick={() => setShowChecksList(prev => !prev)}
+                            className="inline-flex items-center p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                            aria-label={showChecksList ? 'Hide checks list' : 'Show checks list'}
+                        >
+                            <svg
+                                className={`w-4 h-4 transition-transform ${showChecksList ? 'rotate-180' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
+                {isLoadingRules ? (
+                    <div className="flex justify-center py-4">
+                        <Spinner />
+                    </div>
+                ) : (allPassed && !showChecksList) ? (
+                    null
+                ) : (
+                    <div className="space-y-3">
+                        {validationRules.map((rule) => {
+                            const { passed, issue } = checkRuleStatus(rule);
+                            const ruleName = rule.rule_data.check_id || rule.rule_name;
+                            const variables = rule.rule_data.variables_involved || [];
+                            const isExpanded = expandedRules.has(rule.rule_id);
+                            // Both passed and failed checks respect the expanded state
+                            const shouldShowDetails = isExpanded;
+                            
+                            return (
+                                <div
+                                    key={rule.rule_id}
+                                    className={`p-4 rounded-md border ${
+                                        passed
+                                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/50'
+                                            : 'bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => toggleRuleExpansion(rule.rule_id)}
+                                                    className={`flex-shrink-0 p-1 rounded transition-colors ${
+                                                        passed
+                                                            ? 'hover:bg-green-100 dark:hover:bg-green-900/40'
+                                                            : 'hover:bg-orange-100 dark:hover:bg-orange-900/40'
+                                                    }`}
+                                                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                                                >
+                                                    <svg
+                                                        className={`w-4 h-4 transition-transform ${
+                                                            isExpanded ? 'rotate-180' : ''
+                                                        } ${passed ? 'text-green-700 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </button>
+                                                <h4 className={`font-semibold text-sm ${
+                                                    passed
+                                                        ? 'text-green-800 dark:text-green-300'
+                                                        : 'text-orange-800 dark:text-orange-300'
+                                                }`}>
+                                                    {rule.rule_name || ruleName}
+                                                </h4>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-4">
+                                            {passed ? (
+                                                <>
+                                                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    <span className="text-sm font-medium text-green-700 dark:text-green-400">Passed</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                    <span className="text-sm font-medium text-red-700 dark:text-red-400">Flagged</span>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Show issue message if failed */}
+                                    {!passed && issue && (
+                                        <p className="text-sm mt-3 text-orange-700 dark:text-orange-400">
+                                            {issue.message || rule.rule_data.issue}
+                                        </p>
+                                    )}
+                                    
+                                    {/* Show variables when expanded, or fallback when no variables */}
+                                    {shouldShowDetails && (
+                                        variables.length > 0 ? (
+                                            <div className="mt-3 space-y-2">
+                                                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Variables:</p>
+                                                {variables.map((variable) => {
+                                                    const value = getFieldValue(variable);
+                                                    const questionLabel = getQuestionLabel(variable, surveyConfig);
+                                                    const displayValue = formatValueForDisplay(value, variable, surveyConfig);
+                                                    return (
+                                                        <div key={variable} className="pl-3 border-l-2 border-gray-300 dark:border-gray-600">
+                                                            <div className="text-sm">
+                                                                <span className="font-medium text-gray-700 dark:text-gray-300">
+                                                                    {questionLabel}
+                                                                </span>
+                                                                <span className="text-gray-500 dark:text-gray-400 ml-2 font-mono text-xs">
+                                                                    ({variable})
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                                                <span className="font-medium">Value: </span>
+                                                                <span>{displayValue}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm mt-3 text-gray-600 dark:text-gray-400">No additional details.</p>
+                                        )
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        )}
+
+        {/* Qualitative Quality Checks Section - AI-powered qualitative response analysis */}
+        <div className="mb-6">
+          <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Qualitative Quality Checks</h3>
           <div className="p-4 rounded-md border bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2 mb-3">
               {(llm_check_status === 'pending' || llm_check_status === 'running') ? (
@@ -605,211 +1024,6 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
             )}
           </div>
         </div>
-
-        {/* General Quality Issues Section - Shows issues from general checks (not validation rules or outliers) */}
-        {data_quality_issues.length > 0 && (() => {
-            // Get check IDs from validation rules
-            const validationRuleCheckIds = new Set(
-                validationRules.map(rule => rule.rule_data.check_id || rule.rule_name)
-            );
-
-            // Filter out issues that are from validation rules OR are outliers
-            const generalIssues = data_quality_issues.filter(
-                issue => !validationRuleCheckIds.has(issue.check) && !issue.check.startsWith('outlier_') && !isQualitativeIssue(issue)
-            );
-
-            if (generalIssues.length === 0) return null;
-
-            return (
-                <div className="mb-6">
-                    <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">General Quality Issues</h3>
-                    <div className="space-y-3">
-                        {generalIssues.map((issue, index) => (
-                            <div
-                                key={`${issue.check}-${index}`}
-                                className="p-4 rounded-md border bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50"
-                            >
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <svg className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                            <h4 className="font-semibold text-sm text-orange-800 dark:text-orange-300">
-                                                {issue.check.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                            </h4>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 ml-4">
-                                        <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                        <span className="text-sm font-medium text-red-700 dark:text-red-400">Flagged</span>
-                                    </div>
-                                </div>
-
-                                {/* Show issue message and details */}
-                                <p className="text-sm mt-3 text-orange-700 dark:text-orange-400">
-                                    {issue.message}
-                                </p>
-
-                                {/* Show field and value details */}
-                                <div className="mt-3 space-y-2">
-                                    {issue.field && (
-                                        <div className="text-sm">
-                                            <span className="font-medium text-gray-700 dark:text-gray-300">Field: </span>
-                                            <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">
-                                                {issue.field}
-                                            </span>
-                                        </div>
-                                    )}
-                                    {issue.value !== null && issue.value !== undefined && (
-                                        <div className="text-sm">
-                                            <span className="font-medium text-gray-700 dark:text-gray-300">Value: </span>
-                                            <span className="text-gray-600 dark:text-gray-400">
-                                                {String(issue.value)}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        })()}
-
-
-        {/* Quality Checks Section - Always show all checks */}
-        {validationRules.length > 0 && (
-            <div className="mb-6">
-                <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Custom Quality Checks</h3>
-                {isLoadingRules ? (
-                    <div className="flex justify-center py-4">
-                        <Spinner />
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {validationRules.map((rule) => {
-                            const { passed, issue } = checkRuleStatus(rule);
-                            const ruleName = rule.rule_data.check_id || rule.rule_name;
-                            const variables = rule.rule_data.variables_involved || [];
-                            const isExpanded = expandedRules.has(rule.rule_id);
-                            // Both passed and failed checks respect the expanded state
-                            const shouldShowDetails = isExpanded;
-                            
-                            return (
-                                <div
-                                    key={rule.rule_id}
-                                    className={`p-4 rounded-md border ${
-                                        passed
-                                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/50'
-                                            : 'bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50'
-                                    }`}
-                                >
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                {variables.length > 0 && (
-                                                    <button
-                                                        onClick={() => toggleRuleExpansion(rule.rule_id)}
-                                                        className={`flex-shrink-0 p-1 rounded transition-colors ${
-                                                            passed
-                                                                ? 'hover:bg-green-100 dark:hover:bg-green-900/40'
-                                                                : 'hover:bg-orange-100 dark:hover:bg-orange-900/40'
-                                                        }`}
-                                                        aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                                                    >
-                                                        <svg 
-                                                            className={`w-4 h-4 transition-transform ${
-                                                                isExpanded ? 'rotate-180' : ''
-                                                            } ${
-                                                                passed
-                                                                    ? 'text-green-700 dark:text-green-400'
-                                                                    : 'text-orange-700 dark:text-orange-400'
-                                                            }`}
-                                                            fill="none" 
-                                                            stroke="currentColor" 
-                                                            viewBox="0 0 24 24"
-                                                        >
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                        </svg>
-                                                    </button>
-                                                )}
-                                                <h4 className={`font-semibold text-sm ${
-                                                    passed
-                                                        ? 'text-green-800 dark:text-green-300'
-                                                        : 'text-orange-800 dark:text-orange-300'
-                                                }`}>
-                                                    {rule.rule_name || ruleName}
-                                                </h4>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 ml-4">
-                                            {passed ? (
-                                                <>
-                                                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                    <span className="text-sm font-medium text-green-700 dark:text-green-400">Passed</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                    </svg>
-                                                    <span className="text-sm font-medium text-red-700 dark:text-red-400">Flagged</span>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Show issue message if failed */}
-                                    {!passed && issue && (
-                                        <p className={`text-sm mt-3 ${
-                                            passed
-                                                ? 'text-green-700 dark:text-green-400'
-                                                : 'text-orange-700 dark:text-orange-400'
-                                        }`}>
-                                            {issue.message || rule.rule_data.issue}
-                                        </p>
-                                    )}
-                                    
-                                    {/* Show variables and their values - only when expanded */}
-                                    {shouldShowDetails && variables.length > 0 && (
-                                        <div className="mt-3 space-y-2">
-                                            <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Variables:</p>
-                                            {variables.map((variable) => {
-                                                const value = getFieldValue(variable);
-                                                const questionLabel = getQuestionLabel(variable, surveyConfig);
-                                                const displayValue = formatValueForDisplay(value, variable, surveyConfig);
-                                                
-                                                return (
-                                                    <div key={variable} className="pl-3 border-l-2 border-gray-300 dark:border-gray-600">
-                                                        <div className="text-sm">
-                                                            <span className="font-medium text-gray-700 dark:text-gray-300">
-                                                                {questionLabel}
-                                                            </span>
-                                                            <span className="text-gray-500 dark:text-gray-400 ml-2 font-mono text-xs">
-                                                                ({variable})
-                                                            </span>
-                                                        </div>
-                                                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                                            <span className="font-medium">Value: </span>
-                                                            <span>{displayValue}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-        )}
 
         {/* Outlier Checks Section - Shows outlier-specific issues */}
         {data_quality_issues.length > 0 && (() => {
