@@ -31,6 +31,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
   const [success, setSuccess] = useState<string | null>(null);
   const [reviewerNotes, setReviewerNotes] = useState('');
   const [isSavingReviewerNotes, setIsSavingReviewerNotes] = useState(false);
+  const [showOutlierDetails, setShowOutlierDetails] = useState(false);
   const { selectedSurvey } = useSurvey();
 
   // Clear success and error messages when submission changes
@@ -251,6 +252,13 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
       .replace(/\b\w/g, (l) => l.toUpperCase());
   };
 
+  const isQualitativeIssue = (issue: QualityIssue): boolean => {
+    const metadata = (issue.metadata || {}) as Record<string, any>;
+    return issue.check.startsWith('qual_') || metadata.source === 'llm_qualitative_v1';
+  };
+
+  const qualitativeIssues = data_quality_issues.filter(isQualitativeIssue);
+
   // Toggle expansion state for a rule
   const toggleRuleExpansion = (ruleId: string) => {
     setExpandedRules(prev => {
@@ -341,26 +349,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
               {data_quality_issues.length} issue{data_quality_issues.length > 1 ? 's' : ''}
             </span>
           )}
-          {(llm_check_status === 'pending' || llm_check_status === 'running') && (
-            <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-              </svg>
-              AI qualitative check in progress
-            </span>
-          )}
         </div>
 
-        <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-          <span className="font-medium">AI check status:</span> {llm_check_status || 'skipped'}
-          {llm_checked_at && (
-            <span> · Last checked: {new Date(llm_checked_at).toLocaleString()}</span>
-          )}
-          {llm_last_error && (
-            <span className="text-red-600 dark:text-red-400"> · Error: {llm_last_error}</span>
-          )}
-        </div>
         
         {/* Action row */}
         <div className="flex items-center gap-2 mt-3">
@@ -540,6 +530,82 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
           </div>
         )}
 
+        {/* Qualitative data checks */}
+        <div className="mb-6">
+          <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Qualitative data checks</h3>
+          <div className="p-4 rounded-md border bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 mb-3">
+              {(llm_check_status === 'pending' || llm_check_status === 'running') ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                  </svg>
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">AI qualitative check in progress</span>
+                </>
+              ) : (
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Status: {llm_check_status || 'skipped'}
+                </span>
+              )}
+              {llm_checked_at && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  Last checked: {new Date(llm_checked_at).toLocaleString()}
+                </span>
+              )}
+            </div>
+
+            {llm_last_error && (
+              <div className="mb-3 text-sm text-red-700 dark:text-red-400">
+                Error: {llm_last_error}
+              </div>
+            )}
+
+            {qualitativeIssues.length === 0 ? (
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {llm_check_status === 'success'
+                  ? 'No qualitative issues detected in the latest AI check.'
+                  : 'No qualitative findings available yet.'}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {qualitativeIssues.map((issue, index) => {
+                  const issueType = issue.check.replace(/^qual_/, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  const question = issue.field ? getQuestionLabel(issue.field, surveyConfig) : null;
+                  const answer = issue.value !== null && issue.value !== undefined ? String(issue.value) : 'N/A';
+                  const aiAnalysis = (issue.metadata as Record<string, any> | undefined)?.llm_reasoning || issue.message;
+
+                  return (
+                    <div
+                      key={`${issue.check}-${index}`}
+                      className="p-3 rounded-md border bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700/40"
+                    >
+                      <div className="space-y-2 text-sm">
+                        <p className="text-gray-800 dark:text-gray-200">
+                          <span className="font-semibold">Question:</span>{' '}
+                          <span>{question || issue.field || 'Unknown'}</span>
+                        </p>
+                        <p className="text-gray-800 dark:text-gray-200">
+                          <span className="font-semibold">Answer:</span>{' '}
+                          <span>{answer}</span>
+                        </p>
+                        <p className="text-gray-800 dark:text-gray-200">
+                          <span className="font-semibold">Issue type:</span>{' '}
+                          <span>{issueType}</span>
+                        </p>
+                        <p className="text-purple-900 dark:text-purple-100">
+                          <span className="font-semibold">AI analysis:</span>{' '}
+                          <span>{aiAnalysis}</span>
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* General Quality Issues Section - Shows issues from general checks (not validation rules or outliers) */}
         {data_quality_issues.length > 0 && (() => {
             // Get check IDs from validation rules
@@ -549,7 +615,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
             // Filter out issues that are from validation rules OR are outliers
             const generalIssues = data_quality_issues.filter(
-                issue => !validationRuleCheckIds.has(issue.check) && !issue.check.startsWith('outlier_')
+                issue => !validationRuleCheckIds.has(issue.check) && !issue.check.startsWith('outlier_') && !isQualitativeIssue(issue)
             );
 
             if (generalIssues.length === 0) return null;
@@ -754,9 +820,40 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
             if (outlierIssues.length === 0) return null;
 
+            const firstOutlierMetadata = outlierIssues[0]?.metadata;
+
             return (
                 <div className="mb-6">
-                    <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Outlier Checks</h3>
+                    <div className="flex items-center gap-2 mb-3">
+                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Outlier Checks</h3>
+                        <button
+                            type="button"
+                            onClick={() => setShowOutlierDetails(!showOutlierDetails)}
+                            className="inline-flex items-center p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                            title="Outlier detection details"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </button>
+                    </div>
+                    {showOutlierDetails && firstOutlierMetadata && (
+                        <div className="mb-3 p-3 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-md text-xs text-gray-700 dark:text-gray-300">
+                            <p>
+                                <strong>Method:</strong> {firstOutlierMetadata.method?.toUpperCase() || '—'}
+                                <span className="ml-3"><strong>Threshold:</strong> {firstOutlierMetadata.threshold ?? '—'}</span>
+                            </p>
+                            <p className="mt-1 text-gray-600 dark:text-gray-400">
+                                {firstOutlierMetadata.method === 'iqr'
+                                    ? 'IQR (Interquartile Range): uses quartiles and IQR to define expected range'
+                                    : firstOutlierMetadata.method === 'mad'
+                                    ? 'MAD (Median Absolute Deviation): robust method using median and MAD'
+                                    : firstOutlierMetadata.method === 'zscore'
+                                    ? 'Z-Score: uses mean and standard deviation'
+                                    : ''}
+                            </p>
+                        </div>
+                    )}
                     <div className="space-y-3">
                         {outlierIssues.map((issue, index) => {
                             const variableName = issue.check.replace('outlier_', '');
@@ -817,12 +914,9 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                                     <span className="font-medium">Expected range: </span>
                                                     <span className="font-mono">
                                                         {outlierMetadata.bounds.lower_bound !== undefined && outlierMetadata.bounds.upper_bound !== undefined
-                                                            ? `${outlierMetadata.bounds.lower_bound} to ${outlierMetadata.bounds.upper_bound}`
+                                                            ? `${Math.round(outlierMetadata.bounds.lower_bound)} to ${Math.round(outlierMetadata.bounds.upper_bound)}`
                                                             : outlierMetadata.bounds.note || 'Unable to calculate'
                                                         }
-                                                    </span>
-                                                    <span className="text-xs ml-2">
-                                                        ({outlierMetadata.method?.toUpperCase()} method, threshold: {outlierMetadata.threshold})
                                                     </span>
                                                 </div>
                                             ) : (
@@ -831,13 +925,51 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                                 </div>
                                             )}
 
+                                            {/* Overflow bar - shows how far value is outside expected range */}
+                                            {outlierMetadata?.bounds?.lower_bound !== undefined &&
+                                             outlierMetadata?.bounds?.upper_bound !== undefined &&
+                                             !outlierMetadata?.bounds?.note && (() => {
+                                                const lb = outlierMetadata.bounds!.lower_bound!;
+                                                const ub = outlierMetadata.bounds!.upper_bound!;
+                                                const numValue = typeof issue.value === 'number'
+                                                    ? issue.value
+                                                    : parseFloat(String(fieldValue));
+                                                const rangeWidth = ub - lb;
+                                                if (rangeWidth <= 0 || isNaN(numValue)) return null;
+                                                const isAbove = numValue > ub;
+                                                const distance = isAbove ? numValue - ub : lb - numValue;
+                                                const overflowRatio = Math.min(distance / rangeWidth, 2);
+                                                const overflowPx = Math.round(60 * overflowRatio);
+                                                const rangePx = 60;
+                                                return (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex h-2 w-[120px] overflow-hidden rounded">
+                                                            {isAbove ? (
+                                                                <>
+                                                                    <div className="h-full flex-shrink-0 bg-gray-300 dark:bg-gray-600" style={{ width: rangePx }} />
+                                                                    <div className="h-full flex-shrink-0 bg-orange-400 dark:bg-orange-500" style={{ width: overflowPx }} />
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="h-full flex-shrink-0 bg-orange-400 dark:bg-orange-500" style={{ width: overflowPx }} />
+                                                                    <div className="h-full flex-shrink-0 bg-gray-300 dark:bg-gray-600" style={{ width: rangePx }} />
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {isAbove ? `${Math.round(distance)} above` : `${Math.round(distance)} below`}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })()}
+
                                             {/* Statistics */}
                                             {outlierMetadata && outlierMetadata.statistics ? (
                                                 <div className="text-sm text-gray-600 dark:text-gray-400">
                                                     <span className="font-medium">Dataset stats: </span>
                                                     <span className="font-mono">
-                                                        mean={outlierMetadata.statistics.mean},
-                                                        median={outlierMetadata.statistics.median},
+                                                        mean={Math.round(outlierMetadata.statistics.mean)},
+                                                        median={Math.round(outlierMetadata.statistics.median)},
                                                         n={outlierMetadata.statistics.count}
                                                     </span>
                                                 </div>
