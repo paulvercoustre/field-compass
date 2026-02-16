@@ -191,12 +191,12 @@ export interface SubmissionStatusSummary {
   total_submissions: number;
   approved_count: number;
   approved_percentage: number;
-  pending_count: number;
-  pending_percentage: number;
-  flagged_count: number;
-  flagged_percentage: number;
-  rejected_count: number;
-  rejected_percentage: number;
+  not_approved_count: number;
+  not_approved_percentage: number;
+  on_hold_count: number;
+  on_hold_percentage: number;
+  not_reviewed_count: number;
+  not_reviewed_percentage: number;
 }
 
 export interface QualityMetricsSummary {
@@ -217,9 +217,9 @@ export interface TemporalDataPoint {
   date: string;
   total_submissions: number;
   approved_count: number;
-  pending_count: number;
-  flagged_count: number;
-  rejected_count: number;
+  not_approved_count: number;
+  on_hold_count: number;
+  not_reviewed_count: number;
   total_issues: number;
 }
 

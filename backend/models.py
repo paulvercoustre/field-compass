@@ -235,16 +235,16 @@ class ErrorResponse(BaseModel):
 # ============================================================================
 
 class SubmissionStatusSummary(BaseModel):
-    """Summary of submission counts by QA status."""
+    """Summary of submission counts by Kobo validation status."""
     total_submissions: int = Field(..., description="Total number of submissions")
     approved_count: int = Field(..., description="Number of approved submissions")
     approved_percentage: float = Field(..., description="Percentage of approved submissions")
-    pending_count: int = Field(..., description="Number of pending approval submissions")
-    pending_percentage: float = Field(..., description="Percentage of pending submissions")
-    flagged_count: int = Field(..., description="Number of flagged submissions")
-    flagged_percentage: float = Field(..., description="Percentage of flagged submissions")
-    rejected_count: int = Field(..., description="Number of rejected submissions")
-    rejected_percentage: float = Field(..., description="Percentage of rejected submissions")
+    not_approved_count: int = Field(..., description="Number of not approved submissions")
+    not_approved_percentage: float = Field(..., description="Percentage of not approved submissions")
+    on_hold_count: int = Field(..., description="Number of on hold submissions")
+    on_hold_percentage: float = Field(..., description="Percentage of on hold submissions")
+    not_reviewed_count: int = Field(..., description="Number of not reviewed submissions")
+    not_reviewed_percentage: float = Field(..., description="Percentage of not reviewed submissions")
 
 
 class QualityMetricsSummary(BaseModel):
@@ -268,9 +268,9 @@ class TemporalDataPoint(BaseModel):
     date: str = Field(..., description="ISO date string (YYYY-MM-DD)")
     total_submissions: int = Field(..., description="Submissions on this date")
     approved_count: int = Field(default=0, description="Approved submissions on this date")
-    pending_count: int = Field(default=0, description="Pending submissions on this date")
-    flagged_count: int = Field(default=0, description="Flagged submissions on this date")
-    rejected_count: int = Field(default=0, description="Rejected submissions on this date")
+    not_approved_count: int = Field(default=0, description="Not approved submissions on this date")
+    on_hold_count: int = Field(default=0, description="On hold submissions on this date")
+    not_reviewed_count: int = Field(default=0, description="Not reviewed submissions on this date")
     total_issues: int = Field(default=0, description="Total issues found on this date")
 
 

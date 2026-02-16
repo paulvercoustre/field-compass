@@ -86,12 +86,8 @@ const AppContent: React.FC = () => {
   };
 
   // Cross-navigation handlers
-  const handleNavigateToSubmissionsWithEnumerator = (enumeratorId?: string) => {
-    if (enumeratorId) {
-      setDashboardFilters({ enumerators: [enumeratorId] });
-    } else {
-      setDashboardFilters({});
-    }
+  const handleNavigateToSubmissions = (filters?: Partial<FilterState>) => {
+    setDashboardFilters(filters || {});
     setView('dashboard');
   };
 
@@ -100,12 +96,12 @@ const AppContent: React.FC = () => {
     dataCollectionProgress: <DataCollectionProgressPage />,
     enumeratorPerformance: (
       <EnumeratorPerformancePage 
-        onNavigateToSubmissions={handleNavigateToSubmissionsWithEnumerator}
+        onNavigateToSubmissions={handleNavigateToSubmissions}
       />
     ),
     qualityOverview: (
       <QualityOverviewPage 
-        onNavigateToSubmissions={handleNavigateToSubmissionsWithEnumerator}
+        onNavigateToSubmissions={handleNavigateToSubmissions}
       />
     ),
     createSurvey: <CreateSurveyPage />,

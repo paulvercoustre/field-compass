@@ -54,28 +54,28 @@ const StatusSummaryCards: React.FC<StatusSummaryCardsProps> = ({ data, onStatusC
           count={data.approved_count}
           percentage={data.approved_percentage}
           colorClass="text-green-600 dark:text-green-400"
-          onClick={onStatusClick ? () => onStatusClick('APPROVED') : undefined}
+          onClick={onStatusClick ? () => onStatusClick('Approved') : undefined}
         />
         <StatusCard
-          label="Pending"
-          count={data.pending_count}
-          percentage={data.pending_percentage}
-          colorClass="text-yellow-600 dark:text-yellow-400"
-          onClick={onStatusClick ? () => onStatusClick('PENDING_APPROVAL') : undefined}
-        />
-        <StatusCard
-          label="Flagged"
-          count={data.flagged_count}
-          percentage={data.flagged_percentage}
-          colorClass="text-orange-600 dark:text-orange-400"
-          onClick={onStatusClick ? () => onStatusClick('FLAGGED') : undefined}
-        />
-        <StatusCard
-          label="Rejected"
-          count={data.rejected_count}
-          percentage={data.rejected_percentage}
+          label="Not Approved"
+          count={data.not_approved_count}
+          percentage={data.not_approved_percentage}
           colorClass="text-red-600 dark:text-red-400"
-          onClick={onStatusClick ? () => onStatusClick('REJECTED') : undefined}
+          onClick={onStatusClick ? () => onStatusClick('Not Approved') : undefined}
+        />
+        <StatusCard
+          label="On Hold"
+          count={data.on_hold_count}
+          percentage={data.on_hold_percentage}
+          colorClass="text-yellow-600 dark:text-yellow-400"
+          onClick={onStatusClick ? () => onStatusClick('On Hold') : undefined}
+        />
+        <StatusCard
+          label="Not Reviewed"
+          count={data.not_reviewed_count}
+          percentage={data.not_reviewed_percentage}
+          colorClass="text-gray-600 dark:text-gray-400"
+          onClick={onStatusClick ? () => onStatusClick('Not Reviewed') : undefined}
         />
       </div>
     </div>

@@ -121,7 +121,7 @@ async def get_quality_overview(
     Get quality overview data for the dashboard.
     
     Returns aggregated metrics including:
-    - Submission status breakdown (total, approved, pending, flagged, rejected)
+    - Submission status breakdown (total, approved, not approved, on hold, not reviewed)
     - Quality metrics (total issues, avg issues per submission)
     - Issue frequency breakdown
     - Temporal trends (status and issues over time)
@@ -182,9 +182,9 @@ async def get_quality_overview(
             status_summary=SubmissionStatusSummary(
                 total_submissions=0,
                 approved_count=0, approved_percentage=0.0,
-                pending_count=0, pending_percentage=0.0,
-                flagged_count=0, flagged_percentage=0.0,
-                rejected_count=0, rejected_percentage=0.0,
+                not_approved_count=0, not_approved_percentage=0.0,
+                on_hold_count=0, on_hold_percentage=0.0,
+                not_reviewed_count=0, not_reviewed_percentage=0.0,
             ),
             quality_metrics=QualityMetricsSummary(
                 total_issues=0,
@@ -198,23 +198,23 @@ async def get_quality_overview(
             date_range={"start": "", "end": ""},
         )
     
-    # Calculate status summary
+    # Calculate status summary by Kobo validation status
     total = len(submissions)
-    approved_count = sum(1 for s in submissions if s.qa_status == "APPROVED")
-    pending_count = sum(1 for s in submissions if s.qa_status == "PENDING_APPROVAL")
-    flagged_count = sum(1 for s in submissions if s.qa_status == "FLAGGED")
-    rejected_count = sum(1 for s in submissions if s.qa_status == "REJECTED")
+    approved_count = sum(1 for s in submissions if s.kobo_validation_status == "Approved")
+    not_approved_count = sum(1 for s in submissions if s.kobo_validation_status == "Not Approved")
+    on_hold_count = sum(1 for s in submissions if s.kobo_validation_status == "On Hold")
+    not_reviewed_count = sum(1 for s in submissions if s.kobo_validation_status is None)
     
     status_summary = SubmissionStatusSummary(
         total_submissions=total,
         approved_count=approved_count,
         approved_percentage=round(approved_count / total * 100, 1) if total > 0 else 0.0,
-        pending_count=pending_count,
-        pending_percentage=round(pending_count / total * 100, 1) if total > 0 else 0.0,
-        flagged_count=flagged_count,
-        flagged_percentage=round(flagged_count / total * 100, 1) if total > 0 else 0.0,
-        rejected_count=rejected_count,
-        rejected_percentage=round(rejected_count / total * 100, 1) if total > 0 else 0.0,
+        not_approved_count=not_approved_count,
+        not_approved_percentage=round(not_approved_count / total * 100, 1) if total > 0 else 0.0,
+        on_hold_count=on_hold_count,
+        on_hold_percentage=round(on_hold_count / total * 100, 1) if total > 0 else 0.0,
+        not_reviewed_count=not_reviewed_count,
+        not_reviewed_percentage=round(not_reviewed_count / total * 100, 1) if total > 0 else 0.0,
     )
     
     # Calculate quality metrics
@@ -264,7 +264,7 @@ async def get_quality_overview(
     
     # Calculate temporal data (group by date)
     temporal_dict: Dict[str, Dict[str, int]] = defaultdict(lambda: {
-        "total": 0, "approved": 0, "pending": 0, "flagged": 0, "rejected": 0, "issues": 0
+        "total": 0, "approved": 0, "not_approved": 0, "on_hold": 0, "not_reviewed": 0, "issues": 0
     })
     issue_time_dict: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
     
@@ -272,14 +272,14 @@ async def get_quality_overview(
         date_str = sub._submission_time.strftime("%Y-%m-%d")
         temporal_dict[date_str]["total"] += 1
         
-        if sub.qa_status == "APPROVED":
+        if sub.kobo_validation_status == "Approved":
             temporal_dict[date_str]["approved"] += 1
-        elif sub.qa_status == "PENDING_APPROVAL":
-            temporal_dict[date_str]["pending"] += 1
-        elif sub.qa_status == "FLAGGED":
-            temporal_dict[date_str]["flagged"] += 1
-        elif sub.qa_status == "REJECTED":
-            temporal_dict[date_str]["rejected"] += 1
+        elif sub.kobo_validation_status == "Not Approved":
+            temporal_dict[date_str]["not_approved"] += 1
+        elif sub.kobo_validation_status == "On Hold":
+            temporal_dict[date_str]["on_hold"] += 1
+        else:
+            temporal_dict[date_str]["not_reviewed"] += 1  # None or unknown
         
         issues = sub.data_quality_issues or []
         temporal_dict[date_str]["issues"] += len(issues)
@@ -296,9 +296,9 @@ async def get_quality_overview(
             date=date,
             total_submissions=temporal_dict[date]["total"],
             approved_count=temporal_dict[date]["approved"],
-            pending_count=temporal_dict[date]["pending"],
-            flagged_count=temporal_dict[date]["flagged"],
-            rejected_count=temporal_dict[date]["rejected"],
+            not_approved_count=temporal_dict[date]["not_approved"],
+            on_hold_count=temporal_dict[date]["on_hold"],
+            not_reviewed_count=temporal_dict[date]["not_reviewed"],
             total_issues=temporal_dict[date]["issues"],
         )
         for date in sorted_dates

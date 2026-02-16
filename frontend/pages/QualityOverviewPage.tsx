@@ -3,7 +3,7 @@ import { useSurvey } from '../contexts/SurveyContext';
 import QualityOverviewDashboard from '../components/quality-dashboard/QualityOverviewDashboard';
 
 interface QualityOverviewPageProps {
-  onNavigateToSubmissions?: (enumeratorFilter?: string) => void;
+  onNavigateToSubmissions?: (filters?: { validationStatuses?: string[] }) => void;
 }
 
 const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({ 
@@ -27,10 +27,8 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
   }
 
   const handleStatusClick = (status: string) => {
-    // For now, just navigate to submissions without specific filter
-    // TODO: Could extend to filter by status
     if (onNavigateToSubmissions) {
-      onNavigateToSubmissions();
+      onNavigateToSubmissions({ validationStatuses: [status] });
     }
   };
 

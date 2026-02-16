@@ -10,7 +10,7 @@ import QualityScatterPlot from '../components/progress-tracker/QualityScatterPlo
 import EnumeratorLeaderboard from '../components/progress-tracker/EnumeratorLeaderboard';
 
 interface EnumeratorPerformancePageProps {
-  onNavigateToSubmissions?: (enumeratorFilter?: string) => void;
+  onNavigateToSubmissions?: (filters?: { enumerators?: string[] }) => void;
 }
 
 const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
@@ -76,7 +76,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
 
   const handleEnumeratorClick = (enumeratorId: string) => {
     if (onNavigateToSubmissions) {
-      onNavigateToSubmissions(enumeratorId);
+      onNavigateToSubmissions({ enumerators: [enumeratorId] });
     }
   };
 
