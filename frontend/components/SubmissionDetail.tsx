@@ -938,26 +938,44 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                                 if (rangeWidth <= 0 || isNaN(numValue)) return null;
                                                 const isAbove = numValue > ub;
                                                 const distance = isAbove ? numValue - ub : lb - numValue;
-                                                const overflowRatio = Math.min(distance / rangeWidth, 2);
+                                                const rawRatio = distance / rangeWidth;
+                                                const overflowRatio = Math.min(rawRatio, 4); // cap at 4x (was 2x) for extreme outliers
                                                 const overflowPx = Math.round(60 * overflowRatio);
                                                 const rangePx = 60;
+                                                const isExtreme = rawRatio > 3; // red tint for very extreme outliers
+                                                const barMaxWidth = rangePx + overflowPx;
                                                 return (
                                                     <div className="flex items-center gap-2">
-                                                        <div className="flex h-2 w-[120px] overflow-hidden rounded">
+                                                        <div
+                                                            className="flex h-2.5 overflow-hidden rounded"
+                                                            style={{ width: Math.min(barMaxWidth, 280) }}
+                                                            title={`${Math.round(distance)} ${isAbove ? 'above' : 'below'} expected range (${rawRatio.toFixed(1)}×)`}
+                                                        >
                                                             {isAbove ? (
                                                                 <>
                                                                     <div className="h-full flex-shrink-0 bg-gray-300 dark:bg-gray-600" style={{ width: rangePx }} />
-                                                                    <div className="h-full flex-shrink-0 bg-orange-400 dark:bg-orange-500" style={{ width: overflowPx }} />
+                                                                    <div
+                                                                        className={`h-full flex-shrink-0 ${isExtreme ? 'bg-red-500 dark:bg-red-600' : 'bg-orange-400 dark:bg-orange-500'}`}
+                                                                        style={{ width: overflowPx }}
+                                                                    />
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <div className="h-full flex-shrink-0 bg-orange-400 dark:bg-orange-500" style={{ width: overflowPx }} />
+                                                                    <div
+                                                                        className={`h-full flex-shrink-0 ${isExtreme ? 'bg-red-500 dark:bg-red-600' : 'bg-orange-400 dark:bg-orange-500'}`}
+                                                                        style={{ width: overflowPx }}
+                                                                    />
                                                                     <div className="h-full flex-shrink-0 bg-gray-300 dark:bg-gray-600" style={{ width: rangePx }} />
                                                                 </>
                                                             )}
                                                         </div>
                                                         <span className="text-xs text-gray-500 dark:text-gray-400">
                                                             {isAbove ? `${Math.round(distance)} above` : `${Math.round(distance)} below`}
+                                                            {rawRatio > 4 && (
+                                                                <span className="ml-0.5 text-amber-600 dark:text-amber-400" title={`Actual: ${rawRatio.toFixed(1)}× expected range`}>
+                                                                    (4×+)
+                                                                </span>
+                                                            )}
                                                         </span>
                                                     </div>
                                                 );
