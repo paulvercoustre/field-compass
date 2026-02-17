@@ -4,18 +4,19 @@ This repository contains the complete codebase for the Field Compass application
 
 ## Project Structure
 
-The project is organized as a monorepo with two primary directories:
+The project is organized as a monorepo with the following directories:
 
-- `/frontend`: Contains the React/TypeScript user interface. This is a standalone single-page application that communicates with the backend via a REST API.
-- `/backend`: Contains the Python/FastAPI backend server. It handles data processing, business logic, and serves the API for the frontend.
-- `/backend/database`: Contains PostgreSQL schema and database setup files.
-- `/hfc`: Legacy R code for reference (not part of main codebase, excluded from git).
+- `/frontend`: React/TypeScript user interface (Vite + React 19). Standalone SPA that communicates with the backend via REST API.
+- `/backend`: Python/FastAPI backend server. Handles data processing, business logic, ETL, and serves the API.
+- `/backend/database`: PostgreSQL schema and migrations.
+- `/deploy`: Production deployment configs (nginx, frontend Dockerfile).
 
 ## Quick Start
 
 ### Prerequisites
 
 - Docker and Docker Compose
+- Node.js 18+ (for frontend development)
 - Git
 
 ### Running the Application
@@ -38,21 +39,33 @@ The project is organized as a monorepo with two primary directories:
    make setup
    ```
 
-4. **Access the services**:
+4. **Run the frontend** (in a separate terminal):
+   ```bash
+   npm install && npm run dev
+   ```
+
+5. **Access the services**:
+   - Frontend: http://localhost:3000
    - API: http://localhost:8000
    - API Docs (Swagger): http://localhost:8000/docs
    - Database: localhost:5432 (user: postgres, password: postgres, db: field_compass)
+   - Redis: localhost:6379 (used by Celery worker for async jobs)
 
 ### Development Commands
 
 ```bash
 # View logs
-make logs              # All services
+make logs              # All services (postgres, backend, redis, worker)
 make logs-backend      # Backend only
 make logs-db           # Database only
 
 # Database access
 make db-shell          # PostgreSQL shell
+
+# Run tests
+make test              # Run backend tests
+make test-cov          # Run tests with coverage
+make test-verbose      # Run tests with verbose output
 
 # Restart services
 make restart
@@ -65,6 +78,8 @@ make clean
 ```
 
 ## Development Setup
+
+For running without Docker (PostgreSQL in Docker, backend/frontend local), see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ### Backend Development
 
@@ -96,7 +111,19 @@ To develop locally without Docker:
 
 ### Frontend Development
 
-See `/frontend/README.md` for frontend-specific instructions.
+The frontend runs separately from Docker. With the backend and database running:
+
+1. **Install dependencies** (from project root):
+   ```bash
+   npm install
+   ```
+
+2. **Start the dev server**:
+   ```bash
+   npm run dev
+   ```
+
+3. **Access** at http://localhost:3000. The app uses `VITE_API_URL` (default: `http://localhost:8000`) to talk to the backend. For production builds, set `VITE_API_URL=/api` when using nginx proxy.
 
 ## Database
 
@@ -104,17 +131,14 @@ The database schema is automatically created when the PostgreSQL container start
 
 ### Manual Database Setup
 
-If you need to set up the database manually:
+If you need to run the schema manually (e.g. after `make db-shell`):
 
 ```bash
-# Connect to database
-make db-shell
+# From host (with postgres container running)
+psql -h localhost -U postgres -d field_compass -f backend/database/schema.sql
 
-# Or using psql directly
-psql -h localhost -U postgres -d field_compass
-
-# Run schema
-\i backend/database/schema.sql
+# Or from inside container via make db-shell
+\i /docker-entrypoint-initdb.d/01-schema.sql
 ```
 
 ## API Documentation
@@ -125,10 +149,10 @@ Once the backend is running, visit:
 
 ## Demo Deployment (Azure VM)
 
-If you want to quickly deploy a demo environment (low traffic) while iterating rapidly, use the single-VM deployment:
+For a single-VM production-style deployment (low traffic):
 
-- `VM_DEPLOYMENT_AZURE.md`
-- `docker-compose.prod.yml` (nginx + backend + postgres + frontend build)
+- **`VM_DEPLOYMENT_AZURE.md`** – Azure VM setup instructions
+- **`docker-compose.prod.yml`** – nginx (reverse proxy + static frontend), postgres, backend, redis, Celery worker, frontend build
 
 ## Environment Variables
 
@@ -152,15 +176,26 @@ If you want to quickly deploy a demo environment (low traffic) while iterating r
    # Application settings
    ENVIRONMENT=development
    LOG_LEVEL=INFO
+   
+   # OpenAI (for AI-powered rule generation and qualitative checks)
+   OPENAI_API_KEY=sk-your-openai-api-key-here
+   OPENAI_MODEL=gpt-4o-mini
+   OPENAI_MAX_TOKENS=1000
+   OPENAI_TEMPERATURE=0.2
    ```
 
-3. **The Docker container will automatically load these variables** from the `.env` file.
+3. **Docker Compose** loads variables from `.env`. Optional vars (`OPENAI_RULE_GEN_MODEL`, `OPENAI_QUAL_CHECK_MODEL`, `CELERY_BROKER_URL`, etc.) have defaults in `docker-compose.yml`.
 
 **Security Note**: Never commit your `.env` file to git. It contains sensitive credentials.
 
 ## Testing
 
-Tests will be added in a future update. For now, you can test the API using:
+**Backend tests** (run with services up):
+```bash
+make test
+```
+
+You can also test manually via:
 - Swagger UI at http://localhost:8000/docs
 - curl or Postman
 - The frontend application
@@ -194,8 +229,10 @@ Tests will be added in a future update. For now, you can test the API using:
 - [x] Enumerator performance metrics
 - [x] Data collection progress tracking
 - [x] Edit detection and history tracking
+- [x] **Data Quality Overview Dashboard** (metrics, issue trends, status summary)
+- [x] Celery worker for async qualitative checks (Redis-backed)
 - [x] CI/CD pipeline (GitHub Actions)
-- [x] Backend tests (~60 test functions)
+- [x] Backend tests (~80 test functions)
 
 ## AI-Powered Features
 
@@ -223,14 +260,13 @@ OPENAI_MODEL=gpt-4o-mini
 
 ## Next Steps
 
-- [ ] Data Quality Overview Dashboard (Issue #9)
 - [ ] Frontend component tests
 - [ ] Airflow scheduler for automated ETL
 - [ ] Dataset-level quality checks
 - [ ] Export functionality (CSV/Excel)
 
-See [ACTION_ITEMS.md](ACTION_ITEMS.md) for detailed status and next steps.
+See [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) for deployment details.
 
 ## License
 
-[Add your license here]
+MIT License. See [LICENSE](LICENSE) for details.
