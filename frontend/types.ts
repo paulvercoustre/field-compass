@@ -204,6 +204,7 @@ export interface QualityMetricsSummary {
   submissions_with_issues: number;
   avg_issues_per_submission: number;
   avg_dk_percentage?: number | null;
+  avg_active_duration_minutes?: number | null;
 }
 
 export interface IssueFrequency {

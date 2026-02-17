@@ -253,6 +253,7 @@ class QualityMetricsSummary(BaseModel):
     submissions_with_issues: int = Field(..., description="Number of submissions with at least one issue")
     avg_issues_per_submission: float = Field(..., description="Average issues per submission")
     avg_dk_percentage: Optional[float] = Field(None, description="Average DK percentage across submissions")
+    avg_active_duration_minutes: Optional[float] = Field(None, description="Average active interview duration in minutes (from audit logs)")
 
 
 class IssueFrequency(BaseModel):

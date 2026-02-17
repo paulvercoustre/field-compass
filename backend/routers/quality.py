@@ -221,6 +221,7 @@ async def get_quality_overview(
     total_issues = 0
     submissions_with_issues = 0
     dk_percentages: List[float] = []
+    active_durations: List[float] = []
     issue_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: {"count": 0, "affected": 0})
     
     for sub in submissions:
@@ -233,6 +234,13 @@ async def get_quality_overview(
 
         if sub.dk_percentage is not None:
             dk_percentages.append(float(sub.dk_percentage))
+
+        active_time = (sub.submission_data or {}).get('active_interview_time')
+        if active_time is not None:
+            try:
+                active_durations.append(float(active_time))
+            except (ValueError, TypeError):
+                pass
         
         # Count each issue type (track unique submissions per issue type)
         seen_checks = set()
@@ -243,11 +251,13 @@ async def get_quality_overview(
                 issue_counts[check]["affected"] += 1
                 seen_checks.add(check)
     
+    avg_active_duration = round(sum(active_durations) / len(active_durations), 1) if active_durations else None
     quality_metrics = QualityMetricsSummary(
         total_issues=total_issues,
         submissions_with_issues=submissions_with_issues,
         avg_issues_per_submission=round(total_issues / total, 2) if total > 0 else 0.0,
         avg_dk_percentage=round(sum(dk_percentages) / len(dk_percentages), 2) if dk_percentages else None,
+        avg_active_duration_minutes=avg_active_duration,
     )
     
     # Build issue frequency list (sorted by count descending)
