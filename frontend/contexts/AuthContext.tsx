@@ -31,6 +31,7 @@ interface AuthContextType {
   deleteKoboApiKey: () => Promise<void>;
   testKoboApiKey: () => Promise<{ status: string; message: string; kobo_user?: { username: string; email: string; organization: string } }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -239,6 +240,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const deleteAccount = async () => {
+    const response = await authFetch('/api/users/me', {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete account');
+    }
+
+    logout();
+  };
+
   const refreshUser = async () => {
     const response = await authFetch('/api/users/me');
     if (response.ok) {
@@ -263,6 +277,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         deleteKoboApiKey,
         testKoboApiKey,
         changePassword,
+        deleteAccount,
         refreshUser,
       }}
     >

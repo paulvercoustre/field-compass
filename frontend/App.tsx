@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SurveyProvider } from './contexts/SurveyContext';
+import { SurveyProvider, useSurvey } from './contexts/SurveyContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { FilterState } from './types';
 import Dashboard from './components/Dashboard';
@@ -14,6 +14,17 @@ import Sidebar from './components/Sidebar';
 
 type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'qualityOverview' | 'createSurvey' | 'settings' | 'userSettings';
 
+// Rendered inside SurveyProvider - can use useSurvey
+const SurveyNameInHeader: React.FC = () => {
+  const { selectedSurvey } = useSurvey();
+  if (!selectedSurvey) return null;
+  return (
+    <h2 className="text-base font-semibold text-gray-900 dark:text-white truncate max-w-[200px] sm:max-w-xs">
+      {selectedSurvey.survey_name}
+    </h2>
+  );
+};
+
 // Main app content (authenticated)
 const AppContent: React.FC = () => {
   const { user, isLoading, logout } = useAuth();
@@ -25,11 +36,20 @@ const AppContent: React.FC = () => {
   });
   
   const [dashboardFilters, setDashboardFilters] = useState<FilterState>({});
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem('sidebarOpen');
+    return saved !== null ? saved === 'true' : true;
+  });
 
   // Save current view to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('currentView', view);
   }, [view]);
+
+  // Save sidebar state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('sidebarOpen', String(isSidebarOpen));
+  }, [isSidebarOpen]);
 
   // Listen for navigation events from CreateSurveyPage
   useEffect(() => {
@@ -130,27 +150,29 @@ const AppContent: React.FC = () => {
           onUserSettings={() => setView('userSettings')}
           onLogout={logout}
           isUserSettingsActive={view === 'userSettings'}
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen(prev => !prev)}
         />
         
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 min-h-16 py-3 sm:py-0 sm:h-16 px-4 mx-auto max-w-screen-2xl sm:px-6 lg:px-8">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white flex-shrink-0">Field Compass</h1>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 min-h-16 py-3 sm:py-0 sm:h-16 px-4">
+              <SurveyNameInHeader />
               <nav className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
                 <NavButton currentView={view} targetView="dashboard" onClick={() => { setDashboardFilters({}); setView('dashboard'); }}>
                   Submissions
                 </NavButton>
                 <NavButton currentView={view} targetView="qualityOverview" onClick={() => setView('qualityOverview')}>
-                  Quality Overview
+                  Data Quality
                 </NavButton>
                 <NavButton currentView={view} targetView="dataCollectionProgress" onClick={() => setView('dataCollectionProgress')}>
                   Data Collection Progress
                 </NavButton>
                 <NavButton currentView={view} targetView="enumeratorPerformance" onClick={() => setView('enumeratorPerformance')}>
-                  Enumerator Performance
+                  Field Team
                 </NavButton>
                 <NavButton currentView={view} targetView="settings" onClick={() => setView('settings')}>
-                  Settings
+                  Survey Settings
                 </NavButton>
               </nav>
             </div>

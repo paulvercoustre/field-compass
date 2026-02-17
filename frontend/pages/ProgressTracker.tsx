@@ -83,7 +83,7 @@ const ProgressTracker: React.FC = () => {
 
         <div className="flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-4 mb-8">
           <TabButton tabId="progress">Data Collection Progress</TabButton>
-          <TabButton tabId="performance">Enumerator Performance</TabButton>
+          <TabButton tabId="performance">Field Team</TabButton>
         </div>
 
         <div>

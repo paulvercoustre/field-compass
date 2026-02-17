@@ -303,8 +303,12 @@ async def test_kobo_api_key(
     kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
     
     try:
+        # Use /assets/?limit=0 - a standard Kobo API v2 endpoint that validates the token
+        # The /me/ endpoint may not exist on all Kobo deployments
+        base_url = kobo_api_url.rstrip("/")
         response = requests.get(
-            f"{kobo_api_url}/me/",
+            f"{base_url}/assets/",
+            params={"limit": 0},
             headers={"Authorization": f"Token {api_token}"},
             timeout=10
         )
@@ -316,16 +320,29 @@ async def test_kobo_api_key(
             )
         
         response.raise_for_status()
-        kobo_user = response.json()
+        
+        # Try to get user info from /users/me/ if available (optional, for richer response)
+        kobo_user = None
+        try:
+            me_response = requests.get(
+                f"{base_url}/users/me/",
+                headers={"Authorization": f"Token {api_token}"},
+                timeout=5
+            )
+            if me_response.status_code == 200:
+                me_data = me_response.json()
+                kobo_user = {
+                    "username": me_data.get("username"),
+                    "email": me_data.get("email"),
+                    "organization": me_data.get("organization", ""),
+                }
+        except Exception:
+            pass  # User info is optional; token validity is confirmed by assets call
         
         return {
             "status": "success",
             "message": "Kobo API key is valid",
-            "kobo_user": {
-                "username": kobo_user.get("username"),
-                "email": kobo_user.get("email"),
-                "organization": kobo_user.get("organization"),
-            }
+            "kobo_user": kobo_user
         }
         
     except requests.exceptions.ConnectionError:

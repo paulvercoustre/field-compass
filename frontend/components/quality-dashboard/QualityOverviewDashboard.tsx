@@ -144,7 +144,7 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
       <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 -mx-6 -mt-6 mb-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Quality Overview
+            Data Quality
           </h2>
           <div className="flex items-center gap-3">
             <select
