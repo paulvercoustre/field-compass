@@ -214,6 +214,13 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     setFilterState(newFilters);
   }, []);
 
+  const handleSubmissionUpdate = useCallback((updatedSubmission: Submission) => {
+    setSelectedSubmission(updatedSubmission);
+    setSubmissions(prev =>
+      prev.map(s => s._id === updatedSubmission._id ? updatedSubmission : s)
+    );
+  }, []);
+
   // Keyboard navigation for submissions
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -324,6 +331,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
           <SubmissionDetail
             submission={selectedSubmission}
             isLoading={false}
+            onSubmissionUpdate={handleSubmissionUpdate}
           />
         </div>
       </div>

@@ -163,23 +163,23 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
         </ResponsiveContainer>
       </div>
       
-      {/* Quadrant Legend */}
+      {/* Quadrant Legend - order matches chart: top-left, top-right, bottom-left, bottom-right */}
       <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
-        <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded text-center">
-          <span className="text-emerald-700 dark:text-emerald-300 font-medium">↗ High Vol, High Quality</span>
-          <br /><span className="text-emerald-600 dark:text-emerald-400">Top performers</span>
-        </div>
-        <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded text-center">
-          <span className="text-red-700 dark:text-red-300 font-medium">↘ High Vol, Low Quality</span>
-          <br /><span className="text-red-600 dark:text-red-400">Priority concern</span>
-        </div>
         <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-center">
           <span className="text-blue-700 dark:text-blue-300 font-medium">↖ Low Vol, High Quality</span>
           <br /><span className="text-blue-600 dark:text-blue-400">Good but slow</span>
         </div>
+        <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded text-center">
+          <span className="text-emerald-700 dark:text-emerald-300 font-medium">↗ High Vol, High Quality</span>
+          <br /><span className="text-emerald-600 dark:text-emerald-400">Top performers</span>
+        </div>
         <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-center">
           <span className="text-amber-700 dark:text-amber-300 font-medium">↙ Low Vol, Low Quality</span>
           <br /><span className="text-amber-600 dark:text-amber-400">Needs training</span>
+        </div>
+        <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded text-center">
+          <span className="text-red-700 dark:text-red-300 font-medium">↘ High Vol, Low Quality</span>
+          <br /><span className="text-red-600 dark:text-red-400">Priority concern</span>
         </div>
       </div>
     </div>

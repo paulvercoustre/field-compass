@@ -15,6 +15,7 @@ import ErrorMessage from './ui/ErrorMessage';
 interface SubmissionDetailProps {
   submission: Submission | null;
   isLoading: boolean;
+  onSubmissionUpdate?: (updated: Submission) => void;
 }
 
 // Helper to get value from submission data (path-based lookup like backend)
@@ -61,7 +62,7 @@ const GENERAL_CHECK_DEFINITIONS: Array<{
   { id: 'sampling_frame_mismatch', label: 'Sampling Frame Mismatch', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && c?.config_data?.sampling_frame?.sampling_cols?.length), getDetails: (c, d) => { const cols = c?.config_data?.sampling_frame?.sampling_cols; if (!cols?.length) return null; const combo = cols.map((col: string) => `${col}=${getFieldValueFromData(d, col) ?? 'N/A'}`).join(', '); return { field: cols.join(', '), value: combo }; } },
 ];
 
-const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoading }) => {
+const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoading, onSubmissionUpdate }) => {
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
@@ -390,11 +391,9 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
         selectedSurvey.survey_id,
         newStatus
       );
-      
-      // Update the submission prop (this would ideally trigger a re-fetch from parent)
-      // For now, we'll update the local display
-      Object.assign(submission, updatedSubmission);
-      
+
+      onSubmissionUpdate?.(updatedSubmission);
+
       // Show success message
       const statusText = newStatus || 'cleared';
       setSuccess(`Validation status updated to: ${statusText}`);
