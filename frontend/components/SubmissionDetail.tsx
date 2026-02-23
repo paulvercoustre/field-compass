@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Submission, QualityIssue } from '../types';
-import JsonViewer from './JsonViewer';
+import SubmissionDataViewer from './SubmissionDataViewer';
 import { Spinner } from './Spinner';
 import { Badge, EditIcon, AlertIcon } from './Badge';
 import { useSurvey } from '../contexts/SurveyContext';
@@ -1243,12 +1243,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
         <div className="min-w-0">
             <div className="py-4 min-w-0">
-                {isLoading ? (
+                {isLoading || isLoadingConfig ? (
                     <div className="flex justify-center mt-8">
                         <Spinner />
                     </div>
                 ) : (
-                    <JsonViewer data={submission_data} />
+                    <SubmissionDataViewer data={submission_data} surveyConfig={surveyConfig} />
                 )}
             </div>
         </div>
