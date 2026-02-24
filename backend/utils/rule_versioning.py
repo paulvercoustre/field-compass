@@ -57,6 +57,23 @@ def generate_llm_rules_hash(config_data: Dict[str, Any], qualitative_model: str)
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
 
 
+def _resolve_field_value(submission_data: Dict[str, Any], field_name: str) -> Any:
+    """
+    Resolve a field value from submission data using path-aware lookup.
+
+    Kobo stores fields with full group paths (e.g. 'group/field'), but config
+    entries often use only the leaf name.  This mirrors the logic in
+    HFCEngine._get_field_value so that hash computation and actual LLM
+    field extraction are consistent.
+    """
+    if field_name in submission_data:
+        return submission_data[field_name]
+    for key in submission_data:
+        if key.endswith(f"/{field_name}"):
+            return submission_data[key]
+    return None
+
+
 def generate_llm_input_hash(
     submission_data: Dict[str, Any],
     llm_fields: List[str],
@@ -69,7 +86,7 @@ def generate_llm_input_hash(
     """
     normalized: Dict[str, str] = {}
     for field in sorted(llm_fields or []):
-        value = submission_data.get(field)
+        value = _resolve_field_value(submission_data, field)
         text = _normalize_text(value)
         if not text:
             continue
