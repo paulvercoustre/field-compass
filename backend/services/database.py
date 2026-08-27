@@ -3,20 +3,19 @@ Database connection and query helpers.
 Provides SQLAlchemy session management and common database operations.
 """
 
-from contextlib import contextmanager
-from typing import Generator
-from sqlalchemy import create_engine, Engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import NullPool
 import os
+from collections.abc import Generator
+
 from dotenv import load_dotenv
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 load_dotenv()
 
 # Database connection string from environment
 DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/field_compass"
+    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/field_compass"
 )
 
 # Create SQLAlchemy engine
@@ -34,7 +33,7 @@ def get_db() -> Generator[Session, None, None]:
     """
     Dependency function for FastAPI to get database session.
     FastAPI will handle the context manager automatically.
-    
+
     Usage in FastAPI:
         @router.get("/endpoint")
         async def endpoint(db: Session = Depends(get_db)):
@@ -55,10 +54,10 @@ def init_db():
     """
     try:
         from sqlalchemy import text
+
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
     except Exception as e:
         print(f"Database connection failed: {e}")
         return False
-

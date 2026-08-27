@@ -2,15 +2,16 @@
 Utilities for computing "Don't know" (DK) metrics on submissions.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, Optional, Set, Tuple
+from typing import Any
 
 
 @dataclass(frozen=True)
 class EligibleDKIndex:
     """Precomputed index of question names eligible for DK counting."""
 
-    eligible_question_names: Set[str]
+    eligible_question_names: set[str]
 
 
 def _normalize_token(value: Any) -> str:
@@ -22,7 +23,7 @@ def _get_primary_type(question_type: str) -> str:
     return (question_type or "").strip().split()[0]
 
 
-def _extract_list_name(question: Dict[str, Any], question_type: str) -> Optional[str]:
+def _extract_list_name(question: dict[str, Any], question_type: str) -> str | None:
     list_name = question.get("list_name")
     if list_name:
         return str(list_name)
@@ -33,7 +34,7 @@ def _extract_list_name(question: Dict[str, Any], question_type: str) -> Optional
     return None
 
 
-def build_eligible_dk_question_index(config_data: Dict[str, Any]) -> EligibleDKIndex:
+def build_eligible_dk_question_index(config_data: dict[str, Any]) -> EligibleDKIndex:
     """
     Build an index of eligible question names for DK metrics.
 
@@ -58,7 +59,7 @@ def build_eligible_dk_question_index(config_data: Dict[str, Any]) -> EligibleDKI
 
     # If no DK token is configured, no select question can be considered DK-eligible.
     # integer/text remain eligible because DK can still be represented as dk_value.
-    choices_by_list: Dict[str, Set[str]] = {}
+    choices_by_list: dict[str, set[str]] = {}
     for choice in choices_sheet:
         list_name = choice.get("list_name")
         choice_name = choice.get("name")
@@ -69,7 +70,7 @@ def build_eligible_dk_question_index(config_data: Dict[str, Any]) -> EligibleDKI
             choices_by_list[key] = set()
         choices_by_list[key].add(_normalize_token(choice_name))
 
-    eligible_question_names: Set[str] = set()
+    eligible_question_names: set[str] = set()
     skip_types = {"begin_group", "end_group", "begin_repeat", "end_repeat", "note"}
 
     for question in survey_sheet:
@@ -95,7 +96,7 @@ def build_eligible_dk_question_index(config_data: Dict[str, Any]) -> EligibleDKI
     return EligibleDKIndex(eligible_question_names=eligible_question_names)
 
 
-def _flatten_leaf_values(data: Any, path: str = "") -> Iterator[Tuple[str, Any]]:
+def _flatten_leaf_values(data: Any, path: str = "") -> Iterator[tuple[str, Any]]:
     """Yield (path, value) for leaf values in nested dict/list structures."""
     if isinstance(data, dict):
         for key, value in data.items():
@@ -143,7 +144,7 @@ def _is_dk_value(value: Any, dk_value: Any, dk_string_value: Any) -> bool:
         return False
 
     # Numeric DK
-    if isinstance(value, (int, float)) and dk_value is not None and value == dk_value:
+    if isinstance(value, int | float) and dk_value is not None and value == dk_value:
         return True
 
     dk_str_norm = _normalize_token(dk_string_value) if dk_string_value is not None else ""
@@ -173,10 +174,10 @@ def _is_dk_value(value: Any, dk_value: Any, dk_string_value: Any) -> bool:
 
 
 def compute_dk_metrics(
-    submission_data: Dict[str, Any],
+    submission_data: dict[str, Any],
     eligible_index: EligibleDKIndex,
-    special_values: Dict[str, Any],
-) -> Tuple[int, int, Optional[float]]:
+    special_values: dict[str, Any],
+) -> tuple[int, int, float | None]:
     """
     Compute DK metrics for one submission.
 

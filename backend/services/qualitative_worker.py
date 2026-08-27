@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from sqlalchemy import text
 
-from services.job_queue import celery_app
 from services.database import SessionLocal
+from services.job_queue import celery_app
 
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(bind=True, name="services.qualitative_worker.run_qualitative_check_task", max_retries=3)
-def run_qualitative_check_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+@celery_app.task(
+    bind=True, name="services.qualitative_worker.run_qualitative_check_task", max_retries=3
+)
+def run_qualitative_check_task(self, payload: dict[str, Any]) -> dict[str, Any]:
     """
     Celery task wrapper for qualitative checks.
 
@@ -27,7 +29,9 @@ def run_qualitative_check_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 
         return run_qualitative_check_job(payload=payload, job_id=self.request.id)
     except Exception as exc:
-        logger.error("Qualitative check task failed (job=%s): %s", self.request.id, exc, exc_info=True)
+        logger.error(
+            "Qualitative check task failed (job=%s): %s", self.request.id, exc, exc_info=True
+        )
         # Best-effort fallback so jobs do not remain indefinitely pending.
         try:
             submission_id = int(payload.get("submission_id"))
@@ -54,4 +58,3 @@ def run_qualitative_check_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             logger.exception("Failed to persist fallback worker failure state")
         raise self.retry(exc=exc, countdown=30)
-

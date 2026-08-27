@@ -3,25 +3,26 @@ Survey configuration API endpoints.
 Provides access to survey configurations with permission-based access control.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import Dict, Any, Optional
-from uuid import UUID
-from pydantic import BaseModel, Field, EmailStr
+import logging
 from datetime import datetime
+from typing import Any
+from uuid import UUID
 
-from services.database import get_db
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.orm import Session
+
+from database.models import SubmissionCurrent, SurveyConfig, User, ValidationRule
 from services.auth import get_current_active_user
+from services.database import get_db
 from services.permissions import (
     get_accessible_surveys,
-    get_user_permission,
-    require_survey_access,
-    grant_survey_access,
-    revoke_survey_access,
     get_survey_access_list,
+    get_user_permission,
+    grant_survey_access,
+    require_survey_access,
+    revoke_survey_access,
 )
-from database.models import SurveyConfig, SubmissionCurrent, ValidationRule, User
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +33,17 @@ router = APIRouter()
 # Pydantic Models
 # =============================================================================
 
+
 class SurveyConfigUpdate(BaseModel):
-    survey_name: Optional[str] = None
-    kobo_asset_id: Optional[str] = None
-    config_data: Optional[Dict[str, Any]] = None
+    survey_name: str | None = None
+    kobo_asset_id: str | None = None
+    config_data: dict[str, Any] | None = None
 
 
 class SurveyCreate(BaseModel):
     survey_name: str = Field(..., min_length=1, max_length=255)
-    kobo_asset_id: Optional[str] = None
-    config_data: Dict[str, Any] = Field(default_factory=dict)
+    kobo_asset_id: str | None = None
+    config_data: dict[str, Any] = Field(default_factory=dict)
 
 
 class ShareSurveyRequest(BaseModel):
@@ -57,6 +59,7 @@ class UpdateAccessRequest(BaseModel):
 # Survey CRUD Endpoints
 # =============================================================================
 
+
 @router.get("/surveys")
 async def get_surveys(
     db: Session = Depends(get_db),
@@ -68,19 +71,21 @@ async def get_surveys(
     Admins can see all surveys.
     """
     surveys = get_accessible_surveys(db, current_user)
-    
+
     result = []
     for survey in surveys:
         permission = get_user_permission(db, current_user, survey.survey_id)
-        result.append({
-            "survey_id": str(survey.survey_id),
-            "survey_name": survey.survey_name,
-            "kobo_asset_id": survey.kobo_asset_id,
-            "permission": permission,
-            "owner_id": str(survey.user_id) if survey.user_id else None,
-            "is_owner": survey.user_id == current_user.user_id,
-        })
-    
+        result.append(
+            {
+                "survey_id": str(survey.survey_id),
+                "survey_name": survey.survey_name,
+                "kobo_asset_id": survey.kobo_asset_id,
+                "permission": permission,
+                "owner_id": str(survey.user_id) if survey.user_id else None,
+                "is_owner": survey.user_id == current_user.user_id,
+            }
+        )
+
     return result
 
 
@@ -98,14 +103,13 @@ async def get_survey(
         survey_uuid = UUID(survey_id)
     except ValueError:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
+            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
         )
-    
+
     # Check access and get survey
-    survey = require_survey_access(db, current_user, survey_uuid, min_level='viewer')
+    survey = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
     permission = get_user_permission(db, current_user, survey_uuid)
-    
+
     return {
         "survey_id": str(survey.survey_id),
         "survey_name": survey.survey_name,
@@ -130,30 +134,29 @@ async def create_survey(
     The current user becomes the owner of the survey.
     """
     # Check if survey name already exists
-    existing = db.query(SurveyConfig).filter(
-        SurveyConfig.survey_name == survey_data.survey_name
-    ).first()
-    
+    existing = (
+        db.query(SurveyConfig).filter(SurveyConfig.survey_name == survey_data.survey_name).first()
+    )
+
     if existing:
         raise HTTPException(
-            status_code=400,
-            detail=f"Survey with name '{survey_data.survey_name}' already exists"
+            status_code=400, detail=f"Survey with name '{survey_data.survey_name}' already exists"
         )
-    
+
     # Create new survey with current user as owner
     survey = SurveyConfig(
         survey_name=survey_data.survey_name,
         kobo_asset_id=survey_data.kobo_asset_id,
         config_data=survey_data.config_data,
-        user_id=current_user.user_id  # Set owner
+        user_id=current_user.user_id,  # Set owner
     )
-    
+
     db.add(survey)
     db.commit()
     db.refresh(survey)
-    
+
     logger.info(f"User {current_user.email} created survey {survey.survey_id}")
-    
+
     return {
         "survey_id": str(survey.survey_id),
         "survey_name": survey.survey_name,
@@ -181,40 +184,43 @@ async def update_survey(
         survey_uuid = UUID(survey_id)
     except ValueError:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
+            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
         )
-    
+
     # Require owner access to update survey config
-    survey = require_survey_access(db, current_user, survey_uuid, min_level='owner')
-    
+    survey = require_survey_access(db, current_user, survey_uuid, min_level="owner")
+
     # Update fields if provided
     if survey_update.survey_name is not None:
         # Check if new name conflicts with existing survey
-        existing = db.query(SurveyConfig).filter(
-            SurveyConfig.survey_name == survey_update.survey_name,
-            SurveyConfig.survey_id != survey_uuid
-        ).first()
+        existing = (
+            db.query(SurveyConfig)
+            .filter(
+                SurveyConfig.survey_name == survey_update.survey_name,
+                SurveyConfig.survey_id != survey_uuid,
+            )
+            .first()
+        )
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Survey with name '{survey_update.survey_name}' already exists"
+                detail=f"Survey with name '{survey_update.survey_name}' already exists",
             )
         survey.survey_name = survey_update.survey_name
-    
+
     if survey_update.kobo_asset_id is not None:
         survey.kobo_asset_id = survey_update.kobo_asset_id
-    
+
     if survey_update.config_data is not None:
         survey.config_data = survey_update.config_data
-    
+
     survey.updated_at = datetime.utcnow()
-    
+
     db.commit()
     db.refresh(survey)
-    
+
     logger.info(f"User {current_user.email} updated survey {survey_id}")
-    
+
     return {
         "survey_id": str(survey.survey_id),
         "survey_name": survey.survey_name,
@@ -234,74 +240,67 @@ async def delete_survey(
     """
     Delete a survey and all associated data.
     Requires owner access (or admin).
-    
+
     WARNING: This will permanently delete:
     - All submissions (submissions_current and submissions_history)
     - All validation rules
     - All shared access entries
     - The survey configuration itself
-    
+
     This operation cannot be undone.
     """
     try:
         survey_uuid = UUID(survey_id)
     except ValueError:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
+            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
         )
-    
+
     # Require owner access to delete
-    survey = require_survey_access(db, current_user, survey_uuid, min_level='owner')
+    survey = require_survey_access(db, current_user, survey_uuid, min_level="owner")
     survey_name = survey.survey_name
-    
+
     try:
         # Step 1: Delete all submissions_current for this survey
-        submissions_count = db.query(SubmissionCurrent).filter(
-            SubmissionCurrent.survey_id == survey_uuid
-        ).count()
-        
+        submissions_count = (
+            db.query(SubmissionCurrent).filter(SubmissionCurrent.survey_id == survey_uuid).count()
+        )
+
         if submissions_count > 0:
             logger.info(f"Deleting {submissions_count} submissions for survey {survey_id}")
-            db.query(SubmissionCurrent).filter(
-                SubmissionCurrent.survey_id == survey_uuid
-            ).delete()
-        
+            db.query(SubmissionCurrent).filter(SubmissionCurrent.survey_id == survey_uuid).delete()
+
         # Step 2: Delete all validation rules for this survey
-        rules_count = db.query(ValidationRule).filter(
-            ValidationRule.survey_id == survey_uuid
-        ).count()
-        
+        rules_count = (
+            db.query(ValidationRule).filter(ValidationRule.survey_id == survey_uuid).count()
+        )
+
         if rules_count > 0:
             logger.info(f"Deleting {rules_count} validation rules for survey {survey_id}")
-            db.query(ValidationRule).filter(
-                ValidationRule.survey_id == survey_uuid
-            ).delete()
-        
+            db.query(ValidationRule).filter(ValidationRule.survey_id == survey_uuid).delete()
+
         # Step 3: Delete the survey (shared_access will cascade delete)
         db.delete(survey)
         db.commit()
-        
+
         logger.info(f"User {current_user.email} deleted survey {survey_id} ({survey_name})")
-        
+
         return {
             "message": f"Survey '{survey_name}' has been deleted successfully",
             "deleted_submissions": submissions_count,
-            "deleted_validation_rules": rules_count
+            "deleted_validation_rules": rules_count,
         }
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error deleting survey {survey_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete survey: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to delete survey: {str(e)}")
 
 
 # =============================================================================
 # Survey Sharing Endpoints
 # =============================================================================
+
 
 @router.get("/surveys/{survey_id}/access")
 async def get_survey_access(
@@ -317,13 +316,12 @@ async def get_survey_access(
         survey_uuid = UUID(survey_id)
     except ValueError:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
+            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
         )
-    
+
     # Require owner access to view sharing settings
-    require_survey_access(db, current_user, survey_uuid, min_level='owner')
-    
+    require_survey_access(db, current_user, survey_uuid, min_level="owner")
+
     return get_survey_access_list(db, survey_uuid)
 
 
@@ -342,54 +340,48 @@ async def share_survey(
         survey_uuid = UUID(survey_id)
     except ValueError:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
+            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
         )
-    
+
     # Require owner access to share
-    survey = require_survey_access(db, current_user, survey_uuid, min_level='owner')
-    
+    survey = require_survey_access(db, current_user, survey_uuid, min_level="owner")
+
     # Find user by email
     target_user = db.query(User).filter(User.email == share_request.email).first()
-    
+
     if not target_user:
         raise HTTPException(
-            status_code=404,
-            detail=f"User with email '{share_request.email}' not found"
+            status_code=404, detail=f"User with email '{share_request.email}' not found"
         )
-    
+
     # Cannot share with yourself
     if target_user.user_id == current_user.user_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot share survey with yourself"
-        )
-    
+        raise HTTPException(status_code=400, detail="Cannot share survey with yourself")
+
     # Cannot share with the owner
     if survey.user_id and target_user.user_id == survey.user_id:
-        raise HTTPException(
-            status_code=400,
-            detail="This user is already the owner of the survey"
-        )
-    
+        raise HTTPException(status_code=400, detail="This user is already the owner of the survey")
+
     # Grant access
     access = grant_survey_access(
         db=db,
         survey_id=survey_uuid,
         user_id=target_user.user_id,
         permission_level=share_request.permission_level,
-        granted_by=current_user.user_id
+        granted_by=current_user.user_id,
     )
-    
-    logger.info(f"User {current_user.email} shared survey {survey_id} with {share_request.email} as {share_request.permission_level}")
-    
+
+    logger.info(
+        f"User {current_user.email} shared survey {survey_id} with {share_request.email} as {share_request.permission_level}"
+    )
+
     return {
         "message": f"Survey shared with {share_request.email}",
         "user_id": str(target_user.user_id),
         "email": target_user.email,
         "username": target_user.username,
         "permission_level": access.permission_level,
-        "granted_at": access.granted_at.isoformat() if access.granted_at else None
+        "granted_at": access.granted_at.isoformat() if access.granted_at else None,
     }
 
 
@@ -409,36 +401,34 @@ async def update_survey_access(
         survey_uuid = UUID(survey_id)
         target_user_uuid = UUID(user_id)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid UUID format"
-        )
-    
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
     # Require owner access
-    survey = require_survey_access(db, current_user, survey_uuid, min_level='owner')
-    
+    survey = require_survey_access(db, current_user, survey_uuid, min_level="owner")
+
     # Cannot change owner's access
     if survey.user_id and target_user_uuid == survey.user_id:
         raise HTTPException(
-            status_code=400,
-            detail="Cannot modify owner's access. Transfer ownership instead."
+            status_code=400, detail="Cannot modify owner's access. Transfer ownership instead."
         )
-    
+
     # Update access
     access = grant_survey_access(
         db=db,
         survey_id=survey_uuid,
         user_id=target_user_uuid,
         permission_level=update_request.permission_level,
-        granted_by=current_user.user_id
+        granted_by=current_user.user_id,
     )
-    
-    logger.info(f"User {current_user.email} updated access for user {user_id} on survey {survey_id} to {update_request.permission_level}")
-    
+
+    logger.info(
+        f"User {current_user.email} updated access for user {user_id} on survey {survey_id} to {update_request.permission_level}"
+    )
+
     return {
         "message": "Access updated",
         "user_id": str(target_user_uuid),
-        "permission_level": access.permission_level
+        "permission_level": access.permission_level,
     }
 
 
@@ -457,33 +447,27 @@ async def revoke_survey_access_endpoint(
         survey_uuid = UUID(survey_id)
         target_user_uuid = UUID(user_id)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid UUID format"
-        )
-    
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
     # Require owner access
-    survey = require_survey_access(db, current_user, survey_uuid, min_level='owner')
-    
+    survey = require_survey_access(db, current_user, survey_uuid, min_level="owner")
+
     # Cannot revoke owner's access
     if survey.user_id and target_user_uuid == survey.user_id:
         raise HTTPException(
-            status_code=400,
-            detail="Cannot revoke owner's access. Transfer ownership instead."
+            status_code=400, detail="Cannot revoke owner's access. Transfer ownership instead."
         )
-    
+
     # Revoke access
     revoked = revoke_survey_access(db, survey_uuid, target_user_uuid)
-    
+
     if not revoked:
         raise HTTPException(
-            status_code=404,
-            detail="User does not have shared access to this survey"
+            status_code=404, detail="User does not have shared access to this survey"
         )
-    
-    logger.info(f"User {current_user.email} revoked access for user {user_id} on survey {survey_id}")
-    
-    return {
-        "message": "Access revoked",
-        "user_id": str(target_user_uuid)
-    }
+
+    logger.info(
+        f"User {current_user.email} revoked access for user {user_id} on survey {survey_id}"
+    )
+
+    return {"message": "Access revoked", "user_id": str(target_user_uuid)}

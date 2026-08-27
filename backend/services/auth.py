@@ -3,22 +3,22 @@ Authentication and encryption services.
 Handles JWT tokens, password hashing, and Kobo API key encryption.
 """
 
+import base64
+import hashlib
 import os
 from datetime import datetime, timedelta
-from typing import Optional
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from pydantic import BaseModel
-import base64
-import hashlib
+from sqlalchemy.orm import Session
 
-from services.database import get_db
 from database.models import User
+from services.database import get_db
 
 load_dotenv()
 
@@ -56,21 +56,22 @@ fernet = Fernet(FERNET_KEY)
 # Pydantic models for auth
 # =============================================================================
 
+
 class Token(BaseModel):
     access_token: str
     token_type: str
 
 
 class TokenData(BaseModel):
-    user_id: Optional[str] = None
-    email: Optional[str] = None
+    user_id: str | None = None
+    email: str | None = None
 
 
 class UserCreate(BaseModel):
     email: str
     username: str
     password: str
-    full_name: Optional[str] = None
+    full_name: str | None = None
 
 
 class UserLogin(BaseModel):
@@ -82,22 +83,22 @@ class UserResponse(BaseModel):
     user_id: str
     email: str
     username: str
-    full_name: Optional[str]
+    full_name: str | None
     has_kobo_api_key: bool
     kobo_api_url: str
     is_active: bool
     is_admin: bool
     created_at: datetime
-    last_login_at: Optional[datetime]
+    last_login_at: datetime | None
 
     class Config:
         from_attributes = True
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = None
-    full_name: Optional[str] = None
-    kobo_api_url: Optional[str] = None
+    username: str | None = None
+    full_name: str | None = None
+    kobo_api_url: str | None = None
 
 
 class KoboApiKeyUpdate(BaseModel):
@@ -112,6 +113,7 @@ class PasswordChange(BaseModel):
     passwords in the URL -- and therefore into access logs, proxy logs and
     browser history.
     """
+
     current_password: str
     new_password: str
 
@@ -119,6 +121,7 @@ class PasswordChange(BaseModel):
 # =============================================================================
 # Password hashing functions
 # =============================================================================
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
@@ -134,6 +137,7 @@ def get_password_hash(password: str) -> str:
 # API Key encryption functions
 # =============================================================================
 
+
 def encrypt_api_key(api_key: str) -> str:
     """Encrypt a Kobo API key for storage."""
     return fernet.encrypt(api_key.encode()).decode()
@@ -148,7 +152,8 @@ def decrypt_api_key(encrypted_key: str) -> str:
 # JWT functions
 # =============================================================================
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
     if expires_delta:
@@ -160,7 +165,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def decode_access_token(token: str) -> Optional[TokenData]:
+def decode_access_token(token: str) -> TokenData | None:
     """Decode and validate a JWT access token."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -177,7 +182,8 @@ def decode_access_token(token: str) -> Optional[TokenData]:
 # User authentication functions
 # =============================================================================
 
-def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+
+def authenticate_user(db: Session, email: str, password: str) -> User | None:
     """Authenticate a user by email and password."""
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -187,9 +193,10 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     return user
 
 
-def get_user_by_id(db: Session, user_id: str) -> Optional[User]:
+def get_user_by_id(db: Session, user_id: str) -> User | None:
     """Get a user by their ID."""
     from uuid import UUID
+
     try:
         user_uuid = UUID(user_id)
         return db.query(User).filter(User.user_id == user_uuid).first()
@@ -197,12 +204,12 @@ def get_user_by_id(db: Session, user_id: str) -> Optional[User]:
         return None
 
 
-def get_user_by_email(db: Session, email: str) -> Optional[User]:
+def get_user_by_email(db: Session, email: str) -> User | None:
     """Get a user by their email."""
     return db.query(User).filter(User.email == email).first()
 
 
-def get_user_by_username(db: Session, username: str) -> Optional[User]:
+def get_user_by_username(db: Session, username: str) -> User | None:
     """Get a user by their username."""
     return db.query(User).filter(User.username == username).first()
 
@@ -211,9 +218,9 @@ def get_user_by_username(db: Session, username: str) -> Optional[User]:
 # FastAPI dependencies
 # =============================================================================
 
+
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> User:
     """
     FastAPI dependency to get the current authenticated user.
@@ -224,21 +231,19 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     token_data = decode_access_token(token)
     if token_data is None:
         raise credentials_exception
-    
+
     user = get_user_by_id(db, token_data.user_id)
     if user is None:
         raise credentials_exception
-    
+
     return user
 
 
-async def get_current_active_user(
-    current_user: User = Depends(get_current_user)
-) -> User:
+async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
     """
     FastAPI dependency to get the current active user.
     Raises 400 if user is inactive.
@@ -249,9 +254,8 @@ async def get_current_active_user(
 
 
 async def get_optional_current_user(
-    token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-) -> Optional[User]:
+    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> User | None:
     """
     FastAPI dependency to optionally get the current user.
     Returns None if no valid token is provided (instead of raising an error).
@@ -259,11 +263,11 @@ async def get_optional_current_user(
     """
     if not token:
         return None
-    
+
     token_data = decode_access_token(token)
     if token_data is None:
         return None
-    
+
     return get_user_by_id(db, token_data.user_id)
 
 
@@ -271,7 +275,8 @@ async def get_optional_current_user(
 # Kobo API key helpers
 # =============================================================================
 
-def get_user_kobo_token(user: User) -> Optional[str]:
+
+def get_user_kobo_token(user: User) -> str | None:
     """
     Get the decrypted Kobo API token for a user.
     Returns None if user has no token configured.
@@ -304,4 +309,3 @@ def user_to_response(user: User) -> dict:
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
     }
-

@@ -3,19 +3,19 @@ Field Compass FastAPI Backend
 Main application entry point.
 """
 
+import os
+from contextlib import asynccontextmanager
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-import uvicorn
-from contextlib import asynccontextmanager
 
+from routers import ai, etl, progress, quality, submissions, surveys, users, validation_rules
 from services.database import init_db
 from services.rate_limit import limiter
-from routers import submissions, progress, etl, surveys, validation_rules, users, quality, ai
-import os
 
 # CORS origins - configurable via environment variable
 # For production, set CORS_ORIGINS as comma-separated list: "https://app.example.com,https://www.example.com"
@@ -47,9 +47,9 @@ async def lifespan(app: FastAPI):
         print("✓ Database connection established")
     else:
         print("✗ Database connection failed - check configuration")
-    
+
     yield
-    
+
     # Shutdown: Cleanup if needed
     print("Shutting down Field Compass API...")
 
@@ -91,11 +91,7 @@ app.include_router(ai.router, prefix="/api", tags=["ai"])
 @app.get("/")
 async def root():
     """Root endpoint."""
-    return {
-        "message": "Field Compass API",
-        "version": "1.0.0",
-        "docs": "/docs"
-    }
+    return {"message": "Field Compass API", "version": "1.0.0", "docs": "/docs"}
 
 
 @app.get("/health")
@@ -104,7 +100,7 @@ async def health_check():
     db_status = init_db()
     return {
         "status": "healthy" if db_status else "unhealthy",
-        "database": "connected" if db_status else "disconnected"
+        "database": "connected" if db_status else "disconnected",
     }
 
 
