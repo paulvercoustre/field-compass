@@ -35,7 +35,13 @@
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		# The app bundles all of its JS/CSS -- no third-party origins needed.
 		# 'unsafe-inline' for styles only: React/Recharts set style attributes.
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		#
+		# connect-src also allows API_ORIGIN. This matters when VITE_API_URL is
+		# set to an absolute URL instead of the default "/api": the frontend
+		# then calls a DIFFERENT origin, and 'self' alone would block every
+		# request -- login included -- before CORS was ever consulted. Leave
+		# API_ORIGIN empty whenever VITE_API_URL is "/api" (same-origin).
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' {$API_ORIGIN:}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 	}
 
 	# Sampling-frame uploads (CSV/XLSX) need headroom. nginx's 1MB default

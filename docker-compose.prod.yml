@@ -14,6 +14,10 @@ services:
       # A domain (https://app.example.org) gives real HTTPS.
       # ":80" serves plain HTTP -- demo only, passwords travel in clear.
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      # Only needed when VITE_API_URL is an absolute URL on another origin;
+      # leave empty for the default same-origin "/api" setup. Must match that
+      # origin exactly or the browser's CSP will block every API call.
+      API_ORIGIN: ${API_ORIGIN:-}
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - frontend_dist:/usr/share/caddy/html:ro
