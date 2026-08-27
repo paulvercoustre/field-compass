@@ -104,6 +104,18 @@ class KoboApiKeyUpdate(BaseModel):
     kobo_api_token: str
 
 
+class PasswordChange(BaseModel):
+    """Password change payload.
+
+    Declared as a Pydantic model so FastAPI reads these from the JSON request
+    BODY. As bare `str` parameters they were query parameters, which put both
+    passwords in the URL -- and therefore into access logs, proxy logs and
+    browser history.
+    """
+    current_password: str
+    new_password: str
+
+
 # =============================================================================
 # Password hashing functions
 # =============================================================================

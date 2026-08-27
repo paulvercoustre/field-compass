@@ -16,10 +16,11 @@ Use this checklist to ensure all deployment steps are completed.
 ### Azure Setup (VM Demo Deployment)
 - [ ] Azure account and subscription ready
 - [ ] Resource group created
-- [ ] Ubuntu VM created (ports 22/80/443)
+- [ ] Ubuntu VM created (ports 22/80/443 -- port 80 is required for
+      Let's Encrypt certificate challenges, not just redirects)
 - [ ] Docker + docker compose installed on VM
 - [ ] Repo deployed to VM
-- [ ] `docker-compose.prod.yml` running (nginx + backend + postgres + frontend build)
+- [ ] `docker-compose.prod.yml` running (caddy + backend + postgres + redis + worker + frontend build)
 - [ ] Basic backup approach for postgres volume documented (even for demos)
 
 ### Configuration
@@ -35,7 +36,9 @@ Use this checklist to ensure all deployment steps are completed.
 - [ ] Database firewall rules configured
 - [ ] Strong database password set
 - [ ] Secrets stored securely (not in code)
-- [ ] HTTPS enforced (Azure default)
+- [ ] HTTPS enforced (NOT automatic -- requires a DOMAIN in `SITE_ADDRESS`;
+      there is no Azure component in front of this VM. With a bare IP the
+      app is plain HTTP and passwords travel in clear. See VM_DEPLOYMENT_AZURE.md section 8)
 - [ ] CORS configured correctly
 
 ## Deployment

@@ -2,7 +2,7 @@
 import type { KoboToolData, KoboQuestion, KoboChoice, KoboVariable } from '../types';
 export type { KoboToolData } from '../types';
 
-declare const XLSX: any; // Using XLSX from a script tag
+import * as XLSX from 'xlsx';
 
 export const parseKoboTool = (file: File): Promise<KoboToolData> => {
   return new Promise((resolve, reject) => {

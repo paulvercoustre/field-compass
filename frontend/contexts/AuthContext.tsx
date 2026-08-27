@@ -230,8 +230,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const changePassword = async (currentPassword: string, newPassword: string) => {
-    const response = await authFetch(`/api/users/me/password?current_password=${encodeURIComponent(currentPassword)}&new_password=${encodeURIComponent(newPassword)}`, {
+    // Passwords go in the JSON body, never the query string -- a URL would be
+    // recorded in access logs, proxy logs and browser history.
+    const response = await authFetch('/api/users/me/password', {
       method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
     });
 
     if (!response.ok) {

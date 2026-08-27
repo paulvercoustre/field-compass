@@ -43,7 +43,6 @@ class TestTypeConversion:
     def test_simpleeval_compatibility(self, test_db, test_survey_config):
         """Test that converted values work with SimpleEval comparisons."""
         engine = HFCEngine(test_db, test_survey_config)
-        evaluator = SimpleEval()
         
         # Test cases that should work after conversion
         test_cases = [
@@ -58,24 +57,27 @@ class TestTypeConversion:
         for value, expression, expected in test_cases:
             # Test both income and score variables
             names = {'income': value, 'score': value, 'age': value}
-            result = evaluator.eval(expression, names=names)
+            # Names belong on the evaluator, not on eval() -- eval() has never
+            # accepted a `names` keyword. This mirrors how hfc_engine actually
+            # calls it, so the test exercises the real code path.
+            evaluator = SimpleEval(names=names)
+            result = evaluator.eval(expression)
             assert result == expected, f"Expression '{expression}' with value {value} failed: expected {expected}, got {result}"
     
     def test_string_vs_number_comparison_demonstration(self, test_db, test_survey_config):
         """Demonstrate that string comparisons fail and numeric comparisons work."""
         engine = HFCEngine(test_db, test_survey_config)
-        evaluator = SimpleEval()
         
         # This should fail (TypeError: '>' not supported between instances of 'str' and 'int')
         with pytest.raises(TypeError):
-            evaluator.eval("income > 200", names={'income': "250"})
+            SimpleEval(names={'income': "250"}).eval("income > 200")
         
         # This should work after conversion
-        result = evaluator.eval("income > 200", names={'income': 250})
+        result = SimpleEval(names={'income': 250}).eval("income > 200")
         assert result == True, "Numeric comparison should work: 250 > 200 = True"
         
         # Test that conversion works
         converted = engine._convert_value_type("250")
         assert converted == 250, "String '250' should convert to int 250"
-        result = evaluator.eval("income > 200", names={'income': converted})
+        result = SimpleEval(names={'income': converted}).eval("income > 200")
         assert result == True, "Converted value should work in comparison"

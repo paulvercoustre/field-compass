@@ -6,10 +6,14 @@ Main application entry point.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
 
 from services.database import init_db
+from services.rate_limit import limiter
 from routers import submissions, progress, etl, surveys, validation_rules, users, quality, ai
 import os
 
@@ -57,6 +61,12 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Rate limiting (protects auth endpoints from credential stuffing and the AI
+# endpoints from budget exhaustion)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # Configure CORS
 app.add_middleware(

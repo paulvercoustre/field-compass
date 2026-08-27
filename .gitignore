@@ -28,11 +28,27 @@ wheels/
 *.egg
 
 # Environment variables
+# Glob-based so new variants (.env.prod, .env.production, prod.env) are caught
+# automatically. The deployment guide has you run `git pull` in the same
+# directory as the production .env, so a near-miss filename must not be
+# committable.
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+*.env
+
+# Secrets / TLS material (the VM will hold certs once HTTPS is enabled)
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+id_rsa
+id_rsa.*
+
+# Local agent/editor tooling
+.claude/
+.cursor/
 
 # IDE
 .vscode/

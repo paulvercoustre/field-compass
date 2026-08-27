@@ -3,8 +3,10 @@ Tests for API endpoints.
 """
 
 import pytest
+from fastapi import Depends
 from fastapi.testclient import TestClient
 from database.models import Base, SurveyConfig, SubmissionCurrent, ValidationRule, SubmissionHistory
+from services.database import get_db as get_db_dependency
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -95,17 +97,65 @@ def override_get_db():
         db.close()
 
 
+# Fixed id so the same user owns everything created during a test.
+TEST_USER_ID = UUID("00000000-0000-4000-8000-000000000001")
+
+
+def _ensure_test_user(db):
+    """Insert the test user if it isn't there yet.
+
+    A real row is required rather than a stub: permission checks query the
+    users table, survey rows carry a user_id foreign key, and the SQLite test
+    engine runs with PRAGMA foreign_keys=ON.
+    """
+    from database.models import User
+
+    user = db.query(User).filter(User.user_id == TEST_USER_ID).first()
+    if user is None:
+        user = User(
+            user_id=TEST_USER_ID,
+            email="test-user@example.invalid",
+            username="test-user",
+            # Never verified: authentication itself is bypassed below.
+            password_hash="not-a-real-hash",
+            full_name="Test User",
+            is_active=True,
+            is_admin=False,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+def override_current_user(db=Depends(get_db_dependency)):
+    """Stand in for the authenticated user.
+
+    These endpoint tests predate the authentication system and were never
+    updated when it landed, so every request came back 401 and the fixtures
+    that build test data failed with it.
+
+    The user is returned from the REQUEST's own session (via Depends) rather
+    than a detached instance, so its attributes stay loaded. is_admin is left
+    False deliberately: an admin would satisfy every permission check and the
+    tests would no longer exercise ownership at all.
+    """
+    return _ensure_test_user(db)
+
+
 @pytest.fixture(scope="function")
 def client():
-    """Create a test client with test database."""
+    """Create a test client with test database and an authenticated user."""
     Base.metadata.create_all(bind=engine)
     
     # Import here to avoid circular imports
     from main import app
     from services.database import get_db
+    from services.auth import get_current_active_user
     
     # Override the get_db dependency
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_active_user] = override_current_user
     
     with TestClient(app) as test_client:
         yield test_client
@@ -473,13 +523,26 @@ class TestSurveysEndpoint:
 class TestSubmissionsEndpoint:
     """Tests for /api/submissions endpoints."""
     
-    def test_get_submissions_empty(self, client):
+    def test_get_submissions_empty(self, client, test_survey):
         """Test getting submissions when none exist."""
-        response = client.get("/api/submissions")
+        # survey_id is mandatory: the endpoint scopes results to a survey the
+        # caller has access to, rather than listing every survey's submissions.
+        survey_id = test_survey["survey_id"]
+        response = client.get(f"/api/submissions?survey_id={survey_id}")
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 0
         assert len(data["submissions"]) == 0
+    
+    def test_get_submissions_requires_survey_id(self, client):
+        """Omitting survey_id must be rejected, not silently unscoped.
+
+        Regression guard: survey_id is what ties the query to an access check,
+        so an unscoped listing would leak other surveys' submissions.
+        """
+        response = client.get("/api/submissions")
+        assert response.status_code == 400
+        assert "survey_id" in response.json()["detail"]
     
     def test_get_submissions_with_survey_filter(self, client, test_survey):
         """Test filtering submissions by survey_id."""
@@ -489,9 +552,12 @@ class TestSubmissionsEndpoint:
         data = response.json()
         assert isinstance(data["submissions"], list)
     
-    def test_get_submissions_with_status_filter(self, client):
+    def test_get_submissions_with_status_filter(self, client, test_survey):
         """Test filtering submissions by qa_status."""
-        response = client.get("/api/submissions?qa_status=FLAGGED")
+        survey_id = test_survey["survey_id"]
+        response = client.get(
+            f"/api/submissions?survey_id={survey_id}&qa_status=FLAGGED"
+        )
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data["submissions"], list)
