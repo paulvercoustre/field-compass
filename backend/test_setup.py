@@ -5,14 +5,14 @@ Run this to verify the environment is configured correctly.
 
 import os
 import sys
-from sqlalchemy import create_engine, text
+
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
 
 load_dotenv()
 
 DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/field_compass"
+    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/field_compass"
 )
 
 
@@ -22,7 +22,7 @@ def test_database_connection():
     try:
         engine = create_engine(DATABASE_URL)
         with engine.connect() as conn:
-            result = conn.execute(text("SELECT 1"))
+            conn.execute(text("SELECT 1"))
             print("✓ Database connection successful")
             return True
     except Exception as e:
@@ -37,15 +37,17 @@ def test_tables_exist():
         "survey_configs",
         "validation_rules",
         "submissions_current",
-        "submissions_history"
+        "submissions_history",
     ]
-    
+
     try:
         engine = create_engine(DATABASE_URL)
         with engine.connect() as conn:
             for table in required_tables:
                 result = conn.execute(
-                    text(f"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table}')")
+                    text(
+                        f"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table}')"
+                    )
                 )
                 exists = result.scalar()
                 if exists:
@@ -63,15 +65,25 @@ def test_imports():
     """Test if all required modules can be imported."""
     print("\nTesting Python imports...")
     try:
-        from database.models import Base, SurveyConfig, ValidationRule, SubmissionCurrent, SubmissionHistory
+        from database.models import (
+            Base,
+            SubmissionCurrent,
+            SubmissionHistory,
+            SurveyConfig,
+            ValidationRule,
+        )
+
         print("✓ Database models imported successfully")
-        
-        from models import Submission, SubmissionHistory as SubmissionHistoryPydantic
+
+        from models import Submission
+        from models import SubmissionHistory as SubmissionHistoryPydantic
+
         print("✓ Pydantic models imported successfully")
-        
-        from routers import submissions, progress
+
+        from routers import progress, submissions
+
         print("✓ Routers imported successfully")
-        
+
         return True
     except ImportError as e:
         print(f"✗ Import failed: {e}")
@@ -86,12 +98,12 @@ if __name__ == "__main__":
     print("=" * 50)
     print("Field Compass Setup Test")
     print("=" * 50)
-    
+
     all_passed = True
-    
+
     # Test imports first (doesn't require database)
     all_passed = test_imports() and all_passed
-    
+
     # Test database connection
     if test_database_connection():
         # Test tables
@@ -99,7 +111,7 @@ if __name__ == "__main__":
     else:
         print("\n⚠ Skipping table tests (database not available)")
         all_passed = False
-    
+
     print("\n" + "=" * 50)
     if all_passed:
         print("✓ All tests passed! Setup looks good.")
@@ -107,4 +119,3 @@ if __name__ == "__main__":
     else:
         print("✗ Some tests failed. Please check the errors above.")
         sys.exit(1)
-

@@ -1,8 +1,8 @@
 """Celery application setup for asynchronous background jobs."""
 
 import os
-from celery import Celery
 
+from celery import Celery
 
 BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
 RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", BROKER_URL)
@@ -35,4 +35,3 @@ if os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() in {"1", "true", "yes"
 
 # Keep autodiscovery for future conventional task modules.
 celery_app.autodiscover_tasks(["services"])
-

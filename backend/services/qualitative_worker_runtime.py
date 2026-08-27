@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import logging
 import os
 import sys
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 # Ensure worker subprocesses can resolve top-level backend modules reliably.
@@ -23,13 +23,13 @@ logger = logging.getLogger(__name__)
 LLM_ISSUE_SOURCE = "llm_qualitative_v1"
 
 
-def _extract_question_contexts(config_data: Dict[str, Any], fields: List[str]) -> Dict[str, str]:
+def _extract_question_contexts(config_data: dict[str, Any], fields: list[str]) -> dict[str, str]:
     """Get question labels for monitored fields."""
     kobo_tool = config_data.get("kobo_tool", {}) or {}
     survey_questions = kobo_tool.get("survey", []) or []
     label_col = kobo_tool.get("label_column_survey", "label::English (en)")
 
-    contexts: Dict[str, str] = {}
+    contexts: dict[str, str] = {}
     for field in fields:
         question = next((q for q in survey_questions if q.get("name") == field), None)
         if not question:
@@ -39,7 +39,7 @@ def _extract_question_contexts(config_data: Dict[str, Any], fields: List[str]) -
     return contexts
 
 
-def _is_llm_issue(issue: Dict[str, Any]) -> bool:
+def _is_llm_issue(issue: dict[str, Any]) -> bool:
     """Identify qualitative LLM issues in the issue list."""
     metadata = issue.get("metadata", {}) or {}
     return bool(
@@ -47,7 +47,7 @@ def _is_llm_issue(issue: Dict[str, Any]) -> bool:
     )
 
 
-def run_qualitative_check_job(payload: Dict[str, Any], job_id: str) -> Dict[str, Any]:
+def run_qualitative_check_job(payload: dict[str, Any], job_id: str) -> dict[str, Any]:
     """Run qualitative checks for one submission and persist status/issues."""
     db = SessionLocal()
     try:
@@ -69,9 +69,7 @@ def run_qualitative_check_job(payload: Dict[str, Any], job_id: str) -> Dict[str,
             logger.warning("Qualitative worker: submission not found id=%s", submission_id)
             return {"status": "missing_submission", "submission_id": submission_id}
 
-        survey_config = (
-            db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_id).first()
-        )
+        survey_config = db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_id).first()
         if not survey_config:
             submission.llm_check_status = "failed"
             submission.llm_last_error = "Survey config not found"
@@ -105,7 +103,7 @@ def run_qualitative_check_job(payload: Dict[str, Any], job_id: str) -> Dict[str,
         llm_fields = engine.llm_qualitative_fields
         question_contexts = _extract_question_contexts(survey_config.config_data, llm_fields)
 
-        field_values: Dict[str, str] = {}
+        field_values: dict[str, str] = {}
         for field in llm_fields:
             value, _ = engine._get_field_value(submission.submission_data, field)
             if not isinstance(value, str):
@@ -117,7 +115,7 @@ def run_qualitative_check_job(payload: Dict[str, Any], job_id: str) -> Dict[str,
                 continue
             field_values[field] = text
 
-        llm_results: List[Dict[str, Any]] = []
+        llm_results: list[dict[str, Any]] = []
         if field_values:
             llm_results = ai_service.check_qualitative_responses(
                 field_values=field_values,
@@ -186,4 +184,3 @@ def run_qualitative_check_job(payload: Dict[str, Any], job_id: str) -> Dict[str,
         raise
     finally:
         db.close()
-

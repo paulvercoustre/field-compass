@@ -3,18 +3,19 @@ ETL API endpoints
 Endpoints for triggering and monitoring ETL pipelines.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from sqlalchemy.orm import Session
+import logging
 from datetime import datetime
 from uuid import UUID as UUIDType
-import logging
 
-from services.database import get_db
-from services.auth import get_current_active_user, get_user_kobo_token
-from services.permissions import require_survey_access
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from database.models import User
 from etl.pipeline import ETLPipeline
 from models import BaseResponse
-from database.models import User
+from services.auth import get_current_active_user, get_user_kobo_token
+from services.database import get_db
+from services.permissions import require_survey_access
 
 logger = logging.getLogger(__name__)
 
@@ -26,31 +27,36 @@ async def run_etl_pipeline(
     survey_id: str,
     background_tasks: BackgroundTasks,
     limit: int | None = Query(None, description="Maximum number of submissions to process"),
-    start_date: str | None = Query(None, description="Only process submissions after this date (YYYY-MM-DD)"),
-    force_validation: bool = Query(False, description="Force revalidation of all submissions (ignores incremental optimization)"),
+    start_date: str | None = Query(
+        None, description="Only process submissions after this date (YYYY-MM-DD)"
+    ),
+    force_validation: bool = Query(
+        False,
+        description="Force revalidation of all submissions (ignores incremental optimization)",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Trigger ETL pipeline for a survey.
-    
+
     This endpoint will:
     1. Fetch submissions from KoboToolbox
     2. Merge submissions (with edit detection)
     3. Run High-Frequency Checks (incrementally by default)
     4. Update database
-    
+
     Parameters:
     - limit: Cap the number of submissions processed
     - start_date: Only process submissions after this date
     - force_validation: If True, revalidate all fetched submissions regardless of their validation status.
                        If False (default), use incremental validation (only new/edited/rule-changed submissions)
-    
+
     Authentication required. User must:
     - Have at least 'editor' access to the survey
     - Have a Kobo API key configured
     - Have Kobo-level access to the form
-    
+
     Note: This runs synchronously. For large datasets, consider using Airflow.
     """
     try:
@@ -60,70 +66,64 @@ async def run_etl_pipeline(
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
+                detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID.",
             )
-        
+
         # Check user has editor access to this survey
-        require_survey_access(db, current_user, survey_uuid, min_level='editor')
-        
+        require_survey_access(db, current_user, survey_uuid, min_level="editor")
+
         # Parse start_date if provided
         start_datetime = None
         if start_date:
             try:
-                start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
             except ValueError:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid date format: {start_date}. Use YYYY-MM-DD"
+                    status_code=400, detail=f"Invalid date format: {start_date}. Use YYYY-MM-DD"
                 )
-        
+
         # Get Kobo API credentials from user
         kobo_api_token = get_user_kobo_token(current_user)
         kobo_api_url = current_user.kobo_api_url
-        
+
         if not kobo_api_token:
             raise HTTPException(
                 status_code=400,
-                detail="Kobo API key not configured. Please set your API key in user settings."
+                detail="Kobo API key not configured. Please set your API key in user settings.",
             )
-        
+
         # Create pipeline with user's credentials
-        pipeline = ETLPipeline(
-            db,
-            kobo_api_token=kobo_api_token,
-            kobo_api_url=kobo_api_url
-        )
-        
+        pipeline = ETLPipeline(db, kobo_api_token=kobo_api_token, kobo_api_url=kobo_api_url)
+
         # Run pipeline
         stats = pipeline.run_pipeline(
             survey_id=survey_id,
             limit=limit,
             start_date=start_datetime,
-            force_validation=force_validation
+            force_validation=force_validation,
         )
-        
+
         return BaseResponse(
             success=True,
-            message=f"ETL pipeline completed successfully",
+            message="ETL pipeline completed successfully",
             data={
-                "fetched": stats['fetched'],
-                "created": stats['created'],
-                "updated": stats['updated'],
-                "edited": stats['edited'],
-                "validated": stats.get('validated', 0),
-                "skipped": stats.get('skipped', 0),
-                "validation_reasons": stats.get('validation_reasons', {}),
-                "llm_queued": stats.get('llm_queued', 0),
-                "llm_skipped": stats.get('llm_skipped', 0),
-                "hfc_flagged": stats['hfc_flagged'],
-                "errors": stats['errors'],
-                "duration_seconds": stats.get('duration_seconds', 0)
-            }
+                "fetched": stats["fetched"],
+                "created": stats["created"],
+                "updated": stats["updated"],
+                "edited": stats["edited"],
+                "validated": stats.get("validated", 0),
+                "skipped": stats.get("skipped", 0),
+                "validation_reasons": stats.get("validation_reasons", {}),
+                "llm_queued": stats.get("llm_queued", 0),
+                "llm_skipped": stats.get("llm_skipped", 0),
+                "hfc_flagged": stats["hfc_flagged"],
+                "errors": stats["errors"],
+                "duration_seconds": stats.get("duration_seconds", 0),
+            },
         )
-    
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"ETL pipeline failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"ETL pipeline failed: {str(e)}")
-

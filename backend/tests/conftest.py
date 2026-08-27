@@ -2,23 +2,20 @@
 Pytest configuration and fixtures for backend tests.
 """
 
-import pytest
-import os
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
-from sqlalchemy.dialects.postgresql import JSONB
-from datetime import datetime
 from uuid import uuid4
 
-# Import database models and services
-from database.models import Base, SurveyConfig, SubmissionCurrent, ValidationRule
-from services.database import get_db
+import pytest
+from sqlalchemy import create_engine, event
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
+# Import database models and services
+from database.models import Base, SurveyConfig
 
 # Use in-memory SQLite for testing (faster than PostgreSQL)
 TEST_DATABASE_URL = "sqlite:///:memory:"
+
 
 @pytest.fixture(scope="function")
 def test_db():
@@ -32,7 +29,7 @@ def test_db():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    
+
     # Map JSONB to JSON for SQLite compatibility
     @event.listens_for(engine, "connect", propagate=True)
     def set_sqlite_pragma(dbapi_conn, connection_record):
@@ -40,53 +37,55 @@ def test_db():
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
-    
+
     # Replace JSONB with JSON for SQLite and UUID with String
-    from sqlalchemy import TypeDecorator, JSON, String
+    from sqlalchemy import JSON, String, TypeDecorator
     from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
-    
+
     class JSONBForSQLite(TypeDecorator):
         """JSONB type that uses JSON for SQLite."""
+
         impl = JSON
         cache_ok = True
-        
+
         def load_dialect_impl(self, dialect):
-            if dialect.name == 'sqlite':
+            if dialect.name == "sqlite":
                 return dialect.type_descriptor(JSON())
             else:
                 return dialect.type_descriptor(JSONB())
-    
+
     class UUIDForSQLite(TypeDecorator):
         """UUID type that uses String for SQLite."""
+
         impl = String(36)
         cache_ok = True
-        
+
         def load_dialect_impl(self, dialect):
-            if dialect.name == 'sqlite':
+            if dialect.name == "sqlite":
                 return dialect.type_descriptor(String(36))
             else:
                 return dialect.type_descriptor(PostgresUUID(as_uuid=True))
-        
+
         def process_bind_param(self, value, dialect):
             """Convert UUID to string for SQLite."""
             if value is None:
                 return None
-            if dialect.name == 'sqlite':
+            if dialect.name == "sqlite":
                 return str(value) if not isinstance(value, str) else value
             return value
-        
+
         def process_result_value(self, value, dialect):
             """Convert string back to UUID for PostgreSQL."""
             if value is None:
                 return None
-            if dialect.name == 'sqlite':
+            if dialect.name == "sqlite":
                 from uuid import UUID
+
                 return UUID(value) if isinstance(value, str) else value
             return value
-    
+
     # Replace JSONB and UUID columns for SQLite compatibility
-    from database.models import SurveyConfig, ValidationRule, SubmissionCurrent, SubmissionHistory
-    
+
     # Update column types for SQLite compatibility
     for table in Base.metadata.tables.values():
         for column in table.columns:
@@ -94,12 +93,12 @@ def test_db():
                 column.type = JSONBForSQLite()
             elif isinstance(column.type, PostgresUUID):
                 column.type = UUIDForSQLite()
-    
+
     # Create all tables
     Base.metadata.create_all(bind=engine)
-    
+
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
+
     db = TestingSessionLocal()
     try:
         yield db
@@ -121,19 +120,16 @@ def test_survey_config(test_db):
                 "enumerator": "enumerator_id",
                 "date_interview": "today",
                 "start_time": "start",
-                "end_time": "end"
+                "end_time": "end",
             },
-            "special_values": {
-                "dk_value": -99,
-                "dk_string_value": "dk"
-            },
+            "special_values": {"dk_value": -99, "dk_string_value": "dk"},
             "global_parameters": {
                 "data_collection_start_date": "2023-01-01",
                 "data_collection_end_date": "2023-12-31",
                 "min_survey_duration_minutes": 10,
-                "max_survey_duration_minutes": 120
-            }
-        }
+                "max_survey_duration_minutes": 120,
+            },
+        },
     )
     test_db.add(survey)
     test_db.commit()
@@ -153,13 +149,13 @@ def sample_kobo_submission():
             "timestamp": 1698321600,
             "uid": "validation_status_approved",
             "by_whom": "test_user",
-            "label": "Approved"
+            "label": "Approved",
         },
         "enumerator_id": "ENUM001",
         "today": "2023-10-26",
         "start": "2023-10-26T10:00:00Z",
         "age": 25,
-        "income": 50000
+        "income": 50000,
     }
 
 
@@ -175,12 +171,11 @@ def sample_kobo_submission_flagged():
             "timestamp": 1698325200,
             "uid": "validation_status_not_approved",
             "by_whom": "test_user",
-            "label": "Not Approved"
+            "label": "Not Approved",
         },
         "enumerator_id": "ENUM002",
         "today": "2023-10-26",
         "start": "2023-10-26T11:00:00Z",
         "age": 25,
-        "income": 50000
+        "income": 50000,
     }
-

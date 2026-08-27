@@ -5,10 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
-def _canonical_json(value: Dict[str, Any]) -> str:
+def _canonical_json(value: dict[str, Any]) -> str:
     """Return stable JSON for hashing."""
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
@@ -27,7 +27,7 @@ def _normalize_text(value: Any) -> str:
     return text
 
 
-def generate_llm_rules_hash(config_data: Dict[str, Any], qualitative_model: str) -> str:
+def generate_llm_rules_hash(config_data: dict[str, Any], qualitative_model: str) -> str:
     """
     Compute hash for qualitative LLM rule semantics only.
 
@@ -57,7 +57,7 @@ def generate_llm_rules_hash(config_data: Dict[str, Any], qualitative_model: str)
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
 
 
-def _resolve_field_value(submission_data: Dict[str, Any], field_name: str) -> Any:
+def _resolve_field_value(submission_data: dict[str, Any], field_name: str) -> Any:
     """
     Resolve a field value from submission data using path-aware lookup.
 
@@ -75,8 +75,8 @@ def _resolve_field_value(submission_data: Dict[str, Any], field_name: str) -> An
 
 
 def generate_llm_input_hash(
-    submission_data: Dict[str, Any],
-    llm_fields: List[str],
+    submission_data: dict[str, Any],
+    llm_fields: list[str],
     dk_string_value: str,
 ) -> str:
     """
@@ -84,7 +84,7 @@ def generate_llm_input_hash(
 
     A change in any monitored text field value changes this hash.
     """
-    normalized: Dict[str, str] = {}
+    normalized: dict[str, str] = {}
     for field in sorted(llm_fields or []):
         value = _resolve_field_value(submission_data, field)
         text = _normalize_text(value)
@@ -102,12 +102,12 @@ def generate_llm_input_hash(
 
 
 def should_enqueue_llm_check(
-    llm_check_status: Optional[str],
-    previous_rules_hash: Optional[str],
-    previous_input_hash: Optional[str],
+    llm_check_status: str | None,
+    previous_rules_hash: str | None,
+    previous_input_hash: str | None,
     current_rules_hash: str,
     current_input_hash: str,
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """Decide whether a qualitative check should be queued."""
     status = (llm_check_status or "").lower().strip()
 
@@ -127,4 +127,3 @@ def should_enqueue_llm_check(
         return False, "already_in_progress"
 
     return False, "up_to_date"
-
