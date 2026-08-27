@@ -1,0 +1,63 @@
+# =============================================================================
+# Field Compass reverse proxy
+# =============================================================================
+# Replaces the previous nginx config to get automatic HTTPS.
+#
+# SITE_ADDRESS controls how this is served:
+#
+#   https://fieldcompass.example.org   <- a DOMAIN you control.
+#                                         Caddy obtains and renews a free
+#                                         Let's Encrypt certificate itself.
+#                                         This is the only option that gives
+#                                         real, browser-trusted HTTPS.
+#
+#   :80                                <- plain HTTP, no certificate.
+#                                         Only acceptable for a throwaway demo
+#                                         with no real user accounts, because
+#                                         passwords cross the network in clear.
+#
+# Let's Encrypt cannot issue certificates for a bare IP address, so if you only
+# have the VM's public IP you must either point a domain at it or accept :80.
+# =============================================================================
+
+{$SITE_ADDRESS::80} {
+	encode gzip zstd
+
+	header {
+		# Don't advertise the server software
+		-Server
+		# Block MIME-type sniffing
+		X-Content-Type-Options "nosniff"
+		# Block framing (clickjacking)
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Ignored by browsers over plain HTTP, so it is safe to always send
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# The app bundles all of its JS/CSS -- no third-party origins needed.
+		# 'unsafe-inline' for styles only: React/Recharts set style attributes.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	}
+
+	# Sampling-frame uploads (CSV/XLSX) need headroom. nginx's 1MB default
+	# would have rejected them with an opaque 413.
+	request_body {
+		max_size 25MB
+	}
+
+	# Caddy sets X-Forwarded-For / X-Forwarded-Proto automatically, which is
+	# what the backend rate limiter reads when TRUST_PROXY_HEADERS is enabled.
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /health {
+		reverse_proxy backend:8000
+	}
+
+	# Single-page app: unknown paths fall back to index.html
+	handle {
+		root * /usr/share/caddy/html
+		try_files {path} /index.html
+		file_server
+	}
+}

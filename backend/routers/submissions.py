@@ -345,6 +345,11 @@ async def get_kobo_edit_url(
     if not submission:
         raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
     
+    # Authorize against the submission's OWN survey, never the caller-supplied
+    # survey_id. _id is a global primary key across all surveys, so trusting the
+    # query parameter let a user with editor rights on ANY survey mutate
+    # submissions belonging to another one.
+    survey_id = submission.survey_id
     # Check user has editor access to the survey
     survey_config = require_survey_access(db, current_user, survey_id, min_level='editor')
     
@@ -418,6 +423,11 @@ async def update_submission_validation_status(
     if not submission:
         raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
     
+    # Authorize against the submission's OWN survey, never the caller-supplied
+    # survey_id. _id is a global primary key across all surveys, so trusting the
+    # query parameter let a user with editor rights on ANY survey mutate
+    # submissions belonging to another one.
+    survey_id = submission.survey_id
     # Check user has editor access
     survey_config = require_survey_access(db, current_user, survey_id, min_level='editor')
     
@@ -532,6 +542,11 @@ async def update_submission_reviewer_notes(
     if not submission:
         raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
 
+    # Authorize against the submission's OWN survey, never the caller-supplied
+    # survey_id. _id is a global primary key across all surveys, so trusting the
+    # query parameter let a user with editor rights on ANY survey mutate
+    # submissions belonging to another one.
+    survey_id = submission.survey_id
     # Check user has editor access
     require_survey_access(db, current_user, survey_id, min_level='editor')
 

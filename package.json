@@ -12,11 +12,15 @@
     "@headlessui/react": "^2.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "recharts": "^3.5.1"
+    "recharts": "^3.5.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.5.4",
+    "postcss": "^8.5.26",
+    "tailwindcss": "^3.4.19",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

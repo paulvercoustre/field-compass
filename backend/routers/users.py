@@ -3,7 +3,7 @@ User management and authentication API endpoints.
 Provides user registration, login, profile management, and Kobo API key management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -11,12 +11,15 @@ from typing import Optional
 import logging
 
 from services.database import get_db
+from services.rate_limit import limiter
 from services.auth import (
     Token,
     UserCreate,
     UserResponse,
     UserUpdate,
     KoboApiKeyUpdate,
+    PasswordChange,
+    UserLogin,
     get_password_hash,
     verify_password,
     create_access_token,
@@ -41,7 +44,9 @@ router = APIRouter()
 # =============================================================================
 
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/hour")
 async def register(
+    request: Request,
     user_data: UserCreate,
     db: Session = Depends(get_db)
 ):
@@ -89,7 +94,9 @@ async def register(
 
 
 @router.post("/auth/login", response_model=Token)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -130,15 +137,18 @@ async def login(
 
 
 @router.post("/auth/login/json", response_model=Token)
+@limiter.limit("10/minute")
 async def login_json(
-    email: str,
-    password: str,
+    request: Request,
+    credentials: UserLogin,
     db: Session = Depends(get_db)
 ):
     """
     Alternative login endpoint accepting JSON body.
     Useful for frontend applications that prefer JSON over form data.
     """
+    email = credentials.email
+    password = credentials.password
     user = authenticate_user(db, email, password)
     if not user:
         raise HTTPException(
@@ -368,14 +378,17 @@ async def test_kobo_api_key(
 
 @router.put("/users/me/password")
 async def change_password(
-    current_password: str,
-    new_password: str,
+    payload: PasswordChange,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
     Change the current user's password.
+
+    Credentials are read from the JSON body, never the query string.
     """
+    current_password = payload.current_password
+    new_password = payload.new_password
     # Verify current password
     if not verify_password(current_password, current_user.password_hash):
         raise HTTPException(

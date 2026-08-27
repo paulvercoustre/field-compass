@@ -2,7 +2,7 @@
 AI router for validation rule generation and suggestions.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
@@ -10,6 +10,7 @@ from uuid import UUID
 import logging
 
 from services.database import get_db
+from services.rate_limit import limiter
 from services.auth import get_current_active_user
 from services.permissions import require_survey_access
 from services.ai_service import ai_service
@@ -48,8 +49,10 @@ class GeneratedRule(BaseModel):
 
 
 @router.post("/ai/generate-rule", response_model=GeneratedRule)
+@limiter.limit("20/hour")
 async def generate_rule_from_natural_language(
-    request: GenerateRuleRequest,
+    request: Request,
+    payload: GenerateRuleRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -75,11 +78,11 @@ async def generate_rule_from_natural_language(
     
     # Validate survey_id format
     try:
-        survey_uuid = UUID(request.survey_id)
+        survey_uuid = UUID(payload.survey_id)
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid survey_id format: {request.survey_id}"
+            detail=f"Invalid survey_id format: {payload.survey_id}"
         )
     
     # Check user has access to this survey (editors can create rules too)
@@ -93,7 +96,7 @@ async def generate_rule_from_natural_language(
     if not survey_config:
         raise HTTPException(
             status_code=404,
-            detail=f"Survey configuration not found for survey_id: {request.survey_id}"
+            detail=f"Survey configuration not found for survey_id: {payload.survey_id}"
         )
     
     # Extract variables from config
@@ -132,13 +135,13 @@ async def generate_rule_from_natural_language(
     # Generate rule using AI service
     try:
         rule_data = ai_service.generate_rule_from_text(
-            prompt=request.prompt,
+            prompt=payload.prompt,
             kobo_variables=kobo_variables,
             existing_rules=existing_rules_context,
             survey_context=survey_context
         )
         
-        logger.info(f"Successfully generated rule for survey {request.survey_id}: {rule_data.get('description')}")
+        logger.info(f"Successfully generated rule for survey {payload.survey_id}: {rule_data.get('description')}")
         return GeneratedRule(**rule_data)
         
     except ValueError as e:
@@ -153,8 +156,10 @@ async def generate_rule_from_natural_language(
 
 
 @router.post("/ai/suggest-rules", response_model=List[GeneratedRule])
+@limiter.limit("20/hour")
 async def suggest_validation_rules(
-    request: SuggestRulesRequest,
+    request: Request,
+    payload: SuggestRulesRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -179,11 +184,11 @@ async def suggest_validation_rules(
     
     # Validate survey_id format
     try:
-        survey_uuid = UUID(request.survey_id)
+        survey_uuid = UUID(payload.survey_id)
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid survey_id format: {request.survey_id}"
+            detail=f"Invalid survey_id format: {payload.survey_id}"
         )
     
     # Check user has access to this survey (editors can create rules too)
@@ -197,7 +202,7 @@ async def suggest_validation_rules(
     if not survey_config:
         raise HTTPException(
             status_code=404,
-            detail=f"Survey configuration not found for survey_id: {request.survey_id}"
+            detail=f"Survey configuration not found for survey_id: {payload.survey_id}"
         )
     
     # Extract variables, global parameters, and special values from config
@@ -237,7 +242,7 @@ async def suggest_validation_rules(
             existing_rules=existing_rules_context
         )
         
-        logger.info(f"Successfully generated {len(suggestions)} rule suggestions for survey {request.survey_id}")
+        logger.info(f"Successfully generated {len(suggestions)} rule suggestions for survey {payload.survey_id}")
         return [GeneratedRule(**rule) for rule in suggestions]
         
     except ValueError as e:

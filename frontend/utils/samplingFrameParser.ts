@@ -1,7 +1,7 @@
 /**
  * Parse sampling frame file (CSV or XLSX) and return headers and rows
  */
-declare const XLSX: any; // Using XLSX from a script tag
+import * as XLSX from 'xlsx';
 
 export const parseSamplingFrame = (file: File): Promise<{ headers: string[]; rows: Record<string, any>[] }> => {
   return new Promise((resolve, reject) => {
