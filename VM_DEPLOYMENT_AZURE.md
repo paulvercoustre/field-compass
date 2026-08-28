@@ -112,7 +112,7 @@ LOG_LEVEL=INFO
 
 # nginx serves the frontend and proxies /api to the backend on one origin
 CORS_ORIGINS=http://<VM_PUBLIC_IP>
-VITE_API_URL=/api
+VITE_API_URL=
 
 # --- third-party ---
 OPENAI_API_KEY=<your key>
@@ -177,7 +177,10 @@ certificate for a bare IP address.
    CORS_ORIGINS=https://fieldcompass.example.org
    ```
 
-4. `docker compose -f docker-compose.prod.yml up -d`
+4. Set the `SITE_URL` GitHub variable to the same URL, or CI's post-deploy
+   check will keep probing the bare IP over HTTP -- which Caddy no longer
+   serves once it is bound to a hostname, failing every deploy.
+5. `docker compose -f docker-compose.prod.yml up -d`
 
 Caddy requests the certificate on first start and redirects HTTP to HTTPS from
 then on. Certificates live in the `caddy_data` volume -- do not delete it, or
@@ -187,3 +190,96 @@ limits.
 **Without a domain (`SITE_ADDRESS=:80`):** the app is served over plain HTTP.
 Login passwords and session tokens cross the network in the clear, so treat
 this as a demo-only mode and do not create real user accounts on it.
+
+## 9) Automatic deploys from CI
+
+Pushes to `main` deploy themselves once `test-and-lint`, `build-docker` and
+`test-in-docker` have all passed (see `.github/workflows/ci-cd.yml`). A failure
+anywhere upstream skips the deploy entirely.
+
+The pipeline SSHes in as a dedicated key that is **pinned to the deploy script
+by a forced command**, so it cannot open a shell or run anything else. If that
+key ever leaks, the only thing it can do is deploy a commit that is already on
+`origin/main`.
+
+### One-time setup
+
+**On the VM** -- install the script and authorise the CI key:
+
+```bash
+sudo install -m 755 -o root -g root \
+  ~/field-compass/deploy/vm/deploy.sh /usr/local/bin/field-compass-deploy
+
+# Paste the CI public key here. `restrict` disables port/agent forwarding,
+# PTY allocation and X11; `command=` forces the deploy script regardless of
+# what the client asks for.
+cat >> ~/.ssh/authorized_keys <<'KEY'
+command="/usr/local/bin/field-compass-deploy",restrict ssh-ed25519 AAAA...  github-actions-deploy@field-compass
+KEY
+
+chmod 600 ~/.ssh/authorized_keys
+```
+
+The script must be owned by root and not writable by `azureuser`, or the forced
+command could be rewritten by anyone who compromises that account.
+
+**In GitHub** -- three variables and one secret
+(Settings -> Secrets and variables -> Actions):
+
+| Kind | Name | Value |
+|---|---|---|
+| Variable | `VM_HOST` | the VM's public IP |
+| Variable | `VM_USER` | `azureuser` |
+| Variable | `VM_SSH_KNOWN_HOSTS` | output of `ssh-keyscan <VM_IP>`, verified out of band |
+| Variable | `SITE_URL` | the site's canonical public URL. Optional while `SITE_ADDRESS` is `:80`; **required** once you set a domain |
+| Secret | `VM_SSH_PRIVATE_KEY` | the CI private key, whole file including header/footer |
+
+Verify `VM_SSH_KNOWN_HOSTS` against a fingerprint you trust before saving it --
+pinning a key you scanned over an untrusted network pins the attacker's key.
+Compare with `ssh-keygen -lf` output from a machine that has already connected.
+
+### What a deploy does
+
+1. Fetches `origin` and checks out **the exact commit CI tested**, not whatever
+   `main` points at by then. The commit must be reachable from the freshly
+   fetched `origin/main` -- the clone also holds side branches and old history,
+   and without that check a leaked key could deploy a commit from before a
+   security fix.
+2. `docker compose -f docker-compose.prod.yml up -d --build`.
+   The rebuild is required: `VITE_API_URL` is baked into the frontend bundle at
+   build time, so a restart alone would ship the previous bundle.
+3. Polls `/health` from inside the VM for up to 90s, at the address implied by
+   `SITE_ADDRESS` (HTTPS with a loopback `--resolve` once a domain is set, so
+   the probe does not depend on NAT hairpinning).
+4. **Rolls back to the previous commit** if that check fails, then fails the
+   job. If the rollback is also unhealthy the job says so loudly -- that is the
+   case that needs a human.
+5. The workflow then re-checks `/health` from outside, confirming the site is
+   reachable to the internet and not just to itself.
+
+Deploys are serialised (`concurrency: deploy-production`) and queue rather than
+cancel, so two quick pushes cannot build on the VM at the same time.
+
+### Adding a manual approval gate
+
+The job runs in a `production` environment. To require sign-off before any
+deploy, add a required reviewer under Settings -> Environments -> production;
+the job will then pause and wait rather than deploying on green.
+
+### Rolling back by hand
+
+```bash
+ssh azureuser@<VM_PUBLIC_IP>
+cd field-compass && git checkout <known-good-sha>
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### Moving to keyless deploys later
+
+The SSH key is the weak point: it is long-lived, and port 22 must stay open to
+the internet because GitHub's runner IP ranges are too broad to allowlist. If
+this grows past a demo -- a real domain, real accounts -- swap the deploy step
+for Azure OIDC (`azure/login` + `az vm run-command invoke`) with a federated
+credential pinned to `repo:<owner>/field-compass:ref:refs/heads/main`. That
+stores no secret, and lets you close port 22 entirely. Only the one step
+changes; the VM script and everything else stays as it is.
