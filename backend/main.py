@@ -3,12 +3,14 @@ Field Compass FastAPI Backend
 Main application entry point.
 """
 
+import logging
 import os
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -16,6 +18,8 @@ from slowapi.middleware import SlowAPIMiddleware
 from routers import ai, etl, progress, quality, submissions, surveys, users, validation_rules
 from services.database import init_db
 from services.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 # CORS origins - configurable via environment variable
 # For production, set CORS_ORIGINS as comma-separated list: "https://app.example.com,https://www.example.com"
@@ -67,6 +71,28 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Return JSON for unhandled errors, and log the traceback.
+
+    Starlette's default 500 is the plain-text body "Internal Server Error".
+    Every frontend caller parses error responses with response.json(), so a
+    plain-text body surfaced to users as "Unexpected token 'I', "Internal S"...
+    is not valid JSON" -- which says nothing about what actually broke and
+    sent us looking at the frontend for a backend fault.
+
+    The response body stays deliberately generic: exception text can carry
+    table names, SQL, and connection strings, and this is returned to
+    unauthenticated callers. The detail goes to the log instead.
+    """
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
 
 # Configure CORS
 app.add_middleware(

@@ -36,6 +36,41 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Pull a human-readable message out of a failed response.
+ *
+ * Every call here used to do `(await response.json()).detail` directly, which
+ * assumes the server always answers with JSON. It does not: an unhandled
+ * backend error returns the plain-text body "Internal Server Error", so
+ * response.json() threw and the user saw the parser's complaint --
+ * `Unexpected token 'I', "Internal S"... is not valid JSON` -- instead of
+ * anything describing the failure.
+ *
+ * Also flattens FastAPI's 422 `detail`, which is an array of error objects
+ * rather than a string and would otherwise render as "[object Object]".
+ */
+const errorDetail = async (response: Response, fallback: string): Promise<string> => {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return `${fallback} (server error ${response.status})`;
+  }
+
+  const detail = (body as { detail?: unknown } | null)?.detail;
+
+  if (typeof detail === 'string' && detail.trim()) return detail;
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => (item as { msg?: unknown })?.msg)
+      .filter((msg): msg is string => typeof msg === 'string');
+    if (messages.length) return messages.join('; ');
+  }
+
+  return fallback;
+};
+
 // Local storage keys
 const TOKEN_KEY = 'field_compass_token';
 const USER_KEY = 'field_compass_user';
@@ -116,8 +151,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Login failed');
+      throw new Error(await errorDetail(response, 'Login failed'));
     }
 
     const data = await response.json();
@@ -155,8 +189,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Registration failed');
+      throw new Error(await errorDetail(response, 'Registration failed'));
     }
 
     // Auto-login after registration
@@ -177,8 +210,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Update failed');
+      throw new Error(await errorDetail(response, 'Update failed'));
     }
 
     const userData = await response.json();
@@ -193,8 +225,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to set API key');
+      throw new Error(await errorDetail(response, 'Failed to set API key'));
     }
 
     const userData = await response.json();
@@ -208,8 +239,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to delete API key');
+      throw new Error(await errorDetail(response, 'Failed to delete API key'));
     }
 
     const userData = await response.json();
@@ -221,8 +251,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const response = await authFetch('/api/users/me/kobo-api-key/test');
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to test API key');
+      throw new Error(await errorDetail(response, 'Failed to test API key'));
     }
 
     return response.json();
@@ -241,8 +270,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to change password');
+      throw new Error(await errorDetail(response, 'Failed to change password'));
     }
   };
 
@@ -252,8 +280,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to delete account');
+      throw new Error(await errorDetail(response, 'Failed to delete account'));
     }
 
     logout();

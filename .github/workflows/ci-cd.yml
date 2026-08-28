@@ -216,7 +216,15 @@ jobs:
       run: |
         # Install PostgreSQL client if not available
         sudo apt-get update && sudo apt-get install -y postgresql-client || true
-        PGPASSWORD=postgres psql -h localhost -U postgres -d field_compass_test -f backend/database/schema.sql
+        PGPASSWORD=postgres psql -h localhost -U postgres -d field_compass_test \
+          -v ON_ERROR_STOP=1 -f backend/database/schema.sql
+
+        # Production applies this on every deploy, against a database that
+        # already exists. Running it here on a database schema.sql just built
+        # proves it is valid SQL and safe to re-run -- if it is not, CI fails
+        # instead of the deploy.
+        PGPASSWORD=postgres psql -h localhost -U postgres -d field_compass_test \
+          -v ON_ERROR_STOP=1 -f backend/database/migrations/006_sync_schema_with_models.sql
     
     - name: Health check test
       run: |
@@ -291,6 +299,58 @@ jobs:
           echo "Response: $HEALTH_RESPONSE"
         fi
         
+        # --- Authentication smoke test --------------------------------
+        # This is the check that was missing. The health endpoint only runs
+        # "SELECT 1", so it reported healthy against a database that had no
+        # `users` table at all, while every registration and login returned a
+        # 500. Anything that touches a real table has to be exercised here,
+        # because this is the only job that builds the database the way
+        # production does -- from schema.sql.
+        fail_with_logs() {
+          echo "::error::$1"
+          shift
+          for f in "$@"; do [ -f "$f" ] && { echo "--- $f ---"; cat "$f"; echo; }; done
+          echo "=== container logs ==="
+          docker logs $CONTAINER_ID || true
+          docker stop $CONTAINER_ID || true
+          docker rm $CONTAINER_ID || true
+          exit 1
+        }
+
+        SUFFIX="$(date +%s)$RANDOM"
+        EMAIL="ci-${SUFFIX}@example.com"
+        USERNAME="ci-${SUFFIX}"
+        PASSWORD="CiT3stPassw0rd!"
+
+        REGISTER_STATUS=$(curl -s -o /tmp/register.json -w '%{http_code}' \
+          -X POST http://localhost:8001/api/auth/register \
+          -H 'Content-Type: application/json' \
+          -d "{\"email\":\"${EMAIL}\",\"username\":\"${USERNAME}\",\"password\":\"${PASSWORD}\"}")
+
+        [ "$REGISTER_STATUS" = "201" ] \
+          || fail_with_logs "POST /api/auth/register returned $REGISTER_STATUS, expected 201" /tmp/register.json
+        echo "✓ register returned 201"
+
+        LOGIN_STATUS=$(curl -s -o /tmp/login.json -w '%{http_code}' \
+          -X POST http://localhost:8001/api/auth/login \
+          -d "username=${EMAIL}&password=${PASSWORD}")
+
+        [ "$LOGIN_STATUS" = "200" ] \
+          || fail_with_logs "POST /api/auth/login returned $LOGIN_STATUS, expected 200" /tmp/login.json
+        echo "✓ login returned 200"
+
+        TOKEN=$(sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p' /tmp/login.json)
+        [ -n "$TOKEN" ] || fail_with_logs "login response contained no access_token" /tmp/login.json
+
+        ME_STATUS=$(curl -s -o /tmp/me.json -w '%{http_code}' \
+          http://localhost:8001/api/users/me -H "Authorization: Bearer $TOKEN")
+
+        [ "$ME_STATUS" = "200" ] \
+          || fail_with_logs "GET /api/users/me returned $ME_STATUS, expected 200" /tmp/me.json
+        grep -q "$EMAIL" /tmp/me.json \
+          || fail_with_logs "GET /api/users/me returned a different user" /tmp/me.json
+        echo "✓ token authenticates /api/users/me"
+
         # Cleanup
         docker stop $CONTAINER_ID || true
         docker rm $CONTAINER_ID || true

@@ -76,6 +76,43 @@ services:
     networks:
       - field-compass-network
 
+  # Schema reconciliation, run once per deploy before the API starts.
+  #
+  # Postgres runs /docker-entrypoint-initdb.d ONLY on an empty data directory,
+  # so editing schema.sql does nothing for a volume that already exists. Any
+  # database created before a schema change keeps the old shape -- which is how
+  # production ended up with no `users` table and a 500 on every login.
+  #
+  # The migration is idempotent, so running it on every deploy is a no-op once
+  # the database is current.
+  migrate:
+    image: postgres:15-alpine
+    container_name: field-compass-migrate
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env - see .env.example}
+    volumes:
+      - ./backend/database/migrations:/migrations:ro
+    # ON_ERROR_STOP makes a failed migration a failed deploy, rather than
+    # letting the API start against a half-migrated database.
+    entrypoint:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+      - -h
+      - postgres
+      - -U
+      - ${POSTGRES_USER:-postgres}
+      - -d
+      - ${POSTGRES_DB:-field_compass}
+      - -f
+      - /migrations/006_sync_schema_with_models.sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - field-compass-network
+
   # FastAPI Backend
   backend:
     build:
@@ -110,6 +147,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
     expose:
@@ -155,6 +194,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
     command: celery -A services.job_queue.celery_app worker --loglevel=INFO -Q qualitative_checks
