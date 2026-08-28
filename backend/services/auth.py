@@ -185,7 +185,7 @@ def decode_access_token(token: str) -> TokenData | None:
 
 def authenticate_user(db: Session, email: str, password: str) -> User | None:
     """Authenticate a user by email and password."""
-    user = db.query(User).filter(User.email == email).first()
+    user = get_user_by_email(db, email)
     if not user:
         return None
     if not verify_password(password, user.password_hash):
@@ -205,8 +205,18 @@ def get_user_by_id(db: Session, user_id: str) -> User | None:
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
-    """Get a user by their email."""
-    return db.query(User).filter(User.email == email).first()
+    """Get a user by their email.
+
+    Registration stores the address lower-cased and stripped, so every lookup
+    has to normalise the same way. It did not, which broke two things: signing
+    in with the capitalisation you typed at signup returned "Incorrect email or
+    password", and registering a second account with different capitalisation
+    slipped past the duplicate check and then hit the UNIQUE constraint on
+    users.email, surfacing as a 500.
+    """
+    if email is None:
+        return None
+    return db.query(User).filter(User.email == email.lower().strip()).first()
 
 
 def get_user_by_username(db: Session, username: str) -> User | None:

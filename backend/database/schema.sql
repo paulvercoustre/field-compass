@@ -9,6 +9,42 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================================
+-- Table: users
+-- ============================================================================
+-- User accounts with authentication and per-user Kobo API credentials.
+-- Kobo tokens are encrypted at rest (Fernet) and never returned by the API.
+-- ============================================================================
+
+CREATE TABLE users (
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255),
+    -- Kobo API credentials (encrypted at rest)
+    kobo_api_token_encrypted TEXT,
+    kobo_api_url VARCHAR(500) DEFAULT 'https://kf.kobotoolbox.org/api/v2',
+    -- Account status
+    is_active BOOLEAN DEFAULT TRUE,
+    is_admin BOOLEAN DEFAULT FALSE,
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP WITH TIME ZONE
+);
+
+COMMENT ON TABLE users IS 'User accounts with authentication and Kobo API credentials';
+COMMENT ON COLUMN users.user_id IS 'Primary key, auto-generated UUID';
+COMMENT ON COLUMN users.email IS 'User email address, unique, used for login';
+COMMENT ON COLUMN users.username IS 'Username, unique, used for display';
+COMMENT ON COLUMN users.password_hash IS 'Bcrypt hashed password';
+COMMENT ON COLUMN users.kobo_api_token_encrypted IS 'Fernet-encrypted Kobo API token';
+COMMENT ON COLUMN users.kobo_api_url IS 'Kobo API base URL (defaults to kf.kobotoolbox.org)';
+COMMENT ON COLUMN users.is_active IS 'Whether user account is active';
+COMMENT ON COLUMN users.is_admin IS 'Whether user has admin privileges';
+COMMENT ON COLUMN users.last_login_at IS 'Timestamp of last successful login';
+
+-- ============================================================================
 -- Table: survey_configs
 -- ============================================================================
 -- Stores survey-specific configuration settings (replaces config.R from legacy)
@@ -20,6 +56,7 @@ CREATE TABLE survey_configs (
     survey_name VARCHAR(255) NOT NULL,
     kobo_asset_id VARCHAR(255),
     config_data JSONB NOT NULL,
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(survey_name)
@@ -29,6 +66,7 @@ COMMENT ON TABLE survey_configs IS 'Survey-specific configuration settings';
 COMMENT ON COLUMN survey_configs.survey_id IS 'Primary key, auto-generated UUID';
 COMMENT ON COLUMN survey_configs.survey_name IS 'Human-readable survey name';
 COMMENT ON COLUMN survey_configs.kobo_asset_id IS 'KoboToolbox asset ID for API integration';
+COMMENT ON COLUMN survey_configs.user_id IS 'Owner user ID, NULL for system/legacy surveys';
 COMMENT ON COLUMN survey_configs.config_data IS 'JSONB containing all survey configuration: core identifiers, sampling frame, special values, PII columns, roster configs, global parameters';
 
 -- ============================================================================
@@ -71,12 +109,17 @@ CREATE TABLE submissions_current (
     "end" TIMESTAMP WITH TIME ZONE NOT NULL,
     submission_data JSONB NOT NULL,
     is_edited BOOLEAN DEFAULT FALSE,
+    has_edit_history BOOLEAN DEFAULT FALSE,
     data_quality_issues JSONB DEFAULT '[]'::JSONB,
-    qa_status VARCHAR(50) DEFAULT 'PENDING_QA',
+    qa_status VARCHAR(50) DEFAULT 'PENDING_APPROVAL',
     dk_count INTEGER,
     dk_eligible_count INTEGER,
     dk_percentage NUMERIC(5,2),
+    kobo_validation_status VARCHAR(50),
+    kobo_edit_url VARCHAR(500),
     reviewer_notes TEXT,
+    last_validated_at TIMESTAMP WITH TIME ZONE,
+    validation_rule_hash VARCHAR(64),
     llm_check_status VARCHAR(20) DEFAULT 'skipped' NOT NULL,
     llm_rules_hash VARCHAR(64),
     llm_input_hash VARCHAR(64),
@@ -99,12 +142,17 @@ COMMENT ON COLUMN submissions_current._submission_time IS 'Original submission t
 COMMENT ON COLUMN submissions_current."end" IS 'End timestamp, used to detect edits (if end > _submission_time + 300s, considered edited)';
 COMMENT ON COLUMN submissions_current.submission_data IS 'Complete survey data as JSONB, includes all fields and nested rosters';
 COMMENT ON COLUMN submissions_current.is_edited IS 'Whether this submission has been edited after initial submission';
+COMMENT ON COLUMN submissions_current.has_edit_history IS 'Permanent flag: submission was edited at least once (is_edited is cleared after revalidation)';
 COMMENT ON COLUMN submissions_current.data_quality_issues IS 'JSONB array of quality issues found by HFC: [{check, field, value, message}, ...]';
-COMMENT ON COLUMN submissions_current.qa_status IS 'QA status: HFC_FLAGGED, PENDING_QA, PENDING_RE_QA, APPROVED';
+COMMENT ON COLUMN submissions_current.qa_status IS 'QA status: FLAGGED, PENDING_APPROVAL, PENDING_RE_QA, APPROVED';
 COMMENT ON COLUMN submissions_current.dk_count IS 'Count of DK answers for eligible questions in this submission';
 COMMENT ON COLUMN submissions_current.dk_eligible_count IS 'Count of eligible question instances included in DK denominator';
 COMMENT ON COLUMN submissions_current.dk_percentage IS 'DK percentage for this submission (dk_count / dk_eligible_count * 100)';
+COMMENT ON COLUMN submissions_current.kobo_validation_status IS 'KoboToolbox validation status: Approved, Not Approved, On Hold, or NULL';
+COMMENT ON COLUMN submissions_current.kobo_edit_url IS 'Deep link to view/edit this submission in Kobo';
 COMMENT ON COLUMN submissions_current.reviewer_notes IS 'Optional free-text notes entered by reviewers';
+COMMENT ON COLUMN submissions_current.last_validated_at IS 'When validation checks last ran, for incremental revalidation';
+COMMENT ON COLUMN submissions_current.validation_rule_hash IS 'Hash of the rule config used at last validation';
 COMMENT ON COLUMN submissions_current.llm_check_status IS 'Status of qualitative LLM checks: pending, running, success, failed, skipped';
 COMMENT ON COLUMN submissions_current.llm_rules_hash IS 'Hash of LLM qualitative rule/config at last run';
 COMMENT ON COLUMN submissions_current.llm_input_hash IS 'Hash of normalized qualitative input values at last run';
@@ -139,11 +187,40 @@ COMMENT ON COLUMN submissions_history.deprecated_uuid IS 'Previous UUID before t
 COMMENT ON COLUMN submissions_history.data_delta IS 'JSON patch array showing what changed: [{op: add|remove|replace, path, value}, ...]';
 
 -- ============================================================================
+-- Table: survey_access
+-- ============================================================================
+-- Junction table granting non-owner users access to a survey.
+-- ============================================================================
+
+CREATE TABLE survey_access (
+    survey_id UUID NOT NULL REFERENCES survey_configs(survey_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    permission_level VARCHAR(20) NOT NULL CHECK (permission_level IN ('editor', 'viewer')),
+    granted_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    granted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (survey_id, user_id)
+);
+
+COMMENT ON TABLE survey_access IS 'Junction table for sharing surveys with users';
+COMMENT ON COLUMN survey_access.permission_level IS 'Access level: editor (can run ETL, resolve flags) or viewer (read-only)';
+COMMENT ON COLUMN survey_access.granted_by IS 'User who granted this access';
+
+-- ============================================================================
 -- Indexes for Performance
 -- ============================================================================
 
+-- Users indexes
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_active ON users(is_active) WHERE is_active = TRUE;
+
+-- Survey access indexes
+CREATE INDEX idx_survey_access_user ON survey_access(user_id);
+CREATE INDEX idx_survey_access_survey ON survey_access(survey_id);
+
 -- Survey configs indexes
 CREATE INDEX idx_survey_configs_name ON survey_configs(survey_name);
+CREATE INDEX idx_survey_configs_user_id ON survey_configs(user_id) WHERE user_id IS NOT NULL;
 CREATE INDEX idx_survey_configs_kobo_asset ON survey_configs(kobo_asset_id) WHERE kobo_asset_id IS NOT NULL;
 
 -- Validation rules indexes
@@ -156,6 +233,10 @@ CREATE INDEX idx_submissions_survey_id ON submissions_current(survey_id);
 CREATE INDEX idx_submissions_uuid ON submissions_current(_uuid);
 CREATE INDEX idx_submissions_qa_status ON submissions_current(qa_status);
 CREATE INDEX idx_submissions_is_edited ON submissions_current(is_edited);
+CREATE INDEX idx_submissions_has_edit_history ON submissions_current(has_edit_history)
+    WHERE has_edit_history = TRUE;
+CREATE INDEX idx_submissions_validation_tracking
+    ON submissions_current(last_validated_at, validation_rule_hash);
 CREATE INDEX idx_submissions_submission_time ON submissions_current(_submission_time);
 CREATE INDEX idx_submissions_submission_data ON submissions_current USING GIN(submission_data);
 CREATE INDEX idx_submissions_quality_issues ON submissions_current USING GIN(data_quality_issues);
@@ -163,8 +244,8 @@ CREATE INDEX idx_submissions_llm_status ON submissions_current(llm_check_status)
 CREATE INDEX idx_submissions_llm_hashes ON submissions_current(survey_id, llm_rules_hash, llm_input_hash);
 CREATE INDEX idx_submissions_llm_job_id ON submissions_current(llm_job_id);
 -- Composite index for common triage queue queries
-CREATE INDEX idx_submissions_triage ON submissions_current(qa_status, survey_id) 
-    WHERE qa_status IN ('HFC_FLAGGED', 'PENDING_RE_QA');
+CREATE INDEX idx_submissions_triage ON submissions_current(qa_status, survey_id)
+    WHERE qa_status IN ('FLAGGED', 'PENDING_RE_QA');
 
 -- Submissions history indexes
 CREATE INDEX idx_history_kobo_id ON submissions_history(kobo_id);
@@ -183,6 +264,10 @@ BEGIN
     RETURN NEW;
 END;
 $$ language 'plpgsql';
+
+CREATE TRIGGER update_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_survey_configs_updated_at 
     BEFORE UPDATE ON survey_configs 
