@@ -177,7 +177,10 @@ certificate for a bare IP address.
    CORS_ORIGINS=https://fieldcompass.example.org
    ```
 
-4. `docker compose -f docker-compose.prod.yml up -d`
+4. Set the `SITE_URL` GitHub variable to the same URL, or CI's post-deploy
+   check will keep probing the bare IP over HTTP -- which Caddy no longer
+   serves once it is bound to a hostname, failing every deploy.
+5. `docker compose -f docker-compose.prod.yml up -d`
 
 Caddy requests the certificate on first start and redirects HTTP to HTTPS from
 then on. Certificates live in the `caddy_data` volume -- do not delete it, or
@@ -228,6 +231,7 @@ command could be rewritten by anyone who compromises that account.
 | Variable | `VM_HOST` | the VM's public IP |
 | Variable | `VM_USER` | `azureuser` |
 | Variable | `VM_SSH_KNOWN_HOSTS` | output of `ssh-keyscan <VM_IP>`, verified out of band |
+| Variable | `SITE_URL` | the site's canonical public URL. Optional while `SITE_ADDRESS` is `:80`; **required** once you set a domain |
 | Secret | `VM_SSH_PRIVATE_KEY` | the CI private key, whole file including header/footer |
 
 Verify `VM_SSH_KNOWN_HOSTS` against a fingerprint you trust before saving it --
@@ -237,11 +241,16 @@ Compare with `ssh-keygen -lf` output from a machine that has already connected.
 ### What a deploy does
 
 1. Fetches `origin` and checks out **the exact commit CI tested**, not whatever
-   `main` points at by then.
+   `main` points at by then. The commit must be reachable from the freshly
+   fetched `origin/main` -- the clone also holds side branches and old history,
+   and without that check a leaked key could deploy a commit from before a
+   security fix.
 2. `docker compose -f docker-compose.prod.yml up -d --build`.
    The rebuild is required: `VITE_API_URL` is baked into the frontend bundle at
    build time, so a restart alone would ship the previous bundle.
-3. Polls `/health` from inside the VM for up to 90s.
+3. Polls `/health` from inside the VM for up to 90s, at the address implied by
+   `SITE_ADDRESS` (HTTPS with a loopback `--resolve` once a domain is set, so
+   the probe does not depend on NAT hairpinning).
 4. **Rolls back to the previous commit** if that check fails, then fails the
    job. If the rollback is also unhealthy the job says so loudly -- that is the
    case that needs a human.

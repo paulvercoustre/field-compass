@@ -326,7 +326,7 @@ jobs:
     # to pause for approval.
     environment:
       name: production
-      url: http://${{ vars.VM_HOST }}/
+      url: ${{ vars.SITE_URL || format('http://{0}/', vars.VM_HOST) }}
 
     steps:
     - name: Deploy over SSH
@@ -366,11 +366,20 @@ jobs:
     - name: Verify the deployed site is serving
       env:
         VM_HOST: ${{ vars.VM_HOST }}
+        SITE_URL: ${{ vars.SITE_URL }}
       run: |
         set -euo pipefail
         # The VM script already health-checked from inside; this confirms the
         # site is reachable from the outside world too.
-        RESPONSE=$(curl -fsS --max-time 15 "http://${VM_HOST}/health")
+        #
+        # SITE_URL is the site's canonical public URL. The fallback to the VM's
+        # IP over HTTP is correct only while SITE_ADDRESS is ":80" -- once a
+        # domain is configured Caddy serves that hostname and redirects HTTP to
+        # HTTPS, and a request to the bare IP no longer matches any site. Set
+        # the SITE_URL variable at the same time you set SITE_ADDRESS.
+        BASE="${SITE_URL:-http://${VM_HOST}}"
+        echo "Probing ${BASE}/health"
+        RESPONSE=$(curl -fsS --max-time 15 "${BASE}/health")
         echo "Health response: $RESPONSE"
         echo "$RESPONSE" | grep -q '"status":"healthy"' \
           || { echo "::error::Site did not report healthy from outside"; exit 1; }
