@@ -67,3 +67,45 @@
 		file_server
 	}
 }
+
+# =============================================================================
+# Marketing site (../../site) — served on its own hostname.
+# =============================================================================
+# Best practice is to keep the public site and the authenticated app on
+# separate origins:
+#
+#   WWW_ADDRESS  = https://fieldcompass.example.org   <- this block
+#   SITE_ADDRESS = https://app.fieldcompass.example.org <- the app, above
+#
+# The separation buys two things. The app's session cookies and tokens are
+# scoped to the app origin, so nothing the marketing page ever loads can read
+# them. And the marketing page can have the looser policy it needs (webfonts)
+# without weakening the app's policy by one directive.
+#
+# WWW_ADDRESS defaults to :8081, a port docker-compose.prod.yml does NOT
+# publish. Leaving it unset therefore changes nothing about an existing
+# deployment: the block exists but is unreachable from outside the host.
+# Point both hostnames at this VM's IP with A records before setting it, or
+# Caddy's certificate request for the new name will fail.
+# =============================================================================
+
+{$WWW_ADDRESS::8081} {
+	encode gzip zstd
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Deliberately NOT the app's policy. This origin holds no session and
+		# talks to no API, and it loads Inter from Google Fonts.
+		# 'unsafe-inline' for styles only: the dashboard illustration sets bar
+		# heights with style attributes, same reason the app needs it.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	}
+
+	# Static files only — no API, no SPA fallback.
+	root * /usr/share/caddy/site
+	file_server
+}
