@@ -42,13 +42,14 @@ services:
       context: .
       dockerfile: ./deploy/frontend/Dockerfile
       args:
-        # Set this to your public API base URL (or keep default "/api" if using nginx proxy)
-        VITE_API_URL: ${VITE_API_URL:-/api}
+        # The API's ORIGIN. Empty means same-origin, which is correct behind the
+        # bundled Caddy proxy; request paths already include the /api prefix.
+        VITE_API_URL: ${VITE_API_URL:-}
     container_name: field-compass-frontend-build
     restart: "no"
     command: ["sh", "-c", "cp -r /app/dist/* /out/ && echo 'Frontend built'"]
     environment:
-      - VITE_API_URL=${VITE_API_URL:-/api}
+      - VITE_API_URL=${VITE_API_URL:-}
     # Write built assets to shared volume
     volumes:
       - frontend_dist:/out

@@ -30,7 +30,7 @@ Use this checklist to ensure all deployment steps are completed.
   - [ ] `ENVIRONMENT` (`production`)
   - [ ] `LOG_LEVEL`
   - [ ] `CORS_ORIGINS` (your domain/IP)
-  - [ ] `VITE_API_URL` (`/api` when served through nginx)
+  - [ ] `VITE_API_URL` (leave EMPTY when served through the bundled Caddy proxy)
 
 ### Security
 - [ ] Database firewall rules configured

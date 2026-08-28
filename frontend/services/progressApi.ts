@@ -1,8 +1,7 @@
 
 import { ProgressData, PerformanceData } from '../types';
 
-// API base URL - defaults to localhost:8000 for development
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_BASE_URL } from './apiBase';
 
 // Helper to get auth token from localStorage
 const getAuthToken = (): string | null => {
