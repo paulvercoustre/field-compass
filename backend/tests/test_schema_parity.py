@@ -106,19 +106,31 @@ def parse_schema_sql(sql: str) -> dict[str, set[str]]:
             item = item.strip()
             if not item:
                 continue
-            first = item.split()[0]
+            # Split on whitespace OR "(", so an inline constraint written
+            # without a space -- UNIQUE(_uuid) -- is recognised as the keyword
+            # UNIQUE rather than taken for a column named "unique(_uuid)".
+            first = re.split(r"[\s(]", item, maxsplit=1)[0]
             if first.lower().strip('"') in _CONSTRAINT_KEYWORDS:
                 continue
             columns.add(first.strip('"').lower())
         tables[table] = columns
 
+    # One ALTER TABLE may carry several comma-separated ADD COLUMN clauses:
+    #     ALTER TABLE t ADD COLUMN a INT, ADD COLUMN b TEXT;
+    # so match the whole statement first, then every clause inside it. Matching
+    # ADD COLUMN directly against the table name would find only the first.
     alter_re = re.compile(
-        r"ALTER\s+TABLE\s+\"?(\w+)\"?\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?\"?(\w+)\"?",
+        r"ALTER\s+TABLE\s+\"?(\w+)\"?\s(.*?);",
+        re.IGNORECASE | re.DOTALL,
+    )
+    column_re = re.compile(
+        r"ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?\"?(\w+)\"?",
         re.IGNORECASE,
     )
     for match in alter_re.finditer(sql):
         table = match.group(1).lower()
-        tables.setdefault(table, set()).add(match.group(2).strip('"').lower())
+        for column in column_re.finditer(match.group(2)):
+            tables.setdefault(table, set()).add(column.group(1).strip('"').lower())
 
     return tables
 
@@ -167,4 +179,99 @@ def test_every_model_column_exists_in_schema_sql(table_name, schema_tables, mode
     assert not missing, (
         f"columns on '{table}' defined in models.py but missing from "
         f"{SCHEMA_PATH.name}: {missing}"
+    )
+
+
+# =============================================================================
+# Migration 006 must be able to reconcile ANY historical database
+# =============================================================================
+# The deploy runs exactly one migration (see the `migrate` service in
+# docker-compose.prod.yml), so that single file has to close the gap between
+# the oldest database that could still exist and what the ORM writes today.
+#
+# It did not, at first: it added only the columns missing from the most recent
+# schema.sql, and silently skipped the ones folded into schema.sql back in
+# 04a77c0 (dk_*, reviewer_notes, llm_*). A database predating that commit would
+# have gained a working `users` table and still failed on the first submissions
+# query. This test pins the requirement so the next column added to models.py
+# cannot be left out of the reconciliation.
+
+MIGRATION_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "database"
+    / "migrations"
+    / "006_sync_schema_with_models.sql"
+)
+
+# Columns present in the very first schema (b07bf1f). No database exists that
+# predates these, so the reconciliation script does not need to add them.
+# Tables absent here -- users, survey_access -- are created by 006 in full.
+BASELINE_COLUMNS = {
+    "survey_configs": {
+        "survey_id",
+        "survey_name",
+        "kobo_asset_id",
+        "config_data",
+        "created_at",
+        "updated_at",
+    },
+    "validation_rules": {
+        "rule_id",
+        "survey_id",
+        "rule_name",
+        "rule_data",
+        "is_active",
+        "created_at",
+        "updated_at",
+    },
+    "submissions_current": {
+        "_id",
+        "survey_id",
+        "_uuid",
+        "_submission_time",
+        "end",
+        "submission_data",
+        "is_edited",
+        "data_quality_issues",
+        "qa_status",
+        "created_at",
+        "updated_at",
+    },
+    "submissions_history": {
+        "history_id",
+        "kobo_id",
+        "timestamp",
+        "deprecated_uuid",
+        "data_delta",
+        "created_at",
+    },
+}
+
+
+@pytest.fixture(scope="module")
+def migration_tables() -> dict[str, set[str]]:
+    return parse_schema_sql(MIGRATION_PATH.read_text())
+
+
+def test_migration_file_is_parseable(migration_tables):
+    assert migration_tables, f"nothing parsed from {MIGRATION_PATH}"
+    assert "users" in migration_tables, "006 must create the users table"
+
+
+@pytest.mark.parametrize("table_name", sorted(Base.metadata.tables))
+def test_migration_006_covers_every_model_column(table_name, migration_tables, model_tables):
+    """Every ORM column must be either original, or added by migration 006.
+
+    Anything else is a column that exists in models.py and in schema.sql, but
+    that an already-provisioned database will never gain -- exactly the failure
+    this migration exists to prevent.
+    """
+    table = table_name.lower()
+    reachable = BASELINE_COLUMNS.get(table, set()) | migration_tables.get(table, set())
+
+    missing = sorted(model_tables[table] - reachable)
+    assert not missing, (
+        f"columns on '{table}' that migration 006 would never add: {missing}. "
+        "A database provisioned before these columns existed keeps failing on "
+        f"them after the deploy. Add them to {MIGRATION_PATH.name}."
     )

@@ -69,9 +69,42 @@ CREATE INDEX IF NOT EXISTS idx_survey_access_user ON survey_access(user_id);
 CREATE INDEX IF NOT EXISTS idx_survey_access_survey ON survey_access(survey_id);
 
 -- ----------------------------------------------------------------------------
--- submissions_current: columns the ORM writes that schema.sql never created
+-- submissions_current
 -- ----------------------------------------------------------------------------
+-- Two groups, both handled here because this is the ONLY migration the deploy
+-- runs. A database is reconciled in one step regardless of how old it is, so
+-- every column the ORM writes has to be listed -- not just the ones that were
+-- missing from the most recent schema.sql.
+--
+-- Group 1 was folded into schema.sql in Feb 2026 (04a77c0), so any database
+-- built from that file onwards -- which includes the current production
+-- volume -- already has them and these are no-ops. A database created before
+-- that commit does not, and without these its submissions queries would fail
+-- on `reviewer_notes` even once registration worked again.
+ALTER TABLE submissions_current
+    ADD COLUMN IF NOT EXISTS dk_count INTEGER,
+    ADD COLUMN IF NOT EXISTS dk_eligible_count INTEGER,
+    ADD COLUMN IF NOT EXISTS dk_percentage NUMERIC(5,2),
+    ADD COLUMN IF NOT EXISTS reviewer_notes TEXT,
+    ADD COLUMN IF NOT EXISTS llm_check_status VARCHAR(20) DEFAULT 'skipped' NOT NULL,
+    ADD COLUMN IF NOT EXISTS llm_rules_hash VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS llm_input_hash VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS llm_model_used VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS llm_job_id VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS llm_queued_at TIMESTAMP WITH TIME ZONE,
+    ADD COLUMN IF NOT EXISTS llm_started_at TIMESTAMP WITH TIME ZONE,
+    ADD COLUMN IF NOT EXISTS llm_checked_at TIMESTAMP WITH TIME ZONE,
+    ADD COLUMN IF NOT EXISTS llm_last_error TEXT;
 
+CREATE INDEX IF NOT EXISTS idx_submissions_llm_status
+    ON submissions_current(llm_check_status);
+CREATE INDEX IF NOT EXISTS idx_submissions_llm_hashes
+    ON submissions_current(survey_id, llm_rules_hash, llm_input_hash);
+CREATE INDEX IF NOT EXISTS idx_submissions_llm_job_id
+    ON submissions_current(llm_job_id);
+
+-- Group 2 was never in schema.sql at all: these are the columns whose absence
+-- is being fixed in the same change as this migration.
 ALTER TABLE submissions_current
     ADD COLUMN IF NOT EXISTS has_edit_history BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS kobo_validation_status VARCHAR(50),
