@@ -302,6 +302,77 @@ jobs:
     # earned. The health check above is the real gate. Add genuine integration
     # tests here when they exist -- a step that cannot fail is worse than none.
 
-  # Note: Deployment is intentionally not handled here.
-  # For demos, we deploy using an Azure VM + docker-compose.prod.yml (see VM_DEPLOYMENT_AZURE.md).
+  # ============================================
+  # Job 4: Deploy to the Azure VM
+  # ============================================
+  # Only runs for a direct push to main, and only after every preceding job has
+  # gone green -- `needs` makes a failure anywhere upstream skip this entirely.
+  deploy:
+    name: Deploy to VM
+    runs-on: ubuntu-latest
+    needs: test-in-docker
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 20
+
+    # Two pushes landing close together must not build on the VM at the same
+    # time. Queue rather than cancel: a cancelled deploy could leave the VM
+    # mid-rebuild.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    # Declaring the environment gives the deploy a URL in the Actions UI, and
+    # is where you would later add a required-reviewer gate if you want deploys
+    # to pause for approval.
+    environment:
+      name: production
+      url: http://${{ vars.VM_HOST }}/
+
+    steps:
+    - name: Deploy over SSH
+      env:
+        SSH_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+        KNOWN_HOSTS: ${{ vars.VM_SSH_KNOWN_HOSTS }}
+        VM_HOST: ${{ vars.VM_HOST }}
+        VM_USER: ${{ vars.VM_USER }}
+        # Passed via env, not interpolated into the script body, so the shell
+        # never parses workflow-context data as code.
+        TARGET_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+
+        for v in SSH_KEY KNOWN_HOSTS VM_HOST VM_USER; do
+          if [ -z "${!v}" ]; then
+            echo "::error::$v is not set. See VM_DEPLOYMENT_AZURE.md section 9."
+            exit 1
+          fi
+        done
+
+        mkdir -p ~/.ssh && chmod 700 ~/.ssh
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+
+        # StrictHostKeyChecking=yes with a pinned known_hosts: without it the
+        # runner would trust whatever host answers on that IP.
+        # The SHA is the entire command -- the key is pinned server-side to the
+        # deploy script by a forced command, so nothing else would be accepted.
+        ssh -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "${VM_USER}@${VM_HOST}" "$TARGET_SHA"
+
+    - name: Verify the deployed site is serving
+      env:
+        VM_HOST: ${{ vars.VM_HOST }}
+      run: |
+        set -euo pipefail
+        # The VM script already health-checked from inside; this confirms the
+        # site is reachable from the outside world too.
+        RESPONSE=$(curl -fsS --max-time 15 "http://${VM_HOST}/health")
+        echo "Health response: $RESPONSE"
+        echo "$RESPONSE" | grep -q '"status":"healthy"' \
+          || { echo "::error::Site did not report healthy from outside"; exit 1; }
+        echo "✓ Deployed and serving"
 
