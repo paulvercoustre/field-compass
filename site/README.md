@@ -91,18 +91,39 @@ contents of `site/` as the document root. There is nothing to build.
   than collapsed to their end frame -- that frame is "cleared out", so
   collapsing would empty the section. Retiming is two numbers: the `7s`
   duration and the `1.4s` step in the `calc()` delays.
-- **The logo wall** (`#audience`) ships with placeholder marks, and the lead
-  line reads "Built for" rather than "Trusted by" -- it says who the tool is
-  aimed at, not who uses it. The comment above the section has the four-step
-  swap for real logos. Two rules before you make it: only organisations that
-  actually run Field Compass, and only with written sign-off from their comms
-  team. UN agency and INGO marks are trademarked and their use is policed, and
-  a false endorsement is the first claim a procurement officer checks. Use the
-  official SVG from each organisation's brand pack; a traced approximation is
-  both off-brand and a worse infringement. Real `<img>` logos inherit the
-  grayscale and opacity treatment automatically, which is what makes a mixed
-  set of brand colours read as one row -- and delete the
-  `.logowall__caption` line once they are in.
+- **The partner carousel** (`#audience`) is a CSS marquee: two identical
+  `.marquee__group` lists inside one track, animated to `translateX(-50%)`, so
+  the copy lands exactly where the original began and the loop has no seam.
+  Both groups must stay identical or the seam appears -- the second is
+  `aria-hidden` and its `alt` attributes are empty. It pauses on hover and on
+  keyboard focus, and under `prefers-reduced-motion` the animation is switched
+  off and the row becomes manually scrollable (collapsing it to its end frame
+  would park it half a track to the left).
+- **Logo sizing.** These marks range from 0.49 to 4.16 in aspect ratio, so a
+  single height would turn the tall ones into slivers. Each `<li>` sets a `--h`
+  tuned by eye for equal visual weight; set one when adding a logo rather than
+  copying a neighbour's.
+- **Logo files** live in `site/logos/`. Three things to check on any new SVG,
+  each of which silently breaks an `<img>`-loaded file:
+  1. `xmlns="http://www.w3.org/2000/svg"` must be present. Inline in HTML the
+     parser infers it; a standalone file is parsed as XML and fails without it.
+     IOM's file shipped without it.
+  2. Numeric `width`/`height` on the root element. Missing values, or
+     percentages, leave no intrinsic aspect ratio, so `width: auto` collapses
+     to zero. Six of these needed it added from their viewBox.
+  3. No `<script>` or `on*` handlers.
+  Logos render at their real colours -- no grayscale filter -- because most of
+  these organisations' brand guidelines forbid recolouring. That is also why
+  the strip sits on a light sheet in *both* themes: several marks are black or
+  navy and would vanish on the dark theme, so the surface adapts, not the mark.
+- **`care.svg` is 236KB**, about 40% of the 560KB logo payload, from very
+  high-precision path data. Running the folder through SVGO would cut it
+  sharply. Everything is `loading="lazy"` and below the fold, so it is not
+  urgent.
+- **Only add a logo with the organisation's agreement.** The lead line reads
+  "Teams from these organisations are joining the beta" rather than "Trusted
+  by" because that is what is actually true today; keep it accurate as the
+  relationships change.
 - **The dashboard illustration** in the hero is HTML and CSS, not a
   screenshot — no image assets to re-export when the UI changes, but it also
   won't update on its own. The figures in it are illustrative.

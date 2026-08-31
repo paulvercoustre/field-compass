@@ -176,71 +176,70 @@
 
     <!-- ==================================================== audience === -->
     <!--
-      LOGO WALL — placeholder marks, deliberately.
+      Beta partner logos. Official SVGs live in site/logos/ and are rendered at
+      their real colours -- most of these organisations' brand guidelines
+      forbid recolouring, so no grayscale filter is applied here.
 
-      Real organisation logos go here ONLY with (a) an actual deployment and
-      (b) written sign-off from that organisation's comms team. UN agency and
-      INGO marks are trademarked and their use is policed; showing them
-      without a relationship is a false claim of endorsement, and a
-      procurement officer will check it before anything else on this page.
+      The strip sits on a permanently light sheet in BOTH themes. Several of
+      these marks are black or navy (ICRC, MSF, ODI, NRC) and would disappear
+      against the dark theme; tinting someone else's logo to fix that is not
+      ours to do, so the surface changes instead of the mark.
 
-      TO SWAP IN REAL LOGOS:
-        1. Put the official SVGs in site/logos/ (ask each org for their brand
-           pack -- most publish one; do not trace them by hand).
-        2. Replace each <li> below with:
-             <li class="logowall__item">
-               <img src="logos/example.svg" alt="Example Organisation">
-             </li>
-        3. Delete the .logowall__caption line underneath.
-        4. Change the lead line from "Built for" to "Trusted by".
-
-      The grayscale + opacity treatment in styles.css is what makes a mixed
-      set of brand colours sit together; it applies to <img> as-is.
+      Each <li> carries a --h tuned to its aspect ratio (these span 0.49 to
+      4.16) so every logo reads at roughly the same visual weight. If you add
+      one, set --h by eye rather than reusing a neighbour's.
     -->
     <section class="section audience" aria-labelledby="audience-lead">
       <div class="container">
-        <p class="audience__lead" id="audience-lead">Built for the teams who run field surveys at scale</p>
+        <p class="audience__lead" id="audience-lead">Teams from these organisations are joining the beta</p>
 
-        <ul class="logowall">
-          <li class="logowall__item">
-            <span class="logowall__mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15 0 18M12 3c-2.5 2.6-2.5 15 0 18"/></svg>
-            </span>
-            <span class="logowall__name" style="--w: 86px"></span>
-          </li>
-          <li class="logowall__item">
-            <span class="logowall__mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2.8l7.6 4.4v8.8L12 20.4 4.4 16V7.2z"/><path d="M12 8.4l3.6 2.1v4.2L12 16.8l-3.6-2.1v-4.2z"/></svg>
-            </span>
-            <span class="logowall__name" style="--w: 64px"></span>
-          </li>
-          <li class="logowall__item">
-            <span class="logowall__mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2.6l8 3.2v6c0 4.6-3.3 8.4-8 9.6-4.7-1.2-8-5-8-9.6v-6z"/></svg>
-            </span>
-            <span class="logowall__name" style="--w: 96px"></span>
-          </li>
-          <li class="logowall__item">
-            <span class="logowall__mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21c0-6 3.4-10.4 8-11.6C20 15 16.6 19 12 20"/><path d="M12 21C12 15 8.6 10.6 4 9.4 4 15 7.4 19 12 20"/><path d="M12 21v-6"/></svg>
-            </span>
-            <span class="logowall__name" style="--w: 72px"></span>
-          </li>
-          <li class="logowall__item">
-            <span class="logowall__mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16.5L9 9l4 5 3-4 4 6.5z"/><circle cx="7.5" cy="5.5" r="2"/></svg>
-            </span>
-            <span class="logowall__name" style="--w: 80px"></span>
-          </li>
-          <li class="logowall__item">
-            <span class="logowall__mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 20V9.5L12 4l8.5 5.5V20z"/><path d="M9.5 20v-6h5v6"/></svg>
-            </span>
-            <span class="logowall__name" style="--w: 58px"></span>
-          </li>
-        </ul>
+        <div class="logosheet">
+          <div class="marquee">
+            <div class="marquee__track">
+          <ul class="marquee__group">
+            <li style="--h: 26px"><img src="logos/unhcr.svg" alt="UNHCR" loading="lazy" decoding="async"></li>
+            <li style="--h: 48px"><img src="logos/fao.svg" alt="Food and Agriculture Organization of the United Nations" loading="lazy" decoding="async"></li>
+            <li style="--h: 22px"><img src="logos/unicef.svg" alt="UNICEF" loading="lazy" decoding="async"></li>
+            <li style="--h: 50px"><img src="logos/irc.svg" alt="International Rescue Committee" loading="lazy" decoding="async"></li>
+            <li style="--h: 26px"><img src="logos/who.svg" alt="World Health Organization" loading="lazy" decoding="async"></li>
+            <li style="--h: 56px"><img src="logos/undp.svg" alt="United Nations Development Programme" loading="lazy" decoding="async"></li>
+            <li style="--h: 30px"><img src="logos/oxfam.svg" alt="Oxfam" loading="lazy" decoding="async"></li>
+            <li style="--h: 50px"><img src="logos/ocha.svg" alt="UN OCHA" loading="lazy" decoding="async"></li>
+            <li style="--h: 24px"><img src="logos/nrc.svg" alt="Norwegian Refugee Council" loading="lazy" decoding="async"></li>
+            <li style="--h: 54px"><img src="logos/wfp-vertical.svg" alt="World Food Programme" loading="lazy" decoding="async"></li>
+            <li style="--h: 32px"><img src="logos/msf.svg" alt="Médecins Sans Frontières" loading="lazy" decoding="async"></li>
+            <li style="--h: 46px"><img src="logos/ifrc.svg" alt="International Federation of Red Cross and Red Crescent Societies" loading="lazy" decoding="async"></li>
+            <li style="--h: 28px"><img src="logos/care.svg" alt="CARE" loading="lazy" decoding="async"></li>
+            <li style="--h: 52px"><img src="logos/icrc.svg" alt="International Committee of the Red Cross" loading="lazy" decoding="async"></li>
+            <li style="--h: 28px"><img src="logos/ids.svg" alt="Institute of Development Studies" loading="lazy" decoding="async"></li>
+            <li style="--h: 44px"><img src="logos/acaps.svg" alt="ACAPS" loading="lazy" decoding="async"></li>
+            <li style="--h: 28px"><img src="logos/iom.svg" alt="International Organization for Migration" loading="lazy" decoding="async"></li>
+            <li style="--h: 34px"><img src="logos/odi.svg" alt="ODI" loading="lazy" decoding="async"></li>
+          </ul>
+          <ul class="marquee__group" aria-hidden="true">
+            <li style="--h: 26px"><img src="logos/unhcr.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 48px"><img src="logos/fao.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 22px"><img src="logos/unicef.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 50px"><img src="logos/irc.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 26px"><img src="logos/who.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 56px"><img src="logos/undp.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 30px"><img src="logos/oxfam.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 50px"><img src="logos/ocha.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 24px"><img src="logos/nrc.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 54px"><img src="logos/wfp-vertical.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 32px"><img src="logos/msf.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 46px"><img src="logos/ifrc.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 28px"><img src="logos/care.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 52px"><img src="logos/icrc.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 28px"><img src="logos/ids.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 44px"><img src="logos/acaps.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 28px"><img src="logos/iom.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 34px"><img src="logos/odi.svg" alt="" loading="lazy" decoding="async"></li>
+          </ul>
+            </div>
+          </div>
+        </div>
 
-        <p class="logowall__caption">Placeholder marks — see the comment in <code>index.html</code> before adding real logos</p>
         <p class="audience__note">Works with any KoboToolbox project — the collection platform these teams already run in the field.</p>
       </div>
     </section>

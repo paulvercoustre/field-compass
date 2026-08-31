@@ -34,6 +34,8 @@
 
   --nav-bg:          rgba(251, 252, 254, 0.78);
   --nav-bg-scrolled: rgba(251, 252, 254, 0.93);
+  --logo-sheet:        #ffffff;
+  --logo-sheet-border: rgba(15, 23, 42, 0.10);
   --shadow-card:     0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-mock:     0 30px 64px -30px rgba(15, 23, 42, 0.45);
 
@@ -79,6 +81,9 @@
 
     --nav-bg:          rgba(7, 11, 22, 0.72);
     --nav-bg-scrolled: rgba(7, 11, 22, 0.88);
+    /* Softened rather than pure white: a full-brightness band is harsh here. */
+    --logo-sheet:        #eef1f7;
+    --logo-sheet-border: rgba(148, 163, 184, 0.28);
     --shadow-card:     none;
     --shadow-mock:     0 40px 80px -32px rgba(0, 0, 0, 0.85);
 
@@ -613,77 +618,73 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 .audience__lead {
   font-size: 15.5px;
   color: var(--text-muted);
-  margin-bottom: 30px;
+  margin-bottom: 26px;
 }
 .audience__note {
   font-size: 13.5px;
   color: var(--text-dim);
+  margin-top: 22px;
 }
 
-/* Logo wall. Real <img> logos drop straight into .logowall__item and inherit
-   the grayscale + opacity treatment, which is what lets a mixed set of brand
-   colours sit together as one row. */
-.logowall {
-  list-style: none;
-  margin: 0 0 20px;
-  padding: 0;
+/* Light in both themes -- see the note in index.html. */
+.logosheet {
+  background: var(--logo-sheet);
+  border: 1px solid var(--logo-sheet-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* The mask lives here and not on .logosheet, or it would fade the sheet's own
+   border out at both ends. */
+.marquee {
+  --gap: 58px;
+  position: relative;
+  overflow: hidden;
+  padding-block: 26px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+.marquee__track {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  width: max-content;
+  animation: marquee 68s linear infinite;
+}
+
+/* Two identical groups; translating the track by exactly half its width lands
+   the copy where the original started, so the loop has no seam. */
+@keyframes marquee {
+  to { transform: translateX(-50%); }
+}
+
+.marquee:hover .marquee__track,
+.marquee:focus-within .marquee__track {
+  animation-play-state: paused;
+}
+
+.marquee__group {
+  display: flex;
   align-items: center;
-  gap: 26px 46px;
+  flex: none;
+  gap: var(--gap);
+  /* half a gap each side, so the join between the groups matches the interior */
+  padding-inline: calc(var(--gap) / 2);
+  margin: 0;
+  list-style: none;
 }
 
-.logowall__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 11px;
-  color: var(--text-dim);
-  filter: grayscale(1);
-  opacity: 0.62;
-  transition: opacity 0.2s ease;
-}
-.logowall__item:hover { opacity: 0.9; }
-
-.logowall__item img {
-  height: 30px;
-  width: auto;
-  display: block;
-}
-
-.logowall__mark {
+.marquee__group li {
   display: grid;
   place-items: center;
   flex: none;
-}
-.logowall__mark svg {
-  width: 27px;
-  height: 27px;
-  display: block;
+  height: 58px;
 }
 
-/* Stands in for a wordmark: the silhouette a real logo occupies. */
-.logowall__name {
+.marquee__group img {
+  height: var(--h, 34px);
+  width: auto;
+  max-width: 170px;
   display: block;
-  width: var(--w);
-  height: 9px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.4;
-}
-
-.logowall__caption {
-  font-size: 12px;
-  color: var(--text-dim);
-  opacity: 0.75;
-  margin-bottom: 18px;
-}
-.logowall__caption code {
-  font-family: var(--mono);
-  font-size: 11.5px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--surface-hover);
 }
 
 /* ------------------------------------------------------------ features --- */
@@ -1156,9 +1157,9 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   .grid-3, .steps, .strip, .mock__stats, .flow { grid-template-columns: minmax(0, 1fr); }
   .insight { padding: 22px; }
   .audience { padding-block: 56px; }
-  .logowall { gap: 22px 30px; }
-  .logowall__mark svg { width: 24px; height: 24px; }
-  .logowall__name { height: 8px; }
+  .marquee { --gap: 36px; padding-block: 20px; }
+  .marquee__group li { height: 46px; }
+  .marquee__group img { max-width: 128px; }
   .bars__row { grid-template-columns: minmax(0, 1fr) 56px 24px; gap: 10px; }
   .mock__stats { gap: 9px; }
   .container { padding-inline: 20px; }
@@ -1187,6 +1188,12 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   }
   /* The travelling dot has no meaning standing still; its base state is hidden. */
   .flow__dot { animation: none !important; }
+
+  /* Same trap: collapsing the marquee to its end frame parks it half a track
+     to the left. Stop it and hand the row over to manual scrolling instead. */
+  .marquee { overflow-x: auto; }
+  .marquee__track { animation: none !important; }
+  .marquee__group[aria-hidden="true"] { display: none; }
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
