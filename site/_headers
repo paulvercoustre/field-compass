@@ -1,0 +1,21 @@
+# Cloudflare Pages reads this file from the build output root and applies these
+# headers to the deployed site.
+#
+# IMPORTANT: Caddy no longer serves this site, so the header block in
+# deploy/caddy/Caddyfile does NOT apply to it any more. That block is still
+# correct for the fallback case (serving the site from the VM again), so the
+# two need to be kept in step if you change one.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Deliberately WITHOUT includeSubDomains. That would pin app.fieldcompass.org
+  # to HTTPS from here, coupling the app's availability to a certificate this
+  # site does not manage — the app is on a different host with its own Caddy,
+  # which sends its own HSTS for its own name.
+  Strict-Transport-Security: max-age=31536000
+  # Mirrors the site block in deploy/caddy/Caddyfile. 'unsafe-inline' for
+  # styles only: the dashboard illustration sets bar heights via style
+  # attributes. Google Fonts is the one third-party origin.
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'

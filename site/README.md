@@ -45,88 +45,55 @@ Then open <http://localhost:4321>.
 
 ## 3. Deploy
 
-### Current deployment: the Azure VM, IP only
+The site is hosted on **Cloudflare Pages**, separately from the app. The VM
+serves only the application.
 
-The CTAs point at `http://20.107.221.180`, and the site is served alongside the
-app on the same VM:
+| | Where | Address |
+| --- | --- | --- |
+| Marketing site | Cloudflare Pages, from `site/` | `https://fieldcompass.org` |
+| App | Azure VM, Caddy | `https://app.fieldcompass.org` |
 
-| | Address |
-| --- | --- |
-| App | `http://20.107.221.180/` (`SITE_ADDRESS=:80`) |
-| Marketing site | `http://20.107.221.180:8080/` (`WWW_ADDRESS=:8080`) |
+Splitting them keeps the shopfront up when the VM is down or mid-deploy, puts
+the page on a CDN edge near the field teams reading it rather than in one Azure
+region, and means a copy fix never touches the box running the database.
 
-Two ports rather than two hostnames, because with no domain there is no way to
-tell the sites apart on port 80. `docker-compose.prod.yml` publishes 8080 for
-this.
+### One-time Cloudflare Pages setup
 
-**This is a demo topology, not a launch one.** There is no HTTPS — Let's
-Encrypt cannot certify a bare IP — so every password typed into the login form
-crosses the network in clear. The site links people to that form, and the page
-now carries partner logos. Point a domain at the VM before real accounts exist;
-Caddy then obtains certificates on its own and the split below applies.
+1. **Workers & Pages → Create → Pages → Connect to Git**, pick this repo.
+2. Build settings — there is no build:
+   - Framework preset: **None**
+   - Build command: *(leave empty)*
+   - Build output directory: **`site`**
+   - Production branch: `main`
+3. **Custom domains** on the Pages project: add `fieldcompass.org` and
+   `www.fieldcompass.org`. Cloudflare creates the CNAMEs.
+4. **Rules → Redirect Rules**: `www.fieldcompass.org/*` →
+   `https://fieldcompass.org/$1`, 301. Pages serves both names otherwise, which
+   publishes two URLs for every page and splits search ranking between them.
+5. Point `app.fieldcompass.org` at the VM with an **A record, DNS only (grey
+   cloud)** — see the note in `.env.example` about ACME and proxied records.
 
-### Going live on a domain
+After that, every push to `main` redeploys the site. Pull requests get preview
+URLs automatically.
 
-1. **Three A records**, all at the VM's public IP:
-   `example.org`, `www.example.org`, `app.example.org`.
-2. **Wait for them to resolve** — `dig +short app.example.org` — before you
-   redeploy. Caddy requests certificates on startup; a name that does not
-   resolve yet fails the ACME challenge and counts against Let's Encrypt rate
-   limits.
-3. **`.env` on the VM:**
-   ```env
-   SITE_ADDRESS=https://app.example.org
-   WWW_ADDRESS=https://example.org
-   WWW_REDIRECT_FROM=https://www.example.org
-   CORS_ORIGINS=https://app.example.org
-   ```
-4. **Rewrite the CTAs and the metadata:**
-   ```bash
-   ./site/set-app-url.sh https://app.example.org
-   ```
-   then update `<link rel="canonical">` and the two `og:url` tags in `<head>`
-   to `https://example.org/`.
-5. **Redeploy:** `docker compose -f docker-compose.prod.yml up -d caddy`
+### Security headers
 
-Certificates are issued automatically. Both sites then answer on 443 by
-hostname, `www` 301s to the apex, and ports 8080/8082 go unused.
+`site/_headers` carries them, because **Caddy no longer serves this site** and
+the header block in `deploy/caddy/Caddyfile` therefore does not apply. The two
+are currently identical and should be kept in step — the Caddy block is the
+fallback if the site ever moves back onto the VM.
 
-On Cloudflare DNS, leave the records "DNS only" (grey cloud) until certificates
-are issued — a proxied record terminates TLS at Cloudflare and Caddy's HTTP-01
-challenge cannot complete.
+### Fallback: serving from the VM
 
-### Why the apex/`app.` split
-
-
-The site and the app are served by the same Caddy, on two hostnames. This keeps
-the app's session cookies and its strict CSP on an origin the public page can't
-touch, and it needs no change to the app bundle.
-
-1. Point two A records at the VM:
-   - `fieldcompass.example.org` → VM IP
-   - `app.fieldcompass.example.org` → VM IP
-2. In `.env` on the VM:
-   ```env
-   WWW_ADDRESS=https://fieldcompass.example.org
-   SITE_ADDRESS=https://app.fieldcompass.example.org
-   CORS_ORIGINS=https://app.fieldcompass.example.org
-   ```
-3. Redeploy:
-   ```bash
-   docker compose -f docker-compose.prod.yml up -d caddy
-   ```
-
-Caddy requests Let's Encrypt certificates for both names on first start.
-`site/` is bind-mounted read-only, so subsequent content edits are a `git pull`
-plus `docker compose -f docker-compose.prod.yml restart caddy`.
-
-`WWW_ADDRESS` defaults to `:8081`, which the compose file does not publish —
-leaving it unset keeps the deployment exactly as it was.
+Still supported and configured. Set `WWW_ADDRESS` (and optionally
+`WWW_REDIRECT_FROM`) in `.env` and redeploy Caddy; `site/` is bind-mounted
+read-only. Only the `_headers` file is Pages-specific and is ignored there.
 
 ### Anywhere else
 
-Netlify, Vercel, GitHub Pages, S3 + CloudFront, or any web server: publish the
-contents of `site/` as the document root. There is nothing to build.
+Netlify, Vercel, GitHub Pages, S3 + CloudFront: publish the contents of `site/`
+as the document root. There is nothing to build. Only `_headers` is
+Cloudflare-specific — reimplement it for the host you pick, or you lose the CSP.
 
 ## Notes
 
