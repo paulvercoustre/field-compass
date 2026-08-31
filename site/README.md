@@ -13,24 +13,27 @@ site/
 
 ## 1. Point it at your app
 
-Every "Log in" / "Create an account" link uses the placeholder host
-`https://app.example.com`. Replace it with your real app URL:
-
 ```bash
-sed -i '' 's|https://app.example.com|https://app.YOURDOMAIN.org|g' site/index.html
+./site/set-app-url.sh https://app.YOURDOMAIN.org
 ```
 
-(On Linux, drop the `''` after `-i`.) Verify nothing was missed:
+That rewrites every CTA and prints what it changed. It refuses plain HTTP
+(passwords would cross the network in clear), works on both macOS and Linux,
+and is safe to re-run — it rewrites whatever origin is currently in place.
 
-```bash
-grep -c "app.example.com" site/index.html
-```
+The two CTA shapes are deliberate:
 
-Also worth updating before launch:
+| Link | Goes to | Why |
+| --- | --- | --- |
+| Log in | `<app>/` | The app opens on Sign In by default. |
+| Get started / Create an account | `<app>/#register` | `LoginPage.tsx` reads that fragment on mount and opens the registration form, so the CTA lands where it says it will. |
 
-- `<link rel="canonical">` and the two `og:url` tags in `<head>` — they still
-  say `https://example.com/`.
-- The GitHub links in the nav, CTA and footer, if the repository moves.
+If you change the sign-up links, keep the `#register` fragment or that second
+behaviour is lost silently — nothing breaks, people just arrive on Sign In.
+
+Still to update by hand before launch, because they are the *site's* own
+address rather than the app's: `<link rel="canonical">` and the two `og:url`
+tags in `<head>`, which still say `https://example.com/`.
 
 ## 2. Preview locally
 
