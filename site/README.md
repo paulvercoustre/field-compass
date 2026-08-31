@@ -65,7 +65,38 @@ crosses the network in clear. The site links people to that form, and the page
 now carries partner logos. Point a domain at the VM before real accounts exist;
 Caddy then obtains certificates on its own and the split below applies.
 
-### With a domain (recommended for launch)
+### Going live on a domain
+
+1. **Three A records**, all at the VM's public IP:
+   `example.org`, `www.example.org`, `app.example.org`.
+2. **Wait for them to resolve** — `dig +short app.example.org` — before you
+   redeploy. Caddy requests certificates on startup; a name that does not
+   resolve yet fails the ACME challenge and counts against Let's Encrypt rate
+   limits.
+3. **`.env` on the VM:**
+   ```env
+   SITE_ADDRESS=https://app.example.org
+   WWW_ADDRESS=https://example.org
+   WWW_REDIRECT_FROM=https://www.example.org
+   CORS_ORIGINS=https://app.example.org
+   ```
+4. **Rewrite the CTAs and the metadata:**
+   ```bash
+   ./site/set-app-url.sh https://app.example.org
+   ```
+   then update `<link rel="canonical">` and the two `og:url` tags in `<head>`
+   to `https://example.org/`.
+5. **Redeploy:** `docker compose -f docker-compose.prod.yml up -d caddy`
+
+Certificates are issued automatically. Both sites then answer on 443 by
+hostname, `www` 301s to the apex, and ports 8080/8082 go unused.
+
+On Cloudflare DNS, leave the records "DNS only" (grey cloud) until certificates
+are issued — a proxied record terminates TLS at Cloudflare and Caddy's HTTP-01
+challenge cannot complete.
+
+### Why the apex/`app.` split
+
 
 The site and the app are served by the same Caddy, on two hostnames. This keeps
 the app's session cookies and its strict CSP on an origin the public page can't

@@ -23,6 +23,9 @@ services:
       # Defaults to :8081, which is not published below, so an unset value
       # leaves the deployment exactly as it was. See deploy/caddy/Caddyfile.
       WWW_ADDRESS: ${WWW_ADDRESS:-:8080}
+      # Optional www.<domain> -> apex redirect. Set alongside WWW_ADDRESS when
+      # you move to a domain; unset it binds :8082, which is not published.
+      WWW_REDIRECT_FROM: ${WWW_REDIRECT_FROM:-:8082}
       # Only needed when VITE_API_URL is an absolute URL on another origin;
       # leave empty for the default same-origin "/api" setup. Must match that
       # origin exactly or the browser's CSP will block every API call.
