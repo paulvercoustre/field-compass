@@ -176,32 +176,71 @@
 
     <!-- ==================================================== audience === -->
     <!--
-      A logo wall belongs here — but only with real deployments behind it and
-      written sign-off from each organisation's comms team. Marks for UN
-      agencies and the large INGOs are trademarked and their use is policed;
-      showing them without a relationship is a false claim of endorsement, and
-      it is the first thing a procurement officer will check.
+      LOGO WALL — placeholder marks, deliberately.
 
-      When you have one real reference, drop SVGs into site/logos/ and replace
-      the <ul> below with:
-        <ul class="audience__logos">
-          <li><img src="logos/example.svg" alt="Example Organisation" height="28"></li>
-        </ul>
-      and change the lead line to "Trusted by".
+      Real organisation logos go here ONLY with (a) an actual deployment and
+      (b) written sign-off from that organisation's comms team. UN agency and
+      INGO marks are trademarked and their use is policed; showing them
+      without a relationship is a false claim of endorsement, and a
+      procurement officer will check it before anything else on this page.
 
-      Until then this says who the tool is BUILT FOR, which is true, rather
-      than who uses it, which is not yet.
+      TO SWAP IN REAL LOGOS:
+        1. Put the official SVGs in site/logos/ (ask each org for their brand
+           pack -- most publish one; do not trace them by hand).
+        2. Replace each <li> below with:
+             <li class="logowall__item">
+               <img src="logos/example.svg" alt="Example Organisation">
+             </li>
+        3. Delete the .logowall__caption line underneath.
+        4. Change the lead line from "Built for" to "Trusted by".
+
+      The grayscale + opacity treatment in styles.css is what makes a mixed
+      set of brand colours sit together; it applies to <img> as-is.
     -->
     <section class="section audience" aria-labelledby="audience-lead">
       <div class="container">
         <p class="audience__lead" id="audience-lead">Built for the teams who run field surveys at scale</p>
-        <ul class="audience__list">
-          <li>UN agencies</li>
-          <li>International NGOs</li>
-          <li>National statistics offices</li>
-          <li>Research institutes</li>
-          <li>Monitoring &amp; evaluation teams</li>
+
+        <ul class="logowall">
+          <li class="logowall__item">
+            <span class="logowall__mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15 0 18M12 3c-2.5 2.6-2.5 15 0 18"/></svg>
+            </span>
+            <span class="logowall__name" style="--w: 86px"></span>
+          </li>
+          <li class="logowall__item">
+            <span class="logowall__mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2.8l7.6 4.4v8.8L12 20.4 4.4 16V7.2z"/><path d="M12 8.4l3.6 2.1v4.2L12 16.8l-3.6-2.1v-4.2z"/></svg>
+            </span>
+            <span class="logowall__name" style="--w: 64px"></span>
+          </li>
+          <li class="logowall__item">
+            <span class="logowall__mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2.6l8 3.2v6c0 4.6-3.3 8.4-8 9.6-4.7-1.2-8-5-8-9.6v-6z"/></svg>
+            </span>
+            <span class="logowall__name" style="--w: 96px"></span>
+          </li>
+          <li class="logowall__item">
+            <span class="logowall__mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21c0-6 3.4-10.4 8-11.6C20 15 16.6 19 12 20"/><path d="M12 21C12 15 8.6 10.6 4 9.4 4 15 7.4 19 12 20"/><path d="M12 21v-6"/></svg>
+            </span>
+            <span class="logowall__name" style="--w: 72px"></span>
+          </li>
+          <li class="logowall__item">
+            <span class="logowall__mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16.5L9 9l4 5 3-4 4 6.5z"/><circle cx="7.5" cy="5.5" r="2"/></svg>
+            </span>
+            <span class="logowall__name" style="--w: 80px"></span>
+          </li>
+          <li class="logowall__item">
+            <span class="logowall__mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 20V9.5L12 4l8.5 5.5V20z"/><path d="M9.5 20v-6h5v6"/></svg>
+            </span>
+            <span class="logowall__name" style="--w: 58px"></span>
+          </li>
         </ul>
+
+        <p class="logowall__caption">Placeholder marks — see the comment in <code>index.html</code> before adding real logos</p>
         <p class="audience__note">Works with any KoboToolbox project — the collection platform these teams already run in the field.</p>
       </div>
     </section>

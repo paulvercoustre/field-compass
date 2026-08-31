@@ -91,10 +91,18 @@ contents of `site/` as the document root. There is nothing to build.
   than collapsed to their end frame -- that frame is "cleared out", so
   collapsing would empty the section. Retiming is two numbers: the `7s`
   duration and the `1.4s` step in the `calc()` delays.
-- **No customer logos.** `#audience` states who the tool is built for, not who
-  uses it. The HTML above it carries the markup and instructions for a real
-  logo wall; use it only with actual deployments and written permission from
-  each organisation.
+- **The logo wall** (`#audience`) ships with placeholder marks, and the lead
+  line reads "Built for" rather than "Trusted by" -- it says who the tool is
+  aimed at, not who uses it. The comment above the section has the four-step
+  swap for real logos. Two rules before you make it: only organisations that
+  actually run Field Compass, and only with written sign-off from their comms
+  team. UN agency and INGO marks are trademarked and their use is policed, and
+  a false endorsement is the first claim a procurement officer checks. Use the
+  official SVG from each organisation's brand pack; a traced approximation is
+  both off-brand and a worse infringement. Real `<img>` logos inherit the
+  grayscale and opacity treatment automatically, which is what makes a mixed
+  set of brand colours read as one row -- and delete the
+  `.logowall__caption` line once they are in.
 - **The dashboard illustration** in the hero is HTML and CSS, not a
   screenshot — no image assets to re-export when the UI changes, but it also
   won't update on its own. The figures in it are illustrative.
