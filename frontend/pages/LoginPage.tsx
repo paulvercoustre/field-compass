@@ -8,7 +8,13 @@ interface LoginPageProps {
 const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { login, register, isLoading: authLoading } = useAuth();
   
-  const [isLogin, setIsLogin] = useState(true);
+  // The marketing site links straight here with #register on its "Create an
+  // account" buttons, so that CTA opens the registration form rather than
+  // dropping people on Sign In with an extra click to find. Any other entry
+  // opens on Sign In as before.
+  const [isLogin, setIsLogin] = useState(
+    () => !['#register', '#signup'].includes(window.location.hash.toLowerCase())
+  );
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

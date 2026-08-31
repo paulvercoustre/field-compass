@@ -67,3 +67,73 @@
 		file_server
 	}
 }
+
+# =============================================================================
+# Marketing site (../../site) — served on its own hostname.
+# =============================================================================
+# Best practice is to keep the public site and the authenticated app on
+# separate origins:
+#
+#   WWW_ADDRESS  = https://fieldcompass.example.org   <- this block
+#   SITE_ADDRESS = https://app.fieldcompass.example.org <- the app, above
+#
+# The separation buys two things. The app's session cookies and tokens are
+# scoped to the app origin, so nothing the marketing page ever loads can read
+# them. And the marketing page can have the looser policy it needs (webfonts)
+# without weakening the app's policy by one directive.
+#
+# THIS BLOCK IS DORMANT. The marketing site is hosted on Cloudflare Workers, so
+# WWW_ADDRESS defaults to :8081 -- a port docker-compose.prod.yml does not
+# publish -- and this VM serves only the application.
+#
+# It is kept as the fallback for pulling the site back onto the VM. To do that
+# you need BOTH: set WWW_ADDRESS (to a hostname with an A record here, or to a
+# port), and publish that port in docker-compose.prod.yml. Note that
+# site/_headers is a Cloudflare file and is ignored here; the header block
+# below is what applies, and the two are currently identical.
+# =============================================================================
+
+{$WWW_ADDRESS::8081} {
+	encode gzip zstd
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Deliberately NOT the app's policy. This origin holds no session and
+		# talks to no API, and it loads Inter from Google Fonts.
+		# 'unsafe-inline' for styles only: the dashboard illustration sets bar
+		# heights with style attributes, same reason the app needs it.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	}
+
+	# Static files only — no API, no SPA fallback.
+	root * /usr/share/caddy/site
+	file_server
+}
+
+# =============================================================================
+# www.<domain> -> apex, 301
+# =============================================================================
+# Pick one canonical hostname and send the other to it, or you publish two URLs
+# for every page: search engines split ranking between them, and a session set
+# on one is invisible to the other.
+#
+# Set both together, or neither:
+#   WWW_REDIRECT_FROM=https://www.fieldcompass.example.org   <- this block
+#   WWW_ADDRESS=https://fieldcompass.example.org             <- the target
+#
+# The redirect target IS WWW_ADDRESS, so the canonical host is named once.
+# WWW_REDIRECT_FROM defaults to :8082, a port compose does not publish, so
+# leaving it unset costs nothing.
+#
+# The www record needs its own A record pointing at this VM as well, or Caddy
+# cannot answer on that name and cannot obtain a certificate for it.
+# =============================================================================
+
+{$WWW_REDIRECT_FROM::8082} {
+	# {uri} carries the path and query, so deep links survive the hop.
+	redir {$WWW_ADDRESS:http://localhost}{uri} permanent
+}

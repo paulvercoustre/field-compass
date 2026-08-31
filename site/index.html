@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<!--
+  ===========================================================================
+  Field Compass — marketing site
+
+  Every link to the application uses the placeholder host
+  https://app.fieldcompass.org. Point it at your real app with one command:
+
+      sed -i '' 's|https://app.fieldcompass.org|https://app.YOURDOMAIN.org|g' site/index.html
+
+  (drop the '' after -i on Linux). See site/README.md for deployment.
+  ===========================================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Field Compass — Data quality for KoboToolbox surveys</title>
+  <meta name="description" content="Field Compass turns KoboToolbox submissions and audit logs into a live view of your data quality: validation rules, flagged submissions, enumerator performance, and collection progress.">
+  <meta name="theme-color" content="#070b16">
+  <link rel="canonical" href="https://fieldcompass.org/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Field Compass — Data quality for KoboToolbox surveys">
+  <meta property="og:description" content="Catch bad field data while the team is still in the field. Validation rules, quality dashboards, and enumerator insight on top of KoboToolbox.">
+  <meta property="og:url" content="https://fieldcompass.org/">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23818cf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- ============================================================ nav === -->
+  <header class="nav" id="nav">
+    <div class="container nav__inner">
+      <a class="brand" href="#top" aria-label="Field Compass, home">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z"/>
+          </svg>
+        </span>
+        Field Compass
+      </a>
+
+      <nav class="nav__links" aria-label="Main">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#flow">Quality loop</a>
+        <a href="#ai">AI agents</a>
+        <a href="https://github.com/paulvercoustre/field-compass">Source</a>
+      </nav>
+
+      <div class="nav__actions">
+        <a class="btn btn--quiet" href="https://app.fieldcompass.org">Log in</a>
+        <a class="btn btn--primary" href="https://app.fieldcompass.org/#register">Get started</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ======================================================== hero === -->
+    <section class="hero" id="top">
+      <div class="container hero__grid">
+        <div>
+          <h1>Know your survey data is sound&nbsp;— <em>before the team leaves the field</em>.</h1>
+
+          <p class="hero__sub">
+            Field Compass pulls your KoboToolbox submissions and audit logs, runs your
+            validation rules against every record, and shows you exactly which
+            submissions, which questions, and which enumerators need a second look.
+          </p>
+
+          <div class="hero__cta">
+            <a class="btn btn--primary btn--lg" href="https://app.fieldcompass.org/#register">Create an account</a>
+            <a class="btn btn--ghost btn--lg" href="https://app.fieldcompass.org">Log in</a>
+          </div>
+
+          <p class="hero__note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Open source and self-hostable — your data never leaves your infrastructure.
+          </p>
+        </div>
+
+        <!-- Dashboard mock: pure CSS/HTML, no image assets. -->
+        <div class="mock" role="img" aria-label="Screenshot-style illustration of the Field Compass quality dashboard, showing 1,284 submissions, a 94% pass rate, 47 open flags, a daily chart of submissions with flagged records highlighted, and a list of recently flagged submissions.">
+          <div class="mock__bar" aria-hidden="true">
+            <span class="mock__dot"></span><span class="mock__dot"></span><span class="mock__dot"></span>
+            <span class="mock__title">Data quality overview — Household Survey 2026</span>
+          </div>
+
+          <div class="mock__body" aria-hidden="true">
+            <div class="mock__stats">
+              <div class="stat">
+                <div class="stat__label">Submissions</div>
+                <div class="stat__value">1,284</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">Pass rate</div>
+                <div class="stat__value stat__value--ok">94%</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">Open flags</div>
+                <div class="stat__value stat__value--warn">47</div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__head">
+                <h4>Submissions per day</h4>
+                <span>Flagged in red</span>
+              </div>
+              <div class="chart">
+                <div class="chart__col"><div class="chart__bar chart__bar--flag" style="height:6px;animation-delay:.05s"></div><div class="chart__bar chart__bar--base" style="height:38%;animation-delay:.05s"></div></div>
+                <div class="chart__col"><div class="chart__bar chart__bar--flag" style="height:9px;animation-delay:.1s"></div><div class="chart__bar chart__bar--base" style="height:56%;animation-delay:.1s"></div></div>
+                <div class="chart__col"><div class="chart__bar chart__bar--flag" style="height:5px;animation-delay:.15s"></div><div class="chart__bar chart__bar--base" style="height:47%;animation-delay:.15s"></div></div>
+                <div class="chart__col"><div class="chart__bar chart__bar--flag" style="height:14px;animation-delay:.2s"></div><div class="chart__bar chart__bar--base" style="height:72%;animation-delay:.2s"></div></div>
+                <div class="chart__col"><div class="chart__bar chart__bar--flag" style="height:7px;animation-delay:.25s"></div><div class="chart__bar chart__bar--base" style="height:61%;animation-delay:.25s"></div></div>
+                <div class="chart__col"><div class="chart__bar chart__bar--flag" style="height:4px;animation-delay:.3s"></div><div class="chart__bar chart__bar--base" style="height:84%;animation-delay:.3s"></div></div>
+                <div class="chart__col"><div class="chart__bar chart__bar--flag" style="height:8px;animation-delay:.35s"></div><div class="chart__bar chart__bar--base" style="height:69%;animation-delay:.35s"></div></div>
+              </div>
+              <div class="chart__labels">
+                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__head">
+                <h4>Recently flagged</h4>
+                <span>3 of 47</span>
+              </div>
+              <div class="rows">
+                <div class="row">
+                  <span class="row__id">#4821</span>
+                  <span class="row__text">Interview completed in 4 min</span>
+                  <span class="tag tag--bad">Speeding</span>
+                </div>
+                <div class="row">
+                  <span class="row__id">#4817</span>
+                  <span class="row__text">Household size 24 out of range</span>
+                  <span class="tag tag--warn">Outlier</span>
+                </div>
+                <div class="row">
+                  <span class="row__id">#4802</span>
+                  <span class="row__text">Age edited after submission</span>
+                  <span class="tag tag--ok">Reviewed</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= strip === -->
+    <div class="strip">
+      <div class="strip__item">
+        <h3>Connect, don't migrate</h3>
+        <p>Point Field Compass at your existing KoboToolbox project. Nothing about your forms or workflow changes.</p>
+      </div>
+      <div class="strip__item">
+        <h3>Rules in plain English</h3>
+        <p>Describe a check the way you'd say it out loud. Field Compass turns it into a rule that runs on every submission.</p>
+      </div>
+      <div class="strip__item">
+        <h3>Evidence, not hunches</h3>
+        <p>Audit logs reveal interview duration and post-submission edits — the signals a spreadsheet export throws away.</p>
+      </div>
+    </div>
+
+    <!-- ==================================================== audience === -->
+    <!--
+      Beta partner logos. Official SVGs live in site/logos/ and are rendered at
+      their real colours -- most of these organisations' brand guidelines
+      forbid recolouring, so no grayscale filter is applied here.
+
+      The strip sits on a permanently light sheet in BOTH themes. Several of
+      these marks are black or navy (ICRC, MSF, ODI, NRC) and would disappear
+      against the dark theme; tinting someone else's logo to fix that is not
+      ours to do, so the surface changes instead of the mark.
+
+      Each <li> carries a --h tuned to its aspect ratio (these span 0.49 to
+      4.16) so every logo reads at roughly the same visual weight. If you add
+      one, set --h by eye rather than reusing a neighbour's.
+    -->
+    <section class="section audience" aria-labelledby="audience-lead">
+      <div class="container container--wide">
+        <p class="audience__lead" id="audience-lead">Trusted by teams at the world’s leading humanitarian and development organisations</p>
+
+        <div class="logosheet">
+          <div class="marquee">
+            <div class="marquee__track">
+          <ul class="marquee__group">
+            <li style="--h: 38px"><img src="logos/unhcr.svg" alt="UNHCR" loading="lazy" decoding="async"></li>
+            <li style="--h: 68px"><img src="logos/fao.svg" alt="Food and Agriculture Organization of the United Nations" loading="lazy" decoding="async"></li>
+            <li style="--h: 32px"><img src="logos/unicef.svg" alt="UNICEF" loading="lazy" decoding="async"></li>
+            <li style="--h: 70px"><img src="logos/irc.svg" alt="International Rescue Committee" loading="lazy" decoding="async"></li>
+            <li style="--h: 38px"><img src="logos/who.svg" alt="World Health Organization" loading="lazy" decoding="async"></li>
+            <li style="--h: 78px"><img src="logos/undp.svg" alt="United Nations Development Programme" loading="lazy" decoding="async"></li>
+            <li style="--h: 44px"><img src="logos/oxfam.svg" alt="Oxfam" loading="lazy" decoding="async"></li>
+            <li style="--h: 70px"><img src="logos/ocha.svg" alt="UN OCHA" loading="lazy" decoding="async"></li>
+            <li style="--h: 35px"><img src="logos/nrc.svg" alt="Norwegian Refugee Council" loading="lazy" decoding="async"></li>
+            <li style="--h: 76px"><img src="logos/wfp-vertical.svg" alt="World Food Programme" loading="lazy" decoding="async"></li>
+            <li style="--h: 46px"><img src="logos/msf.svg" alt="Médecins Sans Frontières" loading="lazy" decoding="async"></li>
+            <li style="--h: 66px"><img src="logos/ifrc.svg" alt="International Federation of Red Cross and Red Crescent Societies" loading="lazy" decoding="async"></li>
+            <li style="--h: 40px"><img src="logos/care.svg" alt="CARE" loading="lazy" decoding="async"></li>
+            <li style="--h: 74px"><img src="logos/icrc.svg" alt="International Committee of the Red Cross" loading="lazy" decoding="async"></li>
+            <li style="--h: 40px"><img src="logos/ids.svg" alt="Institute of Development Studies" loading="lazy" decoding="async"></li>
+            <li style="--h: 62px"><img src="logos/acaps.svg" alt="ACAPS" loading="lazy" decoding="async"></li>
+            <li style="--h: 40px"><img src="logos/iom.svg" alt="International Organization for Migration" loading="lazy" decoding="async"></li>
+            <li style="--h: 48px"><img src="logos/odi.svg" alt="ODI" loading="lazy" decoding="async"></li>
+          </ul>
+          <ul class="marquee__group" aria-hidden="true">
+            <li style="--h: 38px"><img src="logos/unhcr.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 68px"><img src="logos/fao.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 32px"><img src="logos/unicef.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 70px"><img src="logos/irc.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 38px"><img src="logos/who.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 78px"><img src="logos/undp.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 44px"><img src="logos/oxfam.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 70px"><img src="logos/ocha.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 35px"><img src="logos/nrc.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 76px"><img src="logos/wfp-vertical.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 46px"><img src="logos/msf.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 66px"><img src="logos/ifrc.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 40px"><img src="logos/care.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 74px"><img src="logos/icrc.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 40px"><img src="logos/ids.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 62px"><img src="logos/acaps.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 40px"><img src="logos/iom.svg" alt="" loading="lazy" decoding="async"></li>
+            <li style="--h: 48px"><img src="logos/odi.svg" alt="" loading="lazy" decoding="async"></li>
+          </ul>
+            </div>
+          </div>
+        </div>
+
+        <p class="audience__note">Works with any KoboToolbox project — the collection platform these teams already run in the field.</p>
+      </div>
+    </section>
+
+    <!-- ==================================================== features === -->
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section__head section__head--center">
+          <span class="eyebrow">What you get</span>
+          <h2>Everything you need to trust your data</h2>
+          <p>One place to define quality, spot problems early, and act on them while corrections are still cheap.</p>
+        </div>
+
+        <div class="grid-3">
+          <article class="card">
+            <div class="card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v5h-5"/></svg>
+            </div>
+            <h3>Automatic Kobo sync</h3>
+            <p>Submissions and audit logs are pulled in and merged on a schedule, so the dashboard reflects what the field sent today.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><circle cx="18" cy="17" r="3"/></svg>
+            </div>
+            <h3>Validation rule builder</h3>
+            <p>Compose range checks, required fields, skip-logic and cross-question conditions without writing code — then reuse them across rounds.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M18.5 15.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/></svg>
+            </div>
+            <h3>AI that writes your rules</h3>
+            <p>Write “flag any survey completed in under 10 minutes” and get a structured rule back. Or let Field Compass read your form and propose the checks itself.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l3.5-4 3 2.5L21 6"/></svg>
+            </div>
+            <h3>Quality overview</h3>
+            <p>Pass rates, issue trends over time, and validation status at a glance — and which questions attract the most flags, so a wording problem doesn't get mistaken for a field problem.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0113 0"/><path d="M16 11.2a3.2 3.2 0 000-6.4"/><path d="M18 20a6.5 6.5 0 00-2-4.7"/></svg>
+            </div>
+            <h3>Enumerator performance</h3>
+            <p>Compare interview duration, flag rates and output per enumerator, so retraining goes to the people who actually need it — and nobody gets a lecture for a badly worded question.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v5l3 2"/><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4h4"/></svg>
+            </div>
+            <h3>Edit &amp; history tracking</h3>
+            <p>See which answers changed after a submission was first sent, when, and by whom — the audit trail your funder will ask about.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule">
+
+    <!-- ========================================================= how === -->
+    <section class="section" id="how">
+      <div class="container">
+        <div class="section__head section__head--center">
+          <span class="eyebrow">How it works</span>
+          <h2>Running in an afternoon</h2>
+          <p>No data migration, no new collection app for your team to learn.</p>
+        </div>
+
+        <div class="steps">
+          <div class="step">
+            <div class="step__num">1</div>
+            <h3>Connect KoboToolbox</h3>
+            <p>Add your Kobo API token — stored encrypted, per user — and pick the form you want to watch. Field Compass reads submissions and audit logs from there.</p>
+          </div>
+          <div class="step">
+            <div class="step__num">2</div>
+            <h3>Set your quality rules</h3>
+            <p>Build checks in the rule editor, describe them in plain English, or start from the set the AI suggests after reading your form.</p>
+          </div>
+          <div class="step">
+            <div class="step__num">3</div>
+            <h3>Monitor and act</h3>
+            <p>Watch the quality dashboard as data lands and review what gets flagged. Follow up with your field teams on the issues that come up while the enumerator is still in the area — when a correction is a phone call, not a return visit.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== flow === -->
+    <section class="section section--band" id="flow">
+      <div class="container">
+        <div class="section__head section__head--center">
+          <span class="eyebrow">The quality loop</span>
+          <h2>What happens to every record that lands</h2>
+          <p>A submission arrives, gets checked, and — if something looks wrong — reaches the person who can still fix it.</p>
+        </div>
+
+        <ol class="flow">
+          <li class="flow__stage" style="--i: 0">
+            <span class="flow__rail" aria-hidden="true"><span class="flow__dot"></span></span>
+            <span class="flow__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15.5V4"/><path d="M7.5 8.5L12 4l4.5 4.5"/>
+                <path d="M4 15v3.5A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5V15"/>
+              </svg>
+            </span>
+            <h3>Submitted</h3>
+            <p>#4821 arrives from the field, audit log attached — timings, edits and all.</p>
+          </li>
+
+          <li class="flow__stage" style="--i: 1">
+            <span class="flow__rail" aria-hidden="true"><span class="flow__dot"></span></span>
+            <span class="flow__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3l7.5 3v5.7c0 4.3-3 8-7.5 9.3-4.5-1.3-7.5-5-7.5-9.3V6z"/>
+                <path d="M8.9 12.2l2.1 2.1 4.1-4.3"/>
+              </svg>
+            </span>
+            <h3>Checked</h3>
+            <p>Your rules run against it, and the open-ended answers go to the review queue.</p>
+          </li>
+
+          <li class="flow__stage" style="--i: 2">
+            <span class="flow__rail" aria-hidden="true"><span class="flow__dot"></span></span>
+            <span class="flow__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5.5 21V3.6"/><path d="M5.5 4.4h11.9l-2 3.6 2 3.6H5.5z"/>
+              </svg>
+            </span>
+            <h3>Flagged</h3>
+            <p>Completed in four minutes. It surfaces on the dashboard with the reason attached.</p>
+          </li>
+
+          <li class="flow__stage" style="--i: 3">
+            <span class="flow__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.4 12.3a7.6 7.6 0 01-10.9 6.9L4 20.6l1.4-5.4a7.6 7.6 0 1115-2.9z"/>
+                <path d="M9 12h.01M12 12h.01M15 12h.01"/>
+              </svg>
+            </span>
+            <h3>Followed up</h3>
+            <p>You reach the enumerator while they're still in the area, and mark it resolved.</p>
+          </li>
+        </ol>
+
+        <p class="flow__caption">The whole loop closes in hours, not at the end of the round.</p>
+
+      </div>
+    </section>
+
+    <!-- ========================================================== ai === -->
+    <section class="section" id="ai">
+      <div class="container split">
+        <div>
+          <span class="eyebrow">AI agents</span>
+          <h2>Put AI to work on your data</h2>
+          <p style="margin-top:16px;color:var(--text-muted);font-size:17px">
+            Writing validation logic is the part that stalls a quality plan. Hand it
+            over: Field Compass reads your questionnaire, drafts the rules, and keeps
+            working through incoming answers while you get on with the survey.
+          </p>
+
+          <div class="list">
+            <div class="list__item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+              <p><strong>It writes the rules.</strong> “Flag if respondent age is greater than 100” becomes a structured rule that runs on every submission from then on.</p>
+            </div>
+            <div class="list__item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+              <p><strong>It reads your form first.</strong> Field Compass analyses your questionnaire and proposes the range, consistency and required-field checks it expects you'll need — before you've written a line of logic.</p>
+            </div>
+            <div class="list__item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+              <p><strong>It keeps working in the background.</strong> Qualitative checks run on their own queue, reading open-ended responses for empty, off-topic or copy-pasted answers while you do something else.</p>
+            </div>
+            <div class="list__item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+              <p><strong>It reports back before it acts.</strong> Every rule it drafts arrives as a plain condition you can edit, test or discard. It proposes; you approve.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo">
+          <div class="demo__label">You describe it</div>
+          <div class="demo__prompt">Flag any survey completed in under 10 minutes</div>
+          <div class="demo__arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>
+          </div>
+          <pre><code>{
+  <span class="tok-key">"name"</span>: <span class="tok-str">"Interview too short"</span>,
+  <span class="tok-key">"field"</span>: <span class="tok-str">"active_interview_time"</span>,
+  <span class="tok-key">"operator"</span>: <span class="tok-str">"less_than"</span>,
+  <span class="tok-key">"value"</span>: <span class="tok-num">600</span>,
+  <span class="tok-key">"severity"</span>: <span class="tok-str">"high"</span>
+}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================= cta === -->
+    <section class="section" style="padding-top:0">
+      <div class="container">
+        <div class="cta">
+          <h2>Start watching your data quality today</h2>
+          <p>Create an account and connect your first Kobo form in minutes.</p>
+          <div class="cta__actions">
+            <a class="btn btn--primary btn--lg" href="https://app.fieldcompass.org/#register">Create an account</a>
+            <a class="btn btn--ghost btn--lg" href="https://github.com/paulvercoustre/field-compass">View the source</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ========================================================= footer === -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <a class="brand" href="#top">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z"/>
+          </svg>
+        </span>
+        Field Compass
+      </a>
+
+      <nav class="footer__links" aria-label="Footer">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="https://github.com/paulvercoustre/field-compass">GitHub</a>
+        <a href="https://app.fieldcompass.org">Log in</a>
+      </nav>
+
+      <p class="footer__note">© 2026 Field Compass · MIT licensed</p>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

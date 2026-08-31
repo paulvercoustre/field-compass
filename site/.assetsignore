@@ -1,0 +1,6 @@
+# Files that live in site/ for convenience but are not part of the website.
+# Without this they are published: https://fieldcompass.org/set-app-url.sh
+# would serve a shell script from the marketing domain.
+README.md
+set-app-url.sh
+.DS_Store
