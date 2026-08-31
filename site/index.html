@@ -52,6 +52,7 @@
       <nav class="nav__links" aria-label="Main">
         <a href="#features">Features</a>
         <a href="#how">How it works</a>
+        <a href="#flow">Quality loop</a>
         <a href="#ai">AI agents</a>
         <a href="https://github.com/paulvercoustre/field-compass">Source</a>
       </nav>
@@ -212,7 +213,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l3.5-4 3 2.5L21 6"/></svg>
             </div>
             <h3>Quality overview</h3>
-            <p>Pass rates, issue trends over time, and validation status at a glance — with every metric drilling down to the submissions behind it.</p>
+            <p>Pass rates, issue trends over time, and validation status at a glance — and which questions attract the most flags, so a wording problem doesn't get mistaken for a field problem.</p>
           </article>
 
           <article class="card">
@@ -220,7 +221,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0113 0"/><path d="M16 11.2a3.2 3.2 0 000-6.4"/><path d="M18 20a6.5 6.5 0 00-2-4.7"/></svg>
             </div>
             <h3>Enumerator performance</h3>
-            <p>Compare interview duration, flag rates and output per enumerator, so coaching goes to the people who actually need it.</p>
+            <p>Compare interview duration, flag rates and output per enumerator, so retraining goes to the people who actually need it — and nobody gets a lecture for a badly worded question.</p>
           </article>
 
           <article class="card">
@@ -261,6 +262,94 @@
             <h3>Monitor and act</h3>
             <p>Watch the quality dashboard as data lands and review what gets flagged. Follow up with your field teams on the issues that come up while the enumerator is still in the area — when a correction is a phone call, not a return visit.</p>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== flow === -->
+    <section class="section section--band" id="flow">
+      <div class="container">
+        <div class="section__head section__head--center">
+          <span class="eyebrow">The quality loop</span>
+          <h2>What happens to every record that lands</h2>
+          <p>A submission arrives, gets checked, and — if something looks wrong — reaches the person who can still fix it.</p>
+        </div>
+
+        <ol class="flow">
+          <li class="flow__stage" style="--i: 0">
+            <span class="flow__rail" aria-hidden="true"><span class="flow__dot"></span></span>
+            <span class="flow__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15.5V4"/><path d="M7.5 8.5L12 4l4.5 4.5"/>
+                <path d="M4 15v3.5A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5V15"/>
+              </svg>
+            </span>
+            <h3>Submitted</h3>
+            <p>#4821 arrives from the field, audit log attached — timings, edits and all.</p>
+          </li>
+
+          <li class="flow__stage" style="--i: 1">
+            <span class="flow__rail" aria-hidden="true"><span class="flow__dot"></span></span>
+            <span class="flow__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3l7.5 3v5.7c0 4.3-3 8-7.5 9.3-4.5-1.3-7.5-5-7.5-9.3V6z"/>
+                <path d="M8.9 12.2l2.1 2.1 4.1-4.3"/>
+              </svg>
+            </span>
+            <h3>Checked</h3>
+            <p>Your rules run against it, and the open-ended answers go to the review queue.</p>
+          </li>
+
+          <li class="flow__stage" style="--i: 2">
+            <span class="flow__rail" aria-hidden="true"><span class="flow__dot"></span></span>
+            <span class="flow__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5.5 21V3.6"/><path d="M5.5 4.4h11.9l-2 3.6 2 3.6H5.5z"/>
+              </svg>
+            </span>
+            <h3>Flagged</h3>
+            <p>Completed in four minutes. It surfaces on the dashboard with the reason attached.</p>
+          </li>
+
+          <li class="flow__stage" style="--i: 3">
+            <span class="flow__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.4 12.3a7.6 7.6 0 01-10.9 6.9L4 20.6l1.4-5.4a7.6 7.6 0 1115-2.9z"/>
+                <path d="M9 12h.01M12 12h.01M15 12h.01"/>
+              </svg>
+            </span>
+            <h3>Followed up</h3>
+            <p>You reach the enumerator while they're still in the area, and mark it resolved.</p>
+          </li>
+        </ol>
+
+        <p class="flow__caption">The whole loop closes in hours, not at the end of the round.</p>
+
+        <!-- The payoff: one flag is a correction, forty is a diagnosis. -->
+        <div class="insight">
+          <div class="insight__head">
+            <h3>Then the pattern tells you something bigger</h3>
+            <p>One bad record is a correction. The same flag forty times is a question that needs rewriting, or a team that needs a refresher — and the difference between those two is visible in who is tripping over it.</p>
+          </div>
+
+          <ul class="insight__list">
+            <li class="insight__row">
+              <span class="insight__kind insight__kind--q">Question</span>
+              <span class="insight__body">
+                <strong>Q12 · Monthly income</strong>
+                <span>34 flags, spread evenly across 9 enumerators</span>
+              </span>
+              <span class="insight__verdict">Everyone struggles with it — the wording is the problem</span>
+            </li>
+            <li class="insight__row">
+              <span class="insight__kind insight__kind--e">Enumerator</span>
+              <span class="insight__body">
+                <strong>Consent module</strong>
+                <span>18 flags, 15 of them from two enumerators</span>
+              </span>
+              <span class="insight__verdict">Concentrated, not systemic — a coaching conversation</span>
+            </li>
+          </ul>
         </div>
       </div>
     </section>

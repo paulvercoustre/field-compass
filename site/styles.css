@@ -754,6 +754,198 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 .tok-str { color: #86efac; }
 .tok-num { color: #fcd34d; }
 
+/* ------------------------------------------------------- quality loop --- */
+
+.section--band {
+  background: var(--surface);
+  border-block: 1px solid var(--border);
+}
+
+.flow {
+  --rail-w: 40px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--rail-w);
+}
+
+/* Each stage runs the same 7s cycle, offset by --i, so the highlight walks
+   the pipeline. Every keyframe track STARTS and ENDS on the resting state:
+   the reduced-motion rule at the bottom of this file collapses animations to
+   their end state, and the diagram has to stay readable when it does. */
+.flow__stage {
+  position: relative;
+  padding: 24px 22px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  animation: flowStage 7s calc(var(--i) * 1.4s) infinite;
+}
+
+.flow__stage h3 {
+  font-size: 15.5px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.flow__stage p {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.flow__icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  margin-bottom: 16px;
+  animation: flowIcon 7s calc(var(--i) * 1.4s) infinite;
+}
+.flow__icon svg { width: 19px; height: 19px; }
+
+/* The connector, drawn into the grid gap to the right of each stage. */
+.flow__rail {
+  position: absolute;
+  top: 42px;
+  right: calc(-1 * var(--rail-w));
+  width: var(--rail-w);
+  height: 2px;
+  background: var(--border-strong);
+}
+.flow__dot {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  opacity: 0;
+  animation: flowDot 7s calc(var(--i) * 1.4s) infinite;
+}
+
+@keyframes flowStage {
+  0%,  6%   { border-color: var(--border); box-shadow: var(--shadow-card); }
+  10%, 20%  { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  26%, 100% { border-color: var(--border); box-shadow: var(--shadow-card); }
+}
+
+@keyframes flowIcon {
+  0%,  6%   { background: var(--surface-hover); border-color: var(--border);      color: var(--text-dim); }
+  10%, 20%  { background: var(--accent-soft);   border-color: var(--accent-line); color: var(--accent);   }
+  26%, 100% { background: var(--surface-hover); border-color: var(--border);      color: var(--text-dim); }
+}
+
+/* Travels the gap between one stage lighting up and the next. */
+@keyframes flowDot {
+  0%,  19%  { transform: translateX(0);            opacity: 0; }
+  21%       { transform: translateX(0);            opacity: 1; }
+  30%       { transform: translateX(var(--rail-w)); opacity: 1; }
+  32%, 100% { transform: translateX(var(--rail-w)); opacity: 0; }
+}
+
+.flow__caption {
+  margin-top: 26px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------- insight --- */
+
+.insight {
+  margin-top: 56px;
+  padding: 32px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+}
+
+.insight__head {
+  max-width: 700px;
+  margin-bottom: 26px;
+}
+.insight__head h3 {
+  font-size: 20px;
+  font-weight: 620;
+  margin-bottom: 10px;
+}
+.insight__head p {
+  color: var(--text-muted);
+  font-size: 15.5px;
+}
+
+.insight__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.insight__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 20px;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.insight__kind {
+  justify-self: start;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 4px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+/* Translucent fills so one value reads correctly in both themes. */
+.insight__kind--q {
+  background: rgba(99, 102, 241, 0.13);
+  border: 1px solid var(--accent-line);
+  color: var(--accent-bright);
+}
+.insight__kind--e {
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.32);
+  color: var(--warn);
+}
+
+.insight__body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.insight__body strong {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.insight__body span {
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.insight__verdict {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  padding-left: 18px;
+  border-left: 2px solid var(--accent-line);
+}
+
 /* ----------------------------------------------------------------- cta --- */
 
 .cta {
@@ -812,6 +1004,17 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   .hero__grid, .split { grid-template-columns: minmax(0, 1fr); gap: 48px; }
   .hero__sub { max-width: none; }
   .grid-3, .steps, .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Two-up wraps the pipeline, so the connectors would point at nothing. */
+  .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .flow__rail { display: none; }
+  .insight__row { grid-template-columns: auto minmax(0, 1fr); }
+  .insight__verdict {
+    grid-column: 1 / -1;
+    padding-left: 0;
+    border-left: 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
   .step:not(:last-child)::after { display: none; }
   .nav__links { display: none; }
 }
@@ -819,7 +1022,9 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 @media (max-width: 640px) {
   .section { padding-block: 76px; }
   .hero { padding-top: 56px; padding-bottom: 68px; }
-  .grid-3, .steps, .strip, .mock__stats { grid-template-columns: minmax(0, 1fr); }
+  .grid-3, .steps, .strip, .mock__stats, .flow { grid-template-columns: minmax(0, 1fr); }
+  .insight { padding: 22px; }
+  .insight__row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .mock__stats { gap: 9px; }
   .container { padding-inline: 20px; }
   .cta { padding: 46px 22px; }

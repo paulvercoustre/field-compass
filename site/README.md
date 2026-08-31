@@ -81,6 +81,14 @@ contents of `site/` as the document root. There is nothing to build.
   self-contained, drop the two `<link rel="preconnect">` tags and the
   stylesheet link, and remove `fonts.googleapis.com` / `fonts.gstatic.com`
   from the site's CSP in `deploy/caddy/Caddyfile`.
+- **The quality-loop animation** (`#flow`) is four CSS keyframe tracks offset
+  by a `--i` custom property on each stage, so the highlight walks the
+  pipeline and a dot crosses each connector exactly as the next stage lights
+  up. Every track starts and ends on the resting state, because the
+  reduced-motion rule at the bottom of `styles.css` collapses animations to
+  their end state -- with motion off the section is a clean static diagram.
+  Retiming is one number: the `7s` duration and the `1.4s` step in the
+  `calc()` delays.
 - **The dashboard illustration** in the hero is HTML and CSS, not a
   screenshot — no image assets to re-export when the UI changes, but it also
   won't update on its own. The figures in it are illustrative.
