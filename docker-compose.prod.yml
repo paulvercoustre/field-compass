@@ -10,10 +10,6 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"   # HTTP/3
-      # Marketing site. With a domain per hostname this is unused -- both names
-      # answer on 80/443. It exists for the IP-only case, where the app already
-      # occupies port 80 and the site has nowhere else to go.
-      - "8080:8080"
     environment:
       # A domain (https://app.example.org) gives real HTTPS.
       # ":80" serves plain HTTP -- demo only, passwords travel in clear.
@@ -22,9 +18,9 @@ services:
       # https://fieldcompass.example.org while the app sits on app.*.
       # Defaults to :8081, which is not published below, so an unset value
       # leaves the deployment exactly as it was. See deploy/caddy/Caddyfile.
-      WWW_ADDRESS: ${WWW_ADDRESS:-:8080}
-      # Optional www.<domain> -> apex redirect. Set alongside WWW_ADDRESS when
-      # you move to a domain; unset it binds :8082, which is not published.
+      WWW_ADDRESS: ${WWW_ADDRESS:-:8081}
+      # Optional www.<domain> -> apex redirect, only relevant if the site is
+      # served from here. Unset it binds :8082, which is not published.
       WWW_REDIRECT_FROM: ${WWW_REDIRECT_FROM:-:8082}
       # Only needed when VITE_API_URL is an absolute URL on another origin;
       # leave empty for the default same-origin "/api" setup. Must match that

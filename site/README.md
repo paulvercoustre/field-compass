@@ -99,9 +99,13 @@ fallback if the site ever moves back onto the VM.
 
 ### Fallback: serving from the VM
 
-Still supported and configured. Set `WWW_ADDRESS` (and optionally
-`WWW_REDIRECT_FROM`) in `.env` and redeploy Caddy; `site/` is bind-mounted
-read-only. Only the `_headers` file is Pages-specific and is ignored there.
+The Caddy site block is kept but **dormant** — the VM serves only the app.
+`WWW_ADDRESS` defaults to `:8081`, a port compose does not publish. Pulling the
+site back onto the VM needs *both*: set `WWW_ADDRESS`, and publish that port in
+`docker-compose.prod.yml`. `site/` is already bind-mounted read-only.
+
+`site/_headers` is a Cloudflare file and is ignored by Caddy; the header block
+in the Caddyfile is what applies there. The two are currently identical.
 
 ### Anywhere else
 

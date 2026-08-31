@@ -82,17 +82,18 @@
 # them. And the marketing page can have the looser policy it needs (webfonts)
 # without weakening the app's policy by one directive.
 #
-# WWW_ADDRESS defaults to :8080, which docker-compose.prod.yml publishes. That
-# default is for the IP-only case: with no domain the app already holds port 80,
-# so the site is served alongside it on http://<vm-ip>:8080 rather than sharing
-# a port it cannot be told apart on.
+# THIS BLOCK IS DORMANT. The marketing site is hosted on Cloudflare Workers, so
+# WWW_ADDRESS defaults to :8081 -- a port docker-compose.prod.yml does not
+# publish -- and this VM serves only the application.
 #
-# With domains, set WWW_ADDRESS to the apex name and both sites answer on
-# 80/443 by hostname; :8080 then goes unused. Point both names at this VM with
-# A records BEFORE setting it, or Caddy's certificate request will fail.
+# It is kept as the fallback for pulling the site back onto the VM. To do that
+# you need BOTH: set WWW_ADDRESS (to a hostname with an A record here, or to a
+# port), and publish that port in docker-compose.prod.yml. Note that
+# site/_headers is a Cloudflare file and is ignored here; the header block
+# below is what applies, and the two are currently identical.
 # =============================================================================
 
-{$WWW_ADDRESS::8080} {
+{$WWW_ADDRESS::8081} {
 	encode gzip zstd
 
 	header {
