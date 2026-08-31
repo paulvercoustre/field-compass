@@ -371,30 +371,6 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   align-items: center;
 }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 13px 6px 8px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 26px;
-}
-.pill strong {
-  color: var(--accent-bright);
-  font-weight: 600;
-  background: var(--accent-soft);
-  border-radius: 999px;
-  padding: 2px 9px;
-  font-size: 12px;
-  /* the badge itself must never break across lines on narrow screens */
-  white-space: nowrap;
-}
-
 .hero h1 {
   font-size: clamp(38px, 5.4vw, 58px);
   letter-spacing: -0.032em;
@@ -615,9 +591,11 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 /* ------------------------------------------------------------ audience --- */
 
 .audience {
-  padding-block: 72px;
+  padding-block: 72px 36px;
   text-align: center;
 }
+/* The strip is a trust bar, not a section in its own right. */
+.audience + .section { padding-top: 60px; }
 .audience__lead {
   font-size: 17px;
   color: var(--text-muted);
@@ -963,148 +941,6 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   color: var(--text-dim);
 }
 
-/* ------------------------------------------------------------- insight --- */
-
-.insight {
-  margin-top: 56px;
-  padding: 32px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-card);
-}
-
-.insight__head {
-  max-width: 720px;
-  margin-bottom: 28px;
-}
-.insight__head h3 {
-  font-size: 21px;
-  font-weight: 620;
-  margin-bottom: 10px;
-}
-.insight__head p {
-  color: var(--text-muted);
-  font-size: 15.5px;
-}
-
-.insight__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-}
-
-.insight__panel {
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.insight__panel-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.insight__panel-head h4 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 620;
-}
-.insight__panel-head span {
-  font-size: 11.5px;
-  color: var(--text-dim);
-}
-
-/* horizontal bars ---------------------------------------------------------- */
-
-.bars {
-  list-style: none;
-  margin: 0 0 18px;
-  padding: 0;
-  display: grid;
-  gap: 11px;
-}
-
-.bars__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 84px 26px;
-  gap: 12px;
-  align-items: center;
-}
-
-.bars__label {
-  font-size: 13px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bars__track {
-  height: 7px;
-  border-radius: 999px;
-  background: var(--surface-hover);
-  overflow: hidden;
-}
-.bars__fill {
-  display: block;
-  height: 100%;
-  width: var(--v);
-  border-radius: 999px;
-  background: var(--border-strong);
-}
-
-.bars__n {
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--text-dim);
-}
-
-/* The rows that carry the finding get the colour; the rest stay quiet. */
-.bars__row--lead .bars__label { color: var(--text); font-weight: 550; }
-.bars__row--lead .bars__n     { color: var(--text); font-weight: 600; }
-.bars__row--lead .bars__fill  { background: var(--accent); }
-.bars--alt .bars__row--lead .bars__fill { background: var(--warn); }
-
-/* the takeaway ------------------------------------------------------------- */
-
-.insight__read {
-  margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--text-muted);
-}
-.insight__read strong {
-  color: var(--text);
-  font-weight: 620;
-}
-
-.insight__close {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
-  font-size: 15px;
-  color: var(--text-muted);
-}
-
-.insight__read-tag {
-  display: block;
-  font-size: 10.5px;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-bright);
-  margin-bottom: 5px;
-}
-
 /* ----------------------------------------------------------------- cta --- */
 
 .cta {
@@ -1166,7 +1002,7 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   /* Two-up wraps the pipeline, so the connectors would point at nothing. */
   .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
   .flow__rail { display: none; }
-  .insight__grid { grid-template-columns: minmax(0, 1fr); }
+
   .step:not(:last-child)::after { display: none; }
   .nav__links { display: none; }
 }
@@ -1175,19 +1011,17 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   .section { padding-block: 76px; }
   .hero { padding-top: 56px; padding-bottom: 68px; }
   .grid-3, .steps, .strip, .mock__stats, .flow { grid-template-columns: minmax(0, 1fr); }
-  .insight { padding: 22px; }
-  .audience { padding-block: 56px; }
+  .audience { padding-block: 56px 28px; }
+  .audience + .section { padding-top: 48px; }
   .audience__lead { font-size: 15.5px; }
   /* Scale the strip rather than the individual logos, so the optical balance
      tuned on desktop survives. */
   .marquee { --gap: 42px; --logo-scale: 0.7; padding-block: 24px; }
   .marquee__group li { height: 60px; }
   .marquee__group img { max-width: 165px; }
-  .bars__row { grid-template-columns: minmax(0, 1fr) 56px 24px; gap: 10px; }
   .mock__stats { gap: 9px; }
   .container { padding-inline: 20px; }
   .cta { padding: 46px 22px; }
-  .pill { align-items: flex-start; font-size: 12.5px; line-height: 1.45; }
   .nav__inner { gap: 14px; }
   .nav__actions { gap: 8px; }
   .btn--quiet { padding-inline: 2px; }
