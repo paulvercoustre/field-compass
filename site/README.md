@@ -102,7 +102,10 @@ contents of `site/` as the document root. There is nothing to build.
 - **Logo sizing.** These marks range from 0.49 to 4.16 in aspect ratio, so a
   single height would turn the tall ones into slivers. Each `<li>` sets a `--h`
   tuned by eye for equal visual weight; set one when adding a logo rather than
-  copying a neighbour's.
+  copying a neighbour's. To resize the whole strip, change `--logo-scale` on
+  `.marquee` (mobile already drops it to 0.7) and the row height on
+  `.marquee__group li` -- never the individual `--h` values, or the balance
+  goes. The strip uses `.container--wide` so it runs past the prose column.
 - **Logo files** live in `site/logos/`. Three things to check on any new SVG,
   each of which silently breaks an `<img>`-loaded file:
   1. `xmlns="http://www.w3.org/2000/svg"` must be present. Inline in HTML the
@@ -120,10 +123,9 @@ contents of `site/` as the document root. There is nothing to build.
   high-precision path data. Running the folder through SVGO would cut it
   sharply. Everything is `loading="lazy"` and below the fold, so it is not
   urgent.
-- **Only add a logo with the organisation's agreement.** The lead line reads
-  "Teams from these organisations are joining the beta" rather than "Trusted
-  by" because that is what is actually true today; keep it accurate as the
-  relationships change.
+- **Only add a logo with the organisation's agreement**, and keep the lead line
+  honest as those relationships change. It currently reads "Trusted by teams at
+  the world's leading humanitarian and development organisations".
 - **The dashboard illustration** in the hero is HTML and CSS, not a
   screenshot — no image assets to re-export when the UI changes, but it also
   won't update on its own. The figures in it are illustrative.

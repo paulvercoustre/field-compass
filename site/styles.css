@@ -52,6 +52,7 @@
   --radius-lg: 22px;
 
   --container: 1120px;
+  --container-wide: 1400px;
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -172,6 +173,8 @@ p { margin: 0; }
   margin-inline: auto;
   padding-inline: 24px;
 }
+
+.container--wide { max-width: var(--container-wide); }
 
 .skip-link {
   position: absolute;
@@ -616,9 +619,11 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   text-align: center;
 }
 .audience__lead {
-  font-size: 15.5px;
+  font-size: 17px;
   color: var(--text-muted);
-  margin-bottom: 26px;
+  margin-bottom: 34px;
+  max-width: 620px;
+  margin-inline: auto;
 }
 .audience__note {
   font-size: 13.5px;
@@ -637,10 +642,12 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 /* The mask lives here and not on .logosheet, or it would fade the sheet's own
    border out at both ends. */
 .marquee {
-  --gap: 58px;
+  --gap: 76px;
+  /* One knob scales the whole strip; the per-logo --h values stay relative. */
+  --logo-scale: 1;
   position: relative;
   overflow: hidden;
-  padding-block: 26px;
+  padding-block: 38px;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
           mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
 }
@@ -677,13 +684,13 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   display: grid;
   place-items: center;
   flex: none;
-  height: 58px;
+  height: 84px;
 }
 
 .marquee__group img {
-  height: var(--h, 34px);
+  height: calc(var(--h, 48px) * var(--logo-scale));
   width: auto;
-  max-width: 170px;
+  max-width: 240px;
   display: block;
 }
 
@@ -1075,6 +1082,19 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   line-height: 1.6;
   color: var(--text-muted);
 }
+.insight__read strong {
+  color: var(--text);
+  font-weight: 620;
+}
+
+.insight__close {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 15px;
+  color: var(--text-muted);
+}
+
 .insight__read-tag {
   display: block;
   font-size: 10.5px;
@@ -1157,9 +1177,12 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   .grid-3, .steps, .strip, .mock__stats, .flow { grid-template-columns: minmax(0, 1fr); }
   .insight { padding: 22px; }
   .audience { padding-block: 56px; }
-  .marquee { --gap: 36px; padding-block: 20px; }
-  .marquee__group li { height: 46px; }
-  .marquee__group img { max-width: 128px; }
+  .audience__lead { font-size: 15.5px; }
+  /* Scale the strip rather than the individual logos, so the optical balance
+     tuned on desktop survives. */
+  .marquee { --gap: 42px; --logo-scale: 0.7; padding-block: 24px; }
+  .marquee__group li { height: 60px; }
+  .marquee__group img { max-width: 165px; }
   .bars__row { grid-template-columns: minmax(0, 1fr) 56px 24px; gap: 10px; }
   .mock__stats { gap: 9px; }
   .container { padding-inline: 20px; }
