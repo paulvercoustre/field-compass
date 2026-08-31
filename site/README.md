@@ -45,7 +45,27 @@ Then open <http://localhost:4321>.
 
 ## 3. Deploy
 
-### On the existing VM (recommended)
+### Current deployment: the Azure VM, IP only
+
+The CTAs point at `http://20.107.221.180`, and the site is served alongside the
+app on the same VM:
+
+| | Address |
+| --- | --- |
+| App | `http://20.107.221.180/` (`SITE_ADDRESS=:80`) |
+| Marketing site | `http://20.107.221.180:8080/` (`WWW_ADDRESS=:8080`) |
+
+Two ports rather than two hostnames, because with no domain there is no way to
+tell the sites apart on port 80. `docker-compose.prod.yml` publishes 8080 for
+this.
+
+**This is a demo topology, not a launch one.** There is no HTTPS — Let's
+Encrypt cannot certify a bare IP — so every password typed into the login form
+crosses the network in clear. The site links people to that form, and the page
+now carries partner logos. Point a domain at the VM before real accounts exist;
+Caddy then obtains certificates on its own and the split below applies.
+
+### With a domain (recommended for launch)
 
 The site and the app are served by the same Caddy, on two hostnames. This keeps
 the app's session cookies and its strict CSP on an origin the public page can't

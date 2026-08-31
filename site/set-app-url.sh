@@ -12,20 +12,42 @@ set -euo pipefail
 
 HTML="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/index.html"
 
-if [ $# -ne 1 ]; then
-  echo "usage: $(basename "$0") <app-url>" >&2
+ALLOW_INSECURE=0
+ARGS=()
+for a in "$@"; do
+  case "$a" in
+    --allow-insecure) ALLOW_INSECURE=1 ;;
+    *) ARGS+=("$a") ;;
+  esac
+done
+
+if [ ${#ARGS[@]} -ne 1 ]; then
+  echo "usage: $(basename "$0") [--allow-insecure] <app-url>" >&2
   echo "example: $(basename "$0") https://app.fieldcompass.org" >&2
   exit 64
 fi
 
-NEW="${1%/}"   # tolerate a trailing slash
+NEW="${ARGS[0]%/}"   # tolerate a trailing slash
 
 case "$NEW" in
   https://*|http://localhost*|http://127.0.0.1*) ;;
   http://*)
-    echo "refusing: $NEW is plain HTTP. Passwords would cross the network in" >&2
-    echo "clear. Use https:// (or localhost for development)." >&2
-    exit 1 ;;
+    if [ "$ALLOW_INSECURE" -eq 1 ]; then
+      echo "WARNING: $NEW is plain HTTP." >&2
+      echo "  These buttons carry people to a login form. Over HTTP every" >&2
+      echo "  password typed there crosses the network in clear, and any" >&2
+      echo "  network in between can read it." >&2
+      echo "  Let's Encrypt cannot issue a certificate for a bare IP, so the" >&2
+      echo "  fix is a domain pointed at the VM -- then Caddy gets a cert on" >&2
+      echo "  its own. Acceptable meanwhile only for a demo with throwaway" >&2
+      echo "  accounts and no real users." >&2
+      echo >&2
+    else
+      echo "refusing: $NEW is plain HTTP. Passwords would cross the network in" >&2
+      echo "clear. Use https:// (or localhost for development)." >&2
+      echo "If this is a throwaway demo, re-run with --allow-insecure." >&2
+      exit 1
+    fi ;;
   *)
     echo "refusing: $NEW does not start with a scheme (https://...)" >&2
     exit 1 ;;
