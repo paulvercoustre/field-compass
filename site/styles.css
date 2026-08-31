@@ -604,6 +604,57 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 }
 .strip__item p { font-size: 14.5px; color: var(--text-muted); }
 
+/* ------------------------------------------------------------ audience --- */
+
+.audience {
+  padding-block: 72px;
+  text-align: center;
+}
+.audience__lead {
+  font-size: 15.5px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+.audience__list {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+.audience__list li {
+  font-size: 15.5px;
+  font-weight: 550;
+  color: var(--text);
+  padding: 4px 22px;
+  line-height: 1.3;
+  border-right: 1px solid var(--border);
+}
+.audience__list li:last-child { border-right: 0; }
+.audience__note {
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+
+/* Slot for real marks once there are real references to show. */
+.audience__logos {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 20px 44px;
+}
+.audience__logos img {
+  height: 28px;
+  width: auto;
+  opacity: 0.75;
+}
+
 /* ------------------------------------------------------------ features --- */
 
 .grid-3 {
@@ -782,7 +833,9 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   border: 1px solid var(--border);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-card);
-  animation: flowStage 7s calc(var(--i) * 1.4s) infinite;
+  /* `backwards` matters: without it every stage would sit fully drawn during
+     its delay and then pop to hidden when the animation finally starts. */
+  animation: flowStage 7s calc(var(--i) * 1.4s) infinite backwards;
 }
 
 .flow__stage h3 {
@@ -805,7 +858,7 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   border: 1px solid var(--border);
   color: var(--text-dim);
   margin-bottom: 16px;
-  animation: flowIcon 7s calc(var(--i) * 1.4s) infinite;
+  animation: flowIcon 7s calc(var(--i) * 1.4s) infinite backwards;
 }
 .flow__icon svg { width: 19px; height: 19px; }
 
@@ -829,19 +882,31 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   background: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
   opacity: 0;
-  animation: flowDot 7s calc(var(--i) * 1.4s) infinite;
+  animation: flowDot 7s calc(var(--i) * 1.4s) infinite backwards;
 }
 
 @keyframes flowStage {
-  0%,  6%   { border-color: var(--border); box-shadow: var(--shadow-card); }
-  10%, 20%  { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
-  26%, 100% { border-color: var(--border); box-shadow: var(--shadow-card); }
+  /* arrives */
+  0%   { opacity: 0; transform: translateY(16px) scale(0.965);
+         border-color: var(--border); box-shadow: var(--shadow-card); }
+  7%   { opacity: 1; transform: translateY(0) scale(1); }
+  /* lights up as the record reaches it */
+  10%  { transform: translateY(-4px) scale(1);
+         border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  20%  { transform: translateY(-4px) scale(1);
+         border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  /* settles, and holds while the rest of the pipeline catches up */
+  27%  { transform: translateY(0) scale(1);
+         border-color: var(--border); box-shadow: var(--shadow-card); }
+  90%  { opacity: 1; transform: translateY(0) scale(1); }
+  /* clears out so the next record can arrive */
+  100% { opacity: 0; transform: translateY(-12px) scale(0.985); }
 }
 
 @keyframes flowIcon {
-  0%,  6%   { background: var(--surface-hover); border-color: var(--border);      color: var(--text-dim); }
-  10%, 20%  { background: var(--accent-soft);   border-color: var(--accent-line); color: var(--accent);   }
-  26%, 100% { background: var(--surface-hover); border-color: var(--border);      color: var(--text-dim); }
+  0%,  7%   { background: var(--surface-hover); border-color: var(--border);      color: var(--text-dim); transform: scale(1); }
+  10%, 20%  { background: var(--accent-soft);   border-color: var(--accent-line); color: var(--accent);   transform: scale(1.1); }
+  27%, 100% { background: var(--surface-hover); border-color: var(--border);      color: var(--text-dim); transform: scale(1); }
 }
 
 /* Travels the gap between one stage lighting up and the next. */
@@ -871,11 +936,11 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 }
 
 .insight__head {
-  max-width: 700px;
-  margin-bottom: 26px;
+  max-width: 720px;
+  margin-bottom: 28px;
 }
 .insight__head h3 {
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 620;
   margin-bottom: 10px;
 }
@@ -884,66 +949,108 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   font-size: 15.5px;
 }
 
-.insight__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.insight__grid {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
 }
 
-.insight__row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: 20px;
-  align-items: center;
-  padding: 16px 18px;
+.insight__panel {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);
 }
 
-.insight__kind {
-  justify-self: start;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 4px 11px;
-  border-radius: 999px;
+.insight__panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.insight__panel-head h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 620;
+}
+.insight__panel-head span {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* horizontal bars ---------------------------------------------------------- */
+
+.bars {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: grid;
+  gap: 11px;
+}
+
+.bars__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px 26px;
+  gap: 12px;
+  align-items: center;
+}
+
+.bars__label {
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Translucent fills so one value reads correctly in both themes. */
-.insight__kind--q {
-  background: rgba(99, 102, 241, 0.13);
-  border: 1px solid var(--accent-line);
+
+.bars__track {
+  height: 7px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  overflow: hidden;
+}
+.bars__fill {
+  display: block;
+  height: 100%;
+  width: var(--v);
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.bars__n {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-dim);
+}
+
+/* The rows that carry the finding get the colour; the rest stay quiet. */
+.bars__row--lead .bars__label { color: var(--text); font-weight: 550; }
+.bars__row--lead .bars__n     { color: var(--text); font-weight: 600; }
+.bars__row--lead .bars__fill  { background: var(--accent); }
+.bars--alt .bars__row--lead .bars__fill { background: var(--warn); }
+
+/* the takeaway ------------------------------------------------------------- */
+
+.insight__read {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.insight__read-tag {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--accent-bright);
-}
-.insight__kind--e {
-  background: rgba(251, 191, 36, 0.14);
-  border: 1px solid rgba(251, 191, 36, 0.32);
-  color: var(--warn);
-}
-
-.insight__body {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.insight__body strong {
-  font-size: 14.5px;
-  font-weight: 600;
-}
-.insight__body span {
-  font-size: 13.5px;
-  color: var(--text-muted);
-}
-
-.insight__verdict {
-  font-size: 13.5px;
-  color: var(--text-muted);
-  padding-left: 18px;
-  border-left: 2px solid var(--accent-line);
+  margin-bottom: 5px;
 }
 
 /* ----------------------------------------------------------------- cta --- */
@@ -1007,14 +1114,7 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   /* Two-up wraps the pipeline, so the connectors would point at nothing. */
   .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
   .flow__rail { display: none; }
-  .insight__row { grid-template-columns: auto minmax(0, 1fr); }
-  .insight__verdict {
-    grid-column: 1 / -1;
-    padding-left: 0;
-    border-left: 0;
-    padding-top: 10px;
-    border-top: 1px solid var(--border);
-  }
+  .insight__grid { grid-template-columns: minmax(0, 1fr); }
   .step:not(:last-child)::after { display: none; }
   .nav__links { display: none; }
 }
@@ -1024,7 +1124,10 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
   .hero { padding-top: 56px; padding-bottom: 68px; }
   .grid-3, .steps, .strip, .mock__stats, .flow { grid-template-columns: minmax(0, 1fr); }
   .insight { padding: 22px; }
-  .insight__row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .audience { padding-block: 56px; }
+  .audience__list { display: grid; gap: 9px; }
+  .audience__list li { border-right: 0; padding: 0; }
+  .bars__row { grid-template-columns: minmax(0, 1fr) 56px 24px; gap: 10px; }
   .mock__stats { gap: 9px; }
   .container { padding-inline: 20px; }
   .cta { padding: 46px 22px; }
@@ -1039,6 +1142,19 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+
+  /* The blanket rule below collapses animations to their END state. For the
+     pipeline that frame is "cleared out" -- an empty section. Stop those
+     animations outright instead and let the base styles show: the resting,
+     fully drawn diagram. Specificity beats the `*` rule regardless of order. */
+  .flow__stage,
+  .flow__icon {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* The travelling dot has no meaning standing still; its base state is hidden. */
+  .flow__dot { animation: none !important; }
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;

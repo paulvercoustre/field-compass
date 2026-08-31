@@ -81,14 +81,20 @@ contents of `site/` as the document root. There is nothing to build.
   self-contained, drop the two `<link rel="preconnect">` tags and the
   stylesheet link, and remove `fonts.googleapis.com` / `fonts.gstatic.com`
   from the site's CSP in `deploy/caddy/Caddyfile`.
-- **The quality-loop animation** (`#flow`) is four CSS keyframe tracks offset
-  by a `--i` custom property on each stage, so the highlight walks the
-  pipeline and a dot crosses each connector exactly as the next stage lights
-  up. Every track starts and ends on the resting state, because the
-  reduced-motion rule at the bottom of `styles.css` collapses animations to
-  their end state -- with motion off the section is a clean static diagram.
-  Retiming is one number: the `7s` duration and the `1.4s` step in the
-  `calc()` delays.
+- **The quality-loop animation** (`#flow`) is CSS only. Each stage runs the
+  same 7s keyframe track offset by a `--i` custom property, so stages fade in
+  one after another, light up as the record reaches them, then clear out for
+  the next cycle; a dot crosses each connector to arrive exactly as the next
+  stage lights up. `animation-fill-mode: backwards` keeps a stage hidden
+  during its delay instead of showing it fully drawn and then popping. Under
+  `prefers-reduced-motion` the animations are switched off entirely rather
+  than collapsed to their end frame -- that frame is "cleared out", so
+  collapsing would empty the section. Retiming is two numbers: the `7s`
+  duration and the `1.4s` step in the `calc()` delays.
+- **No customer logos.** `#audience` states who the tool is built for, not who
+  uses it. The HTML above it carries the markup and instructions for a real
+  logo wall; use it only with actual deployments and written permission from
+  each organisation.
 - **The dashboard illustration** in the hero is HTML and CSS, not a
   screenshot — no image assets to re-export when the UI changes, but it also
   won't update on its own. The figures in it are illustrative.

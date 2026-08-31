@@ -174,6 +174,38 @@
       </div>
     </div>
 
+    <!-- ==================================================== audience === -->
+    <!--
+      A logo wall belongs here — but only with real deployments behind it and
+      written sign-off from each organisation's comms team. Marks for UN
+      agencies and the large INGOs are trademarked and their use is policed;
+      showing them without a relationship is a false claim of endorsement, and
+      it is the first thing a procurement officer will check.
+
+      When you have one real reference, drop SVGs into site/logos/ and replace
+      the <ul> below with:
+        <ul class="audience__logos">
+          <li><img src="logos/example.svg" alt="Example Organisation" height="28"></li>
+        </ul>
+      and change the lead line to "Trusted by".
+
+      Until then this says who the tool is BUILT FOR, which is true, rather
+      than who uses it, which is not yet.
+    -->
+    <section class="section audience" aria-labelledby="audience-lead">
+      <div class="container">
+        <p class="audience__lead" id="audience-lead">Built for the teams who run field surveys at scale</p>
+        <ul class="audience__list">
+          <li>UN agencies</li>
+          <li>International NGOs</li>
+          <li>National statistics offices</li>
+          <li>Research institutes</li>
+          <li>Monitoring &amp; evaluation teams</li>
+        </ul>
+        <p class="audience__note">Works with any KoboToolbox project — the collection platform these teams already run in the field.</p>
+      </div>
+    </section>
+
     <!-- ==================================================== features === -->
     <section class="section" id="features">
       <div class="container">
@@ -325,31 +357,80 @@
 
         <p class="flow__caption">The whole loop closes in hours, not at the end of the round.</p>
 
-        <!-- The payoff: one flag is a correction, forty is a diagnosis. -->
+        <!-- Names the capability first; the interpretation follows from it. -->
         <div class="insight">
           <div class="insight__head">
-            <h3>Then the pattern tells you something bigger</h3>
-            <p>One bad record is a correction. The same flag forty times is a question that needs rewriting, or a team that needs a refresher — and the difference between those two is visible in who is tripping over it.</p>
+            <h3>Every flag, grouped by question and by enumerator</h3>
+            <p>The same flags, counted two ways. Read the pair together and the fix picks itself: a question that trips up the whole team needs rewriting, while a fault concentrated in two people is a briefing.</p>
           </div>
 
-          <ul class="insight__list">
-            <li class="insight__row">
-              <span class="insight__kind insight__kind--q">Question</span>
-              <span class="insight__body">
-                <strong>Q12 · Monthly income</strong>
-                <span>34 flags, spread evenly across 9 enumerators</span>
-              </span>
-              <span class="insight__verdict">Everyone struggles with it — the wording is the problem</span>
-            </li>
-            <li class="insight__row">
-              <span class="insight__kind insight__kind--e">Enumerator</span>
-              <span class="insight__body">
-                <strong>Consent module</strong>
-                <span>18 flags, 15 of them from two enumerators</span>
-              </span>
-              <span class="insight__verdict">Concentrated, not systemic — a coaching conversation</span>
-            </li>
-          </ul>
+          <div class="insight__grid">
+            <section class="insight__panel">
+              <div class="insight__panel-head">
+                <h4>Most flagged questions</h4>
+                <span>this round</span>
+              </div>
+              <ul class="bars">
+                <li class="bars__row bars__row--lead">
+                  <span class="bars__label">Q12 · Monthly income</span>
+                  <span class="bars__track"><span class="bars__fill" style="--v: 100%"></span></span>
+                  <span class="bars__n">34</span>
+                </li>
+                <li class="bars__row">
+                  <span class="bars__label">Q7 · Consent given</span>
+                  <span class="bars__track"><span class="bars__fill" style="--v: 53%"></span></span>
+                  <span class="bars__n">18</span>
+                </li>
+                <li class="bars__row">
+                  <span class="bars__label">Q23 · Household roster</span>
+                  <span class="bars__track"><span class="bars__fill" style="--v: 32%"></span></span>
+                  <span class="bars__n">11</span>
+                </li>
+                <li class="bars__row">
+                  <span class="bars__label">Q4 · GPS accuracy</span>
+                  <span class="bars__track"><span class="bars__fill" style="--v: 18%"></span></span>
+                  <span class="bars__n">6</span>
+                </li>
+              </ul>
+              <p class="insight__read">
+                <span class="insight__read-tag">Reads as</span>
+                Q12's 34 flags are spread evenly across 9 enumerators. Nobody is getting it right, so the wording is the problem — not the team.
+              </p>
+            </section>
+
+            <section class="insight__panel">
+              <div class="insight__panel-head">
+                <h4>Flags by enumerator</h4>
+                <span>consent module</span>
+              </div>
+              <ul class="bars bars--alt">
+                <li class="bars__row bars__row--lead">
+                  <span class="bars__label">A. Diallo</span>
+                  <span class="bars__track"><span class="bars__fill" style="--v: 100%"></span></span>
+                  <span class="bars__n">9</span>
+                </li>
+                <li class="bars__row bars__row--lead">
+                  <span class="bars__label">M. Traoré</span>
+                  <span class="bars__track"><span class="bars__fill" style="--v: 67%"></span></span>
+                  <span class="bars__n">6</span>
+                </li>
+                <li class="bars__row">
+                  <span class="bars__label">F. Camara</span>
+                  <span class="bars__track"><span class="bars__fill" style="--v: 22%"></span></span>
+                  <span class="bars__n">2</span>
+                </li>
+                <li class="bars__row">
+                  <span class="bars__label">Seven others</span>
+                  <span class="bars__track"><span class="bars__fill" style="--v: 11%"></span></span>
+                  <span class="bars__n">1</span>
+                </li>
+              </ul>
+              <p class="insight__read">
+                <span class="insight__read-tag">Reads as</span>
+                Two enumerators account for 15 of the 18 consent flags. The form is fine — this is a coaching conversation, and a short one.
+              </p>
+            </section>
+          </div>
         </div>
       </div>
     </section>
