@@ -84,4 +84,10 @@ contents of `site/` as the document root. There is nothing to build.
 - **The dashboard illustration** in the hero is HTML and CSS, not a
   screenshot — no image assets to re-export when the UI changes, but it also
   won't update on its own. The figures in it are illustrative.
-- **Dark only, by design**, matching the application.
+- **Light and dark.** The page follows the visitor's OS setting via
+  `prefers-color-scheme`, the same mechanism as the app's `darkMode: 'media'`.
+  Light is the default. The dashboard mock, the code sample and the CTA band
+  stay dark in both themes -- they opt into a set of inverted tokens defined in
+  one block in `styles.css`, so a dark screenshot sits on a light page. To
+  change a colour, edit the tokens at the top of `styles.css`; nothing below
+  hardcodes a palette value.
