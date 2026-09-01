@@ -90,6 +90,21 @@ a bad look. Note that wrangler's "Read N files" line is a raw directory count
 printed *before* ignore filtering — it does not shrink when you add ignores, so
 verify after deploying by requesting `/set-app-url.sh` and expecting a 404.
 
+### CI check
+
+`.github/workflows/ci-cd.yml` has a `verify-marketing-site` job that runs on
+every push to `main`. Cloudflare deploys this site entirely outside that
+pipeline, so nothing else notices when that deploy breaks.
+
+It asserts, with retries to allow for Cloudflare's build finishing after the
+workflow starts: the page returns 200; it is the marketing page and not the app
+shell; the CSP and framing headers are present; the CTAs point at the app with
+no placeholder host left behind; and `set-app-url.sh` and `README.md` still 404.
+
+It does **not** check that the newest commit is live — there is no build step
+and so no version stamp to match against. It catches a broken deploy or a
+config regression, not a stale one.
+
 ### Security headers### Security headers
 
 `site/_headers` carries them, because **Caddy no longer serves this site** and
