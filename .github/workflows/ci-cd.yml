@@ -445,3 +445,81 @@ jobs:
           || { echo "::error::Site did not report healthy from outside"; exit 1; }
         echo "✓ Deployed and serving"
 
+
+  # ---------------------------------------------------------------------------
+  # The marketing site is deployed by Cloudflare, from site/ on main, entirely
+  # outside this pipeline. Nothing here can fail when that deploy breaks, so
+  # this job is the only thing watching it.
+  #
+  # It does NOT assert that the newest commit is live: the site has no build
+  # step and so no version stamp to match against. It asserts the invariants
+  # that break loudly if the deploy failed or the configuration regressed.
+  # ---------------------------------------------------------------------------
+  verify-marketing-site:
+    name: Verify the marketing site
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - name: Probe the published site
+      env:
+        MARKETING_URL: ${{ vars.MARKETING_URL || 'https://fieldcompass.org' }}
+        SITE_URL: ${{ vars.SITE_URL }}
+      run: |
+        set -euo pipefail
+        BASE="${MARKETING_URL%/}"
+        APP="${SITE_URL:-https://app.fieldcompass.org}"
+
+        # Cloudflare's build runs in parallel with this workflow, so the new
+        # version may not be live yet. Retry rather than race it.
+        CODE=000
+        for i in $(seq 1 20); do
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$BASE/" || echo 000)
+          if [ "$CODE" = "200" ]; then break; fi
+          echo "  attempt $i: HTTP $CODE — retrying"
+          sleep 6
+        done
+        if [ "$CODE" != "200" ]; then
+          echo "::error::$BASE did not return 200 (last: $CODE)"; exit 1
+        fi
+        echo "✓ $BASE returns 200"
+
+        BODY=$(curl -fsS --max-time 15 "$BASE/")
+        HEADERS=$(curl -fsSI --max-time 15 "$BASE/")
+
+        # The marketing page, not the app shell. Wrangler's framework detection
+        # once deployed the React build here; this is the guard against that.
+        if ! echo "$BODY" | grep -q "Data quality for KoboToolbox surveys"; then
+          echo "::error::unexpected page content at $BASE"; exit 1
+        fi
+        if echo "$BODY" | grep -q 'id="root"'; then
+          echo "::error::the app shell is being served at $BASE, not the site"; exit 1
+        fi
+        echo "✓ serving the marketing page"
+
+        # site/_headers is the only thing applying these -- Caddy does not serve
+        # this site. Deleting that file would otherwise fail silently.
+        for h in content-security-policy x-frame-options x-content-type-options; do
+          if ! echo "$HEADERS" | grep -qi "^$h:"; then
+            echo "::error::missing $h header"; exit 1
+          fi
+        done
+        echo "✓ security headers present"
+
+        # CTAs reach the app, and no placeholder host survived a find/replace.
+        if ! echo "$BODY" | grep -q "$APP"; then
+          echo "::error::no links to $APP — CTAs may hold a stale host"; exit 1
+        fi
+        if echo "$BODY" | grep -q "app\.example\.com"; then
+          echo "::error::placeholder app URL is live on the site"; exit 1
+        fi
+        echo "✓ CTAs point at $APP"
+
+        # site/.assetsignore keeps these out of the upload.
+        for p in set-app-url.sh README.md; do
+          C=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$BASE/$p" || echo 000)
+          if [ "$C" != "404" ]; then
+            echo "::error::/$p is publicly served (HTTP $C)"; exit 1
+          fi
+        done
+        echo "✓ non-site files are not published"
