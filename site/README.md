@@ -159,10 +159,17 @@ lose the CSP.
   these organisations' brand guidelines forbid recolouring. That is also why
   the strip sits on a light sheet in *both* themes: several marks are black or
   navy and would vanish on the dark theme, so the surface adapts, not the mark.
-- **`care.svg` is 236KB**, about 40% of the 560KB logo payload, from very
-  high-precision path data. Running the folder through SVGO would cut it
-  sharply. Everything is `loading="lazy"` and below the fold, so it is not
-  urgent.
+- **Optimising logos.** New SVGs should go through SVGO before committing:
+  ```bash
+  npx svgo --folder site/logos --config svgo.config.js
+  ```
+  The config lives at the repo root (so it is not published) and exists mainly
+  to turn **`removeViewBox` off**. SVGO's default preset drops `viewBox` when
+  `width`/`height` are present, and the carousel sizes every logo by height
+  with `width: auto` — without a viewBox the artwork cannot scale and the marks
+  break. It halved the payload (540KB → 265KB) with no visible change; verify
+  after running that every file still has `xmlns`, `width`, `height` and its
+  `viewBox`.
 - **Only add a logo with the organisation's agreement**, and keep the lead line
   honest as those relationships change. It currently reads "Trusted by teams at
   the world's leading humanitarian and development organisations".

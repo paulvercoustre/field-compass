@@ -12,6 +12,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "field-compass",
   "compatibility_date": "2026-08-01",
+  // The site is reachable at fieldcompass.org. Leaving workers.dev on would
+  // publish a second copy at field-compass.<account>.workers.dev — a duplicate
+  // URL for every page, which splits search ranking and gives out an address
+  // that is not the brand. Preview URLs go with it, which is fine: builds for
+  // non-production branches are off.
+  "workers_dev": false,
+  "preview_urls": false,
   "assets": {
     "directory": "./site"
   }
