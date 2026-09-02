@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { createSurvey, SurveyCreate } from '../services/progressApi';
-import { parseKoboTool, KoboToolData } from '../services/koboParser';
+import { KoboToolData } from '../services/koboParser';
 import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
 import { generateUUID } from '../utils/uuid';
 import { StagedRule } from '../types';
@@ -13,6 +13,10 @@ import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import QualityCheckPromptModal from '../components/QualityCheckPromptModal';
+import InfoTip from '../components/ui/InfoTip';
+import { parseKoboAssetId, looksLikeUrl, labelColumnFor } from '../utils/koboUrl';
+import { getKoboProjectForm, KoboProjectForm } from '../services/api';
+import { CORE_IDENTIFIER_HELP, KOBO_LINK_HELP } from '../constants/coreIdentifiers';
 
 const CreateSurveyPage: React.FC = () => {
   const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
@@ -24,8 +28,6 @@ const CreateSurveyPage: React.FC = () => {
 
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
-  const [koboToolFileName, setKoboToolFileName] = useState<string>('');
-  const [isLoadingTool, setIsLoadingTool] = useState(false);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
 
   // Sampling frame CSV state
@@ -38,15 +40,28 @@ const CreateSurveyPage: React.FC = () => {
 
   // Form state
   const [surveyName, setSurveyName] = useState('');
-  const [koboAssetId, setKoboAssetId] = useState('');
+  // The user pastes the link to their project; the identifier is derived from
+  // it. Kobo's own interface never shows the term "asset ID", so asking for one
+  // asks people to know a word they have never seen.
+  const [koboLink, setKoboLink] = useState('');
+  const koboAssetId = parseKoboAssetId(koboLink);
+
+  const [isLoadingProjectForm, setIsLoadingProjectForm] = useState(false);
+  const [projectFormError, setProjectFormError] = useState<string | null>(null);
+  const [projectFormName, setProjectFormName] = useState<string | null>(null);
+  // Which translation to show. The form tells us which exist, so this is a
+  // choice between real languages rather than a spreadsheet column name.
+  const [formLanguages, setFormLanguages] = useState<string[]>([]);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('');
   const [coreIdentifiers, setCoreIdentifiers] = useState({
-    uuid: '_uuid',
-    enumerator: 'enumerator_id',
+    uuid: '_uuid',  // always supplied by Kobo as submission metadata
+    // Form-dependent: never pre-fill a field the user did not choose. A form
+    // may name these anything, or not have them at all.
+    enumerator: '',
     date_interview: 'today',
     start_time: 'start',
     end_time: 'end',
-    consent: 'consent',
-    audit: 'audit_URL',
+    consent: '',
   });
   const [samplingFrame, setSamplingFrame] = useState({
     sampling_cols: [] as string[],
@@ -74,15 +89,17 @@ const CreateSurveyPage: React.FC = () => {
       const vars = Array.from(koboToolData.variableMap.keys());
       setAvailableVariables(vars);
       
-      // Auto-select defaults if they exist in the tool
+      // Pre-select a conventional name only when the form actually contains a
+      // question by that name. That is a verified match, not a guess -- unlike a
+      // blind default, which silently points the config at a question that may
+      // not exist. Anything not matched is left for the user to choose.
       const defaults = {
         uuid: '_uuid',
-        enumerator: 'enumerator_id',
         date_interview: 'today',
         start_time: 'start',
         end_time: 'end',
+        enumerator: 'enumerator_id',
         consent: 'consent',
-        audit: 'audit_URL',
       };
       
       setCoreIdentifiers(prev => {
@@ -96,26 +113,6 @@ const CreateSurveyPage: React.FC = () => {
       });
     }
   }, [koboToolData]);
-
-  const handleKoboToolUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsLoadingTool(true);
-    setError(null);
-    setKoboToolFileName('');
-    
-    try {
-      const data = await parseKoboTool(file);
-      setKoboToolData(data);
-      setKoboToolFileName(file.name);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse Kobo tool file');
-    } finally {
-      setIsLoadingTool(false);
-      event.target.value = ''; // Reset file input
-    }
-  };
 
   const handleSamplingFrameUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -131,7 +128,7 @@ const CreateSurveyPage: React.FC = () => {
       
       // Validate that all headers (except target column) exist in the Kobo tool variables
       if (!koboToolData || !koboToolData.variableMap) {
-        throw new Error('Please upload Kobo tool first to validate sampling frame columns');
+        throw new Error('Read the form from your Kobo project first, so sampling frame columns can be validated');
       }
       
       const toolVars = Array.from(koboToolData.variableMap.keys());
@@ -197,6 +194,83 @@ const CreateSurveyPage: React.FC = () => {
     setCurrentlyEditing(null);
   }, []);
 
+  /**
+   * Reshape a fetched project form into the stored `kobo_tool` shape.
+   *
+   * Everything downstream -- the rule builder, DK eligibility, label lookups --
+   * reads the sheet-row format the XLSX parser produces, so a fetched form is
+   * adapted rather than introducing a second shape those consumers would each
+   * need to learn.
+   */
+  const toKoboToolData = (form: KoboProjectForm, language: string): KoboToolData => {
+    // One column per translation, exactly as the XLSForm sheet has them, so a
+    // fetched form is stored in the same shape an uploaded one produces and the
+    // existing label machinery needs no special case.
+    const labelColumns = (labels: Record<string, string>) =>
+      Object.fromEntries(
+        Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text])
+      );
+
+    const survey = form.questions.map((q) => ({
+      type: q.type,
+      name: q.name,
+      ...labelColumns(q.labels),
+      roster_name: q.repeat_name,
+      list_name: q.list_name,
+    }));
+
+    const choices = Object.entries(form.choice_lists).flatMap(([list_name, options]) =>
+      options.map((option) => ({
+        list_name,
+        name: option.name,
+        ...labelColumns(option.labels),
+      }))
+    );
+
+    const variableMap = new Map(
+      form.questions.map((q) => [
+        q.name,
+        {
+          type: q.type,
+          label: q.labels[language] || q.name,
+          choiceListName: q.list_name,
+          roster_name: q.repeat_name,
+        },
+      ])
+    );
+
+    return { survey, choices, variableMap } as KoboToolData;
+  };
+
+  // Required to create a survey that can actually run: without a project the
+  // ETL has nothing to fetch, and without dates the survey has no period.
+  const canCreate = Boolean(
+    surveyName.trim() &&
+      koboAssetId &&
+      globalParameters.data_collection_start_date &&
+      globalParameters.data_collection_end_date
+  );
+
+  const handleLoadProjectForm = async () => {
+    if (!koboAssetId) return;
+
+    setIsLoadingProjectForm(true);
+    setProjectFormError(null);
+    try {
+      const form = await getKoboProjectForm(koboAssetId);
+      const language = form.languages[0] || 'default';
+      setFormLanguages(form.languages);
+      setSelectedLanguage(language);
+      setKoboToolData(toKoboToolData(form, language));
+      setProjectFormName(form.asset_name || koboAssetId);
+    } catch (err) {
+      setProjectFormError(err instanceof Error ? err.message : 'Could not read the form.');
+      setProjectFormName(null);
+    } finally {
+      setIsLoadingProjectForm(false);
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
@@ -219,12 +293,14 @@ const CreateSurveyPage: React.FC = () => {
         kobo_tool: koboToolData ? {
           survey: koboToolData.survey,
           choices: koboToolData.choices,
+          label_column_survey: labelColumnFor(selectedLanguage),
+          label_column_choices: labelColumnFor(selectedLanguage),
         } : undefined,
       };
 
       const newSurvey = await createSurvey({
         survey_name: surveyName,
-        kobo_asset_id: koboAssetId || null,
+        kobo_asset_id: koboAssetId,
         config_data: configData,
       });
       
@@ -374,11 +450,17 @@ const CreateSurveyPage: React.FC = () => {
   const renderVariableDropdown = (
     value: string,
     onChange: (value: string) => void,
-    label: string
+    label: string,
+    helpKey?: string
   ) => {
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          {label}
+          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
+            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
+          )}
+        </label>
         {availableVariables.length > 0 ? (
           <select
             value={value}
@@ -408,7 +490,8 @@ const CreateSurveyPage: React.FC = () => {
   const renderAnswerOptionDropdown = (
     value: string,
     onChange: (value: string) => void,
-    label: string
+    label: string,
+    helpKey?: string
   ) => {
     // Get all unique answer options from choices
     const answerOptions = koboToolData?.choices 
@@ -417,7 +500,12 @@ const CreateSurveyPage: React.FC = () => {
 
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          {label}
+          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
+            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
+          )}
+        </label>
         {answerOptions.length > 0 ? (
           <select
             value={value}
@@ -478,20 +566,33 @@ const CreateSurveyPage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                  Kobo Asset ID
+                  Kobo project link *
+                  <InfoTip help={KOBO_LINK_HELP} />
                 </label>
                 <input
                   type="text"
-                  value={koboAssetId}
-                  onChange={(e) => setKoboAssetId(e.target.value)}
+                  value={koboLink}
+                  onChange={(e) => setKoboLink(e.target.value)}
                   className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g., a3wCWjYRXo46cSygF8gQAc"
+                  placeholder="https://kf.kobotoolbox.org/#/forms/aXXXXXXXXXXXXXXXXXXXXX"
+                  required
                 />
+                {koboAssetId ? (
+                  <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                    ✓ Project ID: <span className="font-mono">{koboAssetId}</span>
+                  </p>
+                ) : koboLink.trim() ? (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    {looksLikeUrl(koboLink)
+                      ? "That link does not contain a project ID. Open your project in Kobo and copy the address bar."
+                      : "That is not a Kobo project link or ID."}
+                  </p>
+                ) : null}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Data Collection Start Date
+                    Data Collection Start Date *
                   </label>
                   <input
                     type="date"
@@ -502,7 +603,7 @@ const CreateSurveyPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Data Collection End Date
+                    Data Collection End Date *
                   </label>
                   <input
                     type="date"
@@ -515,35 +616,60 @@ const CreateSurveyPage: React.FC = () => {
             </div>
           </section>
 
-          {/* Kobo Tool */}
+          {/* Survey form */}
           <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Kobo Tool</h2>
+            <h2 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Survey form</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Field Compass needs your form's questions to fill in the settings below.
+            </p>
+
             <div className="space-y-2">
-              {koboToolData && (
-                <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-300">
-                  {koboToolFileName && (
-                    <div className="text-green-600 dark:text-green-400 mb-1">
-                      ✓ {koboToolFileName} ({availableVariables.length} variables)
-                    </div>
+                <button
+                  type="button"
+                  onClick={handleLoadProjectForm}
+                  disabled={!koboAssetId || isLoadingProjectForm}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+                >
+                  {isLoadingProjectForm ? (
+                    <>
+                      <Spinner />
+                      <span>Reading form...</span>
+                    </>
+                  ) : (
+                    <span>Read form from project</span>
                   )}
+                </button>
+                {!koboAssetId && (
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    You can upload a new tool to replace the existing one, or keep the current tool.
+                    Add your Kobo project link above first.
                   </p>
-                </div>
-              )}
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleKoboToolUpload}
-                className="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
-                disabled={isLoadingTool}
-              />
-              {isLoadingTool && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                  <Spinner />
-                  <span>Parsing Kobo tool...</span>
-                </div>
-              )}
+                )}
+                {projectFormName && (
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    ✓ {projectFormName} ({availableVariables.length} questions)
+                  </p>
+                )}
+                {formLanguages.length > 1 && (
+                  <div className="pt-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      Show question labels in
+                    </label>
+                    <select
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                      className="w-full sm:w-64 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {formLanguages.map((language) => (
+                        <option key={language} value={language}>
+                          {language}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {projectFormError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{projectFormError}</p>
+                )}
             </div>
           </section>
 
@@ -623,7 +749,7 @@ const CreateSurveyPage: React.FC = () => {
                 )}
                 {!koboToolData && (
                   <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-                    ⚠ Please ensure Kobo tool is loaded first to validate sampling frame
+                    ⚠ Read the form from your Kobo project first, so sampling frame columns can be validated
                   </p>
                 )}
               </div>
@@ -654,15 +780,19 @@ const CreateSurveyPage: React.FC = () => {
               {renderVariableDropdown(
                 coreIdentifiers.enumerator,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
-                'Enumerator ID'
+                'Enumerator ID',
+                'enumerator'
               )}
               {renderVariableDropdown(
                 coreIdentifiers.consent,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
-                'Consent'
+                'Consent',
+                'consent'
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value
+                  <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
+                </label>
                 <input
                   type="number"
                   value={specialValues.dk_value}
@@ -673,7 +803,8 @@ const CreateSurveyPage: React.FC = () => {
               {renderAnswerOptionDropdown(
                 specialValues.dk_string_value,
                 (value) => setSpecialValues({ ...specialValues, dk_string_value: value }),
-                'DK String Value'
+                'DK String Value',
+                'dk_string_value'
               )}
             </div>
           </section>
@@ -682,7 +813,7 @@ const CreateSurveyPage: React.FC = () => {
           <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               onClick={handleSave}
-              disabled={isSaving || !surveyName.trim()}
+              disabled={isSaving || !canCreate}
               className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
             >
               {isSaving ? 'Creating...' : 'Create Survey'}

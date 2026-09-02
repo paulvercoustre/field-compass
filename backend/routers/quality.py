@@ -23,6 +23,7 @@ from models import (
 from services.auth import get_current_active_user
 from services.database import get_db
 from services.permissions import require_survey_access
+from services.survey_config import get_enumerator_field
 
 router = APIRouter()
 
@@ -140,8 +141,7 @@ async def get_quality_overview(
 
     # Get config fields
     config = survey_config.config_data or {}
-    core_ids = config.get("core_identifiers", {})
-    enumerator_field = core_ids.get("enumerator", "enumerator_id")
+    enumerator_field = get_enumerator_field(config)
     sampling_frame_config = config.get("sampling_frame", {})
     sampling_cols = sampling_frame_config.get("sampling_cols", [])
 

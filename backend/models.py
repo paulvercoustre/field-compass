@@ -235,9 +235,54 @@ class EnumeratorQualityStats(BaseModel):
     avgIssuesPerSurvey: float
 
 
+class FormQuestion(BaseModel):
+    """One answerable question, shaped for configuration pickers."""
+
+    path: str
+    name: str
+    # Every translation the form carries, keyed by language name. Returning all
+    # of them rather than one resolved string lets a client offer a language
+    # picker without refetching, and lets a fetched form be stored in exactly
+    # the same shape an uploaded XLSForm produces.
+    labels: dict[str, str] = {}
+    type: str
+    list_name: str | None = None
+    repeat_name: str | None = None
+
+
+class FormChoice(BaseModel):
+    name: str
+    labels: dict[str, str] = {}
+
+
+class SurveyFormResponse(BaseModel):
+    """A Kobo project's form structure, for populating configuration UIs."""
+
+    asset_uid: str
+    asset_name: str | None = None
+    # Kobo's currently deployed form version. Recorded at configuration time so
+    # a later run can tell that the form changed underneath the survey.
+    deployed_version_id: str | None = None
+    languages: list[str] = []
+    has_audit: bool | None = None
+    questions: list[FormQuestion] = []
+    choice_lists: dict[str, list[FormChoice]] = {}
+
+
+class UnavailableCapability(BaseModel):
+    """A feature that cannot work under the current survey configuration."""
+
+    capability: str
+    reason: str
+    missing_setting: str
+
+
 class PerformanceData(BaseModel):
     collection: list[EnumeratorCollectionStats]
     quality: list[EnumeratorQualityStats]
+    # Populated when a required setting is missing, so the client can
+    # explain an empty result instead of rendering a blank chart.
+    unavailable: list[UnavailableCapability] = []
 
 
 # ============================================================================
