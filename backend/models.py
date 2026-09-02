@@ -235,6 +235,36 @@ class EnumeratorQualityStats(BaseModel):
     avgIssuesPerSurvey: float
 
 
+class FormQuestion(BaseModel):
+    """One answerable question, shaped for configuration pickers."""
+
+    path: str
+    name: str
+    label: str
+    type: str
+    list_name: str | None = None
+    repeat_name: str | None = None
+
+
+class FormChoice(BaseModel):
+    name: str
+    label: str
+
+
+class SurveyFormResponse(BaseModel):
+    """A Kobo project's form structure, for populating configuration UIs."""
+
+    asset_uid: str
+    asset_name: str | None = None
+    # Kobo's currently deployed form version. Recorded at configuration time so
+    # a later run can tell that the form changed underneath the survey.
+    deployed_version_id: str | None = None
+    languages: list[str] = []
+    has_audit: bool | None = None
+    questions: list[FormQuestion] = []
+    choice_lists: dict[str, list[FormChoice]] = {}
+
+
 class UnavailableCapability(BaseModel):
     """A feature that cannot work under the current survey configuration."""
 

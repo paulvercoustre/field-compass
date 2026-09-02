@@ -16,6 +16,14 @@ export interface FieldHelp {
   text: string;
 }
 
+export const KOBO_LINK_HELP: FieldHelp = {
+  title: 'Kobo project link',
+  text:
+    'Open your project in KoboToolbox and copy the address from your browser — it '  +
+    'looks like https://kf.kobotoolbox.org/#/forms/aXKq... Field Compass reads your '  +
+    'questions straight from the project, so there is nothing to export or upload.',
+};
+
 export const CORE_IDENTIFIER_HELP: Record<string, FieldHelp> = {
   uuid: {
     title: 'Submission ID',
