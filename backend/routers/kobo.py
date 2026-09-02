@@ -39,7 +39,6 @@ NON_QUESTION_TYPES = frozenset({"begin_group", "end_group", "begin_repeat", "end
 async def get_kobo_asset_form(
     request: Request,
     asset_uid: str,
-    language: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -96,7 +95,7 @@ async def get_kobo_asset_form(
         {
             "path": question.path,
             "name": question.name,
-            "label": question.label_for(language),
+            "labels": question.label,
             "type": question.type,
             "list_name": question.list_name,
             "repeat_name": question.repeat_name,
@@ -106,7 +105,7 @@ async def get_kobo_asset_form(
     ]
 
     choice_lists = {
-        list_name: [{"name": c.name, "label": c.label_for(language)} for c in choices]
+        list_name: [{"name": c.name, "labels": c.label} for c in choices]
         for list_name, choices in schema.choices_by_list.items()
     }
 

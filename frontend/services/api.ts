@@ -238,7 +238,8 @@ export const api = {
 export interface KoboFormQuestion {
   path: string;
   name: string;
-  label: string;
+  /** Every translation the form carries, keyed by language name. */
+  labels: Record<string, string>;
   type: string;
   list_name: string | null;
   repeat_name: string | null;
@@ -246,7 +247,7 @@ export interface KoboFormQuestion {
 
 export interface KoboFormChoice {
   name: string;
-  label: string;
+  labels: Record<string, string>;
 }
 
 export interface KoboProjectForm {

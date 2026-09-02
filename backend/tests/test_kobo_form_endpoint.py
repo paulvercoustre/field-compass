@@ -101,7 +101,10 @@ class TestKoboAssetForm:
         assert payload["asset_name"] == "Market Assessment"
         assert payload["languages"] == ["English (en)", "Dari (da)"]
         assert payload["has_audit"] is True
-        assert payload["choice_lists"]["enums"][0] == {"name": "E01", "label": "Amina"}
+        assert payload["choice_lists"]["enums"][0] == {
+            "name": "E01",
+            "labels": {"English (en)": "Amina", "Dari (da)": "امینه"},
+        }
 
     def test_questions_carry_group_qualified_paths(self, client):
         """Paths must match submission_data keys, not bare names."""
@@ -112,7 +115,10 @@ class TestKoboAssetForm:
 
         by_name = {q["name"]: q for q in questions}
         assert by_name["enumerator_id"]["path"] == "intro/enumerator_id"
-        assert by_name["enumerator_id"]["label"] == "Enumerator ID:"
+        assert by_name["enumerator_id"]["labels"] == {
+            "English (en)": "Enumerator ID:",
+            "Dari (da)": "شماره",
+        }
         assert by_name["enumerator_id"]["list_name"] == "enums"
 
     def test_structural_rows_and_notes_are_excluded(self, client):
@@ -125,13 +131,21 @@ class TestKoboAssetForm:
         assert types.isdisjoint({"begin_group", "end_group", "note"})
         assert "select_one" in types and "integer" in types
 
-    def test_language_parameter_selects_the_label(self, client):
+    def test_every_translation_is_returned(self, client):
+        """
+        All languages, not one resolved string: the client offers a language
+        picker without refetching, and a fetched form can be stored in the same
+        shape an uploaded XLSForm produces.
+        """
         with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
             "routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD
         ):
-            questions = _get(client, language="Dari (da)").json()["questions"]
+            questions = _get(client).json()["questions"]
 
-        assert {q["name"]: q["label"] for q in questions}["age"] == "سن"
+        assert {q["name"]: q["labels"] for q in questions}["age"] == {
+            "English (en)": "Age",
+            "Dari (da)": "سن",
+        }
 
     def test_missing_kobo_token_is_actionable(self, client):
         with patch("routers.kobo.get_user_kobo_token", return_value=None):

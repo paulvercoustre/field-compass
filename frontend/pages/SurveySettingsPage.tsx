@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
-import { parseKoboTool, KoboToolData } from '../services/koboParser';
+import { KoboToolData } from '../services/koboParser';
 import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
 import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
@@ -15,6 +15,8 @@ import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import InfoTip from '../components/ui/InfoTip';
 import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
+import { getKoboProjectForm, KoboProjectForm } from '../services/api';
+import { labelColumnFor } from '../utils/koboUrl';
 
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -447,37 +449,70 @@ const SurveySettingsPage: React.FC = () => {
     }
   };
 
-  const handleKoboToolUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  /**
+   * Re-read the form from the Kobo project.
+   *
+   * Replaces uploading an XLSForm: the project is the source of truth, and a
+   * form edited mid-collection has to be picked up from there anyway.
+   */
+  const handleRefreshFormFromProject = async () => {
+    const assetId = config?.kobo_asset_id;
+    if (!assetId) {
+      setError('This survey has no Kobo project linked, so the form cannot be read.');
+      return;
+    }
 
     setIsLoadingTool(true);
     setError(null);
-    setKoboToolFileName('');
-    
     try {
-      const data = await parseKoboTool(file);
-      setKoboToolData(data);
-      setKoboToolFileName(file.name);
-      
-      // Auto-detect and set label columns if available
-      if (data.survey.length > 0) {
-        const surveyLabels = Object.keys(data.survey[0]).filter(key => key.startsWith('label::'));
-        if (surveyLabels.length > 0 && !surveyLabels.includes(labelColumnSurvey)) {
-          setLabelColumnSurvey(surveyLabels[0]);
-        }
+      const form: KoboProjectForm = await getKoboProjectForm(assetId);
+      const labelColumns = (labels: Record<string, string>) =>
+        Object.fromEntries(
+          Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text])
+        );
+
+      const survey = form.questions.map((q) => ({
+        type: q.type,
+        name: q.name,
+        ...labelColumns(q.labels),
+        roster_name: q.repeat_name,
+        list_name: q.list_name,
+      }));
+      const choices = Object.entries(form.choice_lists).flatMap(([list_name, options]) =>
+        options.map((option) => ({
+          list_name,
+          name: option.name,
+          ...labelColumns(option.labels),
+        }))
+      );
+      const language = form.languages[0] || 'default';
+      const variableMap = new Map(
+        form.questions.map((q) => [
+          q.name,
+          {
+            type: q.type,
+            label: q.labels[language] || q.name,
+            choiceListName: q.list_name,
+            roster_name: q.repeat_name,
+          },
+        ])
+      );
+
+      setKoboToolData({ survey, choices, variableMap } as KoboToolData);
+      setKoboToolFileName(form.asset_name || assetId);
+
+      // Keep the chosen language if the form still has it; otherwise fall back.
+      const available = form.languages.map(labelColumnFor);
+      if (available.length > 0 && !available.includes(labelColumnSurvey)) {
+        setLabelColumnSurvey(available[0]);
       }
-      if (data.choices.length > 0) {
-        const choiceLabels = Object.keys(data.choices[0]).filter(key => key.startsWith('label::'));
-        if (choiceLabels.length > 0 && !choiceLabels.includes(labelColumnChoices)) {
-          setLabelColumnChoices(choiceLabels[0]);
-        }
+      if (available.length > 0 && !available.includes(labelColumnChoices)) {
+        setLabelColumnChoices(available[0]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse Kobo tool file');
+      setError(err instanceof Error ? err.message : 'Could not read the form from Kobo.');
     } finally {
       setIsLoadingTool(false);
-      event.target.value = '';
     }
   };
 
@@ -1220,95 +1255,76 @@ const SurveySettingsPage: React.FC = () => {
                         </div>
                       )}
                       <p className="text-xs text-gray-600 dark:text-gray-400">
-                        You can upload a new tool to replace the existing one, or keep the current tool.
+                        Refresh to pick up any changes made to the form in Kobo.
                       </p>
                     </div>
                   )}
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleKoboToolUpload}
-                    className="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
-                    disabled={isLoadingTool}
-                  />
-                  {isLoadingTool && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <Spinner />
-                      <span>Parsing Kobo tool...</span>
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleRefreshFormFromProject}
+                    disabled={isLoadingTool || !config?.kobo_asset_id}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+                  >
+                    {isLoadingTool ? (
+                      <>
+                        <Spinner />
+                        <span>Reading form...</span>
+                      </>
+                    ) : (
+                      <span>Refresh form from project</span>
+                    )}
+                  </button>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Reads the current form from your Kobo project. Do this after changing
+                    the form in Kobo.
+                  </p>
                   
-                  {/* Label Column Settings */}
+                  {/* Label language */}
                   {koboToolData && (
-                    <div className="mt-4 space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Label Column Settings</h3>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                        Select which column to use for displaying question and choice labels. This is useful when your survey has multiple language columns.
-                      </p>
-                      
-                      {/* Detect available label columns */}
+                    <div className="mt-4 space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                        Label language
+                      </h3>
                       {(() => {
-                        const surveyLabels = new Set<string>();
-                        const choiceLabels = new Set<string>();
-                        
-                        if (koboToolData.survey.length > 0) {
-                          Object.keys(koboToolData.survey[0]).forEach(key => {
-                            if (key.startsWith('label::')) {
-                              surveyLabels.add(key);
-                            }
-                          });
+                        // Translations are stored as `label::<language>` columns, so the
+                        // languages the form carries are exactly those column names.
+                        const languages = Array.from(
+                          new Set(
+                            [...koboToolData.survey, ...koboToolData.choices].flatMap((row) =>
+                              Object.keys(row).filter((key) => key.startsWith('label::'))
+                            )
+                          )
+                        );
+
+                        if (languages.length === 0) {
+                          return (
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              This form has a single, unnamed set of labels.
+                            </p>
+                          );
                         }
-                        
-                        if (koboToolData.choices.length > 0) {
-                          Object.keys(koboToolData.choices[0]).forEach(key => {
-                            if (key.startsWith('label::')) {
-                              choiceLabels.add(key);
-                            }
-                          });
-                        }
-                        
-                        const surveyLabelArray = Array.from(surveyLabels);
-                        const choiceLabelArray = Array.from(choiceLabels);
-                        
+
                         return (
                           <>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                                Survey Question Label Column
-                              </label>
-                              <select
-                                value={labelColumnSurvey}
-                                onChange={(e) => setLabelColumnSurvey(e.target.value)}
-                                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                              >
-                                {surveyLabelArray.length > 0 ? (
-                                  surveyLabelArray.map(col => (
-                                    <option key={col} value={col}>{col}</option>
-                                  ))
-                                ) : (
-                                  <option value="label::English (en)">label::English (en) (default)</option>
-                                )}
-                              </select>
-                            </div>
-                            
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                                Choice Label Column
-                              </label>
-                              <select
-                                value={labelColumnChoices}
-                                onChange={(e) => setLabelColumnChoices(e.target.value)}
-                                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                              >
-                                {choiceLabelArray.length > 0 ? (
-                                  choiceLabelArray.map(col => (
-                                    <option key={col} value={col}>{col}</option>
-                                  ))
-                                ) : (
-                                  <option value="label::English (en)">label::English (en) (default)</option>
-                                )}
-                              </select>
-                            </div>
+                            <select
+                              value={labelColumnSurvey}
+                              onChange={(e) => {
+                                // One language for both: showing questions in one
+                                // language and their answers in another helps nobody.
+                                setLabelColumnSurvey(e.target.value);
+                                setLabelColumnChoices(e.target.value);
+                              }}
+                              className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              {languages.map((column) => (
+                                <option key={column} value={column}>
+                                  {column.replace('label::', '')}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              Used wherever Field Compass shows a question or answer label.
+                            </p>
                           </>
                         );
                       })()}

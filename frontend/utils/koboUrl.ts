@@ -31,6 +31,16 @@ export function parseKoboAssetId(input: string): string | null {
 }
 
 /**
+ * The stored column name for a language's labels.
+ *
+ * The stored `kobo_tool` format is XLSForm sheet rows, where translations are
+ * separate columns. A form with no named translation uses a bare `label`.
+ */
+export function labelColumnFor(language: string): string {
+  return !language || language === 'default' ? 'label' : `label::${language}`;
+}
+
+/**
  * Whether the input looks like an attempt at a link rather than an identifier.
  *
  * Lets the UI say "that link does not contain a project ID" instead of the

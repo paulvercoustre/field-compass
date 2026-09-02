@@ -240,7 +240,11 @@ class FormQuestion(BaseModel):
 
     path: str
     name: str
-    label: str
+    # Every translation the form carries, keyed by language name. Returning all
+    # of them rather than one resolved string lets a client offer a language
+    # picker without refetching, and lets a fetched form be stored in exactly
+    # the same shape an uploaded XLSForm produces.
+    labels: dict[str, str] = {}
     type: str
     list_name: str | None = None
     repeat_name: str | None = None
@@ -248,7 +252,7 @@ class FormQuestion(BaseModel):
 
 class FormChoice(BaseModel):
     name: str
-    label: str
+    labels: dict[str, str] = {}
 
 
 class SurveyFormResponse(BaseModel):

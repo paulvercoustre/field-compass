@@ -14,7 +14,7 @@ import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import QualityCheckPromptModal from '../components/QualityCheckPromptModal';
 import InfoTip from '../components/ui/InfoTip';
-import { parseKoboAssetId, looksLikeUrl } from '../utils/koboUrl';
+import { parseKoboAssetId, looksLikeUrl, labelColumnFor } from '../utils/koboUrl';
 import { getKoboProjectForm, KoboProjectForm } from '../services/api';
 import { CORE_IDENTIFIER_HELP, KOBO_LINK_HELP } from '../constants/coreIdentifiers';
 
@@ -49,12 +49,16 @@ const CreateSurveyPage: React.FC = () => {
   const [isLoadingProjectForm, setIsLoadingProjectForm] = useState(false);
   const [projectFormError, setProjectFormError] = useState<string | null>(null);
   const [projectFormName, setProjectFormName] = useState<string | null>(null);
+  // Which translation to show. The form tells us which exist, so this is a
+  // choice between real languages rather than a spreadsheet column name.
+  const [formLanguages, setFormLanguages] = useState<string[]>([]);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('');
   const [coreIdentifiers, setCoreIdentifiers] = useState({
     uuid: '_uuid',  // always supplied by Kobo as submission metadata
     // Form-dependent: never pre-fill a field the user did not choose. A form
     // may name these anything, or not have them at all.
     enumerator: '',
-    date_interview: '',
+    date_interview: 'today',
     start_time: 'start',
     end_time: 'end',
     consent: 'consent',
@@ -85,14 +89,15 @@ const CreateSurveyPage: React.FC = () => {
       const vars = Array.from(koboToolData.variableMap.keys());
       setAvailableVariables(vars);
       
-      // Auto-select defaults if they exist in the tool
+      // Pre-select only the metadata questions ODK/Kobo name by convention, and
+      // only when the form actually contains them. Enumerator and consent are
+      // form-specific -- guessing at those is how a survey ends up quietly
+      // configured against the wrong question.
       const defaults = {
         uuid: '_uuid',
-        enumerator: 'enumerator_id',
         date_interview: 'today',
         start_time: 'start',
         end_time: 'end',
-        consent: 'consent',
       };
       
       setCoreIdentifiers(prev => {
@@ -195,11 +200,19 @@ const CreateSurveyPage: React.FC = () => {
    * adapted rather than introducing a second shape those consumers would each
    * need to learn.
    */
-  const toKoboToolData = (form: KoboProjectForm): KoboToolData => {
+  const toKoboToolData = (form: KoboProjectForm, language: string): KoboToolData => {
+    // One column per translation, exactly as the XLSForm sheet has them, so a
+    // fetched form is stored in the same shape an uploaded one produces and the
+    // existing label machinery needs no special case.
+    const labelColumns = (labels: Record<string, string>) =>
+      Object.fromEntries(
+        Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text])
+      );
+
     const survey = form.questions.map((q) => ({
       type: q.type,
       name: q.name,
-      'label::English (en)': q.label,
+      ...labelColumns(q.labels),
       roster_name: q.repeat_name,
       list_name: q.list_name,
     }));
@@ -208,7 +221,7 @@ const CreateSurveyPage: React.FC = () => {
       options.map((option) => ({
         list_name,
         name: option.name,
-        'label::English (en)': option.label,
+        ...labelColumns(option.labels),
       }))
     );
 
@@ -217,7 +230,7 @@ const CreateSurveyPage: React.FC = () => {
         q.name,
         {
           type: q.type,
-          label: q.label || q.name,
+          label: q.labels[language] || q.name,
           choiceListName: q.list_name,
           roster_name: q.repeat_name,
         },
@@ -243,7 +256,10 @@ const CreateSurveyPage: React.FC = () => {
     setProjectFormError(null);
     try {
       const form = await getKoboProjectForm(koboAssetId);
-      setKoboToolData(toKoboToolData(form));
+      const language = form.languages[0] || 'default';
+      setFormLanguages(form.languages);
+      setSelectedLanguage(language);
+      setKoboToolData(toKoboToolData(form, language));
       setProjectFormName(form.asset_name || koboAssetId);
     } catch (err) {
       setProjectFormError(err instanceof Error ? err.message : 'Could not read the form.');
@@ -275,6 +291,8 @@ const CreateSurveyPage: React.FC = () => {
         kobo_tool: koboToolData ? {
           survey: koboToolData.survey,
           choices: koboToolData.choices,
+          label_column_survey: labelColumnFor(selectedLanguage),
+          label_column_choices: labelColumnFor(selectedLanguage),
         } : undefined,
       };
 
@@ -628,6 +646,28 @@ const CreateSurveyPage: React.FC = () => {
                   <p className="text-sm text-green-600 dark:text-green-400">
                     ✓ {projectFormName} ({availableVariables.length} questions)
                   </p>
+                )}
+                {formLanguages.length > 1 && (
+                  <div className="pt-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      Show question labels in
+                    </label>
+                    <select
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                      className="w-full sm:w-64 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {formLanguages.map((language) => (
+                        <option key={language} value={language}>
+                          {language}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                      Your form has {formLanguages.length} translations. This one is used
+                      wherever Field Compass shows a question or answer label.
+                    </p>
+                  </div>
                 )}
                 {projectFormError && (
                   <p className="text-sm text-red-600 dark:text-red-400">{projectFormError}</p>
