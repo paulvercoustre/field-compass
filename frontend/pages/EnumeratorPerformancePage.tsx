@@ -158,8 +158,8 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
           // by enumerator, so rendering them would show a single synthetic
           // bucket holding the whole dataset -- which reads as real data.
           <CapabilityNotice
-            unavailable={unavailable}
             title="Field team performance"
+            message="Please set up the enumerator variable in the settings."
             onOpenSettings={() => window.dispatchEvent(new Event('navigateToSettings'))}
           />
         ) : performanceData ? (

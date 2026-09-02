@@ -4,6 +4,8 @@ import { getSurveyConfig, updateSurvey, createSurvey, SurveyConfig, SurveyCreate
 import { parseKoboTool, KoboToolData } from '../services/koboParser';
 import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
 import { Spinner } from '../components/Spinner';
+import InfoTip from '../components/ui/InfoTip';
+import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
 
 const SurveySetupPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -316,11 +318,17 @@ const SurveySetupPage: React.FC = () => {
   const renderVariableDropdown = (
     value: string,
     onChange: (value: string) => void,
-    label: string
+    label: string,
+    helpKey?: string
   ) => {
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          {label}
+          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
+            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
+          )}
+        </label>
         {availableVariables.length > 0 ? (
           <select
             value={value}
@@ -494,32 +502,38 @@ const SurveySetupPage: React.FC = () => {
               {renderVariableDropdown(
                 coreIdentifiers.uuid,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, uuid: value }),
-                'UUID'
+                'UUID',
+                'uuid'
               )}
               {renderVariableDropdown(
                 coreIdentifiers.enumerator,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
-                'Enumerator'
+                'Enumerator',
+                'enumerator'
               )}
               {renderVariableDropdown(
                 coreIdentifiers.date_interview,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, date_interview: value }),
-                'Date Interview'
+                'Date Interview',
+                'date_interview'
               )}
               {renderVariableDropdown(
                 coreIdentifiers.start_time,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, start_time: value }),
-                'Start Time'
+                'Start Time',
+                'start_time'
               )}
               {renderVariableDropdown(
                 coreIdentifiers.end_time,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, end_time: value }),
-                'End Time'
+                'End Time',
+                'end_time'
               )}
               {renderVariableDropdown(
                 coreIdentifiers.consent,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
-                'Consent'
+                'Consent',
+                'consent'
               )}
               {renderVariableDropdown(
                 coreIdentifiers.audit,
@@ -645,7 +659,9 @@ const SurveySetupPage: React.FC = () => {
             <h2 className="text-xl font-semibold mb-4 text-white">Special Values (Don't Know)</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">DK Numeric Value</label>
+                <label className="block text-sm font-medium text-gray-400 mb-1">DK Numeric Value
+                  <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
+                </label>
                 <input
                   type="number"
                   value={specialValues.dk_value}

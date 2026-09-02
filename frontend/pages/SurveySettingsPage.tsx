@@ -13,6 +13,8 @@ import AISuggestedRules from '../components/rule-builder/AISuggestedRules';
 import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
+import InfoTip from '../components/ui/InfoTip';
+import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
 
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -61,6 +63,8 @@ const SurveySettingsPage: React.FC = () => {
   const [koboToolFileName, setKoboToolFileName] = useState<string>('');
   const [isLoadingTool, setIsLoadingTool] = useState(false);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
+  // Outlier detection is the only picker that genuinely needs numbers.
+  const [numericVariables, setNumericVariables] = useState<string[]>([]);
   const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
   const [labelColumnSurvey, setLabelColumnSurvey] = useState<string>('label::English (en)');
   const [labelColumnChoices, setLabelColumnChoices] = useState<string>('label::English (en)');
@@ -208,12 +212,19 @@ const SurveySettingsPage: React.FC = () => {
 
   useEffect(() => {
     if (koboToolData && koboToolData.variableMap) {
-      // Filter to only numeric variables (integer, decimal, calculate)
+      // Core identifiers can be any question type: an enumerator ID is usually
+      // a select_one (best practice, so IDs are consistent) but is sometimes
+      // free text, and consent is always a select. Offering only numeric
+      // variables made those fields impossible to set -- and silently cleared
+      // a saved one, because a <select> cannot display an option that is not
+      // in its list. Matches CreateSurveyPage and SurveySetupPage.
+      setAvailableVariables(Array.from(koboToolData.variableMap.keys()));
+
       const numericTypes = ['integer', 'decimal', 'calculate'];
-      const vars = Array.from(koboToolData.variableMap.entries())
+      const numericVars = Array.from(koboToolData.variableMap.entries())
         .filter(([_, variable]) => numericTypes.includes(variable.type))
         .map(([name, _]) => name);
-      setAvailableVariables(vars);
+      setNumericVariables(numericVars);
 
       const textQuestions = koboToolData.survey
         .filter((q) => q.name && (q.type === 'text' || q.type.startsWith('text')))
@@ -227,9 +238,9 @@ const SurveySettingsPage: React.FC = () => {
       // Clean up outlier_variables and outlier_log_transform_variables to remove any non-numeric variables
       setQualityChecks((prev) => ({
         ...prev,
-        outlier_variables: prev.outlier_variables.filter((v) => vars.includes(v)),
+        outlier_variables: prev.outlier_variables.filter((v) => numericVars.includes(v)),
         outlier_log_transform_variables: prev.outlier_log_transform_variables.filter((v) =>
-          vars.includes(v) && prev.outlier_variables.includes(v)
+          numericVars.includes(v) && prev.outlier_variables.includes(v)
         ),
         llm_qualitative_fields: prev.llm_qualitative_fields.filter((v) =>
           textQuestions.some((t) => t.name === v)
@@ -261,6 +272,7 @@ const SurveySettingsPage: React.FC = () => {
     setKoboToolData(null);
     setKoboToolFileName('');
     setAvailableVariables([]);
+    setNumericVariables([]);
     
     try {
       const data = await getSurveyConfig(selectedSurvey.survey_id);
@@ -871,12 +883,18 @@ const SurveySettingsPage: React.FC = () => {
     value: string,
     onChange: (value: string) => void,
     label: string,
-    editable?: boolean
+    editable?: boolean,
+    helpKey?: string
   ) => {
     const canEdit = editable ?? isEditing;
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          {label}
+          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
+            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
+          )}
+        </label>
         {canEdit && availableVariables.length > 0 ? (
           <select
             value={value}
@@ -903,7 +921,8 @@ const SurveySettingsPage: React.FC = () => {
     value: string,
     onChange: (value: string) => void,
     label: string,
-    editable?: boolean
+    editable?: boolean,
+    helpKey?: string
   ) => {
     const canEdit = editable ?? isEditing;
     // Get all unique answer options from choices
@@ -913,7 +932,12 @@ const SurveySettingsPage: React.FC = () => {
 
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          {label}
+          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
+            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
+          )}
+        </label>
         {canEdit && answerOptions.length > 0 ? (
           <select
             value={value}
@@ -1485,16 +1509,20 @@ const SurveySettingsPage: React.FC = () => {
                   coreIdentifiers.enumerator,
                   (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
                   'Enumerator ID',
-                  canEditSurvey
+                  canEditSurvey,
+                  'enumerator'
                 )}
                 {renderVariableDropdown(
                   coreIdentifiers.consent,
                   (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
                   'Consent',
-                  canEditSurvey
+                  canEditSurvey,
+                  'consent'
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value
+                  <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
+                </label>
                   {canEditSurvey ? (
                     <input
                       type="number"
@@ -1512,7 +1540,8 @@ const SurveySettingsPage: React.FC = () => {
                   specialValues.dk_string_value,
                   (value) => setSpecialValues({ ...specialValues, dk_string_value: value }),
                   'DK String Value',
-                  canEditSurvey
+                  canEditSurvey,
+                  'dk_string_value'
                 )}
               </div>
               {canEditSurvey && isCoreIdentifiersDirty && (
@@ -1992,8 +2021,8 @@ const SurveySettingsPage: React.FC = () => {
                         </p>
                         {isEditingOutlier ? (
                           <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
-                            {availableVariables.length > 0 ? (
-                              availableVariables.map((variable) => (
+                            {numericVariables.length > 0 ? (
+                              numericVariables.map((variable) => (
                                 <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
                                   <input
                                     type="checkbox"

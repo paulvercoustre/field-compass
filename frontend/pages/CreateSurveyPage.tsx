@@ -13,6 +13,8 @@ import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import QualityCheckPromptModal from '../components/QualityCheckPromptModal';
+import InfoTip from '../components/ui/InfoTip';
+import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
 
 const CreateSurveyPage: React.FC = () => {
   const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
@@ -376,11 +378,17 @@ const CreateSurveyPage: React.FC = () => {
   const renderVariableDropdown = (
     value: string,
     onChange: (value: string) => void,
-    label: string
+    label: string,
+    helpKey?: string
   ) => {
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          {label}
+          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
+            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
+          )}
+        </label>
         {availableVariables.length > 0 ? (
           <select
             value={value}
@@ -410,7 +418,8 @@ const CreateSurveyPage: React.FC = () => {
   const renderAnswerOptionDropdown = (
     value: string,
     onChange: (value: string) => void,
-    label: string
+    label: string,
+    helpKey?: string
   ) => {
     // Get all unique answer options from choices
     const answerOptions = koboToolData?.choices 
@@ -419,7 +428,12 @@ const CreateSurveyPage: React.FC = () => {
 
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          {label}
+          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
+            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
+          )}
+        </label>
         {answerOptions.length > 0 ? (
           <select
             value={value}
@@ -656,15 +670,19 @@ const CreateSurveyPage: React.FC = () => {
               {renderVariableDropdown(
                 coreIdentifiers.enumerator,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
-                'Enumerator ID'
+                'Enumerator ID',
+                'enumerator'
               )}
               {renderVariableDropdown(
                 coreIdentifiers.consent,
                 (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
-                'Consent'
+                'Consent',
+                'consent'
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value
+                  <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
+                </label>
                 <input
                   type="number"
                   value={specialValues.dk_value}
@@ -675,7 +693,8 @@ const CreateSurveyPage: React.FC = () => {
               {renderAnswerOptionDropdown(
                 specialValues.dk_string_value,
                 (value) => setSpecialValues({ ...specialValues, dk_string_value: value }),
-                'DK String Value'
+                'DK String Value',
+                'dk_string_value'
               )}
             </div>
           </section>
