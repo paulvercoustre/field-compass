@@ -26,11 +26,9 @@ export const CORE_IDENTIFIER_HELP: Record<string, FieldHelp> = {
   enumerator: {
     title: 'Enumerator ID',
     text:
-      'The question near the start of your form where the enumerator enters their own ID ' +
-      'or name. It is how Field Compass knows who collected each submission, which powers ' +
-      'the Field Team page, per-enumerator quality comparisons, and filtering submissions ' +
-      'by enumerator. Leave it blank if your form does not ask for one — those features ' +
-      'will simply be unavailable.',
+      'The question in your form where the enumerator enters their own ID. It lets Field ' +
+      'Compass track submissions by who collected them. Leave it blank if your form does ' +
+      'not ask for one.',
   },
   date_interview: {
     title: 'Interview date',
@@ -62,9 +60,10 @@ export const CORE_IDENTIFIER_HELP: Record<string, FieldHelp> = {
   dk_value: {
     title: "Don't know — numeric code",
     text:
-      'The number your form records when a respondent answers "don\'t know" to a numeric ' +
-      'question. -99 is a common convention. Field Compass counts these to measure how ' +
-      'often "don\'t know" is recorded, which is a useful signal of interview quality.',
+      'The number your enumerators are trained to enter on numeric questions when a ' +
+      'respondent says they don\'t know. -99 is a common convention. Field Compass counts ' +
+      'these to measure how often "don\'t know" is recorded, which is a useful signal of ' +
+      'interview quality.',
   },
   dk_string_value: {
     title: "Don't know — answer option",
