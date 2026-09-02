@@ -32,9 +32,11 @@ const SurveySetupPage: React.FC = () => {
   const [surveyName, setSurveyName] = useState('');
   const [koboAssetId, setKoboAssetId] = useState('');
   const [coreIdentifiers, setCoreIdentifiers] = useState({
-    uuid: '_uuid',
-    enumerator: 'enumerator_id',
-    date_interview: 'today',
+    uuid: '_uuid',  // always supplied by Kobo as submission metadata
+    // Form-dependent: never pre-fill a field the user did not choose. A form
+    // may name these anything, or not have them at all.
+    enumerator: '',
+    date_interview: '',
     start_time: 'start',
     end_time: 'end',
     consent: 'consent',

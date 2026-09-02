@@ -8,6 +8,7 @@ import EnumeratorSummaryCards from '../components/progress-tracker/EnumeratorSum
 import SubmissionsBarChart from '../components/progress-tracker/SubmissionsBarChart';
 import QualityScatterPlot from '../components/progress-tracker/QualityScatterPlot';
 import EnumeratorLeaderboard from '../components/progress-tracker/EnumeratorLeaderboard';
+import CapabilityNotice from '../components/ui/CapabilityNotice';
 
 interface EnumeratorPerformancePageProps {
   onNavigateToSubmissions?: (filters?: { enumerators?: string[] }) => void;
@@ -80,6 +81,8 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
     }
   };
 
+  const unavailable = performanceData?.unavailable ?? [];
+
   if (!selectedSurvey) {
     return (
       <div className="h-full flex items-center justify-center p-8">
@@ -150,6 +153,15 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
           </div>
         ) : error && !isRunningETL ? (
           <div className="p-4 text-center text-red-600 dark:text-red-400">{error}</div>
+        ) : unavailable.length > 0 ? (
+          // The survey has no enumerator configured. Every chart below groups
+          // by enumerator, so rendering them would show a single synthetic
+          // bucket holding the whole dataset -- which reads as real data.
+          <CapabilityNotice
+            unavailable={unavailable}
+            title="Field team performance"
+            onOpenSettings={() => window.dispatchEvent(new Event('navigateToSettings'))}
+          />
         ) : performanceData ? (
           <div className="max-w-screen-2xl mx-auto space-y-6">
             {/* Summary Cards */}

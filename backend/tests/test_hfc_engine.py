@@ -653,3 +653,102 @@ class TestOutlierMixedConfig:
         assert len(profit_issues) == 1
         assert profit_issues[0].value == 100000
         assert profit_issues[0].metadata.get("log_transformed") is True
+
+
+class TestOptionalCoreIdentifiers:
+    """
+    Core identifiers are optional. When one is unset the checks that depend on
+    it must not run -- flagging every submission because configuration is
+    incomplete is the app telling a new user that all of their data is bad.
+    """
+
+    @staticmethod
+    def _engine(test_db, test_survey_config, core_identifiers):
+        test_survey_config.config_data = {
+            **test_survey_config.config_data,
+            "core_identifiers": core_identifiers,
+        }
+        return HFCEngine(test_db, test_survey_config)
+
+    def test_clean_submission_is_not_flagged_when_enumerator_is_unset(
+        self, test_db, test_survey_config
+    ):
+        engine = self._engine(test_db, test_survey_config, {"date_interview": "today"})
+
+        issues = engine._run_basic_checks(
+            {"_uuid": "u1", "intro/interviewer_code": "ENUM07", "today": "2023-06-15"}, "u1"
+        )
+
+        assert issues == []
+        assert engine.determine_qa_status(issues) == "PENDING_APPROVAL"
+
+    @pytest.mark.parametrize("value", [None, "", "   "])
+    def test_blank_enumerator_setting_behaves_as_unset(self, test_db, test_survey_config, value):
+        engine = self._engine(
+            test_db, test_survey_config, {"enumerator": value, "date_interview": "today"}
+        )
+
+        issues = engine._run_basic_checks({"_uuid": "u1", "today": "2023-06-15"}, "u1")
+
+        assert [i.check for i in issues] == []
+
+    def test_configured_enumerator_missing_from_data_is_still_flagged(
+        self, test_db, test_survey_config
+    ):
+        """Set-but-absent stays a flag; only *unset* is silent."""
+        engine = self._engine(
+            test_db, test_survey_config, {"enumerator": "enum_id", "date_interview": "today"}
+        )
+
+        issues = engine._run_basic_checks({"_uuid": "u1", "today": "2023-06-15"}, "u1")
+
+        assert [i.check for i in issues] == ["missing_enumerator"]
+
+    def test_configured_enumerator_present_is_not_flagged(self, test_db, test_survey_config):
+        engine = self._engine(
+            test_db, test_survey_config, {"enumerator": "enum_id", "date_interview": "today"}
+        )
+
+        issues = engine._run_basic_checks(
+            {"_uuid": "u1", "enum_id": "ENUM07", "today": "2023-06-15"}, "u1"
+        )
+
+        assert issues == []
+
+    def test_date_checks_skip_when_interview_date_is_unset(self, test_db, test_survey_config):
+        """Weekend and out-of-period checks need a date field to read."""
+        test_survey_config.config_data = {
+            **test_survey_config.config_data,
+            "core_identifiers": {"enumerator": "enum_id"},
+            "quality_checks": {"flag_weekend": True, "flag_out_of_period": True},
+        }
+        engine = HFCEngine(test_db, test_survey_config)
+
+        # 2023-06-17 is a Saturday and outside the configured collection period.
+        issues = engine._run_basic_checks(
+            {"_uuid": "u1", "enum_id": "ENUM07", "today": "2023-06-17"}, "u1"
+        )
+
+        assert issues == []
+
+    def test_fully_configured_survey_is_unchanged(self, test_db, test_survey_config):
+        """Regression guard: the default fixture maps every identifier."""
+        engine = HFCEngine(test_db, test_survey_config)
+
+        clean = engine._run_basic_checks(
+            {"_uuid": "u1", "enumerator_id": "ENUM07", "today": "2023-06-15"}, "u1"
+        )
+        missing_enum = engine._run_basic_checks({"_uuid": "u1", "today": "2023-06-15"}, "u1")
+
+        assert clean == []
+        assert [i.check for i in missing_enum] == ["missing_enumerator"]
+
+    def test_field_lookup_with_no_field_name_finds_nothing(self, test_db, test_survey_config):
+        """
+        Guards the suffix search: without this, an unset identifier makes the
+        lookup hunt for the literal "/None".
+        """
+        engine = HFCEngine(test_db, test_survey_config)
+
+        assert engine._get_field_value({"a/None": "trap", "x": 1}, None) == (None, None)
+        assert engine._get_field_value({"a/None": "trap", "x": 1}, "") == (None, None)

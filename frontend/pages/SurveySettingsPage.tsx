@@ -77,9 +77,11 @@ const SurveySettingsPage: React.FC = () => {
   const [surveyName, setSurveyName] = useState('');
   const [koboAssetId, setKoboAssetId] = useState('');
   const [coreIdentifiers, setCoreIdentifiers] = useState({
-    uuid: '_uuid',
-    enumerator: 'enumerator_id',
-    date_interview: 'today',
+    uuid: '_uuid',  // always supplied by Kobo as submission metadata
+    // Form-dependent: never pre-fill a field the user did not choose. A form
+    // may name these anything, or not have them at all.
+    enumerator: '',
+    date_interview: '',
     start_time: 'start',
     end_time: 'end',
     consent: 'consent',
@@ -108,11 +110,13 @@ const SurveySettingsPage: React.FC = () => {
     globalParameters.data_collection_start_date !== (config?.config_data?.global_parameters?.data_collection_start_date || '') ||
     globalParameters.data_collection_end_date !== (config?.config_data?.global_parameters?.data_collection_end_date || '');
 
-  const savedCoreIdentifiers = config?.config_data?.core_identifiers || { uuid: '_uuid', enumerator: 'enumerator_id', date_interview: 'today', start_time: 'start', end_time: 'end', consent: 'consent', audit: 'audit_URL' };
+  // Fallbacks here must match the initial state above, or clearing a field
+  // reads as "unchanged" and the Save button never enables.
+  const savedCoreIdentifiers = config?.config_data?.core_identifiers || { uuid: '_uuid', enumerator: '', date_interview: '', start_time: 'start', end_time: 'end', consent: 'consent', audit: 'audit_URL' };
   const isCoreIdentifiersDirty =
     coreIdentifiers.uuid !== (savedCoreIdentifiers.uuid ?? '_uuid') ||
-    coreIdentifiers.enumerator !== (savedCoreIdentifiers.enumerator ?? 'enumerator_id') ||
-    coreIdentifiers.date_interview !== (savedCoreIdentifiers.date_interview ?? 'today') ||
+    coreIdentifiers.enumerator !== (savedCoreIdentifiers.enumerator ?? '') ||
+    coreIdentifiers.date_interview !== (savedCoreIdentifiers.date_interview ?? '') ||
     coreIdentifiers.start_time !== (savedCoreIdentifiers.start_time ?? 'start') ||
     coreIdentifiers.end_time !== (savedCoreIdentifiers.end_time ?? 'end') ||
     coreIdentifiers.consent !== (savedCoreIdentifiers.consent ?? 'consent') ||

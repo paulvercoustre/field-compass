@@ -235,9 +235,20 @@ class EnumeratorQualityStats(BaseModel):
     avgIssuesPerSurvey: float
 
 
+class UnavailableCapability(BaseModel):
+    """A feature that cannot work under the current survey configuration."""
+
+    capability: str
+    reason: str
+    missing_setting: str
+
+
 class PerformanceData(BaseModel):
     collection: list[EnumeratorCollectionStats]
     quality: list[EnumeratorQualityStats]
+    # Populated when a required setting is missing, so the client can
+    # explain an empty result instead of rendering a blank chart.
+    unavailable: list[UnavailableCapability] = []
 
 
 # ============================================================================
