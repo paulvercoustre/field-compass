@@ -58,7 +58,6 @@ const CreateSurveyPage: React.FC = () => {
     start_time: 'start',
     end_time: 'end',
     consent: 'consent',
-    audit: 'audit_URL',
   });
   const [samplingFrame, setSamplingFrame] = useState({
     sampling_cols: [] as string[],
@@ -94,7 +93,6 @@ const CreateSurveyPage: React.FC = () => {
         start_time: 'start',
         end_time: 'end',
         consent: 'consent',
-        audit: 'audit_URL',
       };
       
       setCoreIdentifiers(prev => {

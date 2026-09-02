@@ -89,7 +89,6 @@ const SurveySettingsPage: React.FC = () => {
     start_time: 'start',
     end_time: 'end',
     consent: 'consent',
-    audit: 'audit_URL',
   });
   const [samplingFrame, setSamplingFrame] = useState({
     sampling_cols: [] as string[],
@@ -116,7 +115,7 @@ const SurveySettingsPage: React.FC = () => {
 
   // Fallbacks here must match the initial state above, or clearing a field
   // reads as "unchanged" and the Save button never enables.
-  const savedCoreIdentifiers = config?.config_data?.core_identifiers || { uuid: '_uuid', enumerator: '', date_interview: '', start_time: 'start', end_time: 'end', consent: 'consent', audit: 'audit_URL' };
+  const savedCoreIdentifiers = config?.config_data?.core_identifiers || { uuid: '_uuid', enumerator: '', date_interview: '', start_time: 'start', end_time: 'end', consent: 'consent' };
   const isCoreIdentifiersDirty =
     coreIdentifiers.uuid !== (savedCoreIdentifiers.uuid ?? '_uuid') ||
     coreIdentifiers.enumerator !== (savedCoreIdentifiers.enumerator ?? '') ||
@@ -124,7 +123,6 @@ const SurveySettingsPage: React.FC = () => {
     coreIdentifiers.start_time !== (savedCoreIdentifiers.start_time ?? 'start') ||
     coreIdentifiers.end_time !== (savedCoreIdentifiers.end_time ?? 'end') ||
     coreIdentifiers.consent !== (savedCoreIdentifiers.consent ?? 'consent') ||
-    coreIdentifiers.audit !== (savedCoreIdentifiers.audit ?? 'audit_URL') ||
     specialValues.dk_value !== (config?.config_data?.special_values?.dk_value ?? -99) ||
     specialValues.dk_string_value !== (config?.config_data?.special_values?.dk_string_value ?? 'dk');
 
