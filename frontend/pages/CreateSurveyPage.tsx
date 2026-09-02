@@ -649,39 +649,22 @@ const CreateSurveyPage: React.FC = () => {
                     ✓ {projectFormName} ({availableVariables.length} questions)
                   </p>
                 )}
-                {projectFormName && formLanguages.length > 0 && (
+                {formLanguages.length > 1 && (
                   <div className="pt-2">
-                    {formLanguages.length > 1 ? (
-                      <>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                          Show question labels in
-                        </label>
-                        <select
-                          value={selectedLanguage}
-                          onChange={(e) => setSelectedLanguage(e.target.value)}
-                          className="w-full sm:w-64 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          {formLanguages.map((language) => (
-                            <option key={language} value={language}>
-                              {language}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                          Your form has {formLanguages.length} translations. This one is used
-                          wherever Field Compass shows a question or answer label.
-                        </p>
-                      </>
-                    ) : (
-                      // A form with one translation has nothing to choose, but say so --
-                      // silence reads as a missing feature. "default" is how Kobo reports
-                      // an unnamed translation, which is not a language name to show.
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {formLanguages[0] === 'default'
-                          ? 'Your form has a single, unnamed set of labels.'
-                          : `Question labels are shown in ${formLanguages[0]}, the only translation your form carries.`}
-                      </p>
-                    )}
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      Show question labels in
+                    </label>
+                    <select
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                      className="w-full sm:w-64 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {formLanguages.map((language) => (
+                        <option key={language} value={language}>
+                          {language}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
                 {projectFormError && (

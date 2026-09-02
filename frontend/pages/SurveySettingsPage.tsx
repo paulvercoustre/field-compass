@@ -1254,9 +1254,6 @@ const SurveySettingsPage: React.FC = () => {
                           ✓ {koboToolFileName} ({availableVariables.length} variables)
                         </div>
                       )}
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        Refresh to pick up any changes made to the form in Kobo.
-                      </p>
                     </div>
                   )}
                   <button
@@ -1274,62 +1271,46 @@ const SurveySettingsPage: React.FC = () => {
                       <span>Refresh form from project</span>
                     )}
                   </button>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                    Reads the current form from your Kobo project. Do this after changing
-                    the form in Kobo.
-                  </p>
                   
-                  {/* Label language */}
-                  {koboToolData && (
-                    <div className="mt-4 space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                        Label language
-                      </h3>
-                      {(() => {
-                        // Translations are stored as `label::<language>` columns, so the
-                        // languages the form carries are exactly those column names.
-                        const languages = Array.from(
-                          new Set(
-                            [...koboToolData.survey, ...koboToolData.choices].flatMap((row) =>
-                              Object.keys(row).filter((key) => key.startsWith('label::'))
-                            )
-                          )
-                        );
+                  {/* Label language. Only shown when the form has more than one
+                      translation: a control with a single option asks the user to
+                      read something they cannot act on. */}
+                  {koboToolData && (() => {
+                    // Translations are stored as `label::<language>` columns, so the
+                    // languages the form carries are exactly those column names.
+                    const languages = Array.from(
+                      new Set(
+                        [...koboToolData.survey, ...koboToolData.choices].flatMap((row) =>
+                          Object.keys(row).filter((key) => key.startsWith('label::'))
+                        )
+                      )
+                    );
+                    if (languages.length < 2) return null;
 
-                        if (languages.length === 0) {
-                          return (
-                            <p className="text-xs text-gray-600 dark:text-gray-400">
-                              This form has a single, unnamed set of labels.
-                            </p>
-                          );
-                        }
-
-                        return (
-                          <>
-                            <select
-                              value={labelColumnSurvey}
-                              onChange={(e) => {
-                                // One language for both: showing questions in one
-                                // language and their answers in another helps nobody.
-                                setLabelColumnSurvey(e.target.value);
-                                setLabelColumnChoices(e.target.value);
-                              }}
-                              className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                              {languages.map((column) => (
-                                <option key={column} value={column}>
-                                  {column.replace('label::', '')}
-                                </option>
-                              ))}
-                            </select>
-                            <p className="text-xs text-gray-600 dark:text-gray-400">
-                              Used wherever Field Compass shows a question or answer label.
-                            </p>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
+                    return (
+                      <div className="mt-4 space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <label className="block text-sm font-semibold text-gray-900 dark:text-white">
+                          Label language
+                        </label>
+                        <select
+                          value={labelColumnSurvey}
+                          onChange={(e) => {
+                            // One language for both: showing questions in one language
+                            // and their answers in another helps nobody.
+                            setLabelColumnSurvey(e.target.value);
+                            setLabelColumnChoices(e.target.value);
+                          }}
+                          className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          {languages.map((column) => (
+                            <option key={column} value={column}>
+                              {column.replace('label::', '')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })()}
                   <div className="flex gap-3 mt-4">
                     <button
                       onClick={handleSaveKoboTool}
