@@ -563,6 +563,61 @@ class TestSubmissionsEndpoint:
             assert sub["qa_status"] == "FLAGGED"
 
 
+class TestPerformanceEndpoint:
+    """Tests for /api/performance when the enumerator is optional."""
+
+    @staticmethod
+    def _survey(client, core_identifiers):
+        response = client.post(
+            "/api/surveys",
+            json={
+                "survey_name": f"Perf {core_identifiers}",
+                "kobo_asset_id": "perf_asset",
+                "config_data": {"core_identifiers": core_identifiers},
+            },
+        )
+        assert response.status_code == 201
+        return response.json()
+
+    def test_no_enumerator_returns_empty_with_a_reason(self, client):
+        """
+        Never bucket every submission under a phantom "Unknown" enumerator --
+        an empty result that explains itself beats one that reads as real data.
+        """
+        survey = self._survey(client, {"uuid": "_uuid"})
+
+        response = client.get(f"/api/performance?survey_id={survey['survey_id']}")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["collection"] == []
+        assert payload["quality"] == []
+        assert len(payload["unavailable"]) == 1
+
+        entry = payload["unavailable"][0]
+        assert entry["capability"] == "enumerator_performance"
+        assert entry["missing_setting"] == "core_identifiers.enumerator"
+        assert entry["reason"]
+
+    def test_blank_enumerator_is_treated_as_unset(self, client):
+        survey = self._survey(client, {"uuid": "_uuid", "enumerator": "  "})
+
+        payload = client.get(f"/api/performance?survey_id={survey['survey_id']}").json()
+
+        assert payload["collection"] == []
+        assert payload["unavailable"][0]["capability"] == "enumerator_performance"
+
+    def test_configured_enumerator_reports_nothing_unavailable(self, client, test_survey):
+        """Regression guard: a fully configured survey is unchanged."""
+        response = client.get(f"/api/performance?survey_id={test_survey['survey_id']}")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["unavailable"] == []
+        assert "collection" in payload
+        assert "quality" in payload
+
+
 class TestProgressEndpoint:
     """Tests for /api/progress endpoint."""
 

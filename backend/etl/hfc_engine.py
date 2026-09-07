@@ -22,6 +22,7 @@ from etl.dk_utils import (
     compute_dk_metrics as compute_submission_dk_metrics,
 )
 from models import QualityIssue
+from services.survey_config import get_core_identifier
 from utils.rule_versioning import (
     generate_llm_input_hash,
     generate_llm_rules_hash,
@@ -54,8 +55,10 @@ class HFCEngine:
 
         # Core identifiers
         self.uuid_field = core_identifiers.get("uuid", "_uuid")
-        self.enumerator_field = core_identifiers.get("enumerator", "enumerator_id")
-        self.date_interview_field = core_identifiers.get("date_interview", "today")
+        # Optional: a survey may have no enumerator question at all. Never
+        # substitute a default -- see services/survey_config.py.
+        self.enumerator_field = get_core_identifier(self.config_data, "enumerator")
+        self.date_interview_field = get_core_identifier(self.config_data, "date_interview")
         self.start_time_field = core_identifiers.get("start_time", "start")
         self.end_time_field = core_identifiers.get("end_time", "end")
 
@@ -303,7 +306,7 @@ class HFCEngine:
         return 1 - math.exp(-y)
 
     def _get_field_value(
-        self, submission_data: dict[str, Any], field_name: str
+        self, submission_data: dict[str, Any], field_name: str | None
     ) -> tuple[Any, str | None]:
         """
         Get field value from submission data, handling Kobo path-based field names.
@@ -320,6 +323,13 @@ class HFCEngine:
         Returns:
             Tuple of (value, actual_field_path) where actual_field_path is the full path found
         """
+        # Core identifiers are optional, so the field name may be unset. Bail
+        # out explicitly: otherwise the suffix search below looks for the
+        # literal "/None", which is not found by accident rather than by
+        # intent.
+        if not field_name:
+            return None, None
+
         # First try direct lookup
         if field_name in submission_data:
             return submission_data[field_name], field_name
@@ -546,11 +556,18 @@ class HFCEngine:
                 )
             )
 
-        # 2. Check for missing enumerator ID
-        enumerator_id, enumerator_field_path = self._get_field_value(
-            submission_data, self.enumerator_field
+        # 2. Check for missing enumerator ID.
+        # Only meaningful once the survey says which field holds it. With no
+        # enumerator configured every submission would otherwise be flagged,
+        # which is the app telling a new user that all of their data is bad.
+        enumerator_id, enumerator_field_path = (
+            self._get_field_value(submission_data, self.enumerator_field)
+            if self.enumerator_field
+            else (None, None)
         )
-        if not enumerator_id or (isinstance(enumerator_id, str) and enumerator_id.strip() == ""):
+        if self.enumerator_field and (
+            not enumerator_id or (isinstance(enumerator_id, str) and enumerator_id.strip() == "")
+        ):
             issues.append(
                 QualityIssue(
                     check="missing_enumerator",

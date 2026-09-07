@@ -166,9 +166,18 @@ export interface EnumeratorQualityStats {
   avgIssuesPerSurvey: number;
 }
 
+export interface UnavailableCapability {
+  capability: string;
+  reason: string;
+  missing_setting: string;
+}
+
 export interface PerformanceData {
   collection: EnumeratorCollectionStats[];
   quality: EnumeratorQualityStats[];
+  // Present when a required survey setting is missing, so the view can
+  // explain itself instead of rendering an empty chart.
+  unavailable?: UnavailableCapability[];
 }
 
 // --- Filtering Types ---

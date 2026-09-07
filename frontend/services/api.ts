@@ -233,3 +233,52 @@ export const api = {
     }
   }
 };
+// --- Kobo project form ------------------------------------------------------
+
+export interface KoboFormQuestion {
+  path: string;
+  name: string;
+  /** Every translation the form carries, keyed by language name. */
+  labels: Record<string, string>;
+  type: string;
+  list_name: string | null;
+  repeat_name: string | null;
+}
+
+export interface KoboFormChoice {
+  name: string;
+  labels: Record<string, string>;
+}
+
+export interface KoboProjectForm {
+  asset_uid: string;
+  asset_name: string | null;
+  languages: string[];
+  has_audit: boolean | null;
+  questions: KoboFormQuestion[];
+  choice_lists: Record<string, KoboFormChoice[]>;
+}
+
+/**
+ * Fetch a Kobo project's form structure so configuration pickers can be
+ * populated without the user exporting and uploading the XLSForm.
+ */
+export const getKoboProjectForm = async (assetUid: string): Promise<KoboProjectForm> => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/kobo/assets/${encodeURIComponent(assetUid)}/form`,
+    { headers: createHeaders() }
+  );
+
+  if (!response.ok) {
+    let detail = 'Could not read the form from that Kobo project.';
+    try {
+      const body = await response.json();
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // Non-JSON error body; the default message is more useful than the raw text.
+    }
+    throw new Error(detail);
+  }
+
+  return response.json();
+};

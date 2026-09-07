@@ -15,7 +15,17 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from routers import ai, etl, progress, quality, submissions, surveys, users, validation_rules
+from routers import (
+    ai,
+    etl,
+    kobo,
+    progress,
+    quality,
+    submissions,
+    surveys,
+    users,
+    validation_rules,
+)
 from services.database import init_db
 from services.rate_limit import limiter
 
@@ -112,6 +122,7 @@ app.include_router(surveys.router, prefix="/api", tags=["surveys"])
 app.include_router(validation_rules.router, prefix="/api", tags=["validation-rules"])
 app.include_router(quality.router, prefix="/api", tags=["quality"])
 app.include_router(ai.router, prefix="/api", tags=["ai"])
+app.include_router(kobo.router, prefix="/api", tags=["kobo"])
 
 
 @app.get("/")

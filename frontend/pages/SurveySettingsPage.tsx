@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
-import { parseKoboTool, KoboToolData } from '../services/koboParser';
+import { KoboToolData } from '../services/koboParser';
 import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
 import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
@@ -13,6 +13,10 @@ import AISuggestedRules from '../components/rule-builder/AISuggestedRules';
 import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
+import InfoTip from '../components/ui/InfoTip';
+import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
+import { getKoboProjectForm, KoboProjectForm } from '../services/api';
+import { labelColumnFor } from '../utils/koboUrl';
 
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -61,6 +65,8 @@ const SurveySettingsPage: React.FC = () => {
   const [koboToolFileName, setKoboToolFileName] = useState<string>('');
   const [isLoadingTool, setIsLoadingTool] = useState(false);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
+  // Outlier detection is the only picker that genuinely needs numbers.
+  const [numericVariables, setNumericVariables] = useState<string[]>([]);
   const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
   const [labelColumnSurvey, setLabelColumnSurvey] = useState<string>('label::English (en)');
   const [labelColumnChoices, setLabelColumnChoices] = useState<string>('label::English (en)');
@@ -77,13 +83,14 @@ const SurveySettingsPage: React.FC = () => {
   const [surveyName, setSurveyName] = useState('');
   const [koboAssetId, setKoboAssetId] = useState('');
   const [coreIdentifiers, setCoreIdentifiers] = useState({
-    uuid: '_uuid',
-    enumerator: 'enumerator_id',
-    date_interview: 'today',
+    uuid: '_uuid',  // always supplied by Kobo as submission metadata
+    // Form-dependent: never pre-fill a field the user did not choose. A form
+    // may name these anything, or not have them at all.
+    enumerator: '',
+    date_interview: '',
     start_time: 'start',
     end_time: 'end',
     consent: 'consent',
-    audit: 'audit_URL',
   });
   const [samplingFrame, setSamplingFrame] = useState({
     sampling_cols: [] as string[],
@@ -108,15 +115,16 @@ const SurveySettingsPage: React.FC = () => {
     globalParameters.data_collection_start_date !== (config?.config_data?.global_parameters?.data_collection_start_date || '') ||
     globalParameters.data_collection_end_date !== (config?.config_data?.global_parameters?.data_collection_end_date || '');
 
-  const savedCoreIdentifiers = config?.config_data?.core_identifiers || { uuid: '_uuid', enumerator: 'enumerator_id', date_interview: 'today', start_time: 'start', end_time: 'end', consent: 'consent', audit: 'audit_URL' };
+  // Fallbacks here must match the initial state above, or clearing a field
+  // reads as "unchanged" and the Save button never enables.
+  const savedCoreIdentifiers = config?.config_data?.core_identifiers || { uuid: '_uuid', enumerator: '', date_interview: '', start_time: 'start', end_time: 'end', consent: 'consent' };
   const isCoreIdentifiersDirty =
     coreIdentifiers.uuid !== (savedCoreIdentifiers.uuid ?? '_uuid') ||
-    coreIdentifiers.enumerator !== (savedCoreIdentifiers.enumerator ?? 'enumerator_id') ||
-    coreIdentifiers.date_interview !== (savedCoreIdentifiers.date_interview ?? 'today') ||
+    coreIdentifiers.enumerator !== (savedCoreIdentifiers.enumerator ?? '') ||
+    coreIdentifiers.date_interview !== (savedCoreIdentifiers.date_interview ?? '') ||
     coreIdentifiers.start_time !== (savedCoreIdentifiers.start_time ?? 'start') ||
     coreIdentifiers.end_time !== (savedCoreIdentifiers.end_time ?? 'end') ||
     coreIdentifiers.consent !== (savedCoreIdentifiers.consent ?? 'consent') ||
-    coreIdentifiers.audit !== (savedCoreIdentifiers.audit ?? 'audit_URL') ||
     specialValues.dk_value !== (config?.config_data?.special_values?.dk_value ?? -99) ||
     specialValues.dk_string_value !== (config?.config_data?.special_values?.dk_string_value ?? 'dk');
 
@@ -204,12 +212,19 @@ const SurveySettingsPage: React.FC = () => {
 
   useEffect(() => {
     if (koboToolData && koboToolData.variableMap) {
-      // Filter to only numeric variables (integer, decimal, calculate)
+      // Core identifiers can be any question type: an enumerator ID is usually
+      // a select_one (best practice, so IDs are consistent) but is sometimes
+      // free text, and consent is always a select. Offering only numeric
+      // variables made those fields impossible to set -- and silently cleared
+      // a saved one, because a <select> cannot display an option that is not
+      // in its list. Matches CreateSurveyPage and SurveySetupPage.
+      setAvailableVariables(Array.from(koboToolData.variableMap.keys()));
+
       const numericTypes = ['integer', 'decimal', 'calculate'];
-      const vars = Array.from(koboToolData.variableMap.entries())
+      const numericVars = Array.from(koboToolData.variableMap.entries())
         .filter(([_, variable]) => numericTypes.includes(variable.type))
         .map(([name, _]) => name);
-      setAvailableVariables(vars);
+      setNumericVariables(numericVars);
 
       const textQuestions = koboToolData.survey
         .filter((q) => q.name && (q.type === 'text' || q.type.startsWith('text')))
@@ -223,9 +238,9 @@ const SurveySettingsPage: React.FC = () => {
       // Clean up outlier_variables and outlier_log_transform_variables to remove any non-numeric variables
       setQualityChecks((prev) => ({
         ...prev,
-        outlier_variables: prev.outlier_variables.filter((v) => vars.includes(v)),
+        outlier_variables: prev.outlier_variables.filter((v) => numericVars.includes(v)),
         outlier_log_transform_variables: prev.outlier_log_transform_variables.filter((v) =>
-          vars.includes(v) && prev.outlier_variables.includes(v)
+          numericVars.includes(v) && prev.outlier_variables.includes(v)
         ),
         llm_qualitative_fields: prev.llm_qualitative_fields.filter((v) =>
           textQuestions.some((t) => t.name === v)
@@ -257,6 +272,7 @@ const SurveySettingsPage: React.FC = () => {
     setKoboToolData(null);
     setKoboToolFileName('');
     setAvailableVariables([]);
+    setNumericVariables([]);
     
     try {
       const data = await getSurveyConfig(selectedSurvey.survey_id);
@@ -433,37 +449,70 @@ const SurveySettingsPage: React.FC = () => {
     }
   };
 
-  const handleKoboToolUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  /**
+   * Re-read the form from the Kobo project.
+   *
+   * Replaces uploading an XLSForm: the project is the source of truth, and a
+   * form edited mid-collection has to be picked up from there anyway.
+   */
+  const handleRefreshFormFromProject = async () => {
+    const assetId = config?.kobo_asset_id;
+    if (!assetId) {
+      setError('This survey has no Kobo project linked, so the form cannot be read.');
+      return;
+    }
 
     setIsLoadingTool(true);
     setError(null);
-    setKoboToolFileName('');
-    
     try {
-      const data = await parseKoboTool(file);
-      setKoboToolData(data);
-      setKoboToolFileName(file.name);
-      
-      // Auto-detect and set label columns if available
-      if (data.survey.length > 0) {
-        const surveyLabels = Object.keys(data.survey[0]).filter(key => key.startsWith('label::'));
-        if (surveyLabels.length > 0 && !surveyLabels.includes(labelColumnSurvey)) {
-          setLabelColumnSurvey(surveyLabels[0]);
-        }
+      const form: KoboProjectForm = await getKoboProjectForm(assetId);
+      const labelColumns = (labels: Record<string, string>) =>
+        Object.fromEntries(
+          Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text])
+        );
+
+      const survey = form.questions.map((q) => ({
+        type: q.type,
+        name: q.name,
+        ...labelColumns(q.labels),
+        roster_name: q.repeat_name,
+        list_name: q.list_name,
+      }));
+      const choices = Object.entries(form.choice_lists).flatMap(([list_name, options]) =>
+        options.map((option) => ({
+          list_name,
+          name: option.name,
+          ...labelColumns(option.labels),
+        }))
+      );
+      const language = form.languages[0] || 'default';
+      const variableMap = new Map(
+        form.questions.map((q) => [
+          q.name,
+          {
+            type: q.type,
+            label: q.labels[language] || q.name,
+            choiceListName: q.list_name,
+            roster_name: q.repeat_name,
+          },
+        ])
+      );
+
+      setKoboToolData({ survey, choices, variableMap } as KoboToolData);
+      setKoboToolFileName(form.asset_name || assetId);
+
+      // Keep the chosen language if the form still has it; otherwise fall back.
+      const available = form.languages.map(labelColumnFor);
+      if (available.length > 0 && !available.includes(labelColumnSurvey)) {
+        setLabelColumnSurvey(available[0]);
       }
-      if (data.choices.length > 0) {
-        const choiceLabels = Object.keys(data.choices[0]).filter(key => key.startsWith('label::'));
-        if (choiceLabels.length > 0 && !choiceLabels.includes(labelColumnChoices)) {
-          setLabelColumnChoices(choiceLabels[0]);
-        }
+      if (available.length > 0 && !available.includes(labelColumnChoices)) {
+        setLabelColumnChoices(available[0]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse Kobo tool file');
+      setError(err instanceof Error ? err.message : 'Could not read the form from Kobo.');
     } finally {
       setIsLoadingTool(false);
-      event.target.value = '';
     }
   };
 
@@ -867,12 +916,18 @@ const SurveySettingsPage: React.FC = () => {
     value: string,
     onChange: (value: string) => void,
     label: string,
-    editable?: boolean
+    editable?: boolean,
+    helpKey?: string
   ) => {
     const canEdit = editable ?? isEditing;
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          {label}
+          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
+            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
+          )}
+        </label>
         {canEdit && availableVariables.length > 0 ? (
           <select
             value={value}
@@ -899,7 +954,8 @@ const SurveySettingsPage: React.FC = () => {
     value: string,
     onChange: (value: string) => void,
     label: string,
-    editable?: boolean
+    editable?: boolean,
+    helpKey?: string
   ) => {
     const canEdit = editable ?? isEditing;
     // Get all unique answer options from choices
@@ -909,7 +965,12 @@ const SurveySettingsPage: React.FC = () => {
 
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          {label}
+          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
+            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
+          )}
+        </label>
         {canEdit && answerOptions.length > 0 ? (
           <select
             value={value}
@@ -1193,101 +1254,63 @@ const SurveySettingsPage: React.FC = () => {
                           ✓ {koboToolFileName} ({availableVariables.length} variables)
                         </div>
                       )}
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        You can upload a new tool to replace the existing one, or keep the current tool.
-                      </p>
                     </div>
                   )}
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleKoboToolUpload}
-                    className="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
-                    disabled={isLoadingTool}
-                  />
-                  {isLoadingTool && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <Spinner />
-                      <span>Parsing Kobo tool...</span>
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleRefreshFormFromProject}
+                    disabled={isLoadingTool || !config?.kobo_asset_id}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+                  >
+                    {isLoadingTool ? (
+                      <>
+                        <Spinner />
+                        <span>Reading form...</span>
+                      </>
+                    ) : (
+                      <span>Refresh form from project</span>
+                    )}
+                  </button>
                   
-                  {/* Label Column Settings */}
-                  {koboToolData && (
-                    <div className="mt-4 space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Label Column Settings</h3>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                        Select which column to use for displaying question and choice labels. This is useful when your survey has multiple language columns.
-                      </p>
-                      
-                      {/* Detect available label columns */}
-                      {(() => {
-                        const surveyLabels = new Set<string>();
-                        const choiceLabels = new Set<string>();
-                        
-                        if (koboToolData.survey.length > 0) {
-                          Object.keys(koboToolData.survey[0]).forEach(key => {
-                            if (key.startsWith('label::')) {
-                              surveyLabels.add(key);
-                            }
-                          });
-                        }
-                        
-                        if (koboToolData.choices.length > 0) {
-                          Object.keys(koboToolData.choices[0]).forEach(key => {
-                            if (key.startsWith('label::')) {
-                              choiceLabels.add(key);
-                            }
-                          });
-                        }
-                        
-                        const surveyLabelArray = Array.from(surveyLabels);
-                        const choiceLabelArray = Array.from(choiceLabels);
-                        
-                        return (
-                          <>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                                Survey Question Label Column
-                              </label>
-                              <select
-                                value={labelColumnSurvey}
-                                onChange={(e) => setLabelColumnSurvey(e.target.value)}
-                                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                              >
-                                {surveyLabelArray.length > 0 ? (
-                                  surveyLabelArray.map(col => (
-                                    <option key={col} value={col}>{col}</option>
-                                  ))
-                                ) : (
-                                  <option value="label::English (en)">label::English (en) (default)</option>
-                                )}
-                              </select>
-                            </div>
-                            
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                                Choice Label Column
-                              </label>
-                              <select
-                                value={labelColumnChoices}
-                                onChange={(e) => setLabelColumnChoices(e.target.value)}
-                                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                              >
-                                {choiceLabelArray.length > 0 ? (
-                                  choiceLabelArray.map(col => (
-                                    <option key={col} value={col}>{col}</option>
-                                  ))
-                                ) : (
-                                  <option value="label::English (en)">label::English (en) (default)</option>
-                                )}
-                              </select>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
+                  {/* Label language. Only shown when the form has more than one
+                      translation: a control with a single option asks the user to
+                      read something they cannot act on. */}
+                  {koboToolData && (() => {
+                    // Translations are stored as `label::<language>` columns, so the
+                    // languages the form carries are exactly those column names.
+                    const languages = Array.from(
+                      new Set(
+                        [...koboToolData.survey, ...koboToolData.choices].flatMap((row) =>
+                          Object.keys(row).filter((key) => key.startsWith('label::'))
+                        )
+                      )
+                    );
+                    if (languages.length < 2) return null;
+
+                    return (
+                      <div className="mt-4 space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <label className="block text-sm font-semibold text-gray-900 dark:text-white">
+                          Label language
+                        </label>
+                        <select
+                          value={labelColumnSurvey}
+                          onChange={(e) => {
+                            // One language for both: showing questions in one language
+                            // and their answers in another helps nobody.
+                            setLabelColumnSurvey(e.target.value);
+                            setLabelColumnChoices(e.target.value);
+                          }}
+                          className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          {languages.map((column) => (
+                            <option key={column} value={column}>
+                              {column.replace('label::', '')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })()}
                   <div className="flex gap-3 mt-4">
                     <button
                       onClick={handleSaveKoboTool}
@@ -1481,16 +1504,20 @@ const SurveySettingsPage: React.FC = () => {
                   coreIdentifiers.enumerator,
                   (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
                   'Enumerator ID',
-                  canEditSurvey
+                  canEditSurvey,
+                  'enumerator'
                 )}
                 {renderVariableDropdown(
                   coreIdentifiers.consent,
                   (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
                   'Consent',
-                  canEditSurvey
+                  canEditSurvey,
+                  'consent'
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value
+                  <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
+                </label>
                   {canEditSurvey ? (
                     <input
                       type="number"
@@ -1508,7 +1535,8 @@ const SurveySettingsPage: React.FC = () => {
                   specialValues.dk_string_value,
                   (value) => setSpecialValues({ ...specialValues, dk_string_value: value }),
                   'DK String Value',
-                  canEditSurvey
+                  canEditSurvey,
+                  'dk_string_value'
                 )}
               </div>
               {canEditSurvey && isCoreIdentifiersDirty && (
@@ -1988,8 +2016,8 @@ const SurveySettingsPage: React.FC = () => {
                         </p>
                         {isEditingOutlier ? (
                           <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
-                            {availableVariables.length > 0 ? (
-                              availableVariables.map((variable) => (
+                            {numericVariables.length > 0 ? (
+                              numericVariables.map((variable) => (
                                 <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
                                   <input
                                     type="checkbox"

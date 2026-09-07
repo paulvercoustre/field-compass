@@ -19,10 +19,16 @@ from models import (
     PerformanceData,
     ProgressByColumn,
     ProgressData,
+    UnavailableCapability,
 )
 from services.auth import get_current_active_user
 from services.database import get_db
 from services.permissions import require_survey_access
+from services.survey_config import (
+    CAPABILITY_ENUMERATOR_PERFORMANCE,
+    get_enumerator_field,
+    unavailable_capabilities,
+)
 
 router = APIRouter()
 
@@ -384,8 +390,21 @@ async def get_performance_data(
 
     # Get enumerator field name from survey config
     config = survey_config.config_data
-    core_ids = config.get("core_identifiers", {})
-    enumerator_field = core_ids.get("enumerator", "enumerator_id")
+    enumerator_field = get_enumerator_field(config)
+
+    # No enumerator configured: return an empty result carrying the reason,
+    # rather than bucketing every submission under a phantom "Unknown"
+    # enumerator that reads as real data.
+    if not enumerator_field:
+        return PerformanceData(
+            collection=[],
+            quality=[],
+            unavailable=[
+                UnavailableCapability(**item)
+                for item in unavailable_capabilities(config)
+                if item["capability"] == CAPABILITY_ENUMERATOR_PERFORMANCE
+            ],
+        )
 
     # Build query filtered by survey_id
     query = db.query(SubmissionCurrent).filter(

@@ -29,6 +29,7 @@ from models import (
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
 from services.permissions import require_survey_access
+from services.survey_config import get_enumerator_field
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -211,8 +212,7 @@ async def get_submissions(
     enumerator_field = None
     if survey_config and survey_config.config_data:
         config = survey_config.config_data
-        core_ids = config.get("core_identifiers", {})
-        enumerator_field = core_ids.get("enumerator", "enumerator_id")
+        enumerator_field = get_enumerator_field(config)
 
     # Get sampling columns from survey config
     sampling_cols = []
