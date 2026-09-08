@@ -26,7 +26,14 @@ from services.database import get_db
 from services.permissions import require_survey_access
 from services.survey_config import (
     CAPABILITY_ENUMERATOR_PERFORMANCE,
+    SAMPLING_MODE_TOTAL,
+    SAMPLING_MODE_UPLOADED,
     get_enumerator_field,
+    get_frame_data,
+    get_sampling_cols,
+    get_sampling_mode,
+    get_total_target,
+    has_targets,
     unavailable_capabilities,
 )
 
@@ -93,6 +100,40 @@ def _extract_sampling_cols(
     for col in sampling_cols:
         result[col] = _get_field_value(submission_data, col)
     return result
+
+
+def _percentage(conducted: int, target: int | None) -> float | None:
+    """
+    Percent of target conducted, or None when there is nothing to divide by.
+
+    None, not 0 and not 100. The old code read
+    `100.0 if target == 0 else ...`, so a survey with no targets divided by a
+    total of zero and reported **100% complete** on its first submission --
+    "nothing planned" rendering as "everything done". A target of zero is
+    equally undividable, and gets the same answer: we do not know.
+    """
+    if not target or target <= 0:
+        return None
+    return round((conducted / target) * 100, 1)
+
+
+def _collection_rate(submissions: list[SubmissionCurrent]) -> tuple[int, float | None]:
+    """
+    Days of collection so far, and the mean submissions per day.
+
+    This is what a survey with no targets can honestly report instead of a
+    percentage: not how much of a plan is done, but how fast data is arriving.
+
+    Spans the first submission to the most recent inclusive, so a single day of
+    collection is 1 day and not 0 -- which would divide by zero, and is also
+    just wrong.
+    """
+    times = [sub._submission_time for sub in submissions if sub._submission_time is not None]
+    if not times:
+        return 0, None
+
+    span_days = (max(times).date() - min(times).date()).days + 1
+    return span_days, round(len(submissions) / span_days, 1)
 
 
 def _calculate_targets_from_frame(
@@ -222,39 +263,48 @@ async def get_progress_data(
     # Get all submissions (completed surveys)
     submissions = query.all()
 
-    # Get sampling frame configuration
-    sampling_cols = []
-    frame_data = []
+    config = survey_config.config_data if survey_config else None
+    mode = get_sampling_mode(config)
+    sampling_cols = get_sampling_cols(config)
+    frame_data = get_frame_data(config)
+    targets_available = has_targets(config)
+
     target_column = None
-
-    if survey_config and survey_config.config_data:
-        config = survey_config.config_data
-        sampling_frame_config = config.get("sampling_frame", {})
-        sampling_cols = sampling_frame_config.get("sampling_cols", [])
-        frame_data = sampling_frame_config.get("frame_data", [])
-
+    if frame_data:
         # Find target column from frame headers if available
-        if frame_data and len(frame_data) > 0:
-            frame_headers = list(frame_data[0].keys())
-            for header in frame_headers:
-                if _is_target_column(header):
-                    target_column = header
-                    break
+        frame_headers = list(frame_data[0].keys())
+        for header in frame_headers:
+            if _is_target_column(header):
+                target_column = header
+                break
 
-    # Calculate targets from sampling frame
+    # Calculate targets from sampling frame. In every mode but `uploaded` this
+    # returns empty structures, which is what makes the per-column and detailed
+    # sections below fall through to describing what was collected.
     (
-        total_target,
+        frame_total_target,
         targets_by_col,
         targets_by_combo,
         targets_combo_values,
     ) = _calculate_targets_from_frame(frame_data, sampling_cols, target_column)
 
-    # Calculate overall progress
     total_conducted = len(submissions)
+
+    if not targets_available:
+        total_target = None
+    elif mode == SAMPLING_MODE_TOTAL:
+        total_target = get_total_target(config)
+    else:
+        total_target = frame_total_target
+
+    days_active, submissions_per_day = _collection_rate(submissions)
+
     overall = OverallProgress(
         conducted=total_conducted,
         target=total_target,
-        progress=100.0 if total_target == 0 else round((total_conducted / total_target) * 100, 1),
+        progress=_percentage(total_conducted, total_target),
+        days_active=days_active,
+        submissions_per_day=submissions_per_day,
     )
 
     # Group by each sampling column dynamically
@@ -269,21 +319,24 @@ async def get_progress_data(
             col_value = str(col_value) if col_value is not None else "Unknown"
             col_counts[col_value] += 1
 
-        # Get targets for this column
-        col_targets = targets_by_col.get(col, {})
+        # Per-value targets come from an uploaded frame only. A single total
+        # cannot be split across values without inventing an allocation, and
+        # `by_variable` (#30) is not implemented yet.
+        col_targets = targets_by_col.get(col, {}) if mode == SAMPLING_MODE_UPLOADED else {}
 
         # Build progress list for this column ensuring targets with zero conducted are included
         all_values = set(col_counts.keys()) | set(col_targets.keys())
         column_progress = []
         for col_value in sorted(all_values):
             conducted = col_counts.get(col_value, 0)
-            target = col_targets.get(col_value, 0)
+            target = col_targets.get(col_value) if col_targets else None
             column_progress.append(
                 ProgressByColumn(
                     value=str(col_value),
                     conducted=conducted,
                     target=target,
-                    progress=100.0 if target == 0 else round((conducted / target) * 100, 1),
+                    progress=_percentage(conducted, target),
+                    share=_percentage(conducted, total_conducted),
                 )
             )
 
@@ -312,13 +365,17 @@ async def get_progress_data(
             if combo_key not in combo_values_map:
                 combo_values_map[combo_key] = combo_values
 
-        # Include combinations from frame even if no submissions
-        all_combo_keys = set(combo_counts.keys()) | set(targets_by_combo.keys())
+        # Include combinations from frame even if no submissions. Without a
+        # frame there is nothing to add: the observed combinations are the
+        # whole story, and a row for a combination nobody planned would be
+        # invented.
+        frame_combos = targets_by_combo if mode == SAMPLING_MODE_UPLOADED else {}
+        all_combo_keys = set(combo_counts.keys()) | set(frame_combos.keys())
 
         # Build detailed progress entries
         for combo_key in sorted(all_combo_keys):
             conducted = combo_counts.get(combo_key, 0)
-            target = targets_by_combo.get(combo_key, 0)
+            target = frame_combos.get(combo_key) if frame_combos else None
 
             # Get the values dict for this combination
             values_dict = (
@@ -332,7 +389,7 @@ async def get_progress_data(
                     values=values_dict,
                     conducted=conducted,
                     target=target,
-                    progress=100.0 if target == 0 else round((conducted / target) * 100, 1),
+                    progress=_percentage(conducted, target),
                 )
             )
 
@@ -341,6 +398,7 @@ async def get_progress_data(
     by_livelihood = by_column.get(sampling_cols[1], []) if len(sampling_cols) > 1 else []
 
     return ProgressData(
+        mode=mode,
         overall=overall,
         byColumn=by_column,
         detailed=detailed,

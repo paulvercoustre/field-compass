@@ -752,3 +752,93 @@ class TestOptionalCoreIdentifiers:
 
         assert engine._get_field_value({"a/None": "trap", "x": 1}, None) == (None, None)
         assert engine._get_field_value({"a/None": "trap", "x": 1}, "") == (None, None)
+
+
+class TestSamplingFrameCheck:
+    """`_check_sampling_frame` had no tests at all before collection targets
+    became optional. It asks one question: is this submission's *combination*
+    of sampling values one the survey intended to sample? Only an uploaded file
+    says which combinations those are."""
+
+    @staticmethod
+    def _engine(test_db, test_survey_config, sampling_frame):
+        config = dict(test_survey_config.config_data)
+        config["sampling_frame"] = sampling_frame
+        config["quality_checks"] = {"flag_sampling_frame": True}
+        test_survey_config.config_data = config
+        return HFCEngine(test_db, test_survey_config)
+
+    UPLOADED = {
+        "mode": "uploaded",
+        "sampling_cols": ["admin1", "livelihood"],
+        "frame_data": [
+            {"admin1": "Kabul", "livelihood": "farming", "interview_target": 40},
+            {"admin1": "Herat", "livelihood": "trade", "interview_target": 25},
+        ],
+    }
+
+    def test_combination_in_the_frame_is_not_flagged(self, test_db, test_survey_config):
+        engine = self._engine(test_db, test_survey_config, self.UPLOADED)
+
+        issues = engine._check_sampling_frame({"admin1": "Kabul", "livelihood": "farming"})
+
+        assert issues == []
+
+    def test_combination_absent_from_the_frame_is_flagged(self, test_db, test_survey_config):
+        """A real combination that was never planned -- the case this exists for."""
+        engine = self._engine(test_db, test_survey_config, self.UPLOADED)
+
+        issues = engine._check_sampling_frame({"admin1": "Kabul", "livelihood": "trade"})
+
+        assert len(issues) == 1
+        assert issues[0].check == "sampling_frame_mismatch"
+        assert "admin1=Kabul" in issues[0].value
+        assert "livelihood=trade" in issues[0].value
+
+    def test_values_present_individually_but_not_together_are_flagged(
+        self, test_db, test_survey_config
+    ):
+        """The check is on the combination, not on each column separately."""
+        engine = self._engine(test_db, test_survey_config, self.UPLOADED)
+
+        issues = engine._check_sampling_frame({"admin1": "Herat", "livelihood": "farming"})
+
+        assert len(issues) == 1
+
+    def test_missing_sampling_column_skips_rather_than_flags(self, test_db, test_survey_config):
+        """A submission that never answered the question is not evidence of
+        sampling outside the frame -- flagging it would blame the enumerator
+        for a form that did not ask."""
+        engine = self._engine(test_db, test_survey_config, self.UPLOADED)
+
+        issues = engine._check_sampling_frame({"admin1": "Kabul"})
+
+        assert issues == []
+
+    @pytest.mark.parametrize(
+        "sampling_frame",
+        [
+            {"mode": "none"},
+            {"mode": "total", "total_target": 500},
+            {"mode": "by_variable", "sampling_cols": ["admin1"]},
+        ],
+    )
+    def test_modes_without_an_uploaded_frame_do_not_run_the_check(
+        self, test_db, test_survey_config, sampling_frame
+    ):
+        """Not a degraded check -- an inapplicable one. Nothing declares which
+        combinations were intended, so there is nothing to be wrong about."""
+        engine = self._engine(test_db, test_survey_config, sampling_frame)
+
+        issues = engine._check_sampling_frame({"admin1": "Nowhere", "livelihood": "nothing"})
+
+        assert issues == []
+
+    def test_legacy_config_without_mode_still_checks(self, test_db, test_survey_config):
+        """Surveys configured before `mode` existed keep their behaviour."""
+        legacy = {k: v for k, v in self.UPLOADED.items() if k != "mode"}
+        engine = self._engine(test_db, test_survey_config, legacy)
+
+        issues = engine._check_sampling_frame({"admin1": "Kabul", "livelihood": "trade"})
+
+        assert len(issues) == 1

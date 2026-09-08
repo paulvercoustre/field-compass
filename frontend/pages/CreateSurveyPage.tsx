@@ -35,7 +35,7 @@ const CreateSurveyPage: React.FC = () => {
   const [samplingFrameFileName, setSamplingFrameFileName] = useState<string>('');
   const [isLoadingFrame, setIsLoadingFrame] = useState(false);
   const [frameValidationError, setFrameValidationError] = useState<string | null>(null);
-  const [frameValidationWarning, setFrameValidationWarning] = useState<string | null>(null);
+  const [frameValidationNote, setFrameValidationNote] = useState<string | null>(null);
   const [showSamplingFrameHelp, setShowSamplingFrameHelp] = useState(false);
 
   // Form state
@@ -120,7 +120,7 @@ const CreateSurveyPage: React.FC = () => {
 
     setIsLoadingFrame(true);
     setFrameValidationError(null);
-    setFrameValidationWarning(null);
+    setFrameValidationNote(null);
     setSamplingFrameFileName('');
     
     try {
@@ -143,13 +143,16 @@ const CreateSurveyPage: React.FC = () => {
       setSamplingFrameData(rows);
       setSamplingFrameFileName(file.name);
       
-      // Show warning if there are unmatched columns
+      // Lead with what worked. A real targets file carried `Region / AO`,
+      // `sampling_admin_1_label` and `sampling_livelihood_label` alongside the
+      // columns the app uses; ignoring those is correct behaviour, and saying
+      // so in the register of a problem told the user their file was wrong.
       if (validation.hasUnmatchedColumns) {
-        const targetInfo = validation.targetColumn 
-          ? ` (Note: "${validation.targetColumn}" is recognized as a target column)`
+        const targetInfo = validation.targetColumn
+          ? ` "${validation.targetColumn}" is being read as the target column.`
           : '';
-        setFrameValidationWarning(
-          `The following columns don't match Kobo variables and won't be used in the sampling frame: ${validation.unmatchedColumns.join(', ')}.${targetInfo} Only matching columns will be used: ${validation.matchingColumns.join(', ')}.`
+        setFrameValidationNote(
+          `Using ${validation.matchingColumns.join(', ')} from this file.${targetInfo} Other columns are ignored: ${validation.unmatchedColumns.join(', ')}.`
         );
       }
       
@@ -737,9 +740,9 @@ const CreateSurveyPage: React.FC = () => {
                     {frameValidationError}
                   </div>
                 )}
-                {frameValidationWarning && !frameValidationError && (
-                  <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/50 border border-yellow-200 dark:border-yellow-700 rounded-md text-yellow-800 dark:text-yellow-200 text-sm">
-                    ⚠ {frameValidationWarning}
+                {frameValidationNote && !frameValidationError && (
+                  <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300 text-sm">
+                    {frameValidationNote}
                   </div>
                 )}
                 {samplingFrameFileName && !frameValidationError && !samplingFrameData && (

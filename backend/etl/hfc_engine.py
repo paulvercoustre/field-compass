@@ -22,7 +22,13 @@ from etl.dk_utils import (
     compute_dk_metrics as compute_submission_dk_metrics,
 )
 from models import QualityIssue
-from services.survey_config import get_core_identifier
+from services.survey_config import (
+    SAMPLING_MODE_UPLOADED,
+    get_core_identifier,
+    get_frame_data,
+    get_sampling_cols,
+    get_sampling_mode,
+)
 from utils.rule_versioning import (
     generate_llm_input_hash,
     generate_llm_rules_hash,
@@ -121,10 +127,13 @@ class HFCEngine:
         # Statistics cache for outlier detection - computed once per ETL run
         self._outlier_stats_cache: dict[str, dict[str, float]] = {}
 
-        # Sampling frame configuration
-        sampling_frame_config = self.config_data.get("sampling_frame", {})
-        self.sampling_cols = sampling_frame_config.get("sampling_cols", [])
-        self.frame_data = sampling_frame_config.get("frame_data", [])
+        # Collection targets configuration. Read through services.survey_config
+        # so the mode is derived in one place -- four call sites used to reach
+        # into `sampling_frame` directly and each could disagree about what a
+        # missing key meant.
+        self.sampling_mode = get_sampling_mode(self.config_data)
+        self.sampling_cols = get_sampling_cols(self.config_data)
+        self.frame_data = get_frame_data(self.config_data)
         self.dk_eligible_index = build_eligible_dk_question_index(self.config_data)
 
     def precompute_outlier_statistics(self) -> None:
@@ -885,7 +894,22 @@ class HFCEngine:
         """
         issues = []
 
-        # Skip check if sampling frame is not configured
+        # This check asks whether a submission's combination of values is one
+        # the survey intended to sample, and only an uploaded file says which
+        # combinations those are. Every other mode has nothing to compare
+        # against -- not a degraded check, an inapplicable one.
+        #
+        # Validity against the form's own choice lists is a different question
+        # ("is this even a legal answer") and needs a way to declare strata
+        # without a file, which arrives with by_variable mode in #30.
+        if self.sampling_mode != SAMPLING_MODE_UPLOADED:
+            logger.debug(
+                "Sampling frame check skipped: mode is %s, which supplies no "
+                "combinations to check against",
+                self.sampling_mode,
+            )
+            return issues
+
         if not self.sampling_cols or not self.frame_data:
             logger.debug("Sampling frame check skipped: no sampling_cols or frame_data configured")
             return issues

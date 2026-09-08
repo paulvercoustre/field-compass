@@ -81,3 +81,100 @@ def unavailable_capabilities(config_data: dict[str, Any] | None) -> list[dict[st
                 }
             )
     return unavailable
+
+
+# ---------------------------------------------------------------------------
+# Collection targets
+# ---------------------------------------------------------------------------
+#
+# User-facing copy says "collection targets", not "sampling frame". A sampling
+# frame, methodologically, is the list of units you sample *from*; what this
+# holds is the opposite end -- how many interviews you intend to *do* per group.
+# One real frame file names its target column `interview_target`. The
+# `sampling_frame` config key is kept as-is so nothing has to be migrated.
+
+SAMPLING_MODE_NONE = "none"
+SAMPLING_MODE_TOTAL = "total"
+SAMPLING_MODE_BY_VARIABLE = "by_variable"
+SAMPLING_MODE_UPLOADED = "uploaded"
+
+SAMPLING_MODES = (
+    SAMPLING_MODE_NONE,
+    SAMPLING_MODE_TOTAL,
+    SAMPLING_MODE_BY_VARIABLE,
+    SAMPLING_MODE_UPLOADED,
+)
+
+# Modes that supply targets. Everything else can only describe what was
+# collected, never what fraction of a plan it represents.
+_MODES_WITH_TARGETS = frozenset(
+    {SAMPLING_MODE_TOTAL, SAMPLING_MODE_BY_VARIABLE, SAMPLING_MODE_UPLOADED}
+)
+
+
+def _sampling_config(config_data: dict[str, Any] | None) -> dict[str, Any]:
+    return (config_data or {}).get("sampling_frame") or {}
+
+
+def get_sampling_cols(config_data: dict[str, Any] | None) -> list[str]:
+    """Variables the survey is disaggregated by. Empty when none are declared."""
+    cols = _sampling_config(config_data).get("sampling_cols") or []
+    return [str(col) for col in cols if str(col).strip()]
+
+
+def get_frame_data(config_data: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Rows of an uploaded targets file. Empty when nothing was uploaded."""
+    return _sampling_config(config_data).get("frame_data") or []
+
+
+def get_sampling_mode(config_data: dict[str, Any] | None) -> str:
+    """
+    How this survey expresses its collection targets.
+
+    A stored config with no `mode` predates the field, so it is inferred rather
+    than defaulted to a constant: `uploaded` when frame rows are present,
+    `none` when they are not. That is exactly what those configs already do, so
+    every existing survey keeps its behaviour without being migrated.
+
+    An unrecognised mode is treated the same way. A typo must not silently
+    become "no targets" for a survey that has them.
+    """
+    mode = _sampling_config(config_data).get("mode")
+    if mode in SAMPLING_MODES:
+        return str(mode)
+    return SAMPLING_MODE_UPLOADED if get_frame_data(config_data) else SAMPLING_MODE_NONE
+
+
+def has_targets(config_data: dict[str, Any] | None) -> bool:
+    """
+    Whether a percentage can honestly be computed.
+
+    Not the same as "has sampling columns": columns say how to disaggregate,
+    targets say what to divide by.
+    """
+    mode = get_sampling_mode(config_data)
+    if mode not in _MODES_WITH_TARGETS:
+        return False
+    if mode == SAMPLING_MODE_TOTAL:
+        return get_total_target(config_data) is not None
+    if mode == SAMPLING_MODE_UPLOADED:
+        return bool(get_frame_data(config_data))
+    return bool(_sampling_config(config_data).get("targets_by_value"))
+
+
+def get_total_target(config_data: dict[str, Any] | None) -> int | None:
+    """
+    The single number in `total` mode, or None when it is unset or unusable.
+
+    Zero is rejected along with negatives and junk: a target of nothing cannot
+    produce a meaningful percentage, and treating it as one is how a survey
+    with no targets came to report 100% complete.
+    """
+    raw = _sampling_config(config_data).get("total_target")
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    try:
+        value = int(float(raw))
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None

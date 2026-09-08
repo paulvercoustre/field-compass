@@ -119,27 +119,38 @@ export interface GlobalParameters {
 
 // --- Progress Tracker Types ---
 
+// How a survey expresses its collection targets. `none` is a supported choice,
+// not a misconfiguration: plenty of surveys never set a target.
+export type SamplingMode = 'none' | 'total' | 'by_variable' | 'uploaded';
+
+// `target` and `progress` are null when the survey sets no target -- null, not
+// 0. The two are not the same, and collapsing them is what made an untargeted
+// survey report 100% complete.
 export interface OverallProgress {
   conducted: number;
-  target: number;
-  progress: number;
+  target: number | null;
+  progress: number | null;
+  days_active: number;
+  submissions_per_day: number | null;
 }
 
 export interface ProgressByColumn {
   value: string;
   conducted: number;
-  target: number;
-  progress: number;
+  target: number | null;
+  progress: number | null;
+  share: number | null;  // Percent of all submissions, when there is no target to compare against
 }
 
 export interface DetailedProgress {
   values: Record<string, string>;  // Map of column name to value
-  target: number;
+  target: number | null;
   conducted: number;
-  progress: number;
+  progress: number | null;
 }
 
 export interface ProgressData {
+  mode: SamplingMode;
   overall: OverallProgress;
   byColumn: Record<string, ProgressByColumn[]>;  // Key is column name, value is list of progress by column value
   detailed: DetailedProgress[];
