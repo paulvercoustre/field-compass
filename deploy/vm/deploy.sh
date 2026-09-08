@@ -18,6 +18,16 @@ COMPOSE_FILE="docker-compose.prod.yml"
 HEALTH_RETRIES=45
 HEALTH_DELAY=2
 
+# The backend image CI built, tested and published for this commit. Production
+# runs that artifact rather than rebuilding from source here: a rebuild on the
+# VM produces a THIRD image -- different base layer, different pip resolution,
+# built on a different day -- so the thing that passed CI was never the thing
+# that ran. It also moves the build off the box that is serving traffic.
+#
+# Tagged with the full commit SHA by the "Build Docker Image" job. Overridable
+# for a fork or a private mirror.
+IMAGE_REPO="${FIELD_COMPASS_IMAGE_REPO:-ghcr.io/paulvercoustre/field-compass/field-compass-backend}"
+
 log()  { echo "[deploy] $*"; }
 fail() { echo "[deploy] ERROR: $*" >&2; exit 1; }
 
@@ -70,10 +80,40 @@ health_ok() {
   return 1
 }
 
+# Record the image in .env as well as exporting it. Compose reads .env from the
+# project directory automatically, so the pin survives into any later
+# `docker compose ps|logs` -- including the ones this script runs on the
+# failure path, and any an operator runs by hand afterwards.
+pin_image_in_env() {
+  local ref="$1" tmp
+  tmp="$(mktemp)"
+  grep -v '^BACKEND_IMAGE=' .env > "$tmp" 2>/dev/null || true
+  printf 'BACKEND_IMAGE=%s\n' "$ref" >> "$tmp"
+  # Rewrite in place rather than mv, so .env keeps its ownership and mode.
+  cat "$tmp" > .env
+  rm -f "$tmp"
+}
+
 bring_up() {
-  git -c advice.detachedHead=false checkout --quiet "$1"
-  # --build is required, not optional: VITE_API_URL is baked into the frontend
-  # bundle at build time, so a plain restart would ship the previous bundle.
+  local sha="$1" image
+  image="${IMAGE_REPO}:sha-${sha}"
+
+  git -c advice.detachedHead=false checkout --quiet "$sha"
+  pin_image_in_env "$image"
+  export BACKEND_IMAGE="$image"
+
+  # Pull explicitly. Compose would pull too, but its failure is buried in the
+  # output of a command that is also building the frontend; here a missing
+  # image says so before anything is torn down. It matters most on the
+  # rollback path: rolling back to a commit whose image was never published
+  # must fail loudly rather than half-way through replacing the running stack.
+  log "pulling ${image}"
+  docker pull --quiet "$image" \
+    || fail "cannot pull ${image} -- check that the Build Docker Image job published it for ${sha}, and that this VM can read the registry"
+
+  # --build still applies: frontend-build compiles here because VITE_API_URL is
+  # baked into the bundle at build time. Backend, worker and migrate no longer
+  # build -- they run the image pulled above.
   docker compose -f "$COMPOSE_FILE" up -d --build
 }
 
@@ -92,17 +132,41 @@ git cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null \
 git merge-base --is-ancestor "$TARGET_SHA" FETCH_HEAD 2>/dev/null \
   || fail "commit ${TARGET_SHA} is not reachable from origin/main -- refusing to deploy it"
 
-bring_up "$TARGET_SHA"
+# Two ways a deploy fails, and both need the same rollback. `bring_up` returning
+# non-zero used to be fatal on the spot, because `set -e` aborts before any of
+# what follows: compose stops the running containers before it starts the new
+# ones, so a stack that fails to come up leaves the site DOWN and the script
+# exits without ever attempting a rollback.
+#
+# A failed migration is exactly that case. `migrate` runs before the API, and
+# backend and worker wait on service_completed_successfully, so a bad revision
+# means compose stops the old API, fails, and returns 1 -- with the site down.
+# Verified against a live stack: the previously-serving container was shut down
+# and compose exited 1.
+#
+# Alembic runs each revision in a transaction and Postgres has transactional
+# DDL, so the revision that failed leaves nothing behind and the previous image
+# is safe to bring back. Earlier revisions in the same chain stay applied, which
+# is why old code against a partly-migrated database can still need a human.
+FAILURE=""
+if ! bring_up "$TARGET_SHA"; then
+  FAILURE="the stack did not come up -- see the output above. A failed migration stops here, and the old containers are already down."
+elif ! health_ok; then
+  FAILURE="health check FAILED after $(( HEALTH_RETRIES * HEALTH_DELAY ))s"
+fi
 
-if health_ok; then
+if [ -z "$FAILURE" ]; then
   log "DEPLOY OK ${TARGET_SHA}"
   exit 0
 fi
 
-log "health check FAILED after $(( HEALTH_RETRIES * HEALTH_DELAY ))s"
+log "$FAILURE"
 log "=== container state ==="
 docker compose -f "$COMPOSE_FILE" ps || true
 log "=== recent logs ==="
+# `docker compose logs` covers stopped containers too, which matters here:
+# `migrate` has already exited, and its log is the only place a failed
+# revision explains itself.
 docker compose -f "$COMPOSE_FILE" logs --tail 50 || true
 
 if [ "$PREVIOUS_SHA" = "$TARGET_SHA" ]; then

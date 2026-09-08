@@ -61,6 +61,11 @@ If you prefer to run services locally without Docker:
    psql -h localhost -U postgres -d field_compass -f database/schema.sql
    # Or use the docker exec method:
    docker-compose exec -T postgres psql -U postgres -d field_compass < backend/database/schema.sql
+
+   # Then bring it to the current revision. schema.sql only ever builds a NEW
+   # database; alembic is what changes one that already exists, and it is what
+   # the deploy runs.
+   cd backend && alembic upgrade head
    ```
 
 5. **Run backend:**
@@ -86,6 +91,8 @@ If you prefer to run services locally without Docker:
    ```bash
    createdb field_compass
    psql field_compass < backend/database/schema.sql
+   DATABASE_URL=postgresql://localhost:5432/field_compass \
+     sh -c 'cd backend && alembic upgrade head'
    ```
 
 3. **Set environment variable:**
