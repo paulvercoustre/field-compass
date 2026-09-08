@@ -207,13 +207,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               )}
             </button>
           </form>
-
-          {/* Info text */}
-          {!isLogin && (
-            <p className="mt-6 text-center text-sm text-slate-400">
-              After registration, you'll need to configure your Kobo API key in settings.
-            </p>
-          )}
         </div>
 
         {/* Footer */}
