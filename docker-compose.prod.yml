@@ -87,37 +87,30 @@ services:
     networks:
       - field-compass-network
 
-  # Schema reconciliation, run once per deploy before the API starts.
+  # Schema migrations, run once per deploy before the API starts.
   #
   # Postgres runs /docker-entrypoint-initdb.d ONLY on an empty data directory,
   # so editing schema.sql does nothing for a volume that already exists. Any
   # database created before a schema change keeps the old shape -- which is how
   # production ended up with no `users` table and a 500 on every login.
   #
-  # The migration is idempotent, so running it on every deploy is a no-op once
-  # the database is current.
+  # `alembic upgrade head` applies whatever revisions this commit carries and
+  # records each one in alembic_version. Previously this service ran a single
+  # hard-coded .sql file, so adding a migration meant remembering to edit this
+  # file too -- and forgetting was silent, which is the same failure the
+  # comment above describes.
+  #
+  # Runs from the backend image, so the migrations are the ones baked into the
+  # artifact CI tested, not whatever happens to be checked out on the VM.
+  # A non-zero exit fails the deploy: backend and worker below wait on
+  # service_completed_successfully, so nothing serves a half-migrated database.
   migrate:
-    image: postgres:15-alpine
+    image: ${BACKEND_IMAGE:?set BACKEND_IMAGE to the image tag for the commit being deployed - deploy/vm/deploy.sh sets this}
     container_name: field-compass-migrate
     restart: "no"
     environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env - see .env.example}
-    volumes:
-      - ./backend/database/migrations:/migrations:ro
-    # ON_ERROR_STOP makes a failed migration a failed deploy, rather than
-    # letting the API start against a half-migrated database.
-    entrypoint:
-      - psql
-      - -v
-      - ON_ERROR_STOP=1
-      - -h
-      - postgres
-      - -U
-      - ${POSTGRES_USER:-postgres}
-      - -d
-      - ${POSTGRES_DB:-field_compass}
-      - -f
-      - /migrations/006_sync_schema_with_models.sql
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env - see .env.example}
+    command: alembic upgrade head
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,9 +119,7 @@ services:
 
   # FastAPI Backend
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE:?set BACKEND_IMAGE to the image tag for the commit being deployed - deploy/vm/deploy.sh sets this}
     container_name: field-compass-api
     restart: unless-stopped
     env_file:
@@ -178,9 +169,7 @@ services:
 
   # Celery worker for qualitative checks
   worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE:?set BACKEND_IMAGE to the image tag for the commit being deployed - deploy/vm/deploy.sh sets this}
     container_name: field-compass-worker
     restart: unless-stopped
     env_file:

@@ -107,6 +107,12 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        # `type=sha,format=long` produces sha-<full 40-char commit>, and that is
+        # the tag production runs: deploy/vm/deploy.sh is handed a commit SHA
+        # and derives the image reference from it directly, with no registry
+        # lookup and nothing to fall back to. The short branch-prefixed tag
+        # cannot serve that purpose -- it is abbreviated, and its prefix
+        # changes with the branch name.
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -114,6 +120,7 @@ jobs:
           type=semver,pattern={{major}}.{{minor}}
           type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
+          type=sha,format=long
     
     # Always build, so every PR is compiled and tested -- but into the local
     # daemon only. Publishing a PR's image would turn untrusted contributor
@@ -216,15 +223,39 @@ jobs:
       run: |
         # Install PostgreSQL client if not available
         sudo apt-get update && sudo apt-get install -y postgresql-client || true
+
+        # Stands in for /docker-entrypoint-initdb.d, which is how a brand-new
+        # production volume is built.
         PGPASSWORD=postgres psql -h localhost -U postgres -d field_compass_test \
           -v ON_ERROR_STOP=1 -f backend/database/schema.sql
 
-        # Production applies this on every deploy, against a database that
-        # already exists. Running it here on a database schema.sql just built
-        # proves it is valid SQL and safe to re-run -- if it is not, CI fails
-        # instead of the deploy.
-        PGPASSWORD=postgres psql -h localhost -U postgres -d field_compass_test \
-          -v ON_ERROR_STOP=1 -f backend/database/migrations/006_sync_schema_with_models.sql
+    # The migration step the deploy runs, run the way the deploy runs it: the
+    # same command, from the same image, against a real database. Previously
+    # this invoked psql on one hard-coded .sql file, so CI could not have
+    # noticed a new migration that the deploy would never apply.
+    - name: Apply migrations exactly as the deploy does
+      run: |
+        in_image() {
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/field_compass_test" \
+            field-compass-backend:ci "$@"
+        }
+
+        in_image alembic upgrade head
+
+        # Production runs `alembic upgrade head` on every single deploy, most
+        # of which change no schema at all. Running it twice here proves the
+        # second run is a no-op and not an error -- otherwise the first deploy
+        # after a migration would be the one that fails.
+        in_image alembic upgrade head
+
+        # A green tick must mean the database is actually at head. `alembic
+        # current` prints nothing at all when no version is stamped, which
+        # would otherwise pass unnoticed.
+        in_image alembic current | tee /tmp/alembic-current.txt
+        grep -q '(head)' /tmp/alembic-current.txt \
+          || { echo "::error::database is not at head after upgrade"; exit 1; }
     
     - name: Health check test
       run: |

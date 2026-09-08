@@ -137,9 +137,20 @@ chmod 600 .env
 
 ## 6) Start the production stack
 
+`docker-compose.prod.yml` runs the published backend image rather than building
+one, so it needs to know which image. CI's deploy sets `BACKEND_IMAGE` in `.env`
+for you; for the very first start, set it by hand to the commit you have checked
+out:
+
 ```bash
+echo "BACKEND_IMAGE=ghcr.io/paulvercoustre/field-compass/field-compass-backend:sha-$(git rev-parse HEAD)" >> .env
 docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+That tag exists only for commits whose `Build Docker Image` job published one,
+which means commits already on `main`. Compose fails with a message naming the
+variable if it is unset -- deliberately, rather than falling back to `:latest`
+and starting a version nobody chose.
 
 Check:
 
@@ -153,11 +164,17 @@ From your laptop:
 
 ## 7) Updating the deployment
 
+Pushing to `main` does this for you (section 9). By hand:
+
 ```bash
 cd field-compass
 git pull
+sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=ghcr.io/paulvercoustre/field-compass/field-compass-backend:sha-$(git rev-parse HEAD)|" .env
 docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+The `migrate` service runs `alembic upgrade head` before the API starts, so a
+pull that brings new migrations applies them here too.
 
 ## 8) HTTPS
 
@@ -223,6 +240,22 @@ chmod 600 ~/.ssh/authorized_keys
 The script must be owned by root and not writable by `azureuser`, or the forced
 command could be rewritten by anyone who compromises that account.
 
+> **Reinstall the script whenever `deploy/vm/deploy.sh` changes.** The VM runs
+> the copy at `/usr/local/bin/field-compass-deploy`, which a `git pull` does
+> not touch -- the repository copy is only the source. A change to the deploy
+> script and a change to `docker-compose.prod.yml` that depend on each other
+> must therefore be installed **before** the commit reaches `main`, or the
+> first deploy runs a new compose file with the old script. Re-run the
+> `sudo install` line above.
+
+**Registry access.** The backend image is published to GitHub Container
+Registry. While the package is public, the VM pulls it with no credentials. If
+you make the package private, give the VM a read-only pull token:
+
+```bash
+echo "<a PAT with read:packages>" | docker login ghcr.io -u <github-username> --password-stdin
+```
+
 **In GitHub** -- three variables and one secret
 (Settings -> Secrets and variables -> Actions):
 
@@ -245,16 +278,25 @@ Compare with `ssh-keygen -lf` output from a machine that has already connected.
    fetched `origin/main` -- the clone also holds side branches and old history,
    and without that check a leaked key could deploy a commit from before a
    security fix.
-2. `docker compose -f docker-compose.prod.yml up -d --build`.
-   The rebuild is required: `VITE_API_URL` is baked into the frontend bundle at
-   build time, so a restart alone would ship the previous bundle.
-3. Polls `/health` from inside the VM for up to 90s, at the address implied by
+2. Pulls `ghcr.io/paulvercoustre/field-compass/field-compass-backend:sha-<commit>`
+   -- the image CI built, tested and published for that exact commit -- and
+   writes the reference to `BACKEND_IMAGE` in the VM's `.env`, so a later
+   `docker compose ps` or `logs` resolves the same image.
+3. `docker compose -f docker-compose.prod.yml up -d --build`. Backend, worker
+   and migrate run the pulled image and no longer build here. `--build` still
+   applies to `frontend-build`, which is compiled on the VM because
+   `VITE_API_URL` is baked into the bundle at build time.
+4. Runs `alembic upgrade head` in the `migrate` service before the API starts.
+   A non-zero exit fails the deploy: backend and worker wait on
+   `service_completed_successfully`, so nothing serves a half-migrated
+   database.
+5. Polls `/health` from inside the VM for up to 90s, at the address implied by
    `SITE_ADDRESS` (HTTPS with a loopback `--resolve` once a domain is set, so
    the probe does not depend on NAT hairpinning).
-4. **Rolls back to the previous commit** if that check fails, then fails the
+6. **Rolls back to the previous commit** if that check fails, then fails the
    job. If the rollback is also unhealthy the job says so loudly -- that is the
    case that needs a human.
-5. The workflow then re-checks `/health` from outside, confirming the site is
+7. The workflow then re-checks `/health` from outside, confirming the site is
    reachable to the internet and not just to itself.
 
 Deploys are serialised (`concurrency: deploy-production`) and queue rather than

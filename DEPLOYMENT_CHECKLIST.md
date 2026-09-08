@@ -11,7 +11,8 @@ Use this checklist to ensure all deployment steps are completed.
 - [x] CI/CD pipeline with automated tests
 - [ ] Code reviewed and tested locally
 - [ ] All environment variables documented
-- [ ] Database migrations tested
+- [ ] Database migrations tested (`alembic upgrade head`, then again to
+      confirm the second run is a no-op)
 
 ### Azure Setup (VM Demo Deployment)
 - [ ] Azure account and subscription ready
@@ -31,6 +32,19 @@ Use this checklist to ensure all deployment steps are completed.
   - [ ] `LOG_LEVEL`
   - [ ] `CORS_ORIGINS` (your domain/IP)
   - [ ] `VITE_API_URL` (leave EMPTY when served through the bundled Caddy proxy)
+  - [ ] `BACKEND_IMAGE` (the published image for the deployed commit --
+        `deploy/vm/deploy.sh` maintains it after the first manual start)
+
+### Deploy mechanics
+- [ ] `/usr/local/bin/field-compass-deploy` reinstalled from
+      `deploy/vm/deploy.sh` -- a `git pull` does NOT update the installed copy,
+      and the script and `docker-compose.prod.yml` now depend on each other
+- [ ] VM can `docker pull` the backend image from ghcr.io (no credentials
+      needed while the package is public)
+- [ ] `alembic upgrade head` verified against a copy of the production
+      database, not only against an empty one
+- [ ] Postgres volume backed up before the first deploy that carries a
+      migration -- the deploy rolls back code, never schema
 
 ### Security
 - [ ] Database firewall rules configured

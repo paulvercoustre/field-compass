@@ -18,6 +18,16 @@ COMPOSE_FILE="docker-compose.prod.yml"
 HEALTH_RETRIES=45
 HEALTH_DELAY=2
 
+# The backend image CI built, tested and published for this commit. Production
+# runs that artifact rather than rebuilding from source here: a rebuild on the
+# VM produces a THIRD image -- different base layer, different pip resolution,
+# built on a different day -- so the thing that passed CI was never the thing
+# that ran. It also moves the build off the box that is serving traffic.
+#
+# Tagged with the full commit SHA by the "Build Docker Image" job. Overridable
+# for a fork or a private mirror.
+IMAGE_REPO="${FIELD_COMPASS_IMAGE_REPO:-ghcr.io/paulvercoustre/field-compass/field-compass-backend}"
+
 log()  { echo "[deploy] $*"; }
 fail() { echo "[deploy] ERROR: $*" >&2; exit 1; }
 
@@ -70,10 +80,40 @@ health_ok() {
   return 1
 }
 
+# Record the image in .env as well as exporting it. Compose reads .env from the
+# project directory automatically, so the pin survives into any later
+# `docker compose ps|logs` -- including the ones this script runs on the
+# failure path, and any an operator runs by hand afterwards.
+pin_image_in_env() {
+  local ref="$1" tmp
+  tmp="$(mktemp)"
+  grep -v '^BACKEND_IMAGE=' .env > "$tmp" 2>/dev/null || true
+  printf 'BACKEND_IMAGE=%s\n' "$ref" >> "$tmp"
+  # Rewrite in place rather than mv, so .env keeps its ownership and mode.
+  cat "$tmp" > .env
+  rm -f "$tmp"
+}
+
 bring_up() {
-  git -c advice.detachedHead=false checkout --quiet "$1"
-  # --build is required, not optional: VITE_API_URL is baked into the frontend
-  # bundle at build time, so a plain restart would ship the previous bundle.
+  local sha="$1" image
+  image="${IMAGE_REPO}:sha-${sha}"
+
+  git -c advice.detachedHead=false checkout --quiet "$sha"
+  pin_image_in_env "$image"
+  export BACKEND_IMAGE="$image"
+
+  # Pull explicitly. Compose would pull too, but its failure is buried in the
+  # output of a command that is also building the frontend; here a missing
+  # image says so before anything is torn down. It matters most on the
+  # rollback path: rolling back to a commit whose image was never published
+  # must fail loudly rather than half-way through replacing the running stack.
+  log "pulling ${image}"
+  docker pull --quiet "$image" \
+    || fail "cannot pull ${image} -- check that the Build Docker Image job published it for ${sha}, and that this VM can read the registry"
+
+  # --build still applies: frontend-build compiles here because VITE_API_URL is
+  # baked into the bundle at build time. Backend, worker and migrate no longer
+  # build -- they run the image pulled above.
   docker compose -f "$COMPOSE_FILE" up -d --build
 }
 
