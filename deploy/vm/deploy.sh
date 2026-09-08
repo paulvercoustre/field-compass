@@ -132,17 +132,41 @@ git cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null \
 git merge-base --is-ancestor "$TARGET_SHA" FETCH_HEAD 2>/dev/null \
   || fail "commit ${TARGET_SHA} is not reachable from origin/main -- refusing to deploy it"
 
-bring_up "$TARGET_SHA"
+# Two ways a deploy fails, and both need the same rollback. `bring_up` returning
+# non-zero used to be fatal on the spot, because `set -e` aborts before any of
+# what follows: compose stops the running containers before it starts the new
+# ones, so a stack that fails to come up leaves the site DOWN and the script
+# exits without ever attempting a rollback.
+#
+# A failed migration is exactly that case. `migrate` runs before the API, and
+# backend and worker wait on service_completed_successfully, so a bad revision
+# means compose stops the old API, fails, and returns 1 -- with the site down.
+# Verified against a live stack: the previously-serving container was shut down
+# and compose exited 1.
+#
+# Alembic runs each revision in a transaction and Postgres has transactional
+# DDL, so the revision that failed leaves nothing behind and the previous image
+# is safe to bring back. Earlier revisions in the same chain stay applied, which
+# is why old code against a partly-migrated database can still need a human.
+FAILURE=""
+if ! bring_up "$TARGET_SHA"; then
+  FAILURE="the stack did not come up -- see the output above. A failed migration stops here, and the old containers are already down."
+elif ! health_ok; then
+  FAILURE="health check FAILED after $(( HEALTH_RETRIES * HEALTH_DELAY ))s"
+fi
 
-if health_ok; then
+if [ -z "$FAILURE" ]; then
   log "DEPLOY OK ${TARGET_SHA}"
   exit 0
 fi
 
-log "health check FAILED after $(( HEALTH_RETRIES * HEALTH_DELAY ))s"
+log "$FAILURE"
 log "=== container state ==="
 docker compose -f "$COMPOSE_FILE" ps || true
 log "=== recent logs ==="
+# `docker compose logs` covers stopped containers too, which matters here:
+# `migrate` has already exited, and its log is the only place a failed
+# revision explains itself.
 docker compose -f "$COMPOSE_FILE" logs --tail 50 || true
 
 if [ "$PREVIOUS_SHA" = "$TARGET_SHA" ]; then
