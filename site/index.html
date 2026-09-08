@@ -188,6 +188,22 @@
       4.16) so every logo reads at roughly the same visual weight. If you add
       one, set --h by eye rather than reusing a neighbour's.
     -->
+    <!--
+      TEMPORARILY HIDDEN. The section below is wrapped in a <template> so the
+      markup stays exactly where it was while rendering nothing: template
+      contents are inert -- not painted, absent from the accessibility tree,
+      and the logo SVGs are never fetched.
+
+      To bring the strip back, delete the <template> and </template> lines
+      that bracket it. Nothing else has to change: the .audience, .logosheet
+      and .marquee rules in styles.css are untouched, and site/logos/ still
+      holds every SVG.
+
+      An HTML comment would be the obvious way to switch a block off, but each
+      <li> carries a --h custom property, and a bare "--" inside a comment is
+      not valid HTML.
+    -->
+    <template id="audience-strip">
     <section class="section audience" aria-labelledby="audience-lead">
       <div class="container container--wide">
         <p class="audience__lead" id="audience-lead">Trusted by teams at the world’s leading humanitarian and development organisations</p>
@@ -242,6 +258,7 @@
         <p class="audience__note">Works with any KoboToolbox project — the collection platform these teams already run in the field.</p>
       </div>
     </section>
+    </template>
 
     <!-- ==================================================== features === -->
     <section class="section" id="features">
