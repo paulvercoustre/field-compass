@@ -146,6 +146,14 @@ lose the CSP.
   than collapsed to their end frame -- that frame is "cleared out", so
   collapsing would empty the section. Retiming is two numbers: the `7s`
   duration and the `1.4s` step in the `calc()` delays.
+- **The partner carousel is currently switched off.** The whole `.audience`
+  section -- the "Trusted by teams..." lead line, the marquee and the
+  KoboToolbox note beneath it -- is wrapped in `<template id="audience-strip">`
+  in `index.html`, which renders nothing and fetches none of the logos. This is
+  temporary. Delete the `<template>` and `</template>` lines around it to bring
+  it back; nothing else needs changing, and the notes below still describe how
+  it works. A plain HTML comment would not do here: the `--h` custom property
+  on every `<li>` puts a bare `--` inside the comment, which HTML forbids.
 - **The partner carousel** (`#audience`) is a CSS marquee: two identical
   `.marquee__group` lists inside one track, animated to `translateX(-50%)`, so
   the copy lands exactly where the original began and the loop has no seam.
