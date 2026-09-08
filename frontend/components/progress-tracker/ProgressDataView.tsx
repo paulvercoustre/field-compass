@@ -27,6 +27,16 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
     filter,
     setFilter
 }) => {
+    // `mode` says whether this survey sets targets at all. Branching on it
+    // rather than on `target === null` keeps the two questions separate: a
+    // targeted survey can still have a row with no target for one value.
+    const hasTargets = data.mode !== 'none';
+
+    // A cell for a number that may not exist. An em dash reads as "not set";
+    // a blank cell reads as a bug, and a 0 is a claim the data does not make.
+    const numberOrDash = (value: number | null | undefined) =>
+        value === null || value === undefined ? '—' : value;
+
     // Get all column names from sampling columns
     const columnNames = data.samplingColumns || [];
     
@@ -82,15 +92,33 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                     <thead className="bg-gray-200 dark:bg-gray-900">
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                            {hasTargets ? (
+                                <>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Target Interviews</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                                </>
+                            ) : (
+                                <>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Days Collecting</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Per Day</th>
+                                </>
+                            )}
                         </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-850">
                         <tr>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{data.overall.conducted}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{data.overall.target}</td>
-                            <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={data.overall.progress} /></td>
+                            {hasTargets ? (
+                                <>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.target)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={data.overall.progress} /></td>
+                                </>
+                            ) : (
+                                <>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{data.overall.days_active}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.submissions_per_day)}</td>
+                                </>
+                            )}
                         </tr>
                     </tbody>
                 </table>
@@ -108,7 +136,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">{columnName}</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Target Interviews</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">{hasTargets ? 'Target Interviews' : 'Share of Total'}</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Progress (%)</th>
                         </tr>
                     </thead>
@@ -119,7 +147,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                                 <tr key={row.value}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{displayLabel}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{row.conducted}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{row.target}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{hasTargets ? numberOrDash(row.target) : `${numberOrDash(row.share)}%`}</td>
                                     <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                                 </tr>
                             );
@@ -172,7 +200,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                                                     </td>
                                                 );
                                             })}
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center">{row.target}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center">{numberOrDash(row.target)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center">{row.conducted}</td>
                                             <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                                         </tr>
@@ -198,6 +226,18 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                     </span>
                 )}
             </div>
+            {/*
+              Said once for the whole view, not once per card. Repeating it on
+              every table turns a useful prompt into noise, and this is a
+              legitimate configuration rather than something broken.
+            */}
+            {!hasTargets && (
+                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                    No collection targets set for this survey, so the figures below describe what
+                    has been collected rather than progress towards a plan. Add targets in survey
+                    settings to track completion.
+                </p>
+            )}
             <div className="flex flex-wrap gap-2 mb-4">
                 <SubTabButton<ProgressSubTab> tabId="overall" activeTab={activeSubTab} onClick={setActiveSubTab}>
                     Overall

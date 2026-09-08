@@ -2,7 +2,8 @@
 Tests for API endpoints.
 """
 
-from datetime import datetime
+import itertools
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -704,3 +705,141 @@ class TestProgressEndpoint:
         assert response_approved.status_code == 200
         overall_approved = response_approved.json()["overall"]
         assert overall_approved["conducted"] == 1
+
+
+class TestProgressWithoutTargets:
+    """A survey with no collection targets must read as *untargeted*, not as
+    failing and not as finished.
+
+    Before this, `_calculate_targets_from_frame` returned a total of 0 and the
+    endpoint read `progress=100.0 if total_target == 0`, so a survey that had
+    never set a target reported **100% complete** on its first submission.
+    """
+
+    @staticmethod
+    def _create_survey(client, sampling_frame):
+        payload = {
+            "survey_name": "Untargeted Survey",
+            "kobo_asset_id": f"asset_{uuid4().hex[:8]}",
+            "config_data": {
+                "core_identifiers": {"uuid": "_uuid", "enumerator": "enumerator_id"},
+                "sampling_frame": sampling_frame,
+            },
+        }
+        response = client.post("/api/surveys", json=payload)
+        assert response.status_code == 201
+        return response.json()
+
+    # `_id` is the primary key, so every insert across the whole class needs a
+    # distinct one -- two calls in a single test collided on it otherwise.
+    _next_id = itertools.count(90000)
+
+    @classmethod
+    def _add_submissions(cls, survey_id, count, start_day=None, qa_status="PENDING_APPROVAL"):
+        survey_uuid = UUID(survey_id)
+        base = start_day or datetime(2026, 3, 1)
+        with TestingSessionLocal() as db:
+            for index in range(count):
+                db.add(
+                    SubmissionCurrent(
+                        _id=next(cls._next_id),
+                        survey_id=survey_uuid,
+                        _uuid=str(uuid4()),
+                        _submission_time=base + timedelta(days=index),
+                        end=base + timedelta(days=index),
+                        submission_data={"enumerator_id": f"enum-{index}", "district": "North"},
+                        qa_status=qa_status,
+                    )
+                )
+            db.commit()
+
+    def test_uploaded_survey_is_unchanged(self, client, test_survey):
+        """The regression that matters: a framed survey behaves exactly as before."""
+        payload = client.get(f"/api/progress?survey_id={test_survey['survey_id']}").json()
+
+        assert payload["mode"] == "uploaded"
+        assert payload["overall"]["target"] == 25
+        assert payload["overall"]["progress"] == 0.0
+        assert payload["samplingColumns"] == ["district"]
+        assert len(payload["detailed"]) == 2
+
+    def test_no_targets_is_null_not_zero_and_not_complete(self, client):
+        """`target: 0` would render a bar; `progress: 100` would say we are done."""
+        survey = self._create_survey(client, {})
+        self._add_submissions(survey["survey_id"], 3)
+
+        payload = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()
+
+        assert payload["mode"] == "none"
+        assert payload["overall"]["conducted"] == 3
+        assert payload["overall"]["target"] is None
+        assert payload["overall"]["progress"] is None
+
+    def test_no_targets_reports_the_collection_rate(self, client):
+        """What an untargeted survey can honestly say: how fast data arrives."""
+        survey = self._create_survey(client, {})
+        self._add_submissions(survey["survey_id"], 4, start_day=datetime(2026, 3, 1))
+
+        overall = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()["overall"]
+
+        assert overall["days_active"] == 4
+        assert overall["submissions_per_day"] == 1.0
+
+    def test_no_submissions_reports_no_rate_rather_than_zero(self, client):
+        survey = self._create_survey(client, {})
+
+        overall = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()["overall"]
+
+        assert overall["conducted"] == 0
+        assert overall["days_active"] == 0
+        assert overall["submissions_per_day"] is None
+
+    def test_total_mode_gives_a_percentage_without_a_breakdown(self, client):
+        """One number earns a real progress bar. It cannot earn a per-stratum
+        table -- splitting it across values would be inventing an allocation."""
+        survey = self._create_survey(client, {"mode": "total", "total_target": 8})
+        self._add_submissions(survey["survey_id"], 2)
+
+        payload = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()
+
+        assert payload["mode"] == "total"
+        assert payload["overall"]["target"] == 8
+        assert payload["overall"]["progress"] == 25.0
+        assert payload["byColumn"] == {}
+        assert payload["detailed"] == []
+
+    def test_total_mode_with_a_zero_target_has_no_target(self, client):
+        """Zero divides into nothing -- the exact shape of the 100% bug."""
+        survey = self._create_survey(client, {"mode": "total", "total_target": 0})
+        self._add_submissions(survey["survey_id"], 2)
+
+        payload = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()
+
+        assert payload["overall"]["target"] is None
+        assert payload["overall"]["progress"] is None
+
+    def test_approved_only_still_applies_without_targets(self, client):
+        survey = self._create_survey(client, {})
+        self._add_submissions(survey["survey_id"], 2, qa_status="APPROVED")
+        self._add_submissions(
+            survey["survey_id"], 1, start_day=datetime(2026, 4, 1), qa_status="PENDING_APPROVAL"
+        )
+
+        base = f"/api/progress?survey_id={survey['survey_id']}"
+        assert client.get(base).json()["overall"]["conducted"] == 3
+        assert client.get(f"{base}&approved_only=true").json()["overall"]["conducted"] == 2
+
+    def test_observed_distribution_is_reported_without_targets(self, client):
+        """Columns can still be described even when nothing sets a target for them."""
+        survey = self._create_survey(client, {"sampling_cols": ["district"]})
+        self._add_submissions(survey["survey_id"], 2)
+
+        payload = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()
+
+        rows = payload["byColumn"]["district"]
+        assert len(rows) == 1
+        assert rows[0]["value"] == "North"
+        assert rows[0]["conducted"] == 2
+        assert rows[0]["target"] is None
+        assert rows[0]["progress"] is None
+        assert rows[0]["share"] == 100.0

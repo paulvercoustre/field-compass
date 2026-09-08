@@ -166,10 +166,30 @@ class SubmissionHistory(BaseModel):
 # ============================================================================
 
 
+# `target` and `progress` are nullable throughout, and null is not the same as
+# zero. Zero is a target of nothing; null is no target at all. Collapsing the
+# two is what made a survey with no targets report 100% complete -- the old
+# code read `progress=100.0 if target == 0`, so "nothing planned" rendered as
+# "everything done". The distinction has to survive to the client, which is
+# also why ProgressData carries `mode` rather than leaving the client to infer
+# it from a null.
+
+
 class OverallProgress(BaseModel):
     conducted: int
-    target: int
-    progress: float
+    target: int | None = Field(
+        None, description="Planned interviews. Null when the survey sets no targets."
+    )
+    progress: float | None = Field(
+        None, description="Percent of target conducted. Null when there is no target."
+    )
+    days_active: int = Field(
+        0, description="Days from the first submission to the most recent, inclusive."
+    )
+    submissions_per_day: float | None = Field(
+        None,
+        description="Mean submissions per active day. Null before any submission arrives.",
+    )
 
 
 class ProgressByColumn(BaseModel):
@@ -177,20 +197,34 @@ class ProgressByColumn(BaseModel):
 
     value: str
     conducted: int
-    target: int
-    progress: float
+    target: int | None = None
+    progress: float | None = None
+    share: float | None = Field(
+        None,
+        description=(
+            "Percent of all submissions falling in this value. Describes the observed "
+            "distribution when there is no target to compare against."
+        ),
+    )
 
 
 class DetailedProgress(BaseModel):
     """Progress for a combination of all sampling column values."""
 
     values: dict[str, str] = Field(..., description="Map of column name to value")
-    target: int
+    target: int | None = None
     conducted: int
-    progress: float
+    progress: float | None = None
 
 
 class ProgressData(BaseModel):
+    mode: str = Field(
+        ...,
+        description=(
+            "How this survey expresses targets: none, total, by_variable or uploaded. "
+            "Lets a client branch on a stable string instead of inferring from nulls."
+        ),
+    )
     overall: OverallProgress
     byColumn: dict[str, list[ProgressByColumn]] = Field(
         default_factory=dict,

@@ -12,8 +12,16 @@ from services.survey_config import (
     CAPABILITY_DATE_CHECKS,
     CAPABILITY_ENUMERATOR_FILTER,
     CAPABILITY_ENUMERATOR_PERFORMANCE,
+    SAMPLING_MODE_NONE,
+    SAMPLING_MODE_TOTAL,
+    SAMPLING_MODE_UPLOADED,
     get_core_identifier,
     get_enumerator_field,
+    get_frame_data,
+    get_sampling_cols,
+    get_sampling_mode,
+    get_total_target,
+    has_targets,
     unavailable_capabilities,
 )
 
@@ -97,3 +105,75 @@ class TestUnavailableCapabilities:
             CAPABILITY_ENUMERATOR_FILTER,
             CAPABILITY_DATE_CHECKS,
         }
+
+
+# =============================================================================
+# Collection targets
+# =============================================================================
+
+
+class TestSamplingMode:
+    """A stored config with no `mode` predates the field and must not change."""
+
+    def test_explicit_mode_is_used(self):
+        config = {"sampling_frame": {"mode": SAMPLING_MODE_TOTAL, "total_target": 500}}
+
+        assert get_sampling_mode(config) == SAMPLING_MODE_TOTAL
+
+    def test_legacy_config_with_frame_rows_infers_uploaded(self):
+        """Every survey that has a frame today keeps behaving as it does today."""
+        config = {"sampling_frame": {"sampling_cols": ["admin1"], "frame_data": [{"admin1": "A"}]}}
+
+        assert get_sampling_mode(config) == SAMPLING_MODE_UPLOADED
+        assert has_targets(config) is True
+
+    @pytest.mark.parametrize(
+        "config",
+        [
+            None,
+            {},
+            {"sampling_frame": None},
+            {"sampling_frame": {}},
+            {"sampling_frame": {"sampling_cols": [], "frame_data": []}},
+        ],
+    )
+    def test_legacy_config_without_frame_rows_infers_none(self, config):
+        assert get_sampling_mode(config) == SAMPLING_MODE_NONE
+        assert has_targets(config) is False
+
+    def test_unrecognised_mode_falls_back_to_inference(self):
+        """A typo must not silently drop targets a survey actually has."""
+        config = {"sampling_frame": {"mode": "uploded", "frame_data": [{"admin1": "A"}]}}
+
+        assert get_sampling_mode(config) == SAMPLING_MODE_UPLOADED
+        assert has_targets(config) is True
+
+
+class TestTotalTarget:
+    """One number is a real target. Zero is not."""
+
+    @pytest.mark.parametrize("raw,expected", [(500, 500), ("500", 500), (500.0, 500)])
+    def test_reads_a_usable_number(self, raw, expected):
+        config = {"sampling_frame": {"mode": SAMPLING_MODE_TOTAL, "total_target": raw}}
+
+        assert get_total_target(config) == expected
+        assert has_targets(config) is True
+
+    @pytest.mark.parametrize("raw", [None, "", "   ", "abc", 0, -5, [], {}])
+    def test_unusable_values_are_no_target_at_all(self, raw):
+        """Zero divides into nothing. Treating it as a target is what reported 100%."""
+        config = {"sampling_frame": {"mode": SAMPLING_MODE_TOTAL, "total_target": raw}}
+
+        assert get_total_target(config) is None
+        assert has_targets(config) is False
+
+
+class TestSamplingCols:
+    def test_blank_entries_are_dropped(self):
+        config = {"sampling_frame": {"sampling_cols": ["admin1", "", "  ", "livelihood"]}}
+
+        assert get_sampling_cols(config) == ["admin1", "livelihood"]
+
+    def test_absent_configuration_is_empty(self):
+        assert get_sampling_cols(None) == []
+        assert get_frame_data(None) == []
