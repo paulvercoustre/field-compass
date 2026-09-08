@@ -185,9 +185,13 @@ def test_every_model_column_exists_in_schema_sql(table_name, schema_tables, mode
 # =============================================================================
 # Migration 006 must be able to reconcile ANY historical database
 # =============================================================================
-# The deploy runs exactly one migration (see the `migrate` service in
-# docker-compose.prod.yml), so that single file has to close the gap between
-# the oldest database that could still exist and what the ORM writes today.
+# 006 is the Alembic baseline: revision 0001_baseline reads and executes this
+# exact file, and every database reaches Alembic through it -- production, a
+# fresh volume built from schema.sql, and anything older still running
+# somewhere. So this one file still has to close the gap between the oldest
+# database that could exist and what the ORM writes today. Later revisions
+# carry their own SQL and are ordinary immutable migrations; this requirement
+# applies to the baseline alone.
 #
 # It did not, at first: it added only the columns missing from the most recent
 # schema.sql, and silently skipped the ones folded into schema.sql back in

@@ -20,6 +20,30 @@ services:
     networks:
       - field-compass-network
 
+  # Schema migrations, run once before the API starts -- the same command
+  # production runs, so a migration that fails does so on a laptop first.
+  #
+  # Postgres builds a brand-new volume from schema.sql via
+  # /docker-entrypoint-initdb.d; alembic then applies anything schema.sql does
+  # not already contain. On an existing volume, alembic is the only thing that
+  # changes the shape of the database.
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: field-compass-migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/field_compass}
+    volumes:
+      - ./backend:/app
+    command: alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - field-compass-network
+
   # FastAPI Backend
   backend:
     build:
@@ -53,6 +77,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
@@ -91,6 +117,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
     volumes:
