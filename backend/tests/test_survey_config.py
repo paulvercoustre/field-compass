@@ -20,6 +20,8 @@ from services.survey_config import (
     get_frame_data,
     get_sampling_cols,
     get_sampling_mode,
+    get_sampling_variable,
+    get_targets_by_value,
     get_total_target,
     has_targets,
     unavailable_capabilities,
@@ -177,3 +179,62 @@ class TestSamplingCols:
     def test_absent_configuration_is_empty(self):
         assert get_sampling_cols(None) == []
         assert get_frame_data(None) == []
+
+
+class TestByVariableTargets:
+    """Per-value targets, the rung between one number and a spreadsheet."""
+
+    CONFIG = {
+        "sampling_frame": {
+            "mode": "by_variable",
+            "variable": "district",
+            "sampling_cols": ["district"],
+            "targets_by_value": {"north": 40, "south": 25},
+        }
+    }
+
+    def test_reads_variable_and_targets(self):
+        assert get_sampling_variable(self.CONFIG) == "district"
+        assert get_targets_by_value(self.CONFIG) == {"north": 40, "south": 25}
+        assert has_targets(self.CONFIG) is True
+
+    @pytest.mark.parametrize("raw", [None, "", "   "])
+    def test_blank_variable_is_unset(self, raw):
+        config = {"sampling_frame": {"mode": "by_variable", "variable": raw}}
+
+        assert get_sampling_variable(config) is None
+
+    def test_unusable_entries_are_dropped_not_defaulted(self):
+        """A half-filled strata table gives targets for the values that have
+        one, and no target for the rest -- never a fabricated zero, which would
+        divide into a percentage."""
+        config = {
+            "sampling_frame": {
+                "mode": "by_variable",
+                "variable": "district",
+                "targets_by_value": {
+                    "north": 40,
+                    "south": 0,
+                    "east": -5,
+                    "west": "abc",
+                    "centre": None,
+                    "outer": "12",
+                },
+            }
+        }
+
+        assert get_targets_by_value(config) == {"north": 40, "outer": 12}
+
+    @pytest.mark.parametrize("raw", [None, {}, [], "not a dict", 7])
+    def test_missing_or_malformed_targets_are_empty(self, raw):
+        config = {"sampling_frame": {"mode": "by_variable", "targets_by_value": raw}}
+
+        assert get_targets_by_value(config) == {}
+        assert has_targets(config) is False
+
+    def test_mode_is_defined_but_inert_without_targets(self):
+        """by_variable can be selected before any target is entered."""
+        config = {"sampling_frame": {"mode": "by_variable", "variable": "district"}}
+
+        assert get_sampling_mode(config) == "by_variable"
+        assert has_targets(config) is False

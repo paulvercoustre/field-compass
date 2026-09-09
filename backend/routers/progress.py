@@ -26,12 +26,15 @@ from services.database import get_db
 from services.permissions import require_survey_access
 from services.survey_config import (
     CAPABILITY_ENUMERATOR_PERFORMANCE,
+    SAMPLING_MODE_BY_VARIABLE,
     SAMPLING_MODE_TOTAL,
     SAMPLING_MODE_UPLOADED,
     get_enumerator_field,
     get_frame_data,
     get_sampling_cols,
     get_sampling_mode,
+    get_sampling_variable,
+    get_targets_by_value,
     get_total_target,
     has_targets,
     unavailable_capabilities,
@@ -266,6 +269,7 @@ async def get_progress_data(
     config = survey_config.config_data if survey_config else None
     mode = get_sampling_mode(config)
     sampling_cols = get_sampling_cols(config)
+    sampling_variable = get_sampling_variable(config)
     frame_data = get_frame_data(config)
     targets_available = has_targets(config)
 
@@ -290,10 +294,17 @@ async def get_progress_data(
 
     total_conducted = len(submissions)
 
+    # Per-value targets, in the one mode that has them without a file. Read
+    # once here rather than per column: the same dict answers the overall
+    # total, the per-value rows and the detailed rows.
+    targets_by_value = get_targets_by_value(config) if mode == SAMPLING_MODE_BY_VARIABLE else {}
+
     if not targets_available:
         total_target = None
     elif mode == SAMPLING_MODE_TOTAL:
         total_target = get_total_target(config)
+    elif mode == SAMPLING_MODE_BY_VARIABLE:
+        total_target = sum(targets_by_value.values())
     else:
         total_target = frame_total_target
 
@@ -319,10 +330,16 @@ async def get_progress_data(
             col_value = str(col_value) if col_value is not None else "Unknown"
             col_counts[col_value] += 1
 
-        # Per-value targets come from an uploaded frame only. A single total
-        # cannot be split across values without inventing an allocation, and
-        # `by_variable` (#30) is not implemented yet.
-        col_targets = targets_by_col.get(col, {}) if mode == SAMPLING_MODE_UPLOADED else {}
+        # Where this column's targets come from. A single total cannot be split
+        # across values without inventing an allocation, so `total` mode
+        # contributes none -- the overall percentage is the honest limit of what
+        # one number supports.
+        if mode == SAMPLING_MODE_UPLOADED:
+            col_targets = targets_by_col.get(col, {})
+        elif mode == SAMPLING_MODE_BY_VARIABLE and col == sampling_variable:
+            col_targets = targets_by_value
+        else:
+            col_targets = {}
 
         # Build progress list for this column ensuring targets with zero conducted are included
         all_values = set(col_counts.keys()) | set(col_targets.keys())
@@ -369,7 +386,13 @@ async def get_progress_data(
         # frame there is nothing to add: the observed combinations are the
         # whole story, and a row for a combination nobody planned would be
         # invented.
-        frame_combos = targets_by_combo if mode == SAMPLING_MODE_UPLOADED else {}
+        if mode == SAMPLING_MODE_UPLOADED:
+            frame_combos = targets_by_combo
+        elif mode == SAMPLING_MODE_BY_VARIABLE:
+            # One sampling column, so a "combination" is a single value.
+            frame_combos = {(value,): target for value, target in targets_by_value.items()}
+        else:
+            frame_combos = {}
         all_combo_keys = set(combo_counts.keys()) | set(frame_combos.keys())
 
         # Build detailed progress entries
@@ -378,9 +401,20 @@ async def get_progress_data(
             target = frame_combos.get(combo_key) if frame_combos else None
 
             # Get the values dict for this combination
+            # `targets_combo_values` is built from an uploaded frame. In
+            # by_variable mode the combination is a single choice value, so it
+            # maps back to the one sampling column directly -- without this a
+            # value that has a target but no submissions yet would render as
+            # "Unknown" rather than by its own name.
+            by_variable_values = (
+                {sampling_variable: combo_key[0]}
+                if mode == SAMPLING_MODE_BY_VARIABLE and sampling_variable and combo_key
+                else None
+            )
             values_dict = (
                 combo_values_map.get(combo_key)
                 or targets_combo_values.get(combo_key)
+                or by_variable_values
                 or {col: "Unknown" for col in sampling_cols}
             )
 

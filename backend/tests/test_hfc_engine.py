@@ -842,3 +842,131 @@ class TestSamplingFrameCheck:
         issues = engine._check_sampling_frame({"admin1": "Kabul", "livelihood": "trade"})
 
         assert len(issues) == 1
+
+
+class TestStrataValueInForm:
+    """`strata_value_not_in_form` asks a different question from
+    `_check_sampling_frame`: not "was this combination one we meant to sample"
+    but "is this a legal answer at all", per the form's own choice list."""
+
+    FORM = {
+        "survey": [
+            {"type": "select_one districts", "name": "district", "label::English (en)": "District"}
+        ],
+        "choices": [
+            {"list_name": "districts", "name": "north", "label::English (en)": "North"},
+            {"list_name": "districts", "name": "south", "label::English (en)": "South"},
+        ],
+    }
+
+    @staticmethod
+    def _engine(test_db, test_survey_config, sampling_frame, form=None):
+        config = dict(test_survey_config.config_data)
+        config["sampling_frame"] = sampling_frame
+        config["quality_checks"] = {"flag_sampling_frame": True}
+        if form is not None:
+            config["kobo_tool"] = form
+        test_survey_config.config_data = config
+        return HFCEngine(test_db, test_survey_config)
+
+    BY_VARIABLE = {
+        "mode": "by_variable",
+        "variable": "district",
+        "sampling_cols": ["district"],
+        "targets_by_value": {"north": 40, "south": 25},
+    }
+
+    def test_value_in_the_choice_list_passes(self, test_db, test_survey_config):
+        engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE, self.FORM)
+
+        assert engine._check_strata_value_in_form({"district": "north"}) == []
+
+    def test_value_outside_the_choice_list_is_flagged(self, test_db, test_survey_config):
+        """The real case: a submission from an older form version whose choice
+        list has since changed."""
+        engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE, self.FORM)
+
+        issues = engine._check_strata_value_in_form({"district": "xyzzy"})
+
+        assert len(issues) == 1
+        assert issues[0].check == "strata_value_not_in_form"
+        assert issues[0].field == "district"
+        assert issues[0].value == "xyzzy"
+
+    def test_unanswered_question_is_not_an_illegal_answer(self, test_db, test_survey_config):
+        engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE, self.FORM)
+
+        assert engine._check_strata_value_in_form({}) == []
+
+    def test_no_stored_form_skips_rather_than_flags(self, test_db, test_survey_config):
+        """ "Cannot check" must not become "nothing is legal"."""
+        engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE)
+
+        assert engine._check_strata_value_in_form({"district": "anything"}) == []
+
+    def test_variable_absent_from_the_form_skips(self, test_db, test_survey_config):
+        frame = dict(self.BY_VARIABLE, variable="province", sampling_cols=["province"])
+        engine = self._engine(test_db, test_survey_config, frame, self.FORM)
+
+        assert engine._check_strata_value_in_form({"province": "anything"}) == []
+
+    @pytest.mark.parametrize(
+        "sampling_frame",
+        [
+            {"mode": "none"},
+            {"mode": "total", "total_target": 500},
+            {
+                "mode": "uploaded",
+                "sampling_cols": ["district"],
+                "frame_data": [{"district": "north"}],
+            },
+        ],
+    )
+    def test_other_modes_do_not_run_it(self, test_db, test_survey_config, sampling_frame):
+        """Only by_variable declares strata by picking a question, so it is the
+        only mode where a choice list is known to be the authority."""
+        engine = self._engine(test_db, test_survey_config, sampling_frame, self.FORM)
+
+        assert engine._check_strata_value_in_form({"district": "xyzzy"}) == []
+
+    def test_form_is_parsed_once_per_run(self, test_db, test_survey_config, monkeypatch):
+        """An ETL run calls this per submission; re-parsing the form each time
+        would be a real cost on a survey with hundreds of them."""
+        import etl.hfc_engine as engine_module
+
+        parses = []
+        original = engine_module.load_form_schema
+        monkeypatch.setattr(
+            engine_module,
+            "load_form_schema",
+            lambda source: (parses.append(1), original(source))[1],
+        )
+
+        engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE, self.FORM)
+        for _ in range(5):
+            engine._check_strata_value_in_form({"district": "north"})
+
+        assert len(parses) == 1, f"form parsed {len(parses)} times, expected once"
+
+    def test_missing_question_is_not_re_parsed_either(
+        self, test_db, test_survey_config, monkeypatch
+    ):
+        """The "cannot check" answer is cached too. Without that, a survey whose
+        strata question is absent from the stored form re-parses it per
+        submission and never even runs a check."""
+        import etl.hfc_engine as engine_module
+
+        parses = []
+        original = engine_module.load_form_schema
+        monkeypatch.setattr(
+            engine_module,
+            "load_form_schema",
+            lambda source: (parses.append(1), original(source))[1],
+        )
+
+        frame = dict(self.BY_VARIABLE, variable="province", sampling_cols=["province"])
+        engine = self._engine(test_db, test_survey_config, frame, self.FORM)
+        for _ in range(5):
+            engine._check_strata_value_in_form({"province": "anything"})
+
+        assert len(parses) == 1, f"form parsed {len(parses)} times, expected once"
