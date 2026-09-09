@@ -843,3 +843,126 @@ class TestProgressWithoutTargets:
         assert rows[0]["target"] is None
         assert rows[0]["progress"] is None
         assert rows[0]["share"] == 100.0
+
+
+class TestProgressByVariable:
+    """Targets per choice value: the rung between one number and a spreadsheet.
+
+    `sampling_cols` mirrors the chosen variable, so disaggregation goes through
+    the same path an uploaded frame uses and nothing else had to learn about
+    this mode.
+    """
+
+    @staticmethod
+    def _create_survey(client, sampling_frame):
+        payload = {
+            "survey_name": "By-variable Survey",
+            "kobo_asset_id": f"asset_{uuid4().hex[:8]}",
+            "config_data": {
+                "core_identifiers": {"uuid": "_uuid", "enumerator": "enumerator_id"},
+                "sampling_frame": sampling_frame,
+            },
+        }
+        response = client.post("/api/surveys", json=payload)
+        assert response.status_code == 201
+        return response.json()
+
+    _next_id = itertools.count(70000)
+
+    @classmethod
+    def _add(cls, survey_id, district, count, qa_status="PENDING_APPROVAL"):
+        with TestingSessionLocal() as db:
+            for index in range(count):
+                db.add(
+                    SubmissionCurrent(
+                        _id=next(cls._next_id),
+                        survey_id=UUID(survey_id),
+                        _uuid=str(uuid4()),
+                        _submission_time=datetime(2026, 5, 1) + timedelta(days=index),
+                        end=datetime(2026, 5, 1) + timedelta(days=index),
+                        submission_data={"enumerator_id": "enum-1", "district": district},
+                        qa_status=qa_status,
+                    )
+                )
+            db.commit()
+
+    FRAME = {
+        "mode": "by_variable",
+        "variable": "district",
+        "sampling_cols": ["district"],
+        "targets_by_value": {"north": 40, "south": 20},
+    }
+
+    def test_targets_per_value_and_summed_overall(self, client):
+        survey = self._create_survey(client, self.FRAME)
+        self._add(survey["survey_id"], "north", 10)
+        self._add(survey["survey_id"], "south", 5)
+
+        payload = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()
+
+        assert payload["mode"] == "by_variable"
+        assert payload["overall"]["target"] == 60
+        assert payload["overall"]["conducted"] == 15
+        assert payload["overall"]["progress"] == 25.0
+
+        rows = {row["value"]: row for row in payload["byColumn"]["district"]}
+        assert rows["north"]["target"] == 40
+        assert rows["north"]["progress"] == 25.0
+        assert rows["south"]["target"] == 20
+        assert rows["south"]["progress"] == 25.0
+
+    def test_value_with_a_target_but_no_submissions_still_appears(self, client):
+        """Matching what an uploaded frame already does -- a stratum nobody has
+        reached yet is the most important row on the page."""
+        survey = self._create_survey(client, self.FRAME)
+        self._add(survey["survey_id"], "north", 3)
+
+        payload = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()
+
+        rows = {row["value"]: row for row in payload["byColumn"]["district"]}
+        assert rows["south"]["conducted"] == 0
+        assert rows["south"]["target"] == 20
+        assert rows["south"]["progress"] == 0.0
+
+        detailed = {tuple(row["values"].values())[0]: row for row in payload["detailed"]}
+        assert detailed["south"]["conducted"] == 0
+        assert detailed["south"]["target"] == 20
+        assert "Unknown" not in detailed
+
+    def test_value_outside_the_targets_is_counted_without_one(self, client):
+        """An unplanned value is real data and must not be hidden; it simply has
+        no target to be a percentage of."""
+        survey = self._create_survey(client, self.FRAME)
+        self._add(survey["survey_id"], "east", 4)
+
+        rows = {
+            row["value"]: row
+            for row in client.get(f"/api/progress?survey_id={survey['survey_id']}").json()[
+                "byColumn"
+            ]["district"]
+        }
+
+        assert rows["east"]["conducted"] == 4
+        assert rows["east"]["target"] is None
+        assert rows["east"]["progress"] is None
+
+    def test_unusable_targets_give_no_target_not_a_zero_divide(self, client):
+        survey = self._create_survey(
+            client,
+            dict(self.FRAME, targets_by_value={"north": 0, "south": "abc"}),
+        )
+        self._add(survey["survey_id"], "north", 2)
+
+        payload = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()
+
+        assert payload["overall"]["target"] is None
+        assert payload["overall"]["progress"] is None
+
+    def test_approved_only_applies(self, client):
+        survey = self._create_survey(client, self.FRAME)
+        self._add(survey["survey_id"], "north", 3, qa_status="APPROVED")
+        self._add(survey["survey_id"], "north", 2, qa_status="PENDING_APPROVAL")
+
+        base = f"/api/progress?survey_id={survey['survey_id']}"
+        assert client.get(base).json()["overall"]["conducted"] == 5
+        assert client.get(f"{base}&approved_only=true").json()["overall"]["conducted"] == 3

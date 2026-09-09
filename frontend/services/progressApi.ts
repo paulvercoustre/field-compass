@@ -1,5 +1,5 @@
 
-import { ProgressData, PerformanceData } from '../types';
+import { ProgressData, PerformanceData, SamplingMode } from '../types';
 
 import { API_BASE_URL } from './apiBase';
 
@@ -56,10 +56,21 @@ export interface SurveyConfig {
       audit?: string;
     };
     sampling_frame?: {
+      // How this survey expresses targets. Absent on configs stored before the
+      // field existed, which are inferred rather than defaulted -- see
+      // get_sampling_mode() in backend/services/survey_config.py.
+      mode?: SamplingMode;
       sampling_cols?: string[];
       admin_level_for_label?: string;
       admin_level_choice_name?: string;
       frame_data?: Record<string, any>[] | null;
+      // `total` mode: one number for the whole survey.
+      total_target?: number | null;
+      // `by_variable` mode: the question whose choice list defines the strata,
+      // and a target per choice value. `sampling_cols` mirrors `variable`, so
+      // everything that disaggregates keeps reading one field.
+      variable?: string | null;
+      targets_by_value?: Record<string, number> | null;
     };
     special_values?: {
       dk_value?: number;

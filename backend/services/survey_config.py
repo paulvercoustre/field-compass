@@ -159,7 +159,7 @@ def has_targets(config_data: dict[str, Any] | None) -> bool:
         return get_total_target(config_data) is not None
     if mode == SAMPLING_MODE_UPLOADED:
         return bool(get_frame_data(config_data))
-    return bool(_sampling_config(config_data).get("targets_by_value"))
+    return bool(get_targets_by_value(config_data))
 
 
 def get_total_target(config_data: dict[str, Any] | None) -> int | None:
@@ -170,7 +170,16 @@ def get_total_target(config_data: dict[str, Any] | None) -> int | None:
     produce a meaningful percentage, and treating it as one is how a survey
     with no targets came to report 100% complete.
     """
-    raw = _sampling_config(config_data).get("total_target")
+    return _positive_int(_sampling_config(config_data).get("total_target"))
+
+
+def _positive_int(raw: Any) -> int | None:
+    """A usable target, or None.
+
+    Zero is rejected along with negatives and junk. A target of nothing cannot
+    produce a meaningful percentage, and treating it as one is how a survey
+    with no targets came to report 100% complete.
+    """
     if raw is None or (isinstance(raw, str) and not raw.strip()):
         return None
     try:
@@ -178,3 +187,40 @@ def get_total_target(config_data: dict[str, Any] | None) -> int | None:
     except (TypeError, ValueError):
         return None
     return value if value > 0 else None
+
+
+def get_sampling_variable(config_data: dict[str, Any] | None) -> str | None:
+    """
+    The question whose choice list defines the strata, in `by_variable` mode.
+
+    `sampling_cols` mirrors this as a single-element list, so every existing
+    consumer -- progress disaggregation, the submissions filter, the quality
+    breakdown -- keeps working without knowing this mode exists. This accessor
+    is for the places that need the *chosen* variable rather than "whatever we
+    disaggregate by", such as looking its choice list up in the form.
+    """
+    variable = _sampling_config(config_data).get("variable")
+    if variable is None:
+        return None
+    text = str(variable).strip()
+    return text or None
+
+
+def get_targets_by_value(config_data: dict[str, Any] | None) -> dict[str, int]:
+    """
+    Per-choice-value targets in `by_variable` mode.
+
+    Unusable entries are dropped rather than defaulted, so a strata table half
+    filled in yields targets for the values that have one and no target for the
+    rest -- instead of a fabricated zero that would divide into a percentage.
+    """
+    raw = _sampling_config(config_data).get("targets_by_value")
+    if not isinstance(raw, dict):
+        return {}
+
+    targets: dict[str, int] = {}
+    for value, target in raw.items():
+        parsed = _positive_int(target)
+        if parsed is not None:
+            targets[str(value)] = parsed
+    return targets

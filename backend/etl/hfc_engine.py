@@ -21,13 +21,16 @@ from etl.dk_utils import (
 from etl.dk_utils import (
     compute_dk_metrics as compute_submission_dk_metrics,
 )
+from forms.schema import load_form_schema
 from models import QualityIssue
 from services.survey_config import (
+    SAMPLING_MODE_BY_VARIABLE,
     SAMPLING_MODE_UPLOADED,
     get_core_identifier,
     get_frame_data,
     get_sampling_cols,
     get_sampling_mode,
+    get_sampling_variable,
 )
 from utils.rule_versioning import (
     generate_llm_input_hash,
@@ -134,6 +137,12 @@ class HFCEngine:
         self.sampling_mode = get_sampling_mode(self.config_data)
         self.sampling_cols = get_sampling_cols(self.config_data)
         self.frame_data = get_frame_data(self.config_data)
+        self.sampling_variable = get_sampling_variable(self.config_data)
+        # Resolved lazily and cached for the run, including the "cannot check"
+        # answer -- otherwise a survey whose strata question is missing from the
+        # stored form would re-parse the whole form once per submission.
+        self._strata_values_loaded = False
+        self._strata_choice_values: set[str] | None = None
         self.dk_eligible_index = build_eligible_dk_question_index(self.config_data)
 
     def precompute_outlier_statistics(self) -> None:
@@ -703,10 +712,13 @@ class HFCEngine:
             except Exception as e:
                 logger.debug(f"Could not parse time for office hours validation: {e}")
 
-        # 4. Check sampling frame (if flag is enabled)
+        # 4. Check strata (if flag is enabled). Two different questions, each
+        # answerable in only one mode: whether a combination was one we meant to
+        # sample (uploaded frame), and whether a value is a legal answer at all
+        # (the form's own choice list). Neither can stand in for the other.
         if self.flag_sampling_frame:
-            sampling_frame_issues = self._check_sampling_frame(submission_data)
-            issues.extend(sampling_frame_issues)
+            issues.extend(self._check_sampling_frame(submission_data))
+            issues.extend(self._check_strata_value_in_form(submission_data))
 
         # 5. Check survey duration
         # Note: start_time/end_time are not used - duration check uses audit logs or form fields only
@@ -968,6 +980,100 @@ class HFCEngine:
                 f"Sampling frame check passed: combination {submission_combo} found in frame"
             )
 
+        return issues
+
+    def _strata_values_from_form(self) -> set[str] | None:
+        """
+        Legal answers for the strata question, from the form's own choice list.
+
+        Returns None when the form cannot answer -- no stored form, the question
+        is absent, or it has no choice list. None means "cannot check", which is
+        deliberately different from an empty set ("nothing is legal"): the first
+        must skip, the second would flag every submission.
+
+        Cached per engine instance. An ETL run calls this once per submission
+        and the form does not change underneath a run.
+        """
+        if self._strata_values_loaded:
+            return self._strata_choice_values
+
+        self._strata_values_loaded = True
+        self._strata_choice_values = None
+
+        kobo_tool = (self.config_data or {}).get("kobo_tool")
+        if not kobo_tool or not self.sampling_variable:
+            return None
+
+        try:
+            schema = load_form_schema(kobo_tool)
+        except Exception as exc:
+            # A malformed stored form is a configuration problem, not evidence
+            # about this submission. Say so and check nothing.
+            logger.warning("Could not read the stored form for strata validity: %s", exc)
+            return None
+
+        question = schema.get(self.sampling_variable)
+        if question is None:
+            return None
+
+        values = {choice.name for choice in schema.choices_for(question) if choice.name}
+        self._strata_choice_values = values or None
+        return self._strata_choice_values
+
+    def _check_strata_value_in_form(self, submission_data: dict[str, Any]) -> list[QualityIssue]:
+        """
+        Check the strata value against the choice list the form itself defines.
+
+        A different question from `_check_sampling_frame`, which asks whether a
+        *combination* is one the survey meant to sample. This asks whether the
+        value is a legal answer at all -- and it carries its own check id for
+        that reason. Reusing `sampling_frame_mismatch` would make stored issues
+        ambiguous and label this "Sampling Frame Mismatch" on a survey that has
+        no frame.
+
+        Only `by_variable` mode can run it: that is the one mode where strata
+        are declared by picking a question rather than by uploading a file, so
+        it is the only one where a choice list is known to be the authority.
+
+        This will not fire often on a well-behaved select_one -- Kobo constrains
+        what an enumerator can pick. It catches the cases that matter anyway:
+        submissions collected on an older form version whose choice list has
+        since changed (#47), and a strata variable pointed at a text or
+        calculated field where anything can arrive.
+        """
+        issues: list[QualityIssue] = []
+
+        if self.sampling_mode != SAMPLING_MODE_BY_VARIABLE or not self.sampling_variable:
+            return issues
+
+        legal_values = self._strata_values_from_form()
+        if legal_values is None:
+            logger.debug(
+                "Strata validity check skipped: no choice list for %s", self.sampling_variable
+            )
+            return issues
+
+        value, field_path = self._get_field_value(submission_data, self.sampling_variable)
+        if value is None and field_path is None:
+            # The submission never answered. That is a missing answer, not an
+            # illegal one, and blaming the enumerator for it would be wrong.
+            return issues
+
+        observed = str(value) if value is not None else ""
+        if not observed or observed in legal_values:
+            return issues
+
+        issues.append(
+            QualityIssue(
+                check="strata_value_not_in_form",
+                field=self.sampling_variable,
+                value=observed,
+                message=(
+                    f"'{observed}' is not one of the answers {self.sampling_variable} "
+                    "offers in the form"
+                ),
+            )
+        )
         return issues
 
     def _check_outliers(

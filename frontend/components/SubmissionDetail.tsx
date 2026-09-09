@@ -44,6 +44,22 @@ const getDurationMinutes = (config: SurveyConfig | null, data: Record<string, an
   }
 };
 
+// Mirrors get_sampling_mode() in backend/services/survey_config.py: a config
+// stored before `mode` existed carries none, and is inferred from whether it
+// has frame rows rather than defaulted to a constant.
+//
+// The two strata checks are mutually exclusive by mode and share the same
+// `flag_sampling_frame` toggle. Without this, a by_variable survey would list
+// "Sampling Frame Mismatch" as a passed check that never ran.
+const samplingMode = (c: SurveyConfig | null): string => {
+  const frame = c?.config_data?.sampling_frame;
+  const declared = frame?.mode;
+  if (declared === 'none' || declared === 'total' || declared === 'by_variable' || declared === 'uploaded') {
+    return declared;
+  }
+  return frame?.frame_data?.length ? 'uploaded' : 'none';
+};
+
 // General check definitions - only checks enabled in survey settings are shown
 const GENERAL_CHECK_DEFINITIONS: Array<{
   id: string;
@@ -59,7 +75,8 @@ const GENERAL_CHECK_DEFINITIONS: Array<{
   { id: 'dk_percentage_high', label: 'DK Percentage High', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_dk_percentage), getDetails: () => ({ field: 'submission', value: 'Within threshold' }) },
   { id: 'duration_too_short', label: 'Duration Too Short', enabled: (c) => c?.config_data?.global_parameters?.min_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
   { id: 'duration_too_long', label: 'Duration Too Long', enabled: (c) => c?.config_data?.global_parameters?.max_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
-  { id: 'sampling_frame_mismatch', label: 'Sampling Frame Mismatch', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && c?.config_data?.sampling_frame?.sampling_cols?.length), getDetails: (c, d) => { const cols = c?.config_data?.sampling_frame?.sampling_cols; if (!cols?.length) return null; const combo = cols.map((col: string) => `${col}=${getFieldValueFromData(d, col) ?? 'N/A'}`).join(', '); return { field: cols.join(', '), value: combo }; } },
+  { id: 'sampling_frame_mismatch', label: 'Sampling Frame Mismatch', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && c?.config_data?.sampling_frame?.sampling_cols?.length && samplingMode(c) === 'uploaded'), getDetails: (c, d) => { const cols = c?.config_data?.sampling_frame?.sampling_cols; if (!cols?.length) return null; const combo = cols.map((col: string) => `${col}=${getFieldValueFromData(d, col) ?? 'N/A'}`).join(', '); return { field: cols.join(', '), value: combo }; } },
+  { id: 'strata_value_not_in_form', label: 'Strata Value Not In Form', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && samplingMode(c) === 'by_variable' && c?.config_data?.sampling_frame?.variable), getDetails: (c, d) => { const v = c?.config_data?.sampling_frame?.variable; if (!v) return null; return { field: v, value: getFieldValueFromData(d, v) ?? 'N/A' }; } },
 ];
 
 const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoading, onSubmissionUpdate }) => {
