@@ -4,7 +4,7 @@ import { createSurvey, SurveyCreate } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
 import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
 import { generateUUID } from '../utils/uuid';
-import { StagedRule } from '../types';
+import { StagedRule, SamplingMode } from '../types';
 import { stagedRuleToDbFormat } from '../utils/ruleConverter';
 import { createValidationRule, ValidationRuleCreate } from '../services/progressApi';
 import RuleEditor from '../components/rule-builder/RuleEditor';
@@ -17,6 +17,7 @@ import InfoTip from '../components/ui/InfoTip';
 import { parseKoboAssetId, looksLikeUrl, labelColumnFor } from '../utils/koboUrl';
 import { getKoboProjectForm, KoboProjectForm } from '../services/api';
 import { CORE_IDENTIFIER_HELP, KOBO_LINK_HELP } from '../constants/coreIdentifiers';
+import CollectionTargets from '../components/ui/CollectionTargets';
 
 const CreateSurveyPage: React.FC = () => {
   const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
@@ -64,9 +65,13 @@ const CreateSurveyPage: React.FC = () => {
     consent: '',
   });
   const [samplingFrame, setSamplingFrame] = useState({
+    mode: 'none' as SamplingMode,
     sampling_cols: [] as string[],
     admin_level_for_label: '',
     admin_level_choice_name: '',
+    total_target: null as number | null,
+    variable: null as string | null,
+    targets_by_value: {} as Record<string, number>,
   });
   const [specialValues, setSpecialValues] = useState({
     dk_value: -99,
@@ -678,8 +683,33 @@ const CreateSurveyPage: React.FC = () => {
 
           {/* Sampling Frame */}
           <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Sampling Frame</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Collection Targets</h2>
             <div className="space-y-4">
+              <CollectionTargets
+                mode={samplingFrame.mode}
+                onModeChange={(mode) => setSamplingFrame((prev) => ({ ...prev, mode }))}
+                totalTarget={samplingFrame.total_target}
+                onTotalTargetChange={(total_target) =>
+                  setSamplingFrame((prev) => ({ ...prev, total_target }))
+                }
+                variable={samplingFrame.variable}
+                onVariableChange={(variable) =>
+                  setSamplingFrame((prev) => ({
+                    ...prev,
+                    variable,
+                    // sampling_cols mirrors the chosen question, so every
+                    // consumer keeps reading one field.
+                    sampling_cols: variable ? [variable] : [],
+                  }))
+                }
+                targetsByValue={samplingFrame.targets_by_value}
+                onTargetsByValueChange={(targets_by_value) =>
+                  setSamplingFrame((prev) => ({ ...prev, targets_by_value }))
+                }
+                koboToolData={koboToolData}
+                editable={true}
+                uploadedSlot={
+                  <>
               {samplingFrameData && (
                 <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-300">
                   {samplingFrameFileName && (
@@ -756,7 +786,10 @@ const CreateSurveyPage: React.FC = () => {
                   </p>
                 )}
               </div>
-              {samplingFrame.sampling_cols.length > 0 && (
+                  </>
+                }
+              />
+              {samplingFrame.mode === 'uploaded' && samplingFrame.sampling_cols.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
                     Sampling Columns

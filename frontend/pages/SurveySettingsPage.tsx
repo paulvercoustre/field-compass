@@ -5,7 +5,7 @@ import { KoboToolData } from '../services/koboParser';
 import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
 import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
-import { StagedRule } from '../types';
+import { StagedRule, SamplingMode } from '../types';
 import RuleEditor from '../components/rule-builder/RuleEditor';
 import StagedRulesList from '../components/rule-builder/StagedRulesList';
 import AINaturalLanguageInput from '../components/rule-builder/AINaturalLanguageInput';
@@ -17,6 +17,8 @@ import InfoTip from '../components/ui/InfoTip';
 import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
 import { getKoboProjectForm, KoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
+import CollectionTargets from '../components/ui/CollectionTargets';
+import { inferSamplingMode } from '../utils/samplingMode';
 
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -93,9 +95,13 @@ const SurveySettingsPage: React.FC = () => {
     consent: 'consent',
   });
   const [samplingFrame, setSamplingFrame] = useState({
+    mode: 'none' as SamplingMode,
     sampling_cols: [] as string[],
     admin_level_for_label: '',
     admin_level_choice_name: '',
+    total_target: null as number | null,
+    variable: null as string | null,
+    targets_by_value: {} as Record<string, number>,
   });
   const [specialValues, setSpecialValues] = useState({
     dk_value: -99,
@@ -263,9 +269,13 @@ const SurveySettingsPage: React.FC = () => {
     setFrameValidationError(null);
     setFrameValidationNote(null);
     setSamplingFrame({
+      mode: 'none',
       sampling_cols: [],
       admin_level_for_label: '',
       admin_level_choice_name: '',
+      total_target: null,
+      variable: null,
+      targets_by_value: {},
     });
     
     // Kobo tool state
@@ -286,9 +296,16 @@ const SurveySettingsPage: React.FC = () => {
       }
       if (cd.sampling_frame) {
         setSamplingFrame({
+          // A config stored before `mode` existed carries none. Infer it the
+          // way get_sampling_mode() does rather than defaulting to a constant,
+          // so an existing survey shows the mode it actually behaves as.
+          mode: inferSamplingMode(cd.sampling_frame),
           sampling_cols: cd.sampling_frame.sampling_cols || [],
           admin_level_for_label: cd.sampling_frame.admin_level_for_label || '',
           admin_level_choice_name: cd.sampling_frame.admin_level_choice_name || '',
+          total_target: cd.sampling_frame.total_target ?? null,
+          variable: cd.sampling_frame.variable ?? null,
+          targets_by_value: cd.sampling_frame.targets_by_value || {},
         });
         if (cd.sampling_frame.frame_data) {
           setSamplingFrameData(cd.sampling_frame.frame_data);
@@ -1351,10 +1368,10 @@ const SurveySettingsPage: React.FC = () => {
               )}
             </section>
 
-            {/* Sampling Frame */}
+            {/* Collection Targets */}
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Sampling Frame</h2>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Collection Targets</h2>
                 {canEditSurvey && !isEditingSamplingFrame && (
                   <button
                     onClick={() => setIsEditingSamplingFrame(true)}
@@ -1366,6 +1383,32 @@ const SurveySettingsPage: React.FC = () => {
               </div>
               {isEditingSamplingFrame ? (
                 <div className="space-y-4">
+                  <CollectionTargets
+                    mode={samplingFrame.mode}
+                    onModeChange={(mode) => setSamplingFrame((prev) => ({ ...prev, mode }))}
+                    totalTarget={samplingFrame.total_target}
+                    onTotalTargetChange={(total_target) =>
+                      setSamplingFrame((prev) => ({ ...prev, total_target }))
+                    }
+                    variable={samplingFrame.variable}
+                    onVariableChange={(variable) =>
+                      setSamplingFrame((prev) => ({
+                        ...prev,
+                        variable,
+                        // sampling_cols mirrors the chosen question, so every
+                        // consumer keeps reading one field.
+                        sampling_cols: variable ? [variable] : [],
+                      }))
+                    }
+                    targetsByValue={samplingFrame.targets_by_value}
+                    onTargetsByValueChange={(targets_by_value) =>
+                      setSamplingFrame((prev) => ({ ...prev, targets_by_value }))
+                    }
+                    koboToolData={koboToolData}
+                    labelColumnChoices={labelColumnChoices}
+                    editable={true}
+                    uploadedSlot={
+                      <>
                   {samplingFrameData && (
                     <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-300">
                       {samplingFrameFileName && (
@@ -1442,7 +1485,10 @@ const SurveySettingsPage: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  {samplingFrame.sampling_cols.length > 0 && (
+                      </>
+                    }
+                  />
+                  {samplingFrame.mode === 'uploaded' && samplingFrame.sampling_cols.length > 0 && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
                         Sampling Columns
@@ -1478,23 +1524,27 @@ const SurveySettingsPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {samplingFrameData ? (
-                    <div className="text-green-600 dark:text-green-400 mb-2">
-                      ✓ Sampling frame configured ({samplingFrameData.length} rows)
+                  <CollectionTargets
+                    mode={samplingFrame.mode}
+                    onModeChange={() => {}}
+                    totalTarget={samplingFrame.total_target}
+                    onTotalTargetChange={() => {}}
+                    variable={samplingFrame.variable}
+                    onVariableChange={() => {}}
+                    targetsByValue={samplingFrame.targets_by_value}
+                    onTargetsByValueChange={() => {}}
+                    koboToolData={koboToolData}
+                    labelColumnChoices={labelColumnChoices}
+                    editable={false}
+                  />
+                  {samplingFrame.mode === 'uploaded' && samplingFrameData ? (
+                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                      {samplingFrameData.length} rows,{' '}
+                      {samplingFrame.sampling_cols.length > 0
+                        ? `grouped by ${samplingFrame.sampling_cols.join(', ')}`
+                        : 'no grouping columns matched'}
                     </div>
                   ) : null}
-                  <div>
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-400">Sampling Columns: </span>
-                    <span className="text-gray-700 dark:text-gray-300">
-                      {samplingFrame.sampling_cols.length > 0
-                        ? samplingFrame.sampling_cols.join(', ')
-                        : '—'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-400">Admin Level for Label: </span>
-                    <span className="text-gray-700 dark:text-gray-300">{samplingFrame.admin_level_for_label || '—'}</span>
-                  </div>
                 </div>
               )}
             </section>
