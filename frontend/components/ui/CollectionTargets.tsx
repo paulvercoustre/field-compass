@@ -16,6 +16,11 @@ import { KoboToolData, SamplingMode } from '../../types';
 
 export interface CollectionTargetsProps {
   mode: SamplingMode;
+  /**
+   * Called with the new mode. The caller is expected to discard the settings
+   * belonging to the mode being left -- see `discardedByModeChange` below for
+   * what that means and why.
+   */
   onModeChange: (mode: SamplingMode) => void;
 
   totalTarget: number | null;
@@ -31,6 +36,12 @@ export interface CollectionTargetsProps {
   /** e.g. "label::English (en)" -- which translation to show for choices. */
   labelColumnChoices?: string;
   editable: boolean;
+  /**
+   * What switching away from the current mode would throw away, if anything.
+   * Shown next to the choices so the cost is visible before the click, not
+   * discovered after the save.
+   */
+  pendingDiscard?: string | null;
   /**
    * The file upload UI for `uploaded` mode, supplied by the page.
    *
@@ -64,6 +75,36 @@ const MODE_OPTIONS: Array<{ value: SamplingMode; label: string; hint: string }> 
   },
 ];
 
+/**
+ * What a mode currently holds, so the UI can say what changing it will cost.
+ *
+ * A mode's settings mean nothing under another mode -- per-answer targets
+ * belong to a question the new mode does not use, and an uploaded file
+ * describes groupings that are not being read. Leaving them behind produced a
+ * config claiming to be `total` while still carrying a 69-row frame, which is
+ * a config nobody can reason about and which the next reader has to guess at.
+ */
+export const discardedByModeChange = (
+  from: SamplingMode,
+  frame: {
+    total_target?: number | null;
+    variable?: string | null;
+    targets_by_value?: Record<string, number> | null;
+    frame_data?: Record<string, any>[] | null;
+  }
+): string | null => {
+  if (from === 'total' && frame.total_target) {
+    return 'the total you entered';
+  }
+  if (from === 'by_variable' && (frame.variable || Object.keys(frame.targets_by_value || {}).length)) {
+    return 'the per-answer targets';
+  }
+  if (from === 'uploaded' && frame.frame_data?.length) {
+    return `the uploaded file (${frame.frame_data.length} rows)`;
+  }
+  return null;
+};
+
 /** Parse a target input. Blank and unusable values mean "no target", never 0. */
 const parseTarget = (raw: string): number | null => {
   const trimmed = raw.trim();
@@ -86,6 +127,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
   koboToolData,
   labelColumnChoices,
   editable,
+  pendingDiscard,
   uploadedSlot,
 }) => {
   const [evenlyTotal, setEvenlyTotal] = React.useState<string>('');
@@ -209,6 +251,12 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
           ))}
         </div>
       </fieldset>
+
+      {pendingDiscard && (
+        <p className="text-sm text-amber-700 dark:text-amber-400">
+          Changing this discards {pendingDiscard}. Nothing is lost until you save.
+        </p>
+      )}
 
       {mode === 'total' && (
         <div>

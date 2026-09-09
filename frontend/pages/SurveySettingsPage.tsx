@@ -17,7 +17,7 @@ import InfoTip from '../components/ui/InfoTip';
 import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
 import { getKoboProjectForm, KoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
-import CollectionTargets from '../components/ui/CollectionTargets';
+import CollectionTargets, { discardedByModeChange } from '../components/ui/CollectionTargets';
 import { inferSamplingMode } from '../utils/samplingMode';
 
 const SurveySettingsPage: React.FC = () => {
@@ -547,7 +547,7 @@ const SurveySettingsPage: React.FC = () => {
       const headerList = headers as string[];
       
       if (!koboToolData || !koboToolData.variableMap) {
-        throw new Error('Please upload Kobo tool first to validate sampling frame columns');
+        throw new Error('Read the form from your Kobo project first, so its columns can be checked against your questions');
       }
       
       const toolVars: string[] = Array.from(koboToolData.variableMap.keys());
@@ -555,7 +555,7 @@ const SurveySettingsPage: React.FC = () => {
       
       if (!validation.isValid) {
         throw new Error(
-          'No matching columns found in the Kobo tool. Please ensure your sampling frame has at least one column that matches a Kobo variable.'
+          'None of the columns in this file match a question in your form. It needs at least one column named after a question, so targets can be matched to submissions.'
         );
       }
       
@@ -582,11 +582,45 @@ const SurveySettingsPage: React.FC = () => {
         admin_level_for_label: validation.matchingColumns[0] || prev.admin_level_for_label,
       }));
     } catch (err) {
-      setFrameValidationError(err instanceof Error ? err.message : 'Failed to parse sampling frame file');
+      setFrameValidationError(err instanceof Error ? err.message : 'Could not read that targets file');
     } finally {
       setIsLoadingFrame(false);
       event.target.value = '';
     }
+  };
+
+  /**
+   * Switching mode discards the settings that belonged to the old one.
+   *
+   * Each mode owns its own settings and they mean nothing under another --
+   * per-answer targets name a question the new mode does not use, an uploaded
+   * file describes groupings nobody reads. Leaving them behind produces a
+   * config that claims to be `total` while still carrying a frame, which the
+   * next reader has to guess at. Nothing is written until Save, so Cancel
+   * still restores.
+   */
+  const handleTargetsModeChange = (mode: SamplingMode) => {
+    if (mode !== 'uploaded') {
+      setSamplingFrameData(null);
+      setSamplingFrameFileName('');
+      setFrameValidationError(null);
+      setFrameValidationNote(null);
+    }
+    setSamplingFrame((prev) => ({
+      ...prev,
+      mode,
+      total_target: mode === 'total' ? prev.total_target : null,
+      variable: mode === 'by_variable' ? prev.variable : null,
+      targets_by_value: mode === 'by_variable' ? prev.targets_by_value : {},
+      // sampling_cols is the uploaded file's matched columns, or the chosen
+      // variable, depending on the mode.
+      sampling_cols:
+        mode === 'uploaded'
+          ? prev.sampling_cols
+          : mode === 'by_variable' && prev.variable
+            ? [prev.variable]
+            : [],
+    }));
   };
 
   // Persist current state to API (shared by section save handlers)
@@ -702,7 +736,7 @@ const SurveySettingsPage: React.FC = () => {
     setError(null);
     try {
       await persistSurveyConfig();
-      setSuccess('Sampling frame updated');
+      setSuccess('Collection targets updated');
       setIsEditingSamplingFrame(false);
       await loadSurveyConfig();
     } catch (err) {
@@ -1385,7 +1419,11 @@ const SurveySettingsPage: React.FC = () => {
                 <div className="space-y-4">
                   <CollectionTargets
                     mode={samplingFrame.mode}
-                    onModeChange={(mode) => setSamplingFrame((prev) => ({ ...prev, mode }))}
+                    onModeChange={handleTargetsModeChange}
+                    pendingDiscard={discardedByModeChange(samplingFrame.mode, {
+                      ...samplingFrame,
+                      frame_data: samplingFrameData,
+                    })}
                     totalTarget={samplingFrame.total_target}
                     onTotalTargetChange={(total_target) =>
                       setSamplingFrame((prev) => ({ ...prev, total_target }))
@@ -1417,14 +1455,14 @@ const SurveySettingsPage: React.FC = () => {
                         </div>
                       )}
                       <p className="text-xs text-gray-600 dark:text-gray-400">
-                        You can upload a new CSV/XLSX to replace the existing sampling frame, or keep the current one.
+                        Upload a new CSV/XLSX to replace this file, or keep it as it is.
                       </p>
                     </div>
                   )}
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
-                        Upload Sampling Frame (CSV or XLSX)
+                        Upload a file of targets (CSV or XLSX)
                       </label>
                       <button
                         type="button"
@@ -1481,7 +1519,7 @@ const SurveySettingsPage: React.FC = () => {
                     )}
                     {!koboToolData && (
                       <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-                        ⚠ Please ensure Kobo tool is loaded first to validate sampling frame
+                        ⚠ Read the form from your Kobo project first, so its columns can be checked against your questions
                       </p>
                     )}
                   </div>
@@ -1491,7 +1529,7 @@ const SurveySettingsPage: React.FC = () => {
                   {samplingFrame.mode === 'uploaded' && samplingFrame.sampling_cols.length > 0 && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                        Sampling Columns
+                        Grouping columns matched
                       </label>
                       <div className="flex flex-wrap gap-2">
                         {samplingFrame.sampling_cols.map((col) => (
@@ -1885,7 +1923,7 @@ const SurveySettingsPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Sampling Frame Flag */}
+                {/* Collection targets check */}
                 <div className="flex items-start">
                   <div className="flex h-5 items-center">
                     <input
@@ -1898,10 +1936,10 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                   <div className="ml-3">
                     <label className="text-sm font-medium text-gray-900 dark:text-white">
-                      Flag submissions not in sampling frame
+                      Flag submissions outside the collection targets
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Create a flag if the submission's sampling column combination (e.g., district and actor) is not found in the sampling frame.
+                      Flags a submission whose group was not one you planned for: a combination missing from an uploaded targets file, or an answer that is not in the question's list of options.
                     </p>
                   </div>
                 </div>
