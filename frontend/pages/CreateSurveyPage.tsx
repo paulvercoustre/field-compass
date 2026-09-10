@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { createSurvey, SurveyCreate } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
-import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
+import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from '../utils/samplingFrameParser';
 import { generateUUID } from '../utils/uuid';
 import { StagedRule, SamplingMode } from '../types';
 import { stagedRuleToDbFormat } from '../utils/ruleConverter';
@@ -17,7 +17,7 @@ import InfoTip from '../components/ui/InfoTip';
 import { parseKoboAssetId, looksLikeUrl, labelColumnFor } from '../utils/koboUrl';
 import { getKoboProjectForm, KoboProjectForm } from '../services/api';
 import { CORE_IDENTIFIER_HELP, KOBO_LINK_HELP } from '../constants/coreIdentifiers';
-import CollectionTargets, { discardedByModeChange } from '../components/ui/CollectionTargets';
+import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
 
 const CreateSurveyPage: React.FC = () => {
   const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
@@ -285,13 +285,14 @@ const CreateSurveyPage: React.FC = () => {
   };
 
   // Required to create a survey that can actually run: without a project the
-  // ETL has nothing to fetch, and without dates the survey has no period.
-  const canCreate = Boolean(
-    surveyName.trim() &&
-      koboAssetId &&
-      globalParameters.data_collection_start_date &&
-      globalParameters.data_collection_end_date
-  );
+  // ETL has nothing to fetch.
+  //
+  // Collection dates are NOT required, deliberately reversing part of #44.
+  // They are often not fixed when the survey is set up, and blocking creation
+  // on them pushes people to type a placeholder date -- which is worse than an
+  // empty one, because `date_out_of_range` would then flag real submissions
+  // against a date nobody meant. Unset simply means that check does not run.
+  const canCreate = Boolean(surveyName.trim() && koboAssetId);
 
   const handleLoadProjectForm = async () => {
     if (!koboAssetId) return;
@@ -403,7 +404,6 @@ const CreateSurveyPage: React.FC = () => {
           if (targetSurvey) {
             // Force select the survey multiple times to ensure it sticks
             setSelectedSurvey(targetSurvey);
-            localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
 
             // Wait a bit and verify the selection is still correct
             await new Promise(resolve => setTimeout(resolve, 50));
@@ -411,7 +411,6 @@ const CreateSurveyPage: React.FC = () => {
             // Double-check that the survey is still selected
             if (!selectedSurvey || selectedSurvey.survey_id !== newlyCreatedSurveyId) {
               setSelectedSurvey(targetSurvey);
-              localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
             }
 
             // Navigate after ensuring selection is stable
@@ -452,14 +451,12 @@ const CreateSurveyPage: React.FC = () => {
 
           if (targetSurvey) {
             setSelectedSurvey(targetSurvey);
-            localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
 
             // Wait and verify
             await new Promise(resolve => setTimeout(resolve, 50));
 
             if (!selectedSurvey || selectedSurvey.survey_id !== newlyCreatedSurveyId) {
               setSelectedSurvey(targetSurvey);
-              localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
             }
 
             setTimeout(() => {
@@ -634,7 +631,7 @@ const CreateSurveyPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Data Collection Start Date *
+                    Data Collection Start Date
                   </label>
                   <input
                     type="date"
@@ -645,7 +642,7 @@ const CreateSurveyPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Data Collection End Date *
+                    Data Collection End Date
                   </label>
                   <input
                     type="date"
@@ -753,6 +750,16 @@ const CreateSurveyPage: React.FC = () => {
                   {samplingFrameFileName && (
                     <div className="text-green-600 dark:text-green-400 mb-1">
                       ✓ {samplingFrameFileName} ({samplingFrameData.length} rows)
+                    </div>
+                  )}
+                  {samplingFrame.sampling_cols.length > 0 && (
+                    <div className="text-xs mb-1">
+                      Grouping columns matched: {samplingFrame.sampling_cols.join(', ')}
+                    </div>
+                  )}
+                  {totalFromFrameRows(samplingFrameData, isTargetColumn) !== null && (
+                    <div className="text-xs mb-1">
+                      Total interviews planned: {totalFromFrameRows(samplingFrameData, isTargetColumn)}
                     </div>
                   )}
                   <p className="text-xs text-gray-600 dark:text-gray-400">

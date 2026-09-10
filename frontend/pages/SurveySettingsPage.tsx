@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
-import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
+import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from '../utils/samplingFrameParser';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
 import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
 import { StagedRule, SamplingMode } from '../types';
@@ -17,7 +17,7 @@ import InfoTip from '../components/ui/InfoTip';
 import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
 import { getKoboProjectForm, KoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
-import CollectionTargets, { discardedByModeChange } from '../components/ui/CollectionTargets';
+import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
 import { inferSamplingMode } from '../utils/samplingMode';
 
 const SurveySettingsPage: React.FC = () => {
@@ -833,12 +833,11 @@ const SurveySettingsPage: React.FC = () => {
       
       // Clear selection and refresh surveys list
       setSelectedSurvey(null);
-      await refreshSurveys({ allowAutoSelect: false });
+      await refreshSurveys();
       
       // Don't auto-select a survey after deletion - let user choose
       setTimeout(() => {
         setSelectedSurvey(null);
-        localStorage.removeItem('selectedSurveyId');
       }, 0);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete survey');
@@ -1452,6 +1451,17 @@ const SurveySettingsPage: React.FC = () => {
                       {samplingFrameFileName && (
                         <div className="text-green-600 dark:text-green-400 mb-1">
                           ✓ {samplingFrameFileName} ({samplingFrameData.length} rows)
+                        </div>
+                      )}
+                      {samplingFrame.sampling_cols.length > 0 && (
+                        <div className="text-xs mb-1">
+                          Grouping columns matched: {samplingFrame.sampling_cols.join(', ')}
+                        </div>
+                      )}
+                      {totalFromFrameRows(samplingFrameData, isTargetColumn) !== null && (
+                        <div className="text-xs mb-1">
+                          Total interviews planned:{' '}
+                          {totalFromFrameRows(samplingFrameData, isTargetColumn)}
                         </div>
                       )}
                       <p className="text-xs text-gray-600 dark:text-gray-400">

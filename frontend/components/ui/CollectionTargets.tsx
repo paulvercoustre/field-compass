@@ -66,7 +66,8 @@ const MODE_OPTIONS: Array<{ value: SamplingMode; label: string; hint: string }> 
   {
     value: 'by_variable',
     label: 'A target per answer to one question',
-    hint: 'Pick a question from your form and set a target for each of its answers.',
+    hint:
+      'Pick a question from your form and set a target for each of its answer options. e.g. 200 interviews for region A, 250 interviews for region B',
   },
   {
     value: 'uploaded',
@@ -103,6 +104,30 @@ export const discardedByModeChange = (
     return `the uploaded file (${frame.frame_data.length} rows)`;
   }
   return null;
+};
+
+/**
+ * Total interviews an uploaded file plans for.
+ *
+ * The backend sums the target column the same way (_calculate_targets_from_frame
+ * in routers/progress.py), and a row with no usable target counts as 1 there --
+ * mirrored here so the number on the settings screen is the number the progress
+ * page will divide by. Returns null when the file carries no target column at
+ * all, because "one per row" is then an assumption worth not stating as fact.
+ */
+export const totalFromFrameRows = (
+  rows: Record<string, any>[] | null | undefined,
+  isTargetColumn: (name: string) => boolean
+): number | null => {
+  if (!rows?.length) return null;
+
+  const targetColumn = Object.keys(rows[0]).find(isTargetColumn);
+  if (!targetColumn) return null;
+
+  return rows.reduce((sum, row) => {
+    const value = Number(row[targetColumn]);
+    return sum + (Number.isFinite(value) && value > 0 ? Math.floor(value) : 1);
+  }, 0);
 };
 
 /** Parse a target input. Blank and unusable values mean "no target", never 0. */

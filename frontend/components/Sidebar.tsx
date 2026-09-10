@@ -96,7 +96,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* New survey button - always visible */}
       <div className={isOpen ? "px-2" : "px-2 flex justify-center"}>
         <button
-          onClick={onAddSurvey}
+          onClick={() => {
+            // Clear the selection on the way in. Leaving a survey highlighted
+            // here while "Create New Survey" fills the pane suggests the form
+            // is editing that survey, and the first thing it asks for is a
+            // name.
+            setSelectedSurvey(null);
+            onAddSurvey();
+          }}
           className={`flex items-center gap-3 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${isOpen ? 'w-full px-3 py-2 mb-1' : 'p-2'}`}
           title="New survey"
         >
