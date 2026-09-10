@@ -15,7 +15,13 @@ import { KoboToolData, SamplingMode } from '../../types';
  */
 
 export interface CollectionTargetsProps {
-  mode: SamplingMode;
+  /**
+   * null when the user has not chosen yet, which is the initial state on a new
+   * survey. Nothing is preselected: a checked radio is a claim the user made,
+   * and defaulting to "No targets" puts words in their mouth on a question
+   * they have not been asked yet.
+   */
+  mode: SamplingMode | null;
   /**
    * Called with the new mode. The caller is expected to discard the settings
    * belonging to the mode being left -- see `discardedByModeChange` below for
@@ -86,7 +92,7 @@ const MODE_OPTIONS: Array<{ value: SamplingMode; label: string; hint: string }> 
  * a config nobody can reason about and which the next reader has to guess at.
  */
 export const discardedByModeChange = (
-  from: SamplingMode,
+  from: SamplingMode | null,
   frame: {
     total_target?: number | null;
     variable?: string | null;
@@ -155,7 +161,8 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
   pendingDiscard,
   uploadedSlot,
 }) => {
-  const [evenlyTotal, setEvenlyTotal] = React.useState<string>('');
+  const [plannedTotal, setPlannedTotal] = React.useState<string>('');
+  const [perGroup, setPerGroup] = React.useState<string>('');
 
   // select_one only. A select_multiple answer is several values at once, so one
   // submission would count toward several strata and the per-value numbers
@@ -197,7 +204,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
    * are editable afterwards -- this is a starting point, not a decision.
    */
   const distributeEvenly = () => {
-    const total = parseTarget(evenlyTotal);
+    const total = parseTarget(plannedTotal);
     if (!total || choices.length === 0) return;
 
     const base = Math.floor(total / choices.length);
@@ -206,6 +213,24 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
     choices.forEach((choice, index) => {
       const share = base + (index < remainder ? 1 : 0);
       if (share > 0) next[choice.value] = share;
+    });
+    onTargetsByValueChange(next);
+  };
+
+  /**
+   * The other direction: a fixed number per group.
+   *
+   * "40 interviews in each district" is how a plan is often actually written,
+   * and deriving it from a total means dividing by however many groups the
+   * form happens to have and hoping it comes out round.
+   */
+  const applyPerGroup = () => {
+    const each = parseTarget(perGroup);
+    if (!each || choices.length === 0) return;
+
+    const next: Record<string, number> = {};
+    choices.forEach((choice) => {
+      next[choice.value] = each;
     });
     onTargetsByValueChange(next);
   };
@@ -334,31 +359,64 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
 
           {variable && choices.length > 0 && (
             <>
-              <div className="flex flex-wrap items-end gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Total sample size
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={evenlyTotal}
-                    onChange={(e) => setEvenlyTotal(e.target.value)}
-                    placeholder="e.g. 500"
-                    className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={distributeEvenly}
-                  disabled={!parseTarget(evenlyTotal)}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
-                >
-                  Divide evenly
-                </button>
-                <p className="text-xs text-gray-600 dark:text-gray-400 flex-1 min-w-[14rem]">
-                  Fills every group with an equal share, which you can then edit.
+              <div className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md space-y-3">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  Fill the table from a number, then edit any group that differs.
                 </p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      Total interviews planned
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={plannedTotal}
+                      onChange={(e) => setPlannedTotal(e.target.value)}
+                      placeholder="e.g. 500"
+                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={distributeEvenly}
+                    disabled={!parseTarget(plannedTotal)}
+                    className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                  >
+                    Divide evenly
+                  </button>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 px-1 pb-2">
+                    across {choices.length} groups
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      Number of interviews per group
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={perGroup}
+                      onChange={(e) => setPerGroup(e.target.value)}
+                      placeholder="e.g. 40"
+                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyPerGroup}
+                    disabled={!parseTarget(perGroup)}
+                    className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                  >
+                    Apply to every group
+                  </button>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 px-1 pb-2">
+                    {parseTarget(perGroup)
+                      ? `${parseTarget(perGroup)! * choices.length} interviews in total`
+                      : `× ${choices.length} groups`}
+                  </span>
+                </div>
               </div>
 
               <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -375,7 +433,14 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800">
                     {choices.map((choice) => (
-                      <tr key={choice.value} className="border-t border-gray-200 dark:border-gray-700">
+                      // Keyed by question *and* value: two questions can offer
+                      // the same option name ("yes", "other", an admin code),
+                      // and a bare value key lets React reuse the previous
+                      // question's row rather than replace it.
+                      <tr
+                        key={`${variable}:${choice.value}`}
+                        className="border-t border-gray-200 dark:border-gray-700"
+                      >
                         <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
                           {choice.label}
                           {choice.label !== choice.value && (

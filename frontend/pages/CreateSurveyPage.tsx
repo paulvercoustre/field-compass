@@ -65,7 +65,7 @@ const CreateSurveyPage: React.FC = () => {
     consent: '',
   });
   const [samplingFrame, setSamplingFrame] = useState({
-    mode: 'none' as SamplingMode,
+    mode: null as SamplingMode | null,
     sampling_cols: [] as string[],
     admin_level_for_label: '',
     admin_level_choice_name: '',
@@ -714,7 +714,7 @@ const CreateSurveyPage: React.FC = () => {
 
           {/* Collection Targets */}
           <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Collection Targets</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Data collection targets</h2>
             <div className="space-y-4">
               <CollectionTargets
                 mode={samplingFrame.mode}

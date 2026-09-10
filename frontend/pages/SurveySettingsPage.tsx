@@ -95,7 +95,7 @@ const SurveySettingsPage: React.FC = () => {
     consent: 'consent',
   });
   const [samplingFrame, setSamplingFrame] = useState({
-    mode: 'none' as SamplingMode,
+    mode: null as SamplingMode | null,
     sampling_cols: [] as string[],
     admin_level_for_label: '',
     admin_level_choice_name: '',
@@ -198,7 +198,17 @@ const SurveySettingsPage: React.FC = () => {
       setIsEditingKoboTool(false);
       setIsEditingSamplingFrame(false);
     }
-  }, [selectedSurvey]);
+    // Keyed on the id, not the object.
+    //
+    // This effect calls loadSurveyConfig(), which overwrites every field on
+    // this page with the saved config. Depending on the object means any
+    // refetch that produces an equal-but-new Survey re-runs it and silently
+    // discards whatever the user was in the middle of editing -- the form
+    // snaps back to what is on the server and stops responding to changes.
+    // The id is what actually decides whether we are looking at a different
+    // survey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSurvey?.survey_id]);
 
   // Reset deletion state when modal is closed
   useEffect(() => {
@@ -269,7 +279,7 @@ const SurveySettingsPage: React.FC = () => {
     setFrameValidationError(null);
     setFrameValidationNote(null);
     setSamplingFrame({
-      mode: 'none',
+      mode: null,
       sampling_cols: [],
       admin_level_for_label: '',
       admin_level_choice_name: '',
@@ -1404,7 +1414,7 @@ const SurveySettingsPage: React.FC = () => {
             {/* Collection Targets */}
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Collection Targets</h2>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Data collection targets</h2>
                 {canEditSurvey && !isEditingSamplingFrame && (
                   <button
                     onClick={() => setIsEditingSamplingFrame(true)}
