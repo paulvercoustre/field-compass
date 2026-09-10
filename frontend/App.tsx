@@ -14,6 +14,46 @@ import Sidebar from './components/Sidebar';
 
 type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'qualityOverview' | 'createSurvey' | 'settings' | 'userSettings';
 
+// Views that are about one survey. Rendering them with nothing selected is
+// what produced a permanent spinner on the Submissions queue: the page waits
+// for a survey that is never coming.
+//
+// The gate lives here rather than in each page so the answer is the same
+// everywhere -- and so a view added later gets it by being listed, rather than
+// by someone remembering to write the empty state again.
+const SURVEY_SCOPED_VIEWS: View[] = [
+  'dashboard',
+  'dataCollectionProgress',
+  'enumeratorPerformance',
+  'qualityOverview',
+  'settings',
+];
+
+const RequiresSurvey: React.FC<{ view: View; children: React.ReactNode }> = ({ view, children }) => {
+  const { selectedSurvey, isLoading } = useSurvey();
+
+  if (!SURVEY_SCOPED_VIEWS.includes(view) || selectedSurvey) {
+    return <>{children}</>;
+  }
+
+  // Say nothing while the list is still arriving. "No survey selected" during
+  // the first load would be a claim about a question not yet answered.
+  if (isLoading) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">No survey selected</p>
+        <p className="text-gray-500 text-sm">
+          Please select a survey from the sidebar to view its settings.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // Rendered inside SurveyProvider - can use useSurvey
 const SurveyNameInHeader: React.FC = () => {
   const { selectedSurvey } = useSurvey();
@@ -179,7 +219,7 @@ const AppContent: React.FC = () => {
           </header>
 
           <main className="flex-1 min-h-0 overflow-hidden">
-            {views[view]}
+            <RequiresSurvey view={view}>{views[view]}</RequiresSurvey>
           </main>
         </div>
       </div>

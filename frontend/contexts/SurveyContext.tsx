@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { getSurveys, Survey } from '../services/progressApi';
-import { forgetSurveyId, readRememberedSurveyId, rememberSurveyId } from '../utils/selectedSurveyStorage';
+import { readRememberedSurveyId, rememberSurveyId } from '../utils/selectedSurveyStorage';
 
 interface SurveyContextType {
   selectedSurvey: Survey | null;
@@ -30,6 +30,7 @@ interface SurveyProviderProps {
 export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [selectedSurvey, setSelectedSurvey] = useState<Survey | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +66,11 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
         //
         // Still validated against the list: a survey deleted, or access
         // revoked, since the choice was made must not come back.
+        // Read straight from storage rather than a one-shot ref. StrictMode
+        // invokes this effect twice in development, and anything consumed on
+        // first use loses the race on the second pass. Storage is idempotent:
+        // it is only ever written by an actual selection, and only cleared by
+        // login, logout, or starting a new survey.
         const rememberedId = readRememberedSurveyId();
         if (rememberedId) {
           const remembered = data.find(s => s.survey_id === rememberedId);
@@ -94,11 +100,13 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
 
   // Remember the choice for the life of this tab, so a refresh keeps your
   // place. Cleared on login (AuthContext) so signing in starts clean.
+  // Write only. Clearing on a null selection would fire on mount -- before
+  // the id has been read back -- and erase exactly what it is meant to keep.
+  // The three places a selection is genuinely abandoned clear it themselves:
+  // login, logout, and starting a new survey.
   useEffect(() => {
     if (selectedSurvey) {
       rememberSurveyId(selectedSurvey.survey_id);
-    } else {
-      forgetSurveyId();
     }
   }, [selectedSurvey]);
 

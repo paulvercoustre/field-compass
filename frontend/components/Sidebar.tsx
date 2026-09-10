@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
+import { forgetSurveyId } from '../utils/selectedSurveyStorage';
 
 interface User {
   username: string;
@@ -102,6 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             // is editing that survey, and the first thing it asks for is a
             // name.
             setSelectedSurvey(null);
+            forgetSurveyId();
             onAddSurvey();
           }}
           className={`flex items-center gap-3 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${isOpen ? 'w-full px-3 py-2 mb-1' : 'p-2'}`}
