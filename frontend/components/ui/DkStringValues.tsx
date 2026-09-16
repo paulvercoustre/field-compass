@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import InfoTip from './InfoTip';
 import { CORE_IDENTIFIER_HELP } from '../../constants/coreIdentifiers';
-import { suggestDkValues } from '../../utils/dkSuggestions';
+import { suggestDkValues, choiceLabel } from '../../utils/dkSuggestions';
 
 interface DkStringValuesProps {
   values: string[];
   onChange: (values: string[]) => void;
-  /** Every unique answer option across the form's choice lists. */
-  answerOptions: string[];
+  /** The form's choice rows, carrying `name` and its label columns. */
+  choices: Array<Record<string, any>>;
   readOnly?: boolean;
 }
 
@@ -26,14 +26,33 @@ interface DkStringValuesProps {
 const DkStringValues: React.FC<DkStringValuesProps> = ({
   values,
   onChange,
-  answerOptions,
+  choices,
   readOnly = false,
 }) => {
   const [typed, setTyped] = useState('');
 
+  // One entry per name: the same coding appears in every list that offers it.
+  const optionsByName = new Map<string, string>();
+  for (const choice of choices || []) {
+    const name = choice?.name === undefined || choice?.name === null ? '' : String(choice.name);
+    if (name && !optionsByName.has(name)) {
+      optionsByName.set(name, choiceLabel(choice));
+    }
+  }
+
+  // A label is worth showing only when it says more than the name already does.
+  const describe = (name: string): string => {
+    const label = optionsByName.get(name);
+    return label && label.toLowerCase() !== name.toLowerCase() ? `${name} — ${label}` : name;
+  };
+
   const chosen = new Set(values.map((value) => value.toLowerCase()));
-  const suggestions = suggestDkValues(answerOptions).filter((option) => !chosen.has(option));
-  const remaining = answerOptions.filter((option) => !chosen.has(option.toLowerCase()));
+  const suggestions = suggestDkValues(choices || []).filter(
+    (option) => !chosen.has(option.toLowerCase())
+  );
+  const remaining = Array.from(optionsByName.keys())
+    .filter((name) => !chosen.has(name.toLowerCase()))
+    .sort();
 
   const add = (value: string) => {
     const trimmed = value.trim();
@@ -59,6 +78,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
           {values.map((value) => (
             <span
               key={value}
+              title={describe(value)}
               className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200 rounded-md text-sm"
             >
               {value}
@@ -93,13 +113,13 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
                   onClick={() => add(option)}
                   className="px-2 py-1 text-sm border border-dashed border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
                 >
-                  + {option}
+                  + {describe(option)}
                 </button>
               ))}
             </div>
           )}
 
-          {answerOptions.length > 0 ? (
+          {optionsByName.size > 0 ? (
             <select
               value=""
               onChange={(e) => {
@@ -111,7 +131,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
               <option value="">-- Add another answer option --</option>
               {remaining.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {describe(option)}
                 </option>
               ))}
             </select>

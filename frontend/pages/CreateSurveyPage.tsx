@@ -34,10 +34,8 @@ const CreateSurveyPage: React.FC = () => {
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
-  // Every unique answer option across the form's choice lists.
-  const answerOptions: string[] = koboToolData?.choices
-    ? Array.from(new Set((koboToolData.choices as any[]).map((choice) => String(choice.name)))).sort()
-    : [];
+  // The form's choice rows, carrying names and their label columns.
+  const choiceRows: Array<Record<string, any>> = (koboToolData?.choices as any[]) || [];
 
   // Sampling frame CSV state
   const [samplingFrameData, setSamplingFrameData] = useState<Record<string, any>[] | null>(null);
@@ -139,13 +137,10 @@ const CreateSurveyPage: React.FC = () => {
       // are not an ambiguity. A form can genuinely carry both `dk` and
       // `dont_know` for the same answer, and counting only one understates the
       // DK rate, so every match is selected rather than none.
-      const options = koboToolData.choices
-        ? Array.from(new Set((koboToolData.choices as any[]).map((choice) => String(choice.name))))
-        : [];
       setSpecialValues(prev =>
         prev.dk_string_value.length > 0
           ? prev
-          : { ...prev, dk_string_value: suggestDkValues(options) }
+          : { ...prev, dk_string_value: suggestDkValues((koboToolData.choices as any[]) || []) }
       );
     }
   }, [koboToolData]);
@@ -833,7 +828,7 @@ const CreateSurveyPage: React.FC = () => {
               <DkStringValues
                 values={specialValues.dk_string_value}
                 onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
-                answerOptions={answerOptions}
+                choices={choiceRows}
               />
             </div>
           </section>

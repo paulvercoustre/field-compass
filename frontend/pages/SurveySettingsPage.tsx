@@ -70,10 +70,8 @@ const SurveySettingsPage: React.FC = () => {
   const [koboToolFileName, setKoboToolFileName] = useState<string>('');
   const [isLoadingTool, setIsLoadingTool] = useState(false);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
-  // Every unique answer option across the form's choice lists.
-  const answerOptions: string[] = koboToolData?.choices
-    ? Array.from(new Set((koboToolData.choices as any[]).map((choice) => String(choice.name)))).sort()
-    : [];
+  // The form's choice rows, carrying names and their label columns.
+  const choiceRows: Array<Record<string, any>> = (koboToolData?.choices as any[]) || [];
   // Outlier detection is the only picker that genuinely needs numbers.
   const [numericVariables, setNumericVariables] = useState<string[]>([]);
   const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
@@ -1595,7 +1593,7 @@ const SurveySettingsPage: React.FC = () => {
                 <DkStringValues
                   values={specialValues.dk_string_value}
                   onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
-                  answerOptions={answerOptions}
+                  choices={choiceRows}
                   readOnly={!canEditSurvey}
                 />
               </div>
