@@ -26,7 +26,17 @@
  * several match.
  */
 const CANDIDATES: Record<string, string[]> = {
-  enumerator: ['enumerator_id', 'enumerator', 'enum_id', 'enum_name', 'interviewer_id', 'interviewer'],
+  enumerator: [
+    'enumerator_id',
+    'enumerator',
+    'enumerator_name',
+    'enumerator_code',
+    'enum_id',
+    'enum_name',
+    'interviewer_id',
+    'interviewer',
+    'interviewer_name',
+  ],
   consent: ['consent', 'consent_given', 'respondent_consent', 'informed_consent'],
   date_interview: ['today', 'date', 'interview_date', 'date_interview'],
   start_time: ['start', 'start_time'],
