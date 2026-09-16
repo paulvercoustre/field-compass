@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { createSurvey, SurveyCreate } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
-import { parseSamplingFrame, validateSamplingFrameColumns } from '../utils/samplingFrameParser';
+import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from '../utils/samplingFrameParser';
 import { generateUUID } from '../utils/uuid';
-import { StagedRule } from '../types';
+import { StagedRule, SamplingMode } from '../types';
 import { stagedRuleToDbFormat } from '../utils/ruleConverter';
 import { createValidationRule, ValidationRuleCreate } from '../services/progressApi';
 import RuleEditor from '../components/rule-builder/RuleEditor';
@@ -17,6 +17,7 @@ import InfoTip from '../components/ui/InfoTip';
 import { parseKoboAssetId, looksLikeUrl, labelColumnFor } from '../utils/koboUrl';
 import { getKoboProjectForm, KoboProjectForm } from '../services/api';
 import { CORE_IDENTIFIER_HELP, KOBO_LINK_HELP } from '../constants/coreIdentifiers';
+import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
 
 const CreateSurveyPage: React.FC = () => {
   const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
@@ -64,9 +65,13 @@ const CreateSurveyPage: React.FC = () => {
     consent: '',
   });
   const [samplingFrame, setSamplingFrame] = useState({
+    mode: null as SamplingMode | null,
     sampling_cols: [] as string[],
     admin_level_for_label: '',
     admin_level_choice_name: '',
+    total_target: null as number | null,
+    variable: null as string | null,
+    targets_by_value: {} as Record<string, number>,
   });
   const [specialValues, setSpecialValues] = useState({
     dk_value: -99,
@@ -114,6 +119,40 @@ const CreateSurveyPage: React.FC = () => {
     }
   }, [koboToolData]);
 
+  /**
+   * Switching mode discards the settings that belonged to the old one.
+   *
+   * Each mode owns its own settings and they mean nothing under another --
+   * per-answer targets name a question the new mode does not use, an uploaded
+   * file describes groupings nobody reads. Leaving them behind produces a
+   * config that claims to be `total` while still carrying a frame, which the
+   * next reader has to guess at. Nothing is written until Save, so Cancel
+   * still restores.
+   */
+  const handleTargetsModeChange = (mode: SamplingMode) => {
+    if (mode !== 'uploaded') {
+      setSamplingFrameData(null);
+      setSamplingFrameFileName('');
+      setFrameValidationError(null);
+      setFrameValidationNote(null);
+    }
+    setSamplingFrame((prev) => ({
+      ...prev,
+      mode,
+      total_target: mode === 'total' ? prev.total_target : null,
+      variable: mode === 'by_variable' ? prev.variable : null,
+      targets_by_value: mode === 'by_variable' ? prev.targets_by_value : {},
+      // sampling_cols is the uploaded file's matched columns, or the chosen
+      // variable, depending on the mode.
+      sampling_cols:
+        mode === 'uploaded'
+          ? prev.sampling_cols
+          : mode === 'by_variable' && prev.variable
+            ? [prev.variable]
+            : [],
+    }));
+  };
+
   const handleSamplingFrameUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -128,7 +167,7 @@ const CreateSurveyPage: React.FC = () => {
       
       // Validate that all headers (except target column) exist in the Kobo tool variables
       if (!koboToolData || !koboToolData.variableMap) {
-        throw new Error('Read the form from your Kobo project first, so sampling frame columns can be validated');
+        throw new Error('Read the form from your Kobo project first, so its columns can be checked against your questions');
       }
       
       const toolVars = Array.from(koboToolData.variableMap.keys());
@@ -136,7 +175,7 @@ const CreateSurveyPage: React.FC = () => {
       
       if (!validation.isValid) {
         throw new Error(
-          'No matching columns found in the Kobo tool. Please ensure your sampling frame has at least one column that matches a Kobo variable.'
+          'None of the columns in this file match a question in your form. It needs at least one column named after a question, so targets can be matched to submissions.'
         );
       }
       
@@ -163,7 +202,7 @@ const CreateSurveyPage: React.FC = () => {
         admin_level_for_label: validation.matchingColumns[0] || prev.admin_level_for_label,
       }));
     } catch (err) {
-      setFrameValidationError(err instanceof Error ? err.message : 'Failed to parse sampling frame file');
+      setFrameValidationError(err instanceof Error ? err.message : 'Could not read that targets file');
     } finally {
       setIsLoadingFrame(false);
       event.target.value = ''; // Reset file input
@@ -246,13 +285,14 @@ const CreateSurveyPage: React.FC = () => {
   };
 
   // Required to create a survey that can actually run: without a project the
-  // ETL has nothing to fetch, and without dates the survey has no period.
-  const canCreate = Boolean(
-    surveyName.trim() &&
-      koboAssetId &&
-      globalParameters.data_collection_start_date &&
-      globalParameters.data_collection_end_date
-  );
+  // ETL has nothing to fetch.
+  //
+  // Collection dates are NOT required, deliberately reversing part of #44.
+  // They are often not fixed when the survey is set up, and blocking creation
+  // on them pushes people to type a placeholder date -- which is worse than an
+  // empty one, because `date_out_of_range` would then flag real submissions
+  // against a date nobody meant. Unset simply means that check does not run.
+  const canCreate = Boolean(surveyName.trim() && koboAssetId);
 
   const handleLoadProjectForm = async () => {
     if (!koboAssetId) return;
@@ -364,7 +404,6 @@ const CreateSurveyPage: React.FC = () => {
           if (targetSurvey) {
             // Force select the survey multiple times to ensure it sticks
             setSelectedSurvey(targetSurvey);
-            localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
 
             // Wait a bit and verify the selection is still correct
             await new Promise(resolve => setTimeout(resolve, 50));
@@ -372,7 +411,6 @@ const CreateSurveyPage: React.FC = () => {
             // Double-check that the survey is still selected
             if (!selectedSurvey || selectedSurvey.survey_id !== newlyCreatedSurveyId) {
               setSelectedSurvey(targetSurvey);
-              localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
             }
 
             // Navigate after ensuring selection is stable
@@ -413,14 +451,12 @@ const CreateSurveyPage: React.FC = () => {
 
           if (targetSurvey) {
             setSelectedSurvey(targetSurvey);
-            localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
 
             // Wait and verify
             await new Promise(resolve => setTimeout(resolve, 50));
 
             if (!selectedSurvey || selectedSurvey.survey_id !== newlyCreatedSurveyId) {
               setSelectedSurvey(targetSurvey);
-              localStorage.setItem('selectedSurveyId', newlyCreatedSurveyId);
             }
 
             setTimeout(() => {
@@ -595,7 +631,7 @@ const CreateSurveyPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Data Collection Start Date *
+                    Data Collection Start Date
                   </label>
                   <input
                     type="date"
@@ -606,7 +642,7 @@ const CreateSurveyPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Data Collection End Date *
+                    Data Collection End Date
                   </label>
                   <input
                     type="date"
@@ -676,10 +712,39 @@ const CreateSurveyPage: React.FC = () => {
             </div>
           </section>
 
-          {/* Sampling Frame */}
+          {/* Collection Targets */}
           <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Sampling Frame</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Data collection targets</h2>
             <div className="space-y-4">
+              <CollectionTargets
+                mode={samplingFrame.mode}
+                onModeChange={handleTargetsModeChange}
+                pendingDiscard={discardedByModeChange(samplingFrame.mode, {
+                  ...samplingFrame,
+                  frame_data: samplingFrameData,
+                })}
+                totalTarget={samplingFrame.total_target}
+                onTotalTargetChange={(total_target) =>
+                  setSamplingFrame((prev) => ({ ...prev, total_target }))
+                }
+                variable={samplingFrame.variable}
+                onVariableChange={(variable) =>
+                  setSamplingFrame((prev) => ({
+                    ...prev,
+                    variable,
+                    // sampling_cols mirrors the chosen question, so every
+                    // consumer keeps reading one field.
+                    sampling_cols: variable ? [variable] : [],
+                  }))
+                }
+                targetsByValue={samplingFrame.targets_by_value}
+                onTargetsByValueChange={(targets_by_value) =>
+                  setSamplingFrame((prev) => ({ ...prev, targets_by_value }))
+                }
+                koboToolData={koboToolData}
+                editable={true}
+                uploadedSlot={
+                  <>
               {samplingFrameData && (
                 <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-300">
                   {samplingFrameFileName && (
@@ -687,15 +752,25 @@ const CreateSurveyPage: React.FC = () => {
                       ✓ {samplingFrameFileName} ({samplingFrameData.length} rows)
                     </div>
                   )}
+                  {samplingFrame.sampling_cols.length > 0 && (
+                    <div className="text-xs mb-1">
+                      Grouping columns matched: {samplingFrame.sampling_cols.join(', ')}
+                    </div>
+                  )}
+                  {totalFromFrameRows(samplingFrameData, isTargetColumn) !== null && (
+                    <div className="text-xs mb-1">
+                      Total interviews planned: {totalFromFrameRows(samplingFrameData, isTargetColumn)}
+                    </div>
+                  )}
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    You can upload a new CSV/XLSX to replace the existing sampling frame, or keep the current one.
+                    Upload a new CSV/XLSX to replace this file, or keep it as it is.
                   </p>
                 </div>
               )}
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Upload Sampling Frame (CSV or XLSX)
+                    Upload a file of targets (CSV or XLSX)
                   </label>
                   <button
                     type="button"
@@ -752,14 +827,17 @@ const CreateSurveyPage: React.FC = () => {
                 )}
                 {!koboToolData && (
                   <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-                    ⚠ Read the form from your Kobo project first, so sampling frame columns can be validated
+                    ⚠ Read the form from your Kobo project first, so its columns can be checked against your questions
                   </p>
                 )}
               </div>
-              {samplingFrame.sampling_cols.length > 0 && (
+                  </>
+                }
+              />
+              {samplingFrame.mode === 'uploaded' && samplingFrame.sampling_cols.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-                    Sampling Columns
+                    Grouping columns matched
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {samplingFrame.sampling_cols.map((col) => (

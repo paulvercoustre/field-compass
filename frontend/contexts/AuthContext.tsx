@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 import { API_BASE_URL } from '../services/apiBase';
+import { forgetSurveyId } from '../utils/selectedSurveyStorage';
 
 // User type
 export interface User {
@@ -72,6 +73,7 @@ const errorDetail = async (response: Response, fallback: string): Promise<string
 };
 
 // Local storage keys
+
 const TOKEN_KEY = 'field_compass_token';
 const USER_KEY = 'field_compass_user';
 
@@ -160,6 +162,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setToken(newToken);
     localStorage.setItem(TOKEN_KEY, newToken);
 
+    // Signing in starts on the empty state, never on a survey left over from
+    // whoever used this tab before -- which may be a different account whose
+    // surveys this user cannot even see.
+    forgetSurveyId();
+
     // Fetch user profile
     const userResponse = await fetch(`${API_BASE_URL}/api/users/me`, {
       headers: {
@@ -201,6 +208,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    forgetSurveyId();
   };
 
   const updateUser = async (updates: { username?: string; full_name?: string; kobo_api_url?: string }) => {
