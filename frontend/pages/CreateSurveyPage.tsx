@@ -18,6 +18,10 @@ import { parseKoboAssetId, looksLikeUrl, labelColumnFor } from '../utils/koboUrl
 import { getKoboProjectForm, KoboProjectForm } from '../services/api';
 import { CORE_IDENTIFIER_HELP, KOBO_LINK_HELP } from '../constants/coreIdentifiers';
 import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
+import VariableDropdown from '../components/ui/VariableDropdown';
+import { autoFillIdentifier } from '../utils/identifierSuggestions';
+import DkStringValues from '../components/ui/DkStringValues';
+import { suggestDkValues } from '../utils/dkSuggestions';
 
 const CreateSurveyPage: React.FC = () => {
   const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
@@ -30,6 +34,8 @@ const CreateSurveyPage: React.FC = () => {
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
+  // The form's choice rows, carrying names and their label columns.
+  const choiceRows: Array<Record<string, any>> = (koboToolData?.choices as any[]) || [];
 
   // Sampling frame CSV state
   const [samplingFrameData, setSamplingFrameData] = useState<Record<string, any>[] | null>(null);
@@ -57,11 +63,14 @@ const CreateSurveyPage: React.FC = () => {
   const [coreIdentifiers, setCoreIdentifiers] = useState({
     uuid: '_uuid',  // always supplied by Kobo as submission metadata
     // Form-dependent: never pre-fill a field the user did not choose. A form
-    // may name these anything, or not have them at all.
+    // may name these anything, or not have them at all. These stay empty until
+    // a form is read and a conventional name is found in it -- see the effect
+    // below. Filling them here would save a guess made before the app had seen
+    // the form it claims to describe.
     enumerator: '',
-    date_interview: 'today',
-    start_time: 'start',
-    end_time: 'end',
+    date_interview: '',
+    start_time: '',
+    end_time: '',
     consent: '',
   });
   const [samplingFrame, setSamplingFrame] = useState({
@@ -75,7 +84,9 @@ const CreateSurveyPage: React.FC = () => {
   });
   const [specialValues, setSpecialValues] = useState({
     dk_value: -99,
-    dk_string_value: 'dk',
+    // Empty until a form is read: `dk` was a blind default like the identifier
+    // ones, set whether or not the form had such an option.
+    dk_string_value: [] as string[],
   });
   const [globalParameters, setGlobalParameters] = useState({
     data_collection_start_date: '',
@@ -91,31 +102,46 @@ const CreateSurveyPage: React.FC = () => {
   useEffect(() => {
     // Update available variables when tool is loaded
     if (koboToolData && koboToolData.variableMap) {
-      const vars = Array.from(koboToolData.variableMap.keys());
+      // `variableMap` is loosely typed, so its keys arrive as `unknown`. They
+      // are question names and nothing else.
+      const vars = Array.from(koboToolData.variableMap.keys()) as string[];
       setAvailableVariables(vars);
       
       // Pre-select a conventional name only when the form actually contains a
-      // question by that name. That is a verified match, not a guess -- unlike a
+      // question by that name, and only when exactly one candidate matches.
+      // That is a verified, unambiguous match rather than a guess -- unlike a
       // blind default, which silently points the config at a question that may
-      // not exist. Anything not matched is left for the user to choose.
-      const defaults = {
-        uuid: '_uuid',
-        date_interview: 'today',
-        start_time: 'start',
-        end_time: 'end',
-        enumerator: 'enumerator_id',
-        consent: 'consent',
-      };
-      
+      // not exist.
+      //
+      // Where several candidates match there is no basis for choosing, so the
+      // field stays empty and the dropdown shows them all under "Suggested".
+      // A field that already looks answered is one nobody re-reads.
+      //
+      // Only fields the user has not already touched are filled, so re-reading
+      // the form does not overwrite a deliberate choice.
       setCoreIdentifiers(prev => {
         const updated = { ...prev };
-        Object.entries(defaults).forEach(([key, defaultValue]) => {
-          if (vars.includes(defaultValue)) {
-            updated[key as keyof typeof updated] = defaultValue;
+        (['enumerator', 'consent', 'date_interview', 'start_time', 'end_time'] as const).forEach(field => {
+          if (prev[field]) {
+            return;
+          }
+          const match = autoFillIdentifier(vars, field);
+          if (match) {
+            updated[field] = match;
           }
         });
         return updated;
       });
+
+      // Don't-know codings differ from identifiers in one way: several matches
+      // are not an ambiguity. A form can genuinely carry both `dk` and
+      // `dont_know` for the same answer, and counting only one understates the
+      // DK rate, so every match is selected rather than none.
+      setSpecialValues(prev =>
+        prev.dk_string_value.length > 0
+          ? prev
+          : { ...prev, dk_string_value: suggestDkValues((koboToolData.choices as any[]) || []) }
+      );
     }
   }, [koboToolData]);
 
@@ -486,90 +512,6 @@ const CreateSurveyPage: React.FC = () => {
     setNewlyCreatedSurveyId(null);
   };
 
-  const renderVariableDropdown = (
-    value: string,
-    onChange: (value: string) => void,
-    label: string,
-    helpKey?: string
-  ) => {
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-          {label}
-          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
-            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
-          )}
-        </label>
-        {availableVariables.length > 0 ? (
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">-- Select variable --</option>
-            {availableVariables.map((varName) => (
-              <option key={varName} value={varName}>
-                {varName}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Enter variable name"
-          />
-        )}
-      </div>
-    );
-  };
-
-  const renderAnswerOptionDropdown = (
-    value: string,
-    onChange: (value: string) => void,
-    label: string,
-    helpKey?: string
-  ) => {
-    // Get all unique answer options from choices
-    const answerOptions = koboToolData?.choices 
-      ? Array.from(new Set(koboToolData.choices.map(choice => choice.name))).sort()
-      : [];
-
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-          {label}
-          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
-            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
-          )}
-        </label>
-        {answerOptions.length > 0 ? (
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">-- Select answer option --</option>
-            {answerOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Enter answer option"
-          />
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
@@ -858,18 +800,20 @@ const CreateSurveyPage: React.FC = () => {
           <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderVariableDropdown(
-                coreIdentifiers.enumerator,
-                (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
-                'Enumerator ID',
-                'enumerator'
-              )}
-              {renderVariableDropdown(
-                coreIdentifiers.consent,
-                (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
-                'Consent',
-                'consent'
-              )}
+              <VariableDropdown
+                value={coreIdentifiers.enumerator}
+                onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value })}
+                label="Enumerator ID"
+                helpKey="enumerator"
+                availableVariables={availableVariables}
+              />
+              <VariableDropdown
+                value={coreIdentifiers.consent}
+                onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value })}
+                label="Consent"
+                helpKey="consent"
+                availableVariables={availableVariables}
+              />
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value
                   <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
@@ -881,12 +825,11 @@ const CreateSurveyPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
-              {renderAnswerOptionDropdown(
-                specialValues.dk_string_value,
-                (value) => setSpecialValues({ ...specialValues, dk_string_value: value }),
-                'DK String Value',
-                'dk_string_value'
-              )}
+              <DkStringValues
+                values={specialValues.dk_string_value}
+                onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
+                choices={choiceRows}
+              />
             </div>
           </section>
 

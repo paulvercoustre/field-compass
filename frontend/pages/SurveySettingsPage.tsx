@@ -19,6 +19,9 @@ import { getKoboProjectForm, KoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
 import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
 import { inferSamplingMode } from '../utils/samplingMode';
+import VariableDropdown from '../components/ui/VariableDropdown';
+import DkStringValues from '../components/ui/DkStringValues';
+import { readDkValues, sameDkValues } from '../utils/dkSuggestions';
 
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -67,6 +70,8 @@ const SurveySettingsPage: React.FC = () => {
   const [koboToolFileName, setKoboToolFileName] = useState<string>('');
   const [isLoadingTool, setIsLoadingTool] = useState(false);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
+  // The form's choice rows, carrying names and their label columns.
+  const choiceRows: Array<Record<string, any>> = (koboToolData?.choices as any[]) || [];
   // Outlier detection is the only picker that genuinely needs numbers.
   const [numericVariables, setNumericVariables] = useState<string[]>([]);
   const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
@@ -86,13 +91,19 @@ const SurveySettingsPage: React.FC = () => {
   const [koboAssetId, setKoboAssetId] = useState('');
   const [coreIdentifiers, setCoreIdentifiers] = useState({
     uuid: '_uuid',  // always supplied by Kobo as submission metadata
-    // Form-dependent: never pre-fill a field the user did not choose. A form
-    // may name these anything, or not have them at all.
+    // Form-dependent, and nothing here is guessed: this screen is reached
+    // after the survey exists, so the stored config is the only source of
+    // truth. A default could only overwrite it or misrepresent it -- and not
+    // merely on screen, since the load merges stored config *over* these, so a
+    // config missing a key inherits the default and saving writes it.
+    //
+    // Suggestions still appear, grouped at the top of each dropdown, where the
+    // user can see them and choose.
     enumerator: '',
     date_interview: '',
-    start_time: 'start',
-    end_time: 'end',
-    consent: 'consent',
+    start_time: '',
+    end_time: '',
+    consent: '',
   });
   const [samplingFrame, setSamplingFrame] = useState({
     mode: null as SamplingMode | null,
@@ -105,7 +116,9 @@ const SurveySettingsPage: React.FC = () => {
   });
   const [specialValues, setSpecialValues] = useState({
     dk_value: -99,
-    dk_string_value: 'dk',
+    // Nothing pre-selected here, for the reason the identifiers beside it are
+    // empty: the stored config is the source of truth after creation.
+    dk_string_value: [] as string[],
   });
   const [globalParameters, setGlobalParameters] = useState({
     data_collection_start_date: '',
@@ -123,16 +136,19 @@ const SurveySettingsPage: React.FC = () => {
 
   // Fallbacks here must match the initial state above, or clearing a field
   // reads as "unchanged" and the Save button never enables.
-  const savedCoreIdentifiers = config?.config_data?.core_identifiers || { uuid: '_uuid', enumerator: '', date_interview: '', start_time: 'start', end_time: 'end', consent: 'consent' };
+  const savedCoreIdentifiers = config?.config_data?.core_identifiers || { uuid: '_uuid', enumerator: '', date_interview: '', start_time: '', end_time: '', consent: '' };
   const isCoreIdentifiersDirty =
     coreIdentifiers.uuid !== (savedCoreIdentifiers.uuid ?? '_uuid') ||
     coreIdentifiers.enumerator !== (savedCoreIdentifiers.enumerator ?? '') ||
     coreIdentifiers.date_interview !== (savedCoreIdentifiers.date_interview ?? '') ||
-    coreIdentifiers.start_time !== (savedCoreIdentifiers.start_time ?? 'start') ||
-    coreIdentifiers.end_time !== (savedCoreIdentifiers.end_time ?? 'end') ||
-    coreIdentifiers.consent !== (savedCoreIdentifiers.consent ?? 'consent') ||
+    coreIdentifiers.start_time !== (savedCoreIdentifiers.start_time ?? '') ||
+    coreIdentifiers.end_time !== (savedCoreIdentifiers.end_time ?? '') ||
+    coreIdentifiers.consent !== (savedCoreIdentifiers.consent ?? '') ||
     specialValues.dk_value !== (config?.config_data?.special_values?.dk_value ?? -99) ||
-    specialValues.dk_string_value !== (config?.config_data?.special_values?.dk_string_value ?? 'dk');
+    !sameDkValues(
+      specialValues.dk_string_value,
+      readDkValues(config?.config_data?.special_values?.dk_string_value)
+    );
 
   // Quality Checks State
   const [qualityChecks, setQualityChecks] = useState({
@@ -323,7 +339,13 @@ const SurveySettingsPage: React.FC = () => {
         }
       }
       if (cd.special_values) {
-        setSpecialValues({ ...specialValues, ...cd.special_values });
+        // Stored configs hold `dk_string_value` as a single string; new ones
+        // hold a list. Old ones are never rewritten, so both shapes arrive here.
+        setSpecialValues({
+          ...specialValues,
+          ...cd.special_values,
+          dk_string_value: readDkValues(cd.special_values.dk_string_value),
+        });
       }
       if (cd.global_parameters) {
         setGlobalParameters({ ...globalParameters, ...cd.global_parameters });
@@ -715,7 +737,11 @@ const SurveySettingsPage: React.FC = () => {
       setCoreIdentifiers(prev => ({ ...prev, ...config.config_data.core_identifiers }));
     }
     if (config?.config_data?.special_values) {
-      setSpecialValues(prev => ({ ...prev, ...config.config_data.special_values }));
+      setSpecialValues(prev => ({
+        ...prev,
+        ...config.config_data.special_values,
+        dk_string_value: readDkValues(config.config_data.special_values.dk_string_value),
+      }));
     }
   };
 
@@ -975,86 +1001,6 @@ const SurveySettingsPage: React.FC = () => {
     });
   };
 
-  const renderVariableDropdown = (
-    value: string,
-    onChange: (value: string) => void,
-    label: string,
-    editable?: boolean,
-    helpKey?: string
-  ) => {
-    const canEdit = editable ?? isEditing;
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-          {label}
-          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
-            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
-          )}
-        </label>
-        {canEdit && availableVariables.length > 0 ? (
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">-- Select variable --</option>
-            {availableVariables.map((varName) => (
-              <option key={varName} value={varName}>
-                {varName}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-            {value || '—'}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderAnswerOptionDropdown = (
-    value: string,
-    onChange: (value: string) => void,
-    label: string,
-    editable?: boolean,
-    helpKey?: string
-  ) => {
-    const canEdit = editable ?? isEditing;
-    // Get all unique answer options from choices
-    const answerOptions = koboToolData?.choices 
-      ? Array.from(new Set(koboToolData.choices.map(choice => choice.name))).sort()
-      : [];
-
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-          {label}
-          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
-            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
-          )}
-        </label>
-        {canEdit && answerOptions.length > 0 ? (
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">-- Select answer option --</option>
-            {answerOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-            {value || '—'}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   if (!selectedSurvey) {
     return (
@@ -1611,20 +1557,22 @@ const SurveySettingsPage: React.FC = () => {
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderVariableDropdown(
-                  coreIdentifiers.enumerator,
-                  (value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value }),
-                  'Enumerator ID',
-                  canEditSurvey,
-                  'enumerator'
-                )}
-                {renderVariableDropdown(
-                  coreIdentifiers.consent,
-                  (value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value }),
-                  'Consent',
-                  canEditSurvey,
-                  'consent'
-                )}
+                <VariableDropdown
+                  value={coreIdentifiers.enumerator}
+                  onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value })}
+                  label="Enumerator ID"
+                  helpKey="enumerator"
+                  availableVariables={availableVariables}
+                  readOnly={!canEditSurvey}
+                />
+                <VariableDropdown
+                  value={coreIdentifiers.consent}
+                  onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value })}
+                  label="Consent"
+                  helpKey="consent"
+                  availableVariables={availableVariables}
+                  readOnly={!canEditSurvey}
+                />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value
                   <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
@@ -1642,13 +1590,12 @@ const SurveySettingsPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {renderAnswerOptionDropdown(
-                  specialValues.dk_string_value,
-                  (value) => setSpecialValues({ ...specialValues, dk_string_value: value }),
-                  'DK String Value',
-                  canEditSurvey,
-                  'dk_string_value'
-                )}
+                <DkStringValues
+                  values={specialValues.dk_string_value}
+                  onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
+                  choices={choiceRows}
+                  readOnly={!canEditSurvey}
+                />
               </div>
               {canEditSurvey && isCoreIdentifiersDirty && (
                 <div className="flex gap-3 pt-4">

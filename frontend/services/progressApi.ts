@@ -74,7 +74,9 @@ export interface SurveyConfig {
     };
     special_values?: {
       dk_value?: number;
-      dk_string_value?: string;
+      // A list since #59. Configs written before that hold a single string and
+      // are not rewritten, so both shapes are read.
+      dk_string_value?: string | string[];
     };
     pii_cols?: string[] | null;
     roster_processing?: {
