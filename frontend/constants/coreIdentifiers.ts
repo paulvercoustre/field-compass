@@ -75,9 +75,11 @@ export const CORE_IDENTIFIER_HELP: Record<string, FieldHelp> = {
       'interview quality.',
   },
   dk_string_value: {
-    title: "Don't know — answer option",
+    title: "Don't know — answer options",
     text:
-      'The choice value your form uses for "don\'t know" on select questions, often "dk". ' +
-      'Used alongside the numeric code to calculate don\'t-know rates per enumerator.',
+      'The choice values your form uses for "don\'t know" on select questions, often "dk". ' +
+      'Add more than one if your form codes it more than one way -- a form built from ' +
+      'several modules often does, and any coding you leave out gets counted as a real ' +
+      'answer. Used alongside the numeric code to calculate don\'t-know rates per enumerator.',
   },
 };
