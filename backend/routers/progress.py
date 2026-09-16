@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database.models import SubmissionCurrent, User
+from etl.dk_utils import dk_string_tokens, is_dk_value
 from models import (
     DetailedProgress,
     EnumeratorCollectionStats,
@@ -507,7 +508,10 @@ async def get_performance_data(
     # Get DK values from survey config for DK rate calculation
     special_values = config.get("special_values", {})
     dk_value = special_values.get("dk_value")
-    dk_string_value = special_values.get("dk_string_value")
+    # Shared with the ETL rather than compared here, so both read the same
+    # strings the same way. This screen used to do its own raw `==`, which
+    # missed case differences and `select_multiple` answers the ETL counted.
+    dk_tokens = dk_string_tokens(special_values)
 
     # Aggregate by enumerator
     enum_collection_stats = defaultdict(
@@ -523,7 +527,7 @@ async def get_performance_data(
     )
 
     def _count_dk_values(
-        submission_data: dict[str, Any], dk_value: Any, dk_string_value: Any
+        submission_data: dict[str, Any], dk_value: Any, dk_tokens: set[str]
     ) -> tuple[int, int]:
         """
         Count DK values in submission data.
@@ -535,14 +539,7 @@ async def get_performance_data(
         total_count = 0
 
         def _check_value(value: Any) -> bool:
-            """Check if a value is a DK value."""
-            if value is None:
-                return False
-            if isinstance(value, int | float) and dk_value is not None and value == dk_value:
-                return True
-            if isinstance(value, str) and dk_string_value and value == dk_string_value:
-                return True
-            return False
+            return is_dk_value(value, dk_value, dk_tokens)
 
         def _traverse_dict(data: dict[str, Any], path: str = ""):
             """Recursively traverse dictionary to count fields."""
@@ -605,10 +602,8 @@ async def get_performance_data(
                 pass  # Skip invalid values
 
         # Calculate DK rate for this submission
-        if dk_value is not None or dk_string_value:
-            dk_count, total_fields = _count_dk_values(
-                sub.submission_data, dk_value, dk_string_value
-            )
+        if dk_value is not None or dk_tokens:
+            dk_count, total_fields = _count_dk_values(sub.submission_data, dk_value, dk_tokens)
             if total_fields > 0:
                 dk_rate = (dk_count / total_fields) * 100
                 enum_collection_stats[enum_id]["dk_rates"].append(dk_rate)

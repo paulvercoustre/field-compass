@@ -20,6 +20,8 @@ import { CORE_IDENTIFIER_HELP, KOBO_LINK_HELP } from '../constants/coreIdentifie
 import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import { autoFillIdentifier } from '../utils/identifierSuggestions';
+import DkStringValues from '../components/ui/DkStringValues';
+import { suggestDkValues } from '../utils/dkSuggestions';
 
 const CreateSurveyPage: React.FC = () => {
   const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
@@ -32,6 +34,10 @@ const CreateSurveyPage: React.FC = () => {
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
+  // Every unique answer option across the form's choice lists.
+  const answerOptions: string[] = koboToolData?.choices
+    ? Array.from(new Set((koboToolData.choices as any[]).map((choice) => String(choice.name)))).sort()
+    : [];
 
   // Sampling frame CSV state
   const [samplingFrameData, setSamplingFrameData] = useState<Record<string, any>[] | null>(null);
@@ -80,7 +86,9 @@ const CreateSurveyPage: React.FC = () => {
   });
   const [specialValues, setSpecialValues] = useState({
     dk_value: -99,
-    dk_string_value: 'dk',
+    // Empty until a form is read: `dk` was a blind default like the identifier
+    // ones, set whether or not the form had such an option.
+    dk_string_value: [] as string[],
   });
   const [globalParameters, setGlobalParameters] = useState({
     data_collection_start_date: '',
@@ -126,6 +134,19 @@ const CreateSurveyPage: React.FC = () => {
         });
         return updated;
       });
+
+      // Don't-know codings differ from identifiers in one way: several matches
+      // are not an ambiguity. A form can genuinely carry both `dk` and
+      // `dont_know` for the same answer, and counting only one understates the
+      // DK rate, so every match is selected rather than none.
+      const options = koboToolData.choices
+        ? Array.from(new Set((koboToolData.choices as any[]).map((choice) => String(choice.name))))
+        : [];
+      setSpecialValues(prev =>
+        prev.dk_string_value.length > 0
+          ? prev
+          : { ...prev, dk_string_value: suggestDkValues(options) }
+      );
     }
   }, [koboToolData]);
 
@@ -496,50 +517,6 @@ const CreateSurveyPage: React.FC = () => {
     setNewlyCreatedSurveyId(null);
   };
 
-  const renderAnswerOptionDropdown = (
-    value: string,
-    onChange: (value: string) => void,
-    label: string,
-    helpKey?: string
-  ) => {
-    // Get all unique answer options from choices
-    const answerOptions = koboToolData?.choices 
-      ? Array.from(new Set(koboToolData.choices.map(choice => choice.name))).sort()
-      : [];
-
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
-          {label}
-          {helpKey && CORE_IDENTIFIER_HELP[helpKey] && (
-            <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />
-          )}
-        </label>
-        {answerOptions.length > 0 ? (
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">-- Select answer option --</option>
-            {answerOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Enter answer option"
-          />
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
@@ -853,12 +830,11 @@ const CreateSurveyPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
-              {renderAnswerOptionDropdown(
-                specialValues.dk_string_value,
-                (value) => setSpecialValues({ ...specialValues, dk_string_value: value }),
-                'DK String Value',
-                'dk_string_value'
-              )}
+              <DkStringValues
+                values={specialValues.dk_string_value}
+                onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
+                answerOptions={answerOptions}
+              />
             </div>
           </section>
 
