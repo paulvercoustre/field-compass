@@ -52,6 +52,8 @@ ASSET_PAYLOAD = {
                 "type": "integer",
                 "name": "age",
                 "label": ["Age", "سن"],
+                "constraint": ". <= 120",
+                "required": True,
                 "$xpath": "age",
                 "$kuid": "k5",
             },
@@ -120,6 +122,8 @@ class TestKoboAssetForm:
             "Dari (da)": "شماره",
         }
         assert by_name["enumerator_id"]["list_name"] == "enums"
+        assert by_name["age"]["constraint"] == ". <= 120"
+        assert by_name["age"]["required"] is True
 
     def test_structural_rows_and_notes_are_excluded(self, client):
         """The caller is populating pickers, not rendering the form."""

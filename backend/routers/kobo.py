@@ -99,6 +99,11 @@ async def get_kobo_asset_form(
             "type": question.type,
             "list_name": question.list_name,
             "repeat_name": question.repeat_name,
+            "required": question.required,
+            "constraint": question.constraint,
+            "relevant": question.relevant,
+            "calculation": question.calculation,
+            "choice_filter": (question.raw or {}).get("choice_filter") or None,
         }
         for question in schema.questions
         if question.name and question.type not in NON_QUESTION_TYPES

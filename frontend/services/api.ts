@@ -243,6 +243,11 @@ export interface KoboFormQuestion {
   type: string;
   list_name: string | null;
   repeat_name: string | null;
+  required?: boolean;
+  constraint?: string | null;
+  relevant?: string | null;
+  calculation?: string | null;
+  choice_filter?: string | null;
 }
 
 export interface KoboFormChoice {

@@ -15,13 +15,15 @@ import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import InfoTip from '../components/ui/InfoTip';
 import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
-import { getKoboProjectForm, KoboProjectForm } from '../services/api';
+import { getKoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
 import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
 import { inferSamplingMode } from '../utils/samplingMode';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
 import { readDkValues, sameDkValues } from '../utils/dkSuggestions';
+import FormLintPanel from '../components/linter/FormLintPanel';
+import { projectFormToKoboTool } from '../utils/koboForm';
 
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -514,40 +516,9 @@ const SurveySettingsPage: React.FC = () => {
     setIsLoadingTool(true);
     setError(null);
     try {
-      const form: KoboProjectForm = await getKoboProjectForm(assetId);
-      const labelColumns = (labels: Record<string, string>) =>
-        Object.fromEntries(
-          Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text])
-        );
-
-      const survey = form.questions.map((q) => ({
-        type: q.type,
-        name: q.name,
-        ...labelColumns(q.labels),
-        roster_name: q.repeat_name,
-        list_name: q.list_name,
-      }));
-      const choices = Object.entries(form.choice_lists).flatMap(([list_name, options]) =>
-        options.map((option) => ({
-          list_name,
-          name: option.name,
-          ...labelColumns(option.labels),
-        }))
-      );
+      const form = await getKoboProjectForm(assetId);
       const language = form.languages[0] || 'default';
-      const variableMap = new Map(
-        form.questions.map((q) => [
-          q.name,
-          {
-            type: q.type,
-            label: q.labels[language] || q.name,
-            choiceListName: q.list_name,
-            roster_name: q.repeat_name,
-          },
-        ])
-      );
-
-      setKoboToolData({ survey, choices, variableMap } as KoboToolData);
+      setKoboToolData(projectFormToKoboTool(form, language));
       setKoboToolFileName(form.asset_name || assetId);
 
       // Keep the chosen language if the form still has it; otherwise fall back.
@@ -1765,6 +1736,13 @@ const SurveySettingsPage: React.FC = () => {
           </div>
         ) : activeTab === 'quality' ? (
           <div className="space-y-6">
+            {selectedSurvey && (
+              <FormLintPanel
+                surveyId={selectedSurvey.survey_id}
+                canEdit={canEditSurvey}
+                onRulesAdopted={loadValidationRules}
+              />
+            )}
             {/* General Quality Checks - dirty pattern like Survey Profile */}
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">General Quality Checks</h2>

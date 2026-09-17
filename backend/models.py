@@ -282,6 +282,13 @@ class FormQuestion(BaseModel):
     type: str
     list_name: str | None = None
     repeat_name: str | None = None
+    # Needed so a form fetched from Kobo can be linted without a second
+    # round-trip: the create/settings screens persist these onto kobo_tool.
+    required: bool = False
+    constraint: str | None = None
+    relevant: str | None = None
+    calculation: str | None = None
+    choice_filter: str | None = None
 
 
 class FormChoice(BaseModel):
