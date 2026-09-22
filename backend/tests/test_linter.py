@@ -1,17 +1,26 @@
 """Tests for the form linter engine, check packs, and rule adoption."""
 
+from types import SimpleNamespace
+from unittest.mock import Mock
+
 from database.models import ValidationRule
 from etl.hfc_engine import HFCEngine
 from forms.schema import DIALECT_API, load_form_schema
 from linter.adopt import adopt_findings
 from linter.auto_rules import rule_name_for
 from linter.engine import run_lint
+from linter.form_source import load_survey_form
 from linter.registry import registered_ids
 from tests.lint_forms import (
     BROKEN_CALC,
+    DK_AND_REFUSED,
+    DK_EXCLUSIVE_REFUSED_NOT,
     DK_NOT_EXCLUSIVE,
+    GROUPED_API,
+    GROUPED_STORED,
     HEALTHY,
     INCONSISTENT_DK,
+    LEGACY_STORED,
     MISSING_REQUIRED,
     NO_AUDIT,
     NO_AUDIT_API,
@@ -19,6 +28,7 @@ from tests.lint_forms import (
     NO_INTERVIEW_DATE,
     ORPHAN_LIST,
     SAMPLING_AS_TEXT,
+    TODAY_IN_LABEL_ONLY,
     UNBOUNDED_AGE,
     UNBOUNDED_DATE,
     UNREACHABLE,
@@ -296,3 +306,65 @@ class TestAdoptRules:
 
         exclusive = engine.run_checks({"foods": "dk", "enumerator_id": "E01", "_uuid": "u2"}, "u2")
         assert [i for i in exclusive if "dk_not_exclusive" in i.check] == []
+
+
+class TestReviewRegressions:
+    def test_dk_refused_and_none_are_one_convention(self):
+        report = run_lint(load_form_schema(DK_AND_REFUSED))
+        assert _ids(report, "inconsistent_dk_coding") == []
+
+    def test_constraint_on_dk_does_not_cover_refused(self):
+        report = run_lint(load_form_schema(DK_EXCLUSIVE_REFUSED_NOT))
+        finding = _finding(report, "dk_not_exclusive")
+        assert "refused" in finding.message
+        assert "'refused'" in finding.suggested_fix
+
+    def test_missing_required_offers_no_rule_that_cannot_fire(self):
+        report = run_lint(load_form_schema(MISSING_REQUIRED))
+        finding = _finding(report, "missing_required")
+        assert finding.auto_rule is None
+
+    def test_today_in_a_label_is_not_an_interview_date(self):
+        report = run_lint(load_form_schema(TODAY_IN_LABEL_ONLY))
+        assert _ids(report, "no_interview_date") == ["no_interview_date"]
+
+    def test_repeat_reference_is_not_a_broken_calculation(self):
+        for payload in (GROUPED_API, GROUPED_STORED):
+            report = run_lint(load_form_schema(payload))
+            assert _ids(report, "broken_calculation") == []
+
+    def test_legacy_form_skips_logic_checks(self):
+        report = run_lint(load_form_schema(LEGACY_STORED), form_logic_missing=True)
+        assert report.form_logic_missing is True
+        for check_id in ("unbounded_numeric", "unbounded_date", "missing_required"):
+            assert _ids(report, check_id) == []
+        assert "no_enumerator_field" in report.checks_run
+        assert report.as_dict()["form_logic_missing"] is True
+
+
+class TestLoadSurveyForm:
+    def _survey(self, form):
+        return SimpleNamespace(config_data={"kobo_tool": form}, kobo_asset_id="aAsset1234567")
+
+    def test_stored_form_with_logic_is_used_as_is(self):
+        fetch = Mock()
+        result = load_survey_form(self._survey(UNBOUNDED_AGE), fetch)
+        assert result.logic_missing is False
+        fetch.assert_not_called()
+
+    def test_legacy_form_is_re_read_from_kobo(self):
+        fetch = Mock(return_value={"content": GROUPED_API})
+        result = load_survey_form(self._survey(LEGACY_STORED), fetch)
+        fetch.assert_called_once_with("aAsset1234567")
+        assert result.logic_missing is False
+        assert result.schema.get("hh_count") is not None
+
+    def test_legacy_form_without_kobo_access_is_flagged(self):
+        result = load_survey_form(self._survey(LEGACY_STORED), None)
+        assert result.logic_missing is True
+
+    def test_failed_fetch_falls_back_to_flagged_stored_form(self):
+        fetch = Mock(side_effect=RuntimeError("down"))
+        result = load_survey_form(self._survey(LEGACY_STORED), fetch)
+        assert result.logic_missing is True
+        assert result.schema.get("age") is not None

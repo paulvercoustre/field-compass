@@ -10,7 +10,6 @@ from collections.abc import Iterable
 from forms.schema import FormSchema, Question
 from linter.auto_rules import (
     dk_not_exclusive_rule,
-    missing_required_rule,
     unbounded_date_future_rule,
     unbounded_numeric_rule,
 )
@@ -78,7 +77,7 @@ def _has_choice_filter(question: Question) -> bool:
     return bool(str(raw.get("choice_filter") or "").strip())
 
 
-@lint_check("dk_not_exclusive", severity="error", tags=("constraints", "dk"))
+@lint_check("dk_not_exclusive", severity="error", tags=("constraints", "dk", "form_logic"))
 def check_dk_not_exclusive(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     del ctx
     findings: list[LintFinding] = []
@@ -116,7 +115,7 @@ def check_dk_not_exclusive(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
     return findings
 
 
-@lint_check("unbounded_numeric", severity="warning", tags=("constraints",))
+@lint_check("unbounded_numeric", severity="warning", tags=("constraints", "form_logic"))
 def check_unbounded_numeric(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     del ctx
     findings: list[LintFinding] = []
@@ -153,7 +152,7 @@ def check_unbounded_numeric(schema: FormSchema, ctx: LintContext) -> Iterable[Li
     return findings
 
 
-@lint_check("unbounded_date", severity="warning", tags=("constraints",))
+@lint_check("unbounded_date", severity="warning", tags=("constraints", "form_logic"))
 def check_unbounded_date(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     del ctx
     findings: list[LintFinding] = []
@@ -184,7 +183,7 @@ def check_unbounded_date(schema: FormSchema, ctx: LintContext) -> Iterable[LintF
     return findings
 
 
-@lint_check("missing_required", severity="warning", tags=("constraints",))
+@lint_check("missing_required", severity="warning", tags=("constraints", "form_logic"))
 def check_missing_required(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     del ctx
     findings: list[LintFinding] = []
@@ -207,13 +206,16 @@ def check_missing_required(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
                     "downstream check that keys on them silently skip the row."
                 ),
                 suggested_fix="Set `required` to `yes` on this question.",
-                auto_rule=missing_required_rule(question),
+                # No runtime twin: Kobo leaves a blank answer out of the
+                # submission, and the HFC engine skips any rule whose variable
+                # is absent, so a "is blank" rule could never fire.
+                auto_rule=None,
             )
         )
     return findings
 
 
-@lint_check("unreachable_question", severity="warning", tags=("constraints",))
+@lint_check("unreachable_question", severity="warning", tags=("constraints", "form_logic"))
 def check_unreachable_question(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     """
     A `relevant` that references a choice value the list does not contain.
@@ -283,7 +285,7 @@ def check_orphan_choice_list(schema: FormSchema, ctx: LintContext) -> Iterable[L
     return findings
 
 
-@lint_check("broken_calculation", severity="error", tags=("constraints",))
+@lint_check("broken_calculation", severity="error", tags=("constraints", "form_logic"))
 def check_broken_calculation(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     del ctx
     findings: list[LintFinding] = []

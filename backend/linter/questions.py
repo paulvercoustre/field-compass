@@ -71,3 +71,57 @@ def iter_answerable(schema: FormSchema) -> Iterator[Question]:
 def is_valid_rule_identifier(name: str) -> bool:
     """simpleeval can only bind names that are valid Python identifiers."""
     return bool(name) and name.isidentifier()
+
+
+def _raw_list(value: object) -> list[str]:
+    """A stored column that may hold a list or a single string."""
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item or "").strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _path_prefixes(group_path: str) -> list[str]:
+    parts = [part for part in group_path.split("/") if part]
+    return ["/".join(parts[: index + 1]) for index in range(len(parts))]
+
+
+def enclosing_relevants(schema: FormSchema, question: Question) -> list[str]:
+    """
+    ``relevant`` expressions of every group and repeat around ``question``.
+
+    A form gated on consent usually puts the condition on a group, not on each
+    question inside it. Read from the group rows when the schema has them (an
+    API payload), and from the ``group_relevant`` column the create/settings
+    screens store, because the stored sheet rows drop group markers.
+    """
+    relevants = _raw_list((question.raw or {}).get("group_relevant"))
+    if question.group_path:
+        prefixes = set(_path_prefixes(question.group_path))
+        for row in schema.questions:
+            if row.type in GROUP_OPEN_TYPES and row.path in prefixes and row.relevant:
+                if row.relevant not in relevants:
+                    relevants.append(row.relevant)
+    return relevants
+
+
+def container_names(schema: FormSchema) -> set[str]:
+    """
+    Names of groups and repeats, which ``${...}`` may legitimately reference.
+
+    ``count(${hh_roster})`` names a repeat, not a question. Stored sheet rows
+    have no group markers, so the names are also recovered from the
+    ``roster_name`` and ``group_path`` columns written alongside each row.
+    """
+    names: set[str] = set()
+    for question in schema.questions:
+        raw = question.raw or {}
+        if question.type in GROUP_OPEN_TYPES and question.name:
+            names.add(question.name)
+        if question.repeat_name:
+            names.add(question.repeat_name)
+        names.update(_raw_list(raw.get("roster_name")))
+        for group_path in (question.group_path, *_raw_list(raw.get("group_path"))):
+            names.update(part for part in (group_path or "").split("/") if part)
+    return names

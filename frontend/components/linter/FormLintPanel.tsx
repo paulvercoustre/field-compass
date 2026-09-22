@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   adoptLintRules,
   lintForm,
@@ -85,6 +85,15 @@ const PretestCard: React.FC<{ finding: PretestFinding }> = ({ finding }) => (
   </li>
 );
 
+const FormLogicMissingNotice: React.FC = () => (
+  <p className="text-sm p-3 rounded-md bg-yellow-50 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
+    The copy of this form saved with the survey has no constraints, skip logic, or
+    required flags, and it could not be re-read from Kobo (add your Kobo API key in
+    user settings). Checks that need them were skipped. Read the form from the Kobo
+    project again and save to run them.
+  </p>
+);
+
 const FormLintPanel: React.FC<FormLintPanelProps> = ({
   surveyId,
   form,
@@ -99,23 +108,39 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
   const [adoptingKey, setAdoptingKey] = useState<string | null>(null);
   const [adoptedKeys, setAdoptedKeys] = useState<Set<string>>(new Set());
 
+  // Bumped whenever the panel is pointed at a different survey or form, so a
+  // response that arrives after the switch is dropped instead of being shown
+  // against the wrong form. `lintSeq` does the same for overlapping re-lints.
+  const sourceGen = useRef(0);
+  const lintSeq = useRef(0);
+
   const findingKey = (finding: LintFinding) => `${finding.check_id}:${finding.question_path || ''}`;
 
   const runLint = useCallback(async () => {
+    const seq = ++lintSeq.current;
     setError(null);
     setIsLinting(true);
     try {
       const next = surveyId ? await lintSurvey(surveyId) : await lintForm(form as Record<string, unknown>);
+      if (seq !== lintSeq.current) return;
       setReport(next);
     } catch (err) {
+      if (seq !== lintSeq.current) return;
       setReport(null);
       setError(err instanceof Error ? err.message : 'Could not lint this form.');
     } finally {
-      setIsLinting(false);
+      if (seq === lintSeq.current) setIsLinting(false);
     }
   }, [surveyId, form]);
 
   useEffect(() => {
+    sourceGen.current += 1;
+    setReport(null);
+    setPretest(null);
+    setAdoptedKeys(new Set());
+    setAdoptingKey(null);
+    setIsPretesting(false);
+    setError(null);
     if (surveyId || form) {
       runLint();
     }
@@ -123,6 +148,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
 
   const handleAdopt = async (finding: LintFinding) => {
     if (!surveyId) return;
+    const gen = sourceGen.current;
     const key = findingKey(finding);
     setAdoptingKey(key);
     setError(null);
@@ -130,27 +156,32 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
       await adoptLintRules(surveyId, [
         { check_id: finding.check_id, question_path: finding.question_path },
       ]);
-      setAdoptedKeys((prev) => new Set(prev).add(key));
       onRulesAdopted?.();
+      if (gen !== sourceGen.current) return;
+      setAdoptedKeys((prev) => new Set(prev).add(key));
     } catch (err) {
+      if (gen !== sourceGen.current) return;
       setError(err instanceof Error ? err.message : 'Could not add that quality check.');
     } finally {
-      setAdoptingKey(null);
+      if (gen === sourceGen.current) setAdoptingKey(null);
     }
   };
 
   const handlePretest = async (useAgent: boolean) => {
+    const gen = sourceGen.current;
     setError(null);
     setIsPretesting(true);
     try {
       const next = surveyId
         ? await pretestSurvey(surveyId, useAgent)
         : await pretestForm(form as Record<string, unknown>, useAgent);
+      if (gen !== sourceGen.current) return;
       setPretest(next);
     } catch (err) {
+      if (gen !== sourceGen.current) return;
       setError(err instanceof Error ? err.message : 'Could not pretest this form.');
     } finally {
-      setIsPretesting(false);
+      if (gen === sourceGen.current) setIsPretesting(false);
     }
   };
 
@@ -194,6 +225,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
 
       {report && (
         <div className="space-y-4">
+          {report.form_logic_missing && <FormLogicMissingNotice />}
           <p className="text-sm text-gray-700 dark:text-gray-300">
             {total === 0
               ? `No issues on ${report.question_count} questions.`
@@ -258,10 +290,11 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
         </div>
         {pretest && (
           <div className="space-y-2">
+            {pretest.form_logic_missing && <FormLogicMissingNotice />}
             {pretest.agent_error && (
               <p className="text-sm text-yellow-800 dark:text-yellow-200">{pretest.agent_error}</p>
             )}
-            {pretest.findings.length === 0 ? (
+            {pretest.form_logic_missing ? null : pretest.findings.length === 0 ? (
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 No instrument defects from this walk
                 {pretest.agent_ran ? '' : ' (structural only)'}.

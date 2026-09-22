@@ -2,7 +2,14 @@
 
 from forms.schema import load_form_schema
 from linter.pretest import compact_form, run_pretest, structural_pretest
-from tests.lint_forms import CONSENT_GATED, CONSENT_UNGATED, HEALTHY
+from tests.lint_forms import (
+    CONSENT_GATED,
+    CONSENT_UNGATED,
+    GROUPED_API,
+    GROUPED_STORED,
+    HEALTHY,
+    LEGACY_STORED,
+)
 
 
 class FakeAgent:
@@ -35,6 +42,19 @@ class TestStructuralPretest:
     def test_gated_consent_is_silent(self):
         findings = structural_pretest(load_form_schema(CONSENT_GATED))
         assert findings == []
+
+    def test_consent_on_the_enclosing_group_gates(self):
+        for payload in (GROUPED_API, GROUPED_STORED):
+            assert structural_pretest(load_form_schema(payload)) == []
+
+    def test_legacy_form_skips_both_walks(self):
+        agent = FakeAgent()
+        report = run_pretest(
+            load_form_schema(LEGACY_STORED), use_agent=True, agent=agent, form_logic_missing=True
+        )
+        assert report.findings == []
+        assert report.agent_ran is False
+        assert report.as_dict()["form_logic_missing"] is True
 
 
 class TestRunPretest:

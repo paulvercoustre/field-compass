@@ -12,15 +12,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from database.models import User, ValidationRule
+from database.models import SurveyConfig, User, ValidationRule
+from etl.kobo_fetcher import KoboFetcher
 from forms.schema import FormSchema
 from linter.adopt import adopt_findings, select_findings
 from linter.engine import run_lint
-from linter.form_source import schema_from_payload, schema_from_survey
+from linter.form_source import SurveyForm, load_survey_form, schema_from_payload
 from linter.models import LintContext
 from linter.pretest import run_pretest
 from services.ai_service import ai_service
-from services.auth import get_current_active_user
+from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
 from services.permissions import require_survey_access
 from services.rate_limit import limiter
@@ -74,6 +75,28 @@ def _require_form(schema: FormSchema) -> FormSchema:
     return schema
 
 
+def _survey_form(survey: SurveyConfig, current_user: User) -> SurveyForm:
+    """
+    The survey's form, re-read from Kobo when the stored copy has no logic.
+
+    Surveys linked to Kobo before the linter were stored without constraints,
+    skip logic, or required flags. Linting that copy would flag every question,
+    so read the live form with the caller's own Kobo key; without one, the
+    report says the logic is missing and the checks that need it are skipped.
+    """
+    token = get_user_kobo_token(current_user)
+    fetch_live = None
+    if token:
+        api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+
+        def fetch_live(asset_uid: str) -> Any:
+            return KoboFetcher(api_token=token, api_url=api_url).get_asset_info(asset_uid)
+
+    survey_form = load_survey_form(survey, fetch_live)
+    _require_form(survey_form.schema)
+    return survey_form
+
+
 def _rule_payload(rule: ValidationRule, *, created: bool) -> dict[str, Any]:
     return {
         "rule_id": str(rule.rule_id),
@@ -104,8 +127,12 @@ async def lint_survey(
     """Lint the form stored on this survey. Viewer access."""
     survey_uuid = _parse_survey_id(survey_id)
     survey = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
-    schema = _require_form(schema_from_survey(survey))
-    return run_lint(schema, ctx=LintContext(config_data=survey.config_data)).as_dict()
+    survey_form = _survey_form(survey, current_user)
+    return run_lint(
+        survey_form.schema,
+        ctx=LintContext(config_data=survey.config_data),
+        form_logic_missing=survey_form.logic_missing,
+    ).as_dict()
 
 
 @router.post("/surveys/{survey_id}/lint/adopt-rules")
@@ -123,8 +150,8 @@ async def adopt_lint_rules(
     """
     survey_uuid = _parse_survey_id(survey_id)
     survey = require_survey_access(db, current_user, survey_uuid, min_level="editor")
-    schema = _require_form(schema_from_survey(survey))
-    report = run_lint(schema)
+    survey_form = _survey_form(survey, current_user)
+    report = run_lint(survey_form.schema, form_logic_missing=survey_form.logic_missing)
     selected = select_findings(
         report,
         [
@@ -167,7 +194,12 @@ async def pretest_survey(
     del request
     survey_uuid = _parse_survey_id(survey_id)
     survey = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
-    schema = _require_form(schema_from_survey(survey))
+    survey_form = _survey_form(survey, current_user)
     use_agent = True if payload is None else payload.use_agent
-    report = run_pretest(schema, use_agent=use_agent, agent=ai_service)
+    report = run_pretest(
+        survey_form.schema,
+        use_agent=use_agent,
+        agent=ai_service,
+        form_logic_missing=survey_form.logic_missing,
+    )
     return report.as_dict()

@@ -132,7 +132,7 @@ DK_NOT_EXCLUSIVE = form(
 
 UNBOUNDED_AGE = form(
     _q("audit", "audit"),
-    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID", required="yes"),
     _q("today", "today"),
     _q("integer", "age", label="How old is the respondent?"),
     choices=[_choice("enumerator_id", "E01")],
@@ -241,6 +241,165 @@ CONSENT_GATED = form(
         required="yes",
         relevant="${consent} = 'yes'",
     ),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+    ],
+)
+
+# --- regressions from review --------------------------------------------------
+
+# dk, refused and none are different answers, not two DK conventions.
+DK_AND_REFUSED = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one yn", "q1", label="Question one"),
+    _q("select_one codes", "q2", label="Question two"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes", "Yes"),
+        _choice("yn", "dk", "Don't know"),
+        _choice("yn", "refused", "Refused"),
+        _choice("yn", "none", "None of the above"),
+        _choice("codes", "1", "Yes"),
+        # A numeric code labelled Refused is not a second DK convention.
+        _choice("codes", "98", "Refused"),
+        _choice("codes", "dk", "Don't know"),
+    ],
+)
+
+# The constraint makes dk exclusive but not refused.
+DK_EXCLUSIVE_REFUSED_NOT = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q(
+        "select_multiple foods",
+        "foods",
+        label="Which foods?",
+        constraint="not(selected(., 'dk') and count-selected(.) > 1)",
+    ),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("foods", "rice", "Rice"),
+        _choice("foods", "dk", "Don't know"),
+        _choice("foods", "refused", "Refused"),
+    ],
+)
+
+# "today" in a label is not an interview date.
+TODAY_IN_LABEL_ONLY = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("integer", "meals", label="How many meals eaten today?", constraint=". <= 10"),
+    choices=[_choice("enumerator_id", "E01")],
+)
+
+# API dialect: consent gates a whole group, and a calculation counts a repeat.
+GROUPED_API = {
+    "translations": ["English (en)"],
+    "survey": [
+        {"type": "audit", "name": "audit", "$xpath": "audit"},
+        {"type": "today", "name": "today", "$xpath": "today"},
+        {
+            "type": "select_one",
+            "name": "enumerator_id",
+            "label": ["Enumerator ID"],
+            "select_from_list_name": "enumerator_id",
+            "required": True,
+            "$xpath": "enumerator_id",
+        },
+        {
+            "type": "select_one",
+            "name": "consent",
+            "label": ["Does the respondent consent?"],
+            "select_from_list_name": "yn",
+            "required": True,
+            "$xpath": "consent",
+        },
+        {
+            "type": "begin_group",
+            "name": "main",
+            "relevant": "${consent} = 'yes'",
+            "$xpath": "main",
+        },
+        {
+            "type": "text",
+            "name": "full_name",
+            "label": ["Full name"],
+            "required": True,
+            "$xpath": "main/full_name",
+        },
+        {"type": "begin_repeat", "name": "hh_roster", "$xpath": "main/hh_roster"},
+        {
+            "type": "text",
+            "name": "member_name",
+            "label": ["Member name"],
+            "required": True,
+            "$xpath": "main/hh_roster/member_name",
+        },
+        {"type": "end_repeat"},
+        {
+            "type": "calculate",
+            "name": "hh_count",
+            "calculation": "count(${hh_roster})",
+            "$xpath": "main/hh_count",
+        },
+        {"type": "end_group"},
+    ],
+    "choices": [
+        {"list_name": "enumerator_id", "name": "E01", "label": ["Amina"]},
+        {"list_name": "yn", "name": "yes", "label": ["Yes"]},
+        {"list_name": "yn", "name": "no", "label": ["No"]},
+    ],
+}
+
+# The same form as the create/settings screens store it: no group rows, but
+# each question carries group_path, group_relevant and roster_name.
+GROUPED_STORED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID", required="yes"),
+    _q("select_one yn", "consent", label="Does the respondent consent?", required="yes"),
+    _q(
+        "text",
+        "full_name",
+        label="Full name",
+        required="yes",
+        group_path="main",
+        group_relevant=["${consent} = 'yes'"],
+    ),
+    _q(
+        "text",
+        "member_name",
+        label="Member name",
+        required="yes",
+        roster_name="hh_roster",
+        group_path="main/hh_roster",
+        group_relevant=["${consent} = 'yes'"],
+    ),
+    _q(
+        "calculate",
+        "hh_count",
+        calculation="count(${hh_roster})",
+        group_path="main",
+        group_relevant=["${consent} = 'yes'"],
+    ),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+    ],
+)
+
+# A Kobo-linked survey stored before the linter shipped: no logic columns.
+LEGACY_STORED = form(
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("select_one yn", "consent", label="Does the respondent consent?"),
+    _q("integer", "age", label="Respondent age"),
+    _q("date", "date_of_birth", label="Date of birth"),
     choices=[
         _choice("enumerator_id", "E01"),
         _choice("yn", "yes"),

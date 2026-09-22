@@ -1,12 +1,13 @@
 """HTTP tests for the lint and pretest endpoints."""
 
+from unittest.mock import patch
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 
 from database.models import Base, ValidationRule
-from tests.lint_forms import HEALTHY, UNBOUNDED_AGE
+from tests.lint_forms import HEALTHY, LEGACY_STORED, UNBOUNDED_AGE
 from tests.test_api_endpoints import (
     engine,
     override_current_user,
@@ -68,6 +69,25 @@ class TestLintEndpoints:
         assert response.status_code == 200
         checks = {item["check_id"] for item in response.json()["findings"]}
         assert "unbounded_numeric" in checks
+
+    def test_legacy_form_without_kobo_key_skips_logic_checks(self, client):
+        survey = _create_survey(client, LEGACY_STORED)
+        with patch("routers.lint.get_user_kobo_token", return_value=None):
+            body = client.get(f"/api/surveys/{survey['survey_id']}/lint").json()
+        assert body["form_logic_missing"] is True
+        checks = {item["check_id"] for item in body["findings"]}
+        assert checks.isdisjoint({"unbounded_numeric", "unbounded_date", "missing_required"})
+
+    def test_legacy_form_is_linted_from_kobo(self, client):
+        survey = _create_survey(client, LEGACY_STORED)
+        live = {"content": UNBOUNDED_AGE}
+        with patch("routers.lint.get_user_kobo_token", return_value="tok"), patch(
+            "routers.lint.KoboFetcher.get_asset_info", return_value=live
+        ) as fetch:
+            body = client.get(f"/api/surveys/{survey['survey_id']}/lint").json()
+        fetch.assert_called_once_with("aLintAsset1234567")
+        assert body["form_logic_missing"] is False
+        assert "unbounded_numeric" in {item["check_id"] for item in body["findings"]}
 
     def test_lint_without_a_form_is_actionable(self, client):
         survey = _create_survey(client, {"survey": [], "choices": []})

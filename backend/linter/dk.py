@@ -48,6 +48,22 @@ _EXCLUSIVE_LABEL_PHRASES = (
 )
 
 
+# The subset that means "don't know". Refused, none, and not-applicable are
+# different answers, so a form that has both `dk` and `refused` is consistent;
+# only two ways of writing don't-know are a conflict.
+_DK_NAMES = frozenset({"dk", "dont_know", "do_not_know", "don_t_know", "dnk"})
+_DK_LABEL_PHRASES = (
+    "dont know",
+    "do not know",
+    "doesnt know",
+    "does not know",
+    "dk",
+    "no sabe",
+    "ne sais pas",
+    "je ne sais pas",
+)
+
+
 @dataclass(frozen=True)
 class DkOccurrence:
     convention: str
@@ -62,13 +78,34 @@ def _choice_is_exclusive(choice: Choice) -> bool:
     if choice.name in NUMERIC_CONVENTIONS or choice.name.lstrip("-").isdigit():
         if choice.name in NUMERIC_CONVENTIONS:
             return True
+    return _label_matches(choice, _EXCLUSIVE_LABEL_PHRASES)
+
+
+def _label_matches(choice: Choice, phrases: tuple[str, ...]) -> bool:
     for label in choice.label.values():
         normalized = normalize_text(label)
-        if any(
-            normalized == phrase or normalized.startswith(f"{phrase} ")
-            for phrase in _EXCLUSIVE_LABEL_PHRASES
-        ):
+        if any(normalized == phrase or normalized.startswith(f"{phrase} ") for phrase in phrases):
             return True
+    return False
+
+
+def _choice_is_dk(choice: Choice) -> bool:
+    """
+    Whether this choice codes don't-know specifically.
+
+    A numeric code only counts when its label says don't-know, or when it has
+    no label to say otherwise: ``98 = Refused`` next to ``99 = Don't know`` is
+    one convention, not two.
+    """
+    if choice.name.lower() in _DK_NAMES:
+        return True
+    if _label_matches(choice, _DK_LABEL_PHRASES):
+        return True
+    if choice.name in NUMERIC_CONVENTIONS:
+        return all(
+            normalize_text(label) in ("", normalize_text(choice.name))
+            for label in choice.label.values()
+        )
     return False
 
 
@@ -99,12 +136,14 @@ def _looks_numeric_code(name: str) -> bool:
 
 
 def iter_dk_occurrences(schema: FormSchema) -> Iterator[DkOccurrence]:
-    """Every select choice in the form that looks like a DK/NA coding."""
+    """Every select choice in the form that codes don't-know."""
     seen_on_question: set[tuple[str, str]] = set()
     for question in schema.questions:
         if question.type not in SELECT_TYPES or not question.list_name:
             continue
-        for choice in exclusive_choices(schema, question):
+        for choice in schema.choices_for(question):
+            if not _choice_is_dk(choice):
+                continue
             key = (question.path, choice.name)
             if key in seen_on_question:
                 continue

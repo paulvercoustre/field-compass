@@ -248,6 +248,10 @@ export interface KoboFormQuestion {
   relevant?: string | null;
   calculation?: string | null;
   choice_filter?: string | null;
+  /** Enclosing groups, since group rows themselves are not returned. */
+  group_path?: string | null;
+  /** `relevant` conditions of those groups — a consent gate, usually. */
+  group_relevant?: string[];
 }
 
 export interface KoboFormChoice {

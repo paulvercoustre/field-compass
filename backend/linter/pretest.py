@@ -23,7 +23,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from forms.schema import FormSchema, Question
-from linter.questions import has_vocabulary, iter_answerable, question_search_text
+from linter.questions import (
+    enclosing_relevants,
+    has_vocabulary,
+    iter_answerable,
+    question_search_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +109,7 @@ class PretestReport:
     agent_ran: bool = False
     agent_error: str | None = None
     question_count: int = 0
+    form_logic_missing: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -112,6 +118,7 @@ class PretestReport:
             "agent_ran": self.agent_ran,
             "agent_error": self.agent_error,
             "question_count": self.question_count,
+            "form_logic_missing": self.form_logic_missing,
         }
 
 
@@ -144,7 +151,8 @@ def structural_pretest(schema: FormSchema) -> list[PretestFinding]:
             continue
         if not seen_consent:
             continue
-        if _mentions_consent(question.relevant, consent):
+        gates = [question.relevant, *enclosing_relevants(schema, question)]
+        if any(_mentions_consent(relevant, consent) for relevant in gates):
             continue
         if question.required or question.type in {"text", "integer", "decimal", "geopoint"}:
             ungated.append(question)
@@ -209,17 +217,26 @@ def run_pretest(
     *,
     use_agent: bool = True,
     agent: Any | None = None,
+    form_logic_missing: bool = False,
 ) -> PretestReport:
     """
     Run the structural walk, then optionally the agent walk.
 
     ``agent`` is any object with ``pretest_instrument(form, profiles)``. Tests
     pass a fake; production passes ``ai_service``.
+
+    ``form_logic_missing`` skips both walks: they read skip logic, and on a
+    form stored without it every consent gate looks absent.
     """
     report = PretestReport(
         profiles=[profile["id"] for profile in PRETEST_PROFILES],
         question_count=sum(1 for _ in iter_answerable(schema)),
+        form_logic_missing=form_logic_missing,
     )
+    if form_logic_missing:
+        # The agent would be walking the same logic-free copy and would flag
+        # the same missing gates, so it is skipped too.
+        return report
     report.findings.extend(structural_pretest(schema))
 
     if not use_agent:
