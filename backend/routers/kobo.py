@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from database.models import User
 from etl.kobo_fetcher import KoboFetcher
 from forms import load_form_schema
+from linter.questions import enclosing_relevants
 from models import SurveyFormResponse
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
@@ -104,6 +105,11 @@ async def get_kobo_asset_form(
             "relevant": question.relevant,
             "calculation": question.calculation,
             "choice_filter": (question.raw or {}).get("choice_filter") or None,
+            # Group rows are dropped below, so carry what the linter needs
+            # from them on each question: which groups enclose it, and the
+            # conditions those groups put on it (a consent gate, usually).
+            "group_path": question.group_path or None,
+            "group_relevant": enclosing_relevants(schema, question),
         }
         for question in schema.questions
         if question.name and question.type not in NON_QUESTION_TYPES

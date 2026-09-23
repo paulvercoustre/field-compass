@@ -3,6 +3,7 @@
 import re
 
 from forms.schema import FormSchema
+from linter.questions import container_names
 
 # ${group/q} or ${q}
 _REF = re.compile(r"\$\{([^}]+)\}")
@@ -82,21 +83,24 @@ def has_exclusive_select_constraint(constraint: str | None, choice_name: str) ->
     Whether a constraint already stops ``choice_name`` being co-selected.
 
     Looks for the XLSForm idiom ``not(selected(., 'dk') and count-selected(.) > 1)``
-    or a close variant mentioning both ``selected`` and ``count-selected``.
+    or a close variant: ``count-selected`` plus ``choice_name`` as a quoted
+    literal. A constraint that only names ``'dk'`` does not cover ``refused``.
     """
     if not constraint:
         return False
     lowered = constraint.lower()
-    if "count-selected" not in lowered or "selected" not in lowered:
+    if "count-selected" not in lowered:
         return False
-    return choice_name.lower() in lowered or "." in lowered
+    literal = re.escape(choice_name.lower())
+    return re.search(rf"['\"]{literal}['\"]", lowered) is not None
 
 
 def unresolved_references(expression: str | None, schema: FormSchema) -> list[str]:
-    """``${name}`` references that do not resolve to a question in this form."""
+    """``${name}`` references that resolve to neither a question nor a group/repeat."""
+    containers = container_names(schema)
     missing: list[str] = []
     for name in referenced_names(expression):
-        if name in _XLSFORM_BUILTINS:
+        if name in _XLSFORM_BUILTINS or name in containers:
             continue
         if schema.get(name) is None:
             missing.append(name)

@@ -55,8 +55,9 @@ SAMPLING_TOKENS = (
     "county",
 )
 
+# "today" is deliberately not a token: as a word it matches labels such as
+# "meals eaten today". The `today` metadata row is recognised by name instead.
 INTERVIEW_DATE_TOKENS = (
-    "today",
     "interview date",
     "date interview",
     "survey date",
@@ -208,6 +209,8 @@ def check_no_interview_date(schema: FormSchema, ctx: LintContext) -> Iterable[Li
     del ctx
     for question in schema.questions:
         if question.type in DATE_TYPES:
+            return []
+        if question.name == "today":
             return []
         if question.name and has_vocabulary(question_search_text(question), INTERVIEW_DATE_TOKENS):
             return []

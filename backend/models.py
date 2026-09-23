@@ -289,6 +289,10 @@ class FormQuestion(BaseModel):
     relevant: str | None = None
     calculation: str | None = None
     choice_filter: str | None = None
+    # Group rows are not returned, so each question carries its enclosing
+    # groups' path and `relevant` conditions for the linter.
+    group_path: str | None = None
+    group_relevant: list[str] = []
 
 
 class FormChoice(BaseModel):

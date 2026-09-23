@@ -37,6 +37,8 @@ export interface LintReport {
   checks_failed: string[];
   question_count: number;
   has_audit: boolean | null;
+  /** The stored form has no constraints or skip logic, so checks that read them were skipped. */
+  form_logic_missing?: boolean;
 }
 
 export interface AdoptedRule {

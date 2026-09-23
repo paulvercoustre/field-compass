@@ -180,7 +180,17 @@ def classify_choice(choice: Choice) -> str | None:
     The stored name is read first: it is what submissions contain, and it is
     the more deliberate of the two. Labels are the fallback for forms that
     code by number.
+
+    A numeric sentinel is the exception: ``98`` is "refused" on some forms and
+    "don't know" on others, so its label decides when it has one that says.
+    Only an unlabelled sentinel defaults to don't-know.
     """
+    if _is_numeric_sentinel(choice.name):
+        for label in choice.label.values():
+            category = classify_text(label)
+            if category is not None:
+                return category
+        return DONT_KNOW
     for value in (choice.name, *choice.label.values()):
         category = classify_text(value)
         if category is not None:

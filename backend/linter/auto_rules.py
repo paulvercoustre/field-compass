@@ -71,15 +71,6 @@ def unbounded_date_future_rule(question: Question) -> dict[str, Any] | None:
     )
 
 
-def missing_required_rule(question: Question) -> dict[str, Any] | None:
-    return _base_rule(
-        "missing_required",
-        question,
-        issue=f"{question.label_for() or question.name} is blank",
-        check_expression=f'{question.name} == ""',
-    )
-
-
 def dk_not_exclusive_rule(question: Question, choice_names: list[str]) -> dict[str, Any] | None:
     """
     Flag a select_multiple where an exclusive option is one of several answers.

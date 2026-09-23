@@ -9,7 +9,12 @@ from collections.abc import Iterable
 
 from forms.schema import FormSchema, Question
 from linter.models import LintContext, LintFinding, finding_for
-from linter.questions import has_vocabulary, iter_answerable, question_search_text
+from linter.questions import (
+    enclosing_relevants,
+    has_vocabulary,
+    iter_answerable,
+    question_search_text,
+)
 from linter.registry import lint_check
 
 CONSENT_TOKENS = (
@@ -39,7 +44,7 @@ def _mentions_consent(relevant: str | None, consent: Question) -> bool:
     return consent.name.lower() in lowered or consent.path.lower() in lowered
 
 
-@lint_check("consent_does_not_gate", severity="error", tags=("flow", "consent"))
+@lint_check("consent_does_not_gate", severity="error", tags=("flow", "consent", "form_logic"))
 def check_consent_does_not_gate(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     """
     A consent question that no later question is conditioned on.
@@ -61,7 +66,9 @@ def check_consent_does_not_gate(schema: FormSchema, ctx: LintContext) -> Iterabl
             continue
         if not seen_consent:
             continue
-        if _mentions_consent(question.relevant, consent):
+        # A consent gate usually sits on the group, not on each question in it.
+        gates = [question.relevant, *enclosing_relevants(schema, question)]
+        if any(_mentions_consent(relevant, consent) for relevant in gates):
             continue
         if question.required or question.type in _SUBSTANTIVE_TYPES:
             ungated.append(question)

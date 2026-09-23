@@ -64,6 +64,7 @@ class LintReport:
     checks_failed: list[str] = field(default_factory=list)
     question_count: int = 0
     has_audit: bool | None = None
+    form_logic_missing: bool = False
 
     def grouped(self) -> dict[str, list[LintFinding]]:
         buckets: dict[str, list[LintFinding]] = {
@@ -92,6 +93,7 @@ class LintReport:
             "checks_failed": list(self.checks_failed),
             "question_count": self.question_count,
             "has_audit": self.has_audit,
+            "form_logic_missing": self.form_logic_missing,
         }
 
 

@@ -72,6 +72,8 @@ export interface KoboQuestion {
   'label::English (en)'?: string;
   roster_name: string | null;
   list_name?: string;
+  group_path?: string;
+  group_relevant?: string[];
 }
 
 export interface KoboChoice {
