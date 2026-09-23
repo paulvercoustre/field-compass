@@ -1,8 +1,8 @@
 /**
- * Lint and cognitive-pretest API.
+ * Form check API.
  *
- * The linter is deterministic. The pretest may call a model; both operate on
- * form schema only — no respondent answers are sent.
+ * Every check is deterministic and reads the form schema only — no respondent
+ * answers are sent, and no model is called.
  */
 
 import { API_BASE_URL } from './apiBase';
@@ -37,24 +37,6 @@ export interface LintReport {
   checks_failed: string[];
   question_count: number;
   has_audit: boolean | null;
-}
-
-export interface PretestFinding {
-  check_id: string;
-  severity: string;
-  question_path: string | null;
-  message: string;
-  why_it_matters: string;
-  profile: string | null;
-  source: 'structural' | 'agent' | string;
-}
-
-export interface PretestReport {
-  findings: PretestFinding[];
-  profiles: string[];
-  agent_ran: boolean;
-  agent_error: string | null;
-  question_count: number;
 }
 
 export interface AdoptedRule {
@@ -94,28 +76,5 @@ export async function adoptLintRules(
     body: JSON.stringify({ items, is_active: isActive }),
   });
   if (!response.ok) throw new Error(await readError(response, 'Could not add those quality checks.'));
-  return response.json();
-}
-
-export async function pretestForm(
-  form: Record<string, unknown>,
-  useAgent = true
-): Promise<PretestReport> {
-  const response = await fetch(`${API_BASE_URL}/api/pretest`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ form, use_agent: useAgent }),
-  });
-  if (!response.ok) throw new Error(await readError(response, 'Could not pretest this form.'));
-  return response.json();
-}
-
-export async function pretestSurvey(surveyId: string, useAgent = true): Promise<PretestReport> {
-  const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/pretest`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ use_agent: useAgent }),
-  });
-  if (!response.ok) throw new Error(await readError(response, 'Could not pretest this survey.'));
   return response.json();
 }

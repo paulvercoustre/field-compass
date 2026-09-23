@@ -1,4 +1,4 @@
-"""HTTP tests for the lint and pretest endpoints."""
+"""HTTP tests for the lint endpoints."""
 
 from uuid import UUID
 
@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from database.models import Base, ValidationRule
-from tests.lint_forms import HEALTHY, UNBOUNDED_AGE
+from tests.lint_forms import UNBOUNDED_AGE
 from tests.test_api_endpoints import (
     engine,
     override_current_user,
@@ -106,24 +106,3 @@ class TestLintEndpoints:
             assert count == 1
         finally:
             db.close()
-
-
-class TestPretestEndpoints:
-    def test_structural_pretest_without_agent(self, client):
-        response = client.post(
-            "/api/pretest",
-            json={"form": HEALTHY, "use_agent": False},
-        )
-        assert response.status_code == 200
-        body = response.json()
-        assert body["agent_ran"] is False
-        assert "consent_refused" in body["profiles"]
-
-    def test_survey_pretest_without_agent(self, client):
-        survey = _create_survey(client, HEALTHY)
-        response = client.post(
-            f"/api/surveys/{survey['survey_id']}/pretest",
-            json={"use_agent": False},
-        )
-        assert response.status_code == 200
-        assert response.json()["agent_ran"] is False

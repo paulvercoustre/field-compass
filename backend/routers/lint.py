@@ -1,14 +1,14 @@
 """
-Form linter and cognitive pretest.
+Form linter.
 
-The linter is deterministic and schema-only. The pretest adds an optional
-agent walk of the same form; that path is schema-only too (no respondent data).
+Every check is a pure function of the form schema: no model, no network, and
+no respondent data.
 """
 
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -18,12 +18,9 @@ from linter.adopt import adopt_findings, select_findings
 from linter.engine import run_lint
 from linter.form_source import schema_from_payload, schema_from_survey
 from linter.models import LintContext
-from linter.pretest import run_pretest
-from services.ai_service import ai_service
 from services.auth import get_current_active_user
 from services.database import get_db
 from services.permissions import require_survey_access
-from services.rate_limit import limiter
 
 router = APIRouter()
 
@@ -31,15 +28,6 @@ router = APIRouter()
 class LintFormRequest(BaseModel):
     form: dict[str, Any] = Field(..., description="kobo_tool, asset content, or asset payload")
     enabled_checks: list[str] | None = None
-
-
-class PretestFormRequest(BaseModel):
-    form: dict[str, Any]
-    use_agent: bool = True
-
-
-class SurveyPretestRequest(BaseModel):
-    use_agent: bool = True
 
 
 class AdoptItem(BaseModel):
@@ -138,36 +126,3 @@ async def adopt_lint_rules(
     }
     rules = adopt_findings(db, survey_uuid, selected, is_active=payload.is_active)
     return [_rule_payload(rule, created=rule.rule_name not in existing_names) for rule in rules]
-
-
-@router.post("/pretest")
-@limiter.limit("10/hour")
-async def pretest_form_payload(
-    request: Request,
-    payload: PretestFormRequest,
-    current_user: User = Depends(get_current_active_user),
-):
-    """Cognitive pretest of a form that is not (yet) a survey."""
-    del request, current_user
-    schema = _require_form(schema_from_payload(payload.form))
-    report = run_pretest(schema, use_agent=payload.use_agent, agent=ai_service)
-    return report.as_dict()
-
-
-@router.post("/surveys/{survey_id}/pretest")
-@limiter.limit("10/hour")
-async def pretest_survey(
-    request: Request,
-    survey_id: str,
-    payload: SurveyPretestRequest | None = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-):
-    """Cognitive pretest of the form stored on this survey. Viewer access."""
-    del request
-    survey_uuid = _parse_survey_id(survey_id)
-    survey = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
-    schema = _require_form(schema_from_survey(survey))
-    use_agent = True if payload is None else payload.use_agent
-    report = run_pretest(schema, use_agent=use_agent, agent=ai_service)
-    return report.as_dict()
