@@ -8,7 +8,7 @@ connect time so a user finds out before a collection round is wasted.
 from collections.abc import Iterable
 
 from forms.schema import FormSchema
-from linter.dk import group_conventions
+from linter.dk import CATEGORY_LABELS, DONT_KNOW, group_conventions
 from linter.models import LintContext, LintFinding, finding_for
 from linter.questions import (
     DATE_TYPES,
@@ -93,36 +93,57 @@ def check_audit_not_enabled(schema: FormSchema, ctx: LintContext) -> Iterable[Li
 
 @lint_check("inconsistent_dk_coding", severity="error", tags=("setup", "dk"))
 def check_inconsistent_dk_coding(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
+    """
+    One meaning coded more than one way.
+
+    Compared within a meaning, never across: a form with a `dk` option and a
+    `none` option is coded consistently, and reporting that pair was a false
+    positive. Only don't-know is an error — it is the one the DK rate reads.
+    """
     del ctx
+    findings: list[LintFinding] = []
     grouped = group_conventions(schema)
-    if len(grouped) <= 1:
-        return []
 
-    lines = []
-    for convention, occurrences in sorted(grouped.items()):
-        paths = ", ".join(item.question_path for item in occurrences[:8])
-        extra = "" if len(occurrences) <= 8 else f" (+{len(occurrences) - 8} more)"
-        lines.append(f"{convention}: {paths}{extra}")
+    for category, wording in CATEGORY_LABELS.items():
+        conventions = grouped.get(category) or {}
+        if len(conventions) <= 1:
+            continue
 
-    return [
-        finding_for(
-            "inconsistent_dk_coding",
-            "error",
-            message=(
-                "This form codes “don't know” in more than one way: "
-                + ", ".join(sorted(grouped))
-                + "."
-            ),
-            why_it_matters=(
-                "Don't-know rates only count the codes Field Compass is told to "
-                "look for. A second convention is silently treated as a real "
-                "answer, which understates the DK rate rather than failing loudly."
-            ),
-            suggested_fix=(
-                "Pick one convention and use it on every list. Occurrences:\n" + "\n".join(lines)
-            ),
+        lines = []
+        for convention, occurrences in sorted(conventions.items()):
+            paths = ", ".join(item.question_path for item in occurrences[:8])
+            extra = "" if len(occurrences) <= 8 else f" (+{len(occurrences) - 8} more)"
+            lines.append(f"{convention}: {paths}{extra}")
+
+        findings.append(
+            finding_for(
+                "inconsistent_dk_coding",
+                "error" if category == DONT_KNOW else "warning",
+                message=(
+                    f"This form codes “{wording}” as "
+                    + ", ".join(f"`{code}`" for code in sorted(conventions))
+                    + "."
+                ),
+                why_it_matters=(
+                    "Don't-know rates only count the codes Field Compass is told "
+                    "to look for. A second code for the same answer is silently "
+                    "counted as a real answer, which understates the rate rather "
+                    "than failing loudly."
+                )
+                if category == DONT_KNOW
+                else (
+                    f"Two codes for “{wording}” have to be handled separately "
+                    "everywhere downstream — in exports, in filters, and in every "
+                    "rule written against the question. It is usually a sign the "
+                    "form was assembled from more than one module."
+                ),
+                suggested_fix=(
+                    "Pick one code and use it on every list. Occurrences:\n" + "\n".join(lines)
+                ),
+            )
         )
-    ]
+
+    return findings
 
 
 @lint_check("no_enumerator_field", severity="error", tags=("setup",))

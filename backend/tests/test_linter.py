@@ -2,27 +2,43 @@
 
 from database.models import ValidationRule
 from etl.hfc_engine import HFCEngine
-from forms.schema import DIALECT_API, load_form_schema
+from forms.schema import DIALECT_API, Choice, load_form_schema
 from linter.adopt import adopt_findings
 from linter.auto_rules import rule_name_for
+from linter.dk import (
+    DONT_KNOW,
+    NONE,
+    NOT_APPLICABLE,
+    REFUSED,
+    classify_choice,
+    classify_text,
+    convention_for,
+)
 from linter.engine import run_lint
 from linter.registry import registered_ids
 from tests.lint_forms import (
     BROKEN_CALC,
+    CONSENT_GATED,
+    CONSENT_UNGATED,
+    DK_AND_NONE_NOT_EXCLUSIVE,
     DK_NOT_EXCLUSIVE,
+    DK_PREFIXED_CODE,
     HEALTHY,
     INCONSISTENT_DK,
     MISSING_REQUIRED,
+    MIXED_SPECIAL_VALUES,
     NO_AUDIT,
     NO_AUDIT_API,
     NO_ENUMERATOR,
     NO_INTERVIEW_DATE,
     ORPHAN_LIST,
     SAMPLING_AS_TEXT,
+    TRANSLATED,
     UNBOUNDED_AGE,
     UNBOUNDED_DATE,
     UNREACHABLE,
     UNREACHABLE_FILTERED,
+    UNTRANSLATED,
 )
 
 
@@ -52,6 +68,8 @@ class TestRegistry:
             "unreachable_question",
             "orphan_choice_list",
             "broken_calculation",
+            "missing_translations",
+            "consent_does_not_gate",
         ):
             assert check_id in ids
 
@@ -83,6 +101,11 @@ class TestRegistry:
         report = run_lint(load_form_schema(UNBOUNDED_AGE))
         keys = [finding.sort_key() for finding in report.findings]
         assert keys == sorted(keys)
+
+    def test_the_healthy_form_reports_nothing(self):
+        """Every new check has to leave a well-built form alone."""
+        report = run_lint(load_form_schema(HEALTHY))
+        assert report.findings == [], [finding.message for finding in report.findings]
 
 
 class TestAuditNotEnabled:
@@ -118,6 +141,103 @@ class TestInconsistentDk:
     def test_single_convention_is_silent(self):
         report = run_lint(load_form_schema(HEALTHY))
         assert _ids(report, "inconsistent_dk_coding") == []
+
+    def test_different_meanings_are_not_an_inconsistency(self):
+        # `dk`, `none` and `no` on one list is three answers, coded once each.
+        report = run_lint(load_form_schema(MIXED_SPECIAL_VALUES))
+        assert _ids(report, "inconsistent_dk_coding") == []
+
+    def test_prefixed_dk_code_counts_as_a_second_convention(self):
+        report = run_lint(load_form_schema(DK_PREFIXED_CODE))
+        finding = _finding(report, "inconsistent_dk_coding")
+        assert "dk_income" in finding.message
+        assert "don't know" in finding.message
+
+
+class TestSpecialValueClassification:
+    def test_keywords_and_numeric_sentinels(self):
+        for value, expected in (
+            ("dk", DONT_KNOW),
+            ("-99", DONT_KNOW),
+            ("999", DONT_KNOW),
+            ("Don't know", DONT_KNOW),
+            ("Ne sais pas", DONT_KNOW),
+            ("refused", REFUSED),
+            ("Prefer not to say", REFUSED),
+            ("n/a", NOT_APPLICABLE),
+            ("Not applicable", NOT_APPLICABLE),
+            ("none", NONE),
+            ("None of the above", NONE),
+        ):
+            assert classify_text(value) == expected, value
+
+    def test_the_code_can_be_glued_to_a_question_name(self):
+        assert classify_text("dk_smtg") == DONT_KNOW
+        assert classify_text("hh_size_dk") == DONT_KNOW
+        assert classify_text("income_na") == NOT_APPLICABLE
+
+    def test_typos_still_classify(self):
+        assert classify_text("refusd") == REFUSED
+        assert classify_text("dont knwo") == DONT_KNOW
+        assert classify_text("nothng") == NONE
+
+    def test_real_answers_are_left_alone(self):
+        for value in (
+            "yes",
+            "no",
+            "other",
+            "maize",
+            "refugee",
+            "nine",
+            "never",
+            "no_school",
+            "not_at_all",
+            # Short codes only count on their own or on a token edge, or these
+            # would read as not-applicable.
+            "national",
+            "nap_time",
+            "1",
+            "0",
+        ):
+            assert classify_text(value) is None, value
+
+    def test_a_label_only_match_still_reports_the_stored_code(self):
+        choice = Choice(list_name="yn", name="3", label={"en": "Don't know"}, raw={})
+        assert classify_choice(choice) == DONT_KNOW
+        assert convention_for(choice) == "3"
+
+
+class TestMissingTranslations:
+    def test_untranslated_rows_are_a_warning(self):
+        report = run_lint(load_form_schema(UNTRANSLATED))
+        finding = _finding(report, "missing_translations")
+        assert finding.severity == "warning"
+        assert "French (fr)" in finding.message
+        assert "1 question and 1 answer option" in finding.message
+        assert "age" in finding.suggested_fix
+        assert "yn/no" in finding.suggested_fix
+
+    def test_a_fully_translated_form_is_silent(self):
+        report = run_lint(load_form_schema(TRANSLATED))
+        assert _ids(report, "missing_translations") == []
+
+    def test_a_single_language_form_is_silent(self):
+        report = run_lint(load_form_schema(HEALTHY))
+        assert _ids(report, "missing_translations") == []
+
+
+class TestConsentGating:
+    def test_ungated_consent_is_an_error(self):
+        report = run_lint(load_form_schema(CONSENT_UNGATED))
+        finding = _finding(report, "consent_does_not_gate")
+        assert finding.severity == "error"
+        assert finding.question_path == "consent"
+        assert "full_name" in finding.message
+        assert "relevant" in finding.suggested_fix
+
+    def test_gated_consent_is_silent(self):
+        report = run_lint(load_form_schema(CONSENT_GATED))
+        assert _ids(report, "consent_does_not_gate") == []
 
 
 class TestNoEnumerator:
@@ -169,6 +289,13 @@ class TestDkNotExclusive:
     def test_constraint_present_is_silent(self):
         report = run_lint(load_form_schema(HEALTHY))
         assert _ids(report, "dk_not_exclusive") == []
+
+    def test_every_exclusive_option_is_covered_at_once(self):
+        report = run_lint(load_form_schema(DK_AND_NONE_NOT_EXCLUSIVE))
+        finding = _finding(report, "dk_not_exclusive")
+        assert "don't know" in finding.message
+        assert "none" in finding.message
+        assert "selected(., 'dk') or selected(., 'none')" in finding.suggested_fix
 
 
 class TestUnboundedNumeric:
@@ -296,3 +423,19 @@ class TestAdoptRules:
 
         exclusive = engine.run_checks({"foods": "dk", "enumerator_id": "E01", "_uuid": "u2"}, "u2")
         assert [i for i in exclusive if "dk_not_exclusive" in i.check] == []
+
+    def test_one_adopted_rule_covers_dk_and_none(self, test_db, test_survey_config):
+        report = run_lint(load_form_schema(DK_AND_NONE_NOT_EXCLUSIVE))
+        finding = _finding(report, "dk_not_exclusive")
+        assert len(adopt_findings(test_db, test_survey_config.survey_id, [finding])) == 1
+        engine = HFCEngine(test_db, test_survey_config)
+
+        for index, answer in enumerate(("dk rice", "rice none")):
+            uuid = f"u{index}"
+            issues = engine.run_checks(
+                {"foods": answer, "enumerator_id": "E01", "_uuid": uuid}, uuid
+            )
+            assert [i for i in issues if "dk_not_exclusive" in i.check], answer
+
+        clean = engine.run_checks({"foods": "none", "enumerator_id": "E01", "_uuid": "ok"}, "ok")
+        assert [i for i in clean if "dk_not_exclusive" in i.check] == []

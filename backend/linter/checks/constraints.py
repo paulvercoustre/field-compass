@@ -7,14 +7,14 @@ values it should reject. Each of these has a known XLSForm idiom.
 
 from collections.abc import Iterable
 
-from forms.schema import FormSchema, Question
+from forms.schema import Choice, FormSchema, Question
 from linter.auto_rules import (
     dk_not_exclusive_rule,
     missing_required_rule,
     unbounded_date_future_rule,
     unbounded_numeric_rule,
 )
-from linter.dk import exclusive_choices
+from linter.dk import CATEGORY_LABELS, DONT_KNOW, classify_choice, exclusive_choices
 from linter.expressions import (
     has_exclusive_select_constraint,
     referenced_choice_equalities,
@@ -78,6 +78,11 @@ def _has_choice_filter(question: Question) -> bool:
     return bool(str(raw.get("choice_filter") or "").strip())
 
 
+def _meaning_of(choice: Choice) -> str:
+    """Wording for a choice `exclusive_choices` has already classified."""
+    return CATEGORY_LABELS[classify_choice(choice) or DONT_KNOW]
+
+
 @lint_check("dk_not_exclusive", severity="error", tags=("constraints", "dk"))
 def check_dk_not_exclusive(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     del ctx
@@ -95,22 +100,27 @@ def check_dk_not_exclusive(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
         ]
         if not unconstrained:
             continue
-        code = unconstrained[0].name
+        codes = [choice.name for choice in unconstrained]
+        described = ", ".join(
+            f"“{choice.name}” ({_meaning_of(choice)})" for choice in unconstrained
+        )
+        selected = " or ".join(f"selected(., '{code}')" for code in codes)
         findings.append(
             finding_for(
                 "dk_not_exclusive",
                 "error",
                 question=question,
                 message=(
-                    f"“{question.label_for()}” lets “{code}” be selected with " "other options."
+                    f"“{question.label_for()}” lets {described} be selected "
+                    "alongside real answers."
                 ),
                 why_it_matters=(
                     "A don't-know, refused, or none option selected alongside a "
                     "real answer is not a usable response, and it also corrupts "
                     "the don't-know rate."
                 ),
-                suggested_fix=(f"not(selected(., '{code}') and count-selected(.) > 1)"),
-                auto_rule=dk_not_exclusive_rule(question, code),
+                suggested_fix=f"not(({selected}) and count-selected(.) > 1)",
+                auto_rule=dk_not_exclusive_rule(question, codes),
             )
         )
     return findings

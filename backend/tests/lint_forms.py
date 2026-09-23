@@ -21,6 +21,22 @@ def _choice(list_name: str, name: str, label: str | None = None):
     }
 
 
+def _ml(type: str, name: str, *, en: str, fr: str | None = None, **extra):
+    """A row in a two-language form. `fr=None` is a missing translation."""
+    row = {"type": type, "name": name, "label::English (en)": en}
+    if fr is not None:
+        row["label::French (fr)"] = fr
+    row.update(extra)
+    return row
+
+
+def _ml_choice(list_name: str, name: str, *, en: str, fr: str | None = None):
+    row = {"list_name": list_name, "name": name, "label::English (en)": en}
+    if fr is not None:
+        row["label::French (fr)"] = fr
+    return row
+
+
 def form(*survey, choices=None, settings=None):
     payload = {"survey": list(survey), "choices": list(choices or [])}
     if settings is not None:
@@ -36,13 +52,26 @@ HEALTHY = form(
     _q("today", "today"),
     _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID", required="yes"),
     _q("select_one yn", "consent", label="Does the respondent consent?", required="yes"),
-    _q("integer", "age", label="Respondent age", constraint="(. >= 0 and . <= 120) or . = -99"),
-    _q("select_one admin1", "district", label="District", required="yes"),
+    _q(
+        "integer",
+        "age",
+        label="Respondent age",
+        constraint="(. >= 0 and . <= 120) or . = -99",
+        relevant="${consent} = 'yes'",
+    ),
+    _q(
+        "select_one admin1",
+        "district",
+        label="District",
+        required="yes",
+        relevant="${consent} = 'yes'",
+    ),
     _q(
         "select_multiple foods",
         "foods",
         label="Which foods?",
         constraint="not(selected(., 'dk') and count-selected(.) > 1)",
+        relevant="${consent} = 'yes'",
     ),
     _q("calculate", "copy_district", calculation="${district}"),
     choices=[
@@ -95,6 +124,61 @@ INCONSISTENT_DK = form(
     ],
 )
 
+# `dk` alongside `none` is two different answers, consistently coded. The
+# prefixed `dk_income` is a second don't-know code and is the inconsistency.
+MIXED_SPECIAL_VALUES = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one assets", "assets", label="Which assets?"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("assets", "land", "Land"),
+        _choice("assets", "dk", "Don't know"),
+        _choice("assets", "none", "None"),
+        _choice("assets", "no", "No"),
+    ],
+)
+
+DK_PREFIXED_CODE = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one assets", "assets", label="Which assets?"),
+    _q("select_one income", "income", label="Monthly income band"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("assets", "land", "Land"),
+        _choice("assets", "dk", "Don't know"),
+        _choice("income", "low", "Under 100"),
+        _choice("income", "dk_income", "Don't know"),
+    ],
+)
+
+# --- translations ------------------------------------------------------------
+
+# `age` has no French label, and so does the `no` option on `yn`.
+UNTRANSLATED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _ml("select_one enumerator_id", "enumerator_id", en="Enumerator ID", fr="Code enquêteur"),
+    _ml("integer", "age", en="Respondent age", constraint=". <= 120"),
+    _ml("select_one yn", "owns_land", en="Do you own land?", fr="Possédez-vous des terres ?"),
+    choices=[
+        _ml_choice("enumerator_id", "E01", en="Amina", fr="Amina"),
+        _ml_choice("yn", "yes", en="Yes", fr="Oui"),
+        _ml_choice("yn", "no", en="No"),
+    ],
+)
+
+TRANSLATED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _ml("select_one enumerator_id", "enumerator_id", en="Enumerator ID", fr="Code enquêteur"),
+    _ml("integer", "age", en="Respondent age", fr="Âge du répondant", constraint=". <= 120"),
+    choices=[_ml_choice("enumerator_id", "E01", en="Amina", fr="Amina")],
+)
+
 NO_ENUMERATOR = form(
     _q("audit", "audit"),
     _q("today", "today"),
@@ -127,6 +211,19 @@ DK_NOT_EXCLUSIVE = form(
         _choice("enumerator_id", "E01"),
         _choice("foods", "rice", "Rice"),
         _choice("foods", "dk", "Don't know"),
+    ],
+)
+
+DK_AND_NONE_NOT_EXCLUSIVE = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_multiple foods", "foods", label="Which foods did you eat?"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("foods", "rice", "Rice"),
+        _choice("foods", "dk", "Don't know"),
+        _choice("foods", "none", "None of the above"),
     ],
 )
 

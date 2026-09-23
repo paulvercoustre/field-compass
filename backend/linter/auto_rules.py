@@ -80,25 +80,34 @@ def missing_required_rule(question: Question) -> dict[str, Any] | None:
     )
 
 
-def dk_not_exclusive_rule(question: Question, choice_name: str) -> dict[str, Any] | None:
+def dk_not_exclusive_rule(question: Question, choice_names: list[str]) -> dict[str, Any] | None:
     """
-    Flag a select_multiple where the exclusive option is one of several answers.
+    Flag a select_multiple where an exclusive option is one of several answers.
 
     Submissions store select_multiple as a space-delimited string. ``"dk"``
     alone is a legitimate exclusive answer; ``"dk rice"`` is the defect.
     Substring matching is done with a trailing/leading space so ``dk`` does
     not fire inside ``dont_know``.
+
+    One rule covers every exclusive option on the question — don't-know and
+    none-of-the-above are separate answers but the same defect, and adopting
+    them one at a time would mean re-running the check after each fix.
     """
     if not is_valid_rule_identifier(question.name):
         return None
-    code = choice_name.replace('"', "")
-    expression = (
-        f'({question.name} != "{code}") and '
-        f'(("{code} " in {question.name}) or (" {code}" in {question.name}))'
-    )
+    codes = [name.replace('"', "") for name in choice_names]
+    if not codes:
+        return None
+
+    clauses = [
+        f'(({question.name} != "{code}") and '
+        f'(("{code} " in {question.name}) or (" {code}" in {question.name})))'
+        for code in codes
+    ]
+    quoted = ", ".join(f"'{code}'" for code in codes)
     return _base_rule(
         "dk_not_exclusive",
         question,
-        issue=(f"{question.label_for() or question.name} combines '{code}' " "with another option"),
-        check_expression=expression,
+        issue=f"{question.label_for() or question.name} combines {quoted} with another option",
+        check_expression=" or ".join(clauses),
     )
