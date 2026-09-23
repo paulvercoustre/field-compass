@@ -74,7 +74,11 @@ export const parseKoboTool = (file: File): Promise<KoboToolData> => {
             }
         });
 
-        resolve({ survey, choices, variableMap });
+        // The `audit` row is filtered out of `survey` above; record whether it
+        // was there so the form check can tell "no audit log" from "unknown".
+        const has_audit = allQuestions.some(q => String(q.type || '').trim() === 'audit');
+
+        resolve({ survey, choices, variableMap, has_audit });
 
       } catch (err) {
         reject(err);

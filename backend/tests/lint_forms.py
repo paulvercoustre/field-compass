@@ -503,3 +503,40 @@ LEGACY_STORED = form(
         _choice("yn", "no"),
     ],
 )
+
+# Don't-know codes by exact name, by label, by numeric code with a DK label,
+# and by prefix -- next to a numeric code labelled Refused, which is not one.
+DK_SHARED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID", required="yes"),
+    _q("select_one yn", "q1", label="Question one"),
+    _q("select_multiple src", "q2", label="Income sources"),
+    _q("select_one codes", "q3", label="Question three"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes", "Yes"),
+        _choice("yn", "dk", "Don't know"),
+        _choice("src", "wage", "Wage"),
+        _choice("src", "dk", "Don't know"),
+        _choice("src", "dont_know_answer", "Don't know / don't want to answer"),
+        _choice("codes", "1", "Yes"),
+        _choice("codes", "88", "Does not know"),
+        _choice("codes", "98", "Refused"),
+        _choice("codes", "dk_income", "Unsure of income"),
+    ],
+)
+
+ENUMERATOR_BY_USERNAME = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("username", "username"),
+    _q("integer", "age", label="Age", constraint=". <= 120"),
+)
+
+ENUMERATOR_BY_CONFIG = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("select_one collectors", "collector_code", label="Who collected this?", required="yes"),
+    choices=[_choice("collectors", "c1", "C1")],
+)

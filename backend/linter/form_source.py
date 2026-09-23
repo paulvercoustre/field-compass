@@ -28,7 +28,14 @@ def schema_from_payload(payload: Any) -> FormSchema:
     """Accept a kobo_tool, an asset content block, or a full asset payload."""
     if not payload:
         return FormSchema()
-    return load_form_schema(payload)
+    schema = load_form_schema(payload)
+    # Stored sheet rows can have had the `audit` row filtered out, so the
+    # screens record whether the form had one alongside them. Only fills in
+    # "unknown": a payload that carries the rows themselves is the authority.
+    recorded = payload.get("has_audit") if isinstance(payload, dict) else None
+    if schema.has_audit is None and isinstance(recorded, bool):
+        schema.has_audit = recorded
+    return schema
 
 
 def stored_form_has_logic(payload: Any) -> bool:

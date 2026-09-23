@@ -7,8 +7,9 @@ connect time so a user finds out before a collection round is wasted.
 
 from collections.abc import Iterable
 
+from etl.dk_utils import dk_string_tokens
 from forms.schema import FormSchema
-from linter.dk import CATEGORY_LABELS, DONT_KNOW, group_conventions
+from linter.dk import CATEGORY_LABELS, DONT_KNOW, dont_know_codes, group_conventions
 from linter.models import LintContext, LintFinding, finding_for
 from linter.questions import (
     DATE_TYPES,
@@ -70,13 +71,31 @@ def check_audit_not_enabled(schema: FormSchema, ctx: LintContext) -> Iterable[Li
     """
     Duration, active interview time, and speeding all come from the audit log.
 
-    ``has_audit`` is None on a stored xlsx dialect that has had the audit row
-    stripped — we cannot prove absence, so we stay silent rather than raise a
-    false error. The API dialect reports False when the row is missing.
+    ``has_audit`` is None on a stored form whose audit row was stripped and
+    whose screens did not record it. Absence cannot be proven then, so the
+    finding says so as a note rather than raising a false error or, worse,
+    saying nothing and letting "no findings" read as "audit is fine".
     """
     del ctx
-    if schema.has_audit is not False:
+    if schema.has_audit is True:
         return []
+    if schema.has_audit is None:
+        return [
+            finding_for(
+                "audit_not_enabled",
+                "info",
+                message="Could not tell whether this form records an audit log.",
+                why_it_matters=(
+                    "The saved copy of this form does not say whether it has an "
+                    "`audit` row. If it does not, interview duration and speeding "
+                    "checks will be empty for every submission."
+                ),
+                suggested_fix=(
+                    "Read the form from the Kobo project again and save, or confirm "
+                    "the survey sheet has a row of type `audit`."
+                ),
+            )
+        ]
     return [
         finding_for(
             "audit_not_enabled",
@@ -149,7 +168,15 @@ def check_inconsistent_dk_coding(schema: FormSchema, ctx: LintContext) -> Iterab
 
 @lint_check("no_enumerator_field", severity="error", tags=("setup",))
 def check_no_enumerator_field(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
-    del ctx
+    # The field the survey is already configured to use wins, whatever it is
+    # called: "collector_code" is a fine enumerator field once chosen.
+    configured = ((ctx.config_data or {}).get("core_identifiers") or {}).get("enumerator")
+    if configured and schema.get(configured) is not None:
+        return []
+    # Kobo's `username` metadata records the account that submitted, which is
+    # how teams that give each enumerator a login identify them.
+    if any(question.type == "username" for question in schema.questions):
+        return []
     for question in iter_answerable(schema):
         if has_vocabulary(question_search_text(question), ENUMERATOR_TOKENS):
             return []
@@ -165,7 +192,8 @@ def check_no_enumerator_field(schema: FormSchema, ctx: LintContext) -> Iterable[
             ),
             suggested_fix=(
                 "Add a required select_one or text question for the enumerator ID, "
-                "named something like `enumerator_id`."
+                "named something like `enumerator_id`, or a `username` metadata row "
+                "if each enumerator submits from their own Kobo account."
             ),
         )
     ]
@@ -226,6 +254,49 @@ def check_no_interview_date(schema: FormSchema, ctx: LintContext) -> Iterable[Li
             ),
             suggested_fix=(
                 "Add a `today` metadata row, or a `date` question for the " "interview date."
+            ),
+        )
+    ]
+
+
+@lint_check("dk_codes_not_counted", severity="warning", tags=("setup", "dk"))
+def check_dk_codes_not_counted(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
+    """
+    Don't-know codes the form uses that this survey is not set up to count.
+
+    Only runs against a saved survey: before one exists there is no
+    configuration to compare with, and the create screen pre-selects every
+    code this check would report.
+    """
+    if ctx.config_data is None:
+        return []
+    special_values = ctx.config_data.get("special_values") or {}
+    counted = dk_string_tokens(special_values)
+    counted.add(str(special_values.get("dk_value", -99)).strip().lower())
+
+    missing = [code for code in dont_know_codes(schema) if code.name.lower() not in counted]
+    if not missing:
+        return []
+    described = ", ".join(
+        f"`{code.name}` ({code.label})"
+        if code.label.lower() != code.name.lower()
+        else f"`{code.name}`"
+        for code in missing
+    )
+    return [
+        finding_for(
+            "dk_codes_not_counted",
+            "warning",
+            message=f"The form codes don't-know as {described}, which this survey does not count.",
+            why_it_matters=(
+                "The don't-know rate only counts the answer options listed in the "
+                "survey settings. Every submission that uses these codes is counted "
+                "as a real answer, so the rate reads lower than it is."
+            ),
+            suggested_fix=(
+                "In survey settings, under Don't know — answer options, add: "
+                + ", ".join(code.name for code in missing)
+                + "."
             ),
         )
     ]

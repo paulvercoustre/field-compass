@@ -80,3 +80,29 @@ export async function adoptLintRules(
   if (!response.ok) throw new Error(await readError(response, 'Could not add those quality checks.'));
   return response.json();
 }
+
+export interface DkValue {
+  /** The stored code: what submissions carry and what the DK rate compares. */
+  name: string;
+  label: string;
+  /** Choice lists that offer it. */
+  lists: string[];
+}
+
+/**
+ * The form's don't-know codes, found by the same rules the form check uses.
+ *
+ * Both survey screens pre-fill "Don't know — answer options" from this, so a
+ * code the check reports as a second don't-know convention is one the
+ * configuration will count.
+ */
+export async function findDkValues(choices: Array<Record<string, unknown>>): Promise<DkValue[]> {
+  const response = await fetch(`${API_BASE_URL}/api/lint/dk-values`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ form: { survey: [], choices } }),
+  });
+  if (!response.ok) throw new Error(await readError(response, "Could not find the form's don't-know options."));
+  const body = await response.json();
+  return body.values || [];
+}

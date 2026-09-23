@@ -16,9 +16,11 @@ from linter.dk import (
     classify_choice,
     classify_text,
     convention_for,
+    dont_know_codes,
 )
 from linter.engine import run_lint
-from linter.form_source import load_survey_form
+from linter.form_source import load_survey_form, schema_from_payload
+from linter.models import LintContext
 from linter.registry import registered_ids
 from tests.lint_forms import (
     BROKEN_CALC,
@@ -29,6 +31,9 @@ from tests.lint_forms import (
     DK_EXCLUSIVE_REFUSED_NOT,
     DK_NOT_EXCLUSIVE,
     DK_PREFIXED_CODE,
+    DK_SHARED,
+    ENUMERATOR_BY_CONFIG,
+    ENUMERATOR_BY_USERNAME,
     GROUPED_API,
     GROUPED_STORED,
     HEALTHY,
@@ -129,9 +134,22 @@ class TestAuditNotEnabled:
         assert "audit log" in finding.why_it_matters.lower()
         assert "type `audit`" in finding.suggested_fix
 
-    def test_xlsx_without_audit_row_is_not_a_false_error(self):
+    def test_xlsx_without_audit_row_is_a_note_not_a_false_error(self):
         # Stored kobo_tool cannot prove absence; see forms.schema._resolve_has_audit.
+        # #32: say "cannot determine" rather than nothing, which reads as "fine".
         report = run_lint(load_form_schema(NO_AUDIT))
+        finding = _finding(report, "audit_not_enabled")
+        assert finding.severity == "info"
+        assert "could not tell" in finding.message.lower()
+
+    def test_recorded_audit_status_is_used_for_stored_rows(self):
+        assert (
+            _finding(
+                run_lint(schema_from_payload({**NO_AUDIT, "has_audit": False})), "audit_not_enabled"
+            ).severity
+            == "error"
+        )
+        report = run_lint(schema_from_payload({**NO_AUDIT, "has_audit": True}))
         assert _ids(report, "audit_not_enabled") == []
 
     def test_healthy_form_is_silent(self):
@@ -515,3 +533,53 @@ class TestLoadSurveyForm:
         result = load_survey_form(self._survey(LEGACY_STORED), fetch)
         assert result.logic_missing is True
         assert result.schema.get("age") is not None
+
+
+class TestSharedDontKnowCodes:
+    """The survey screens pre-fill from `dont_know_codes`; the check reads the same."""
+
+    def test_codes_found_by_name_label_and_prefix_but_not_refusals(self):
+        codes = dont_know_codes(load_form_schema(DK_SHARED))
+        assert [code.name for code in codes] == ["dk", "dont_know_answer", "88", "dk_income"]
+        assert codes[0].lists == ("yn", "src")
+
+    def test_unconfigured_codes_are_reported_against_a_saved_survey(self):
+        config = {"special_values": {"dk_value": -99, "dk_string_value": ["dk"]}}
+        report = run_lint(load_form_schema(DK_SHARED), ctx=LintContext(config_data=config))
+        finding = _finding(report, "dk_codes_not_counted")
+        assert finding.severity == "warning"
+        for code in ("dont_know_answer", "88", "dk_income"):
+            assert code in finding.suggested_fix
+        assert "`dk`" not in finding.message
+
+    def test_fully_configured_survey_is_silent(self):
+        config = {
+            "special_values": {
+                "dk_value": 88,
+                "dk_string_value": ["dk", "dont_know_answer", "DK_income"],
+            }
+        }
+        report = run_lint(load_form_schema(DK_SHARED), ctx=LintContext(config_data=config))
+        assert _ids(report, "dk_codes_not_counted") == []
+
+    def test_not_run_without_a_survey(self):
+        assert _ids(run_lint(load_form_schema(DK_SHARED)), "dk_codes_not_counted") == []
+
+
+class TestEnumeratorSources:
+    def test_username_metadata_identifies_the_enumerator(self):
+        report = run_lint(load_form_schema(ENUMERATOR_BY_USERNAME))
+        assert _ids(report, "no_enumerator_field") == []
+
+    def test_configured_enumerator_field_is_accepted(self):
+        config = {"core_identifiers": {"enumerator": "collector_code"}}
+        report = run_lint(
+            load_form_schema(ENUMERATOR_BY_CONFIG), ctx=LintContext(config_data=config)
+        )
+        assert _ids(report, "no_enumerator_field") == []
+        # A configured name the form does not contain is no evidence at all.
+        stale = {"core_identifiers": {"enumerator": "gone"}}
+        report = run_lint(
+            load_form_schema(ENUMERATOR_BY_CONFIG), ctx=LintContext(config_data=stale)
+        )
+        assert _ids(report, "no_enumerator_field") == ["no_enumerator_field"]

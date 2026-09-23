@@ -403,7 +403,7 @@ const SurveySettingsPage: React.FC = () => {
           cd.kobo_tool.choices,
           cd.kobo_tool.label_column_survey
         );
-        setKoboToolData(reconstructed);
+        setKoboToolData({ ...reconstructed, has_audit: cd.kobo_tool.has_audit ?? null });
         setKoboToolFileName('(Loaded from saved config)');
       }
       
@@ -646,6 +646,7 @@ const SurveySettingsPage: React.FC = () => {
       kobo_tool: koboToolData ? {
         survey: koboToolData.survey,
         choices: koboToolData.choices,
+        has_audit: koboToolData.has_audit ?? config?.config_data.kobo_tool?.has_audit ?? null,
         label_column_survey: labelColumnSurvey,
         label_column_choices: labelColumnChoices,
       } : config?.config_data.kobo_tool ? {

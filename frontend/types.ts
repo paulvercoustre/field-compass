@@ -93,6 +93,11 @@ export interface KoboToolData {
   survey: KoboQuestion[];
   choices: KoboChoice[];
   variableMap: Map<string, KoboVariable>;
+  /**
+   * Whether the form has an `audit` row. Kept separately because the stored
+   * survey rows are filtered and may not include it; undefined means unknown.
+   */
+  has_audit?: boolean | null;
 }
 
 export interface RuleCondition {

@@ -16,6 +16,7 @@ from database.models import SurveyConfig, User, ValidationRule
 from etl.kobo_fetcher import KoboFetcher
 from forms.schema import FormSchema
 from linter.adopt import adopt_findings, select_findings
+from linter.dk import dont_know_codes
 from linter.engine import run_lint
 from linter.form_source import SurveyForm, load_survey_form, schema_from_payload
 from linter.models import LintContext
@@ -29,6 +30,10 @@ router = APIRouter()
 class LintFormRequest(BaseModel):
     form: dict[str, Any] = Field(..., description="kobo_tool, asset content, or asset payload")
     enabled_checks: list[str] | None = None
+
+
+class DkValuesRequest(BaseModel):
+    form: dict[str, Any] = Field(..., description="kobo_tool; only `choices` is read")
 
 
 class AdoptItem(BaseModel):
@@ -104,6 +109,27 @@ async def lint_form_payload(
     del current_user
     schema = _require_form(schema_from_payload(payload.form))
     return run_lint(schema, enabled_checks=payload.enabled_checks).as_dict()
+
+
+@router.post("/lint/dk-values")
+async def dk_values_for_form(
+    payload: DkValuesRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    The form's don't-know codes, found the way the linter finds them.
+
+    The survey screens pre-fill "Don't know — answer options" from this, so a
+    code the linter reports is one the configuration counts.
+    """
+    del current_user
+    schema = schema_from_payload(payload.form)
+    return {
+        "values": [
+            {"name": code.name, "label": code.label, "lists": list(code.lists)}
+            for code in dont_know_codes(schema)
+        ]
+    }
 
 
 @router.get("/surveys/{survey_id}/lint")

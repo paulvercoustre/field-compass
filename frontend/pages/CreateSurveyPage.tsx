@@ -21,7 +21,7 @@ import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '..
 import VariableDropdown from '../components/ui/VariableDropdown';
 import { autoFillIdentifier } from '../utils/identifierSuggestions';
 import DkStringValues from '../components/ui/DkStringValues';
-import { suggestDkValues } from '../utils/dkSuggestions';
+import { findDkValues } from '../services/lintApi';
 import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 
@@ -138,12 +138,24 @@ const CreateSurveyPage: React.FC = () => {
       // Don't-know codings differ from identifiers in one way: several matches
       // are not an ambiguity. A form can genuinely carry both `dk` and
       // `dont_know` for the same answer, and counting only one understates the
-      // DK rate, so every match is selected rather than none.
-      setSpecialValues(prev =>
-        prev.dk_string_value.length > 0
-          ? prev
-          : { ...prev, dk_string_value: suggestDkValues((koboToolData.choices as any[]) || []) }
-      );
+      // DK rate, so every match is selected rather than none. Found by the
+      // same rules the form check uses, so the two never disagree.
+      let cancelled = false;
+      findDkValues((koboToolData.choices as any[]) || [])
+        .then((found) => {
+          if (cancelled || found.length === 0) return;
+          setSpecialValues(prev =>
+            prev.dk_string_value.length > 0
+              ? prev
+              : { ...prev, dk_string_value: found.map((value) => value.name) }
+          );
+        })
+        .catch(() => {
+          // Leave the field empty; the user can still pick options by hand.
+        });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [koboToolData]);
 
@@ -317,6 +329,7 @@ const CreateSurveyPage: React.FC = () => {
         kobo_tool: koboToolData ? {
           survey: koboToolData.survey,
           choices: koboToolData.choices,
+          has_audit: koboToolData.has_audit ?? null,
           label_column_survey: labelColumnFor(selectedLanguage),
           label_column_choices: labelColumnFor(selectedLanguage),
         } : undefined,

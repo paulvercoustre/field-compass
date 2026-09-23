@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import InfoTip from './InfoTip';
 import { CORE_IDENTIFIER_HELP } from '../../constants/coreIdentifiers';
-import { suggestDkValues, choiceLabel } from '../../utils/dkSuggestions';
+import { useDkSuggestions, choiceLabel } from '../../utils/dkSuggestions';
 
 interface DkStringValuesProps {
   values: string[];
@@ -47,7 +47,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
   };
 
   const chosen = new Set(values.map((value) => value.toLowerCase()));
-  const suggestions = suggestDkValues(choices || []).filter(
+  const suggestions = (useDkSuggestions(choices) || []).filter(
     (option) => !chosen.has(option.toLowerCase())
   );
   const remaining = Array.from(optionsByName.keys())
@@ -106,6 +106,15 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
           {suggestions.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="text-xs text-gray-500 dark:text-gray-400">In your form:</span>
+              {suggestions.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => onChange([...values, ...suggestions])}
+                  className="px-2 py-1 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                >
+                  + Add all {suggestions.length}
+                </button>
+              )}
               {suggestions.map((option) => (
                 <button
                   key={option}

@@ -113,6 +113,7 @@ export interface SurveyConfig {
       choices: any[];
       label_column_survey?: string; // Column name for survey labels (e.g., 'label::English (en)')
       label_column_choices?: string; // Column name for choice labels (e.g., 'label::English (en)')
+      has_audit?: boolean | null; // Whether the form has an `audit` row; null when unknown
     };
   };
   created_at?: string;

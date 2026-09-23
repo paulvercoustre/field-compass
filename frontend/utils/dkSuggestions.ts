@@ -1,74 +1,19 @@
+import { useEffect, useState } from 'react';
+import { DkValue, findDkValues } from '../services/lintApi';
+
 /**
  * Which of a form's answer options mean "don't know".
  *
- * Sibling of identifierSuggestions, with one important difference in what
- * several matches mean. For an identifier, two candidates are an ambiguity:
- * only one question can be *the* consent question, so the app picks neither.
- * Here two candidates are simply two codings of the same answer -- a form
- * assembled from more than one module may carry both `dk` and `dont_know`, and
- * both should be counted. So every match is offered, and on the create screen
- * every match is selected.
+ * Found by the backend (`linter/dk.py`), not here, so the survey screens and
+ * the form check never disagree: a form that codes don't-know as both `dk`
+ * and `dont_know_answer` is reported by the check *and* has both pre-selected
+ * here. Two matches are not an ambiguity -- both codings should be counted --
+ * so every match is offered, and on the create screen every match is selected.
  *
- * Candidates are found two ways, because real forms need both:
- *
- * - by **name**, matched exactly against conventional codings;
- * - by **label**, because names drift where labels do not. One form we tested
- *   against codes the same answer as `dont_know` in fifteen lists and
- *   `dont_know_dont_want_to_answer` in a sixteenth, under an identical label.
- *   Name matching alone finds the first and silently misses the second --
- *   exactly the undercount this feature exists to prevent.
- *
- * What is *selected* is always the name. Kobo stores the name in submissions,
- * so the name is what the backend compares against; the label is only ever a
- * way of finding it, and a way of showing the user what they are choosing.
+ * What is selected is always the name. Kobo stores the name in submissions,
+ * so the name is what the DK rate compares against; the label is only a way
+ * of showing the user what they are choosing.
  */
-
-/**
- * Conventional names, most conventional first.
- *
- * Refusals (`refused`, `prefer_not_to_say`) and not-applicable (`na`,
- * `not_applicable`) are deliberately absent. A refusal is the respondent
- * declining and a not-applicable is skip logic; neither is the knowledge gap
- * the DK rate is read as measuring, and folding them in would make a high rate
- * impossible to act on -- a probing problem, a sensitive question, and a
- * normal skip pattern would all look the same. They stay selectable by hand.
- */
-const DK_NAMES = [
-  'dont_know',
-  'dk',
-  'do_not_know',
-  'don_t_know',
-  'dnk',
-  'dont_know_answer',
-  'doesnt_know',
-];
-
-/**
- * Label openings that mean "don't know".
- *
- * Matched against the *start* of the normalised label, not anywhere inside it.
- * A label reading "Does the farmer know the price?" contains "know" and is a
- * question, not a don't-know option; requiring the phrase to open the label
- * keeps those out while still catching "Don't know / Don't want to answer".
- */
-const DK_LABEL_PHRASES = [
-  'dont know',
-  'do not know',
-  'doesnt know',
-  'does not know',
-  'dk',
-  'no sabe',
-  'ne sais pas',
-  'je ne sais pas',
-];
-
-/** Lowercase, strip apostrophes, reduce punctuation to single spaces. */
-const normalizeLabel = (value: string): string =>
-  value
-    .toLowerCase()
-    .replace(/['''`]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
 
 const labelKeysOf = (choice: Record<string, any>): string[] =>
   Object.keys(choice).filter((key) => key === 'label' || key.startsWith('label::'));
@@ -85,46 +30,37 @@ export const choiceLabel = (choice: Record<string, any>): string => {
   return typeof value === 'string' ? value : '';
 };
 
-const labelLooksLikeDk = (choice: Record<string, any>): boolean =>
-  labelKeysOf(choice).some((key) => {
-    const value = choice[key];
-    if (typeof value !== 'string') {
-      return false;
-    }
-    const normalized = normalizeLabel(value);
-    return DK_LABEL_PHRASES.some(
-      (phrase) => normalized === phrase || normalized.startsWith(`${phrase} `)
-    );
-  });
-
 /**
- * Every don't-know coding this form contains, by name.
+ * The form's don't-know codings, by name, or null while they are loading.
  *
- * Conventional names come first, in candidate order, so the most standard
- * coding leads; anything found only by its label follows.
+ * An empty list on failure rather than a guess from a second set of rules:
+ * the user can still add options by hand from the dropdown.
  */
-export const suggestDkValues = (choices: Array<Record<string, any>>): string[] => {
-  const names = new Map<string, Record<string, any>>();
-  for (const choice of choices || []) {
-    const name = choice?.name === undefined || choice?.name === null ? '' : String(choice.name);
-    if (name && !names.has(name.toLowerCase())) {
-      names.set(name.toLowerCase(), choice);
+export const useDkSuggestions = (choices: Array<Record<string, any>>): string[] | null => {
+  const [values, setValues] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!choices || choices.length === 0) {
+      // Callers pass a fresh `[]` each render when no form is loaded; keep the
+      // same state object so that does not re-render in a loop.
+      setValues((prev) => (prev && prev.length === 0 ? prev : []));
+      return;
     }
-  }
+    let cancelled = false;
+    setValues(null);
+    findDkValues(choices)
+      .then((found: DkValue[]) => {
+        if (!cancelled) setValues(found.map((value) => value.name));
+      })
+      .catch(() => {
+        if (!cancelled) setValues([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [choices]);
 
-  const byName = DK_NAMES.filter((candidate) => names.has(candidate));
-  const found = new Set(byName);
-
-  const byLabel: string[] = [];
-  for (const [key, choice] of names) {
-    if (found.has(key) || !labelLooksLikeDk(choice)) {
-      continue;
-    }
-    byLabel.push(String(choice.name));
-    found.add(key);
-  }
-
-  return [...byName, ...byLabel];
+  return values;
 };
 
 /**

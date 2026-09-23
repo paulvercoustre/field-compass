@@ -257,3 +257,39 @@ def group_conventions(schema: FormSchema) -> dict[str, dict[str, list[SpecialOcc
         by_convention = grouped.setdefault(occurrence.category, {})
         by_convention.setdefault(occurrence.convention, []).append(occurrence)
     return grouped
+
+
+@dataclass(frozen=True)
+class DontKnowCode:
+    """A stored code that means don't-know, and where the form offers it."""
+
+    name: str
+    label: str
+    lists: tuple[str, ...]
+
+
+def dont_know_codes(schema: FormSchema) -> list[DontKnowCode]:
+    """
+    Every choice name in the form that means don't-know, once each.
+
+    This is what the survey screens pre-fill as the don't-know answer options,
+    so the linter and the configuration read the form the same way: a code the
+    linter reports as a second don't-know convention is one the screens
+    select. Every choice list is read, used or not, in form order. Names are
+    compared ignoring case, as the DK rate compares them.
+    """
+    found: dict[str, tuple[Choice, list[str]]] = {}
+    for list_name, choices in schema.choices_by_list.items():
+        for choice in choices:
+            if classify_choice(choice) != DONT_KNOW:
+                continue
+            key = choice.name.strip().lower()
+            if not key:
+                continue
+            entry = found.setdefault(key, (choice, []))
+            if list_name not in entry[1]:
+                entry[1].append(list_name)
+    return [
+        DontKnowCode(name=choice.name.strip(), label=choice.label_for(), lists=tuple(lists))
+        for choice, lists in found.values()
+    ]

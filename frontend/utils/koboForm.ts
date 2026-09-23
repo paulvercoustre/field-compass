@@ -52,10 +52,10 @@ export function projectFormToKoboTool(
     ])
   );
 
-  return { survey, choices, variableMap } as KoboToolData;
+  return { survey, choices, variableMap, has_audit: form.has_audit } as KoboToolData;
 }
 
 export function koboToolPayload(tool: KoboToolData | null): Record<string, unknown> | null {
   if (!tool) return null;
-  return { survey: tool.survey, choices: tool.choices };
+  return { survey: tool.survey, choices: tool.choices, has_audit: tool.has_audit ?? null };
 }

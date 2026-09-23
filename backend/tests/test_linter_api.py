@@ -89,6 +89,26 @@ class TestLintEndpoints:
         assert body["form_logic_missing"] is False
         assert "unbounded_numeric" in {item["check_id"] for item in body["findings"]}
 
+    def test_dk_values_endpoint_uses_the_linter_rules(self, client):
+        choices = [
+            {"list_name": "yn", "name": "yes", "label::English (en)": "Yes"},
+            {"list_name": "yn", "name": "dk", "label::English (en)": "Don't know"},
+            {"list_name": "c", "name": "98", "label::English (en)": "Refused"},
+            {"list_name": "c", "name": "dnk_1", "label::English (en)": "Does not know"},
+        ]
+        response = client.post(
+            "/api/lint/dk-values", json={"form": {"survey": [], "choices": choices}}
+        )
+        assert response.status_code == 200
+        values = response.json()["values"]
+        assert [value["name"] for value in values] == ["dk", "dnk_1"]
+        assert values[0] == {"name": "dk", "label": "Don't know", "lists": ["yn"]}
+
+    def test_survey_lint_compares_dk_codes_with_the_config(self, client):
+        survey = _create_survey(client, UNBOUNDED_AGE)
+        body = client.get(f"/api/surveys/{survey['survey_id']}/lint").json()
+        assert "dk_codes_not_counted" not in {item["check_id"] for item in body["findings"]}
+
     def test_lint_without_a_form_is_actionable(self, client):
         survey = _create_survey(client, {"survey": [], "choices": []})
         response = client.get(f"/api/surveys/{survey['survey_id']}/lint")
