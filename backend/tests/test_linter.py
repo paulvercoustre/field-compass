@@ -17,6 +17,7 @@ from linter.dk import (
     classify_text,
     convention_for,
     dont_know_codes,
+    iter_special_occurrences,
 )
 from linter.engine import run_lint
 from linter.form_source import load_survey_form, schema_from_payload
@@ -543,27 +544,24 @@ class TestSharedDontKnowCodes:
         assert [code.name for code in codes] == ["dk", "dont_know_answer", "88", "dk_income"]
         assert codes[0].lists == ("yn", "src")
 
-    def test_unconfigured_codes_are_reported_against_a_saved_survey(self):
-        config = {"special_values": {"dk_value": -99, "dk_string_value": ["dk"]}}
-        report = run_lint(load_form_schema(DK_SHARED), ctx=LintContext(config_data=config))
-        finding = _finding(report, "dk_codes_not_counted")
-        assert finding.severity == "warning"
-        for code in ("dont_know_answer", "88", "dk_income"):
-            assert code in finding.suggested_fix
-        assert "`dk`" not in finding.message
-
-    def test_fully_configured_survey_is_silent(self):
-        config = {
-            "special_values": {
-                "dk_value": 88,
-                "dk_string_value": ["dk", "dont_know_answer", "DK_income"],
-            }
+    def test_prefill_matches_what_the_consistency_check_reads(self):
+        schema = load_form_schema(DK_SHARED)
+        checked = {
+            occurrence.choice_name
+            for occurrence in iter_special_occurrences(schema)
+            if occurrence.category == DONT_KNOW
         }
-        report = run_lint(load_form_schema(DK_SHARED), ctx=LintContext(config_data=config))
-        assert _ids(report, "dk_codes_not_counted") == []
+        assert {code.name for code in dont_know_codes(schema)} == checked
 
-    def test_not_run_without_a_survey(self):
-        assert _ids(run_lint(load_form_schema(DK_SHARED)), "dk_codes_not_counted") == []
+    def test_list_no_question_uses_is_not_prefilled(self):
+        orphan = {
+            **DK_SHARED,
+            "choices": [
+                *DK_SHARED["choices"],
+                {"list_name": "unused", "name": "nsp", "label::English (en)": "Ne sais pas"},
+            ],
+        }
+        assert "nsp" not in {code.name for code in dont_know_codes(load_form_schema(orphan))}
 
 
 class TestEnumeratorSources:

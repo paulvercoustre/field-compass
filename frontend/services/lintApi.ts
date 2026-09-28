@@ -92,15 +92,20 @@ export interface DkValue {
 /**
  * The form's don't-know codes, found by the same rules the form check uses.
  *
- * Both survey screens pre-fill "Don't know — answer options" from this, so a
- * code the check reports as a second don't-know convention is one the
- * configuration will count.
+ * Both survey screens pre-fill "Don't know — answer options" from this. The
+ * backend builds it from the same function the form check uses, so every
+ * don't-know code the check sees is pre-selected, and nothing else is.
  */
-export async function findDkValues(choices: Array<Record<string, unknown>>): Promise<DkValue[]> {
+export async function findDkValues(
+  survey: Array<Record<string, unknown>>,
+  choices: Array<Record<string, unknown>>
+): Promise<DkValue[]> {
   const response = await fetch(`${API_BASE_URL}/api/lint/dk-values`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ form: { survey: [], choices } }),
+    // The survey rows matter: only lists a question uses are read, exactly
+    // as the form check reads them.
+    body: JSON.stringify({ form: { survey, choices } }),
   });
   if (!response.ok) throw new Error(await readError(response, "Could not find the form's don't-know options."));
   const body = await response.json();

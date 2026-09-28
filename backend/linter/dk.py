@@ -270,26 +270,29 @@ class DontKnowCode:
 
 def dont_know_codes(schema: FormSchema) -> list[DontKnowCode]:
     """
-    Every choice name in the form that means don't-know, once each.
+    Every don't-know code the form's questions offer, once each, in form order.
 
-    This is what the survey screens pre-fill as the don't-know answer options,
-    so the linter and the configuration read the form the same way: a code the
-    linter reports as a second don't-know convention is one the screens
-    select. Every choice list is read, used or not, in form order. Names are
-    compared ignoring case, as the DK rate compares them.
+    This is what "Don't know — answer options" is pre-filled from, and it is
+    built from the same occurrences ``inconsistent_dk_coding`` reads, so the
+    two cannot disagree: every code that check lists is pre-selected, and
+    nothing else is. Names are compared ignoring case, as the DK rate does.
     """
-    found: dict[str, tuple[Choice, list[str]]] = {}
-    for list_name, choices in schema.choices_by_list.items():
-        for choice in choices:
-            if classify_choice(choice) != DONT_KNOW:
-                continue
-            key = choice.name.strip().lower()
-            if not key:
-                continue
-            entry = found.setdefault(key, (choice, []))
-            if list_name not in entry[1]:
-                entry[1].append(list_name)
+    found: dict[str, tuple[str, str, list[str]]] = {}
+    for occurrence in iter_special_occurrences(schema):
+        if occurrence.category != DONT_KNOW:
+            continue
+        key = occurrence.choice_name.strip().lower()
+        if key not in found:
+            choice = next(
+                item
+                for item in schema.choices_by_list.get(occurrence.list_name, [])
+                if item.name == occurrence.choice_name
+            )
+            found[key] = (choice.name.strip(), choice.label_for(), [])
+        lists = found[key][2]
+        if occurrence.list_name not in lists:
+            lists.append(occurrence.list_name)
     return [
-        DontKnowCode(name=choice.name.strip(), label=choice.label_for(), lists=tuple(lists))
-        for choice, lists in found.values()
+        DontKnowCode(name=name, label=label, lists=tuple(lists))
+        for name, label, lists in found.values()
     ]

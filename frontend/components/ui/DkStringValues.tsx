@@ -6,6 +6,8 @@ import { useDkSuggestions, choiceLabel } from '../../utils/dkSuggestions';
 interface DkStringValuesProps {
   values: string[];
   onChange: (values: string[]) => void;
+  /** The form's survey rows; suggestions only come from lists a question uses. */
+  survey: Array<Record<string, any>>;
   /** The form's choice rows, carrying `name` and its label columns. */
   choices: Array<Record<string, any>>;
   readOnly?: boolean;
@@ -26,6 +28,7 @@ interface DkStringValuesProps {
 const DkStringValues: React.FC<DkStringValuesProps> = ({
   values,
   onChange,
+  survey,
   choices,
   readOnly = false,
 }) => {
@@ -47,7 +50,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
   };
 
   const chosen = new Set(values.map((value) => value.toLowerCase()));
-  const suggestions = (useDkSuggestions(choices) || []).filter(
+  const suggestions = (useDkSuggestions(survey, choices) || []).filter(
     (option) => !chosen.has(option.toLowerCase())
   );
   const remaining = Array.from(optionsByName.keys())

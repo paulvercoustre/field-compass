@@ -7,9 +7,8 @@ connect time so a user finds out before a collection round is wasted.
 
 from collections.abc import Iterable
 
-from etl.dk_utils import dk_string_tokens
 from forms.schema import FormSchema
-from linter.dk import CATEGORY_LABELS, DONT_KNOW, dont_know_codes, group_conventions
+from linter.dk import CATEGORY_LABELS, DONT_KNOW, group_conventions
 from linter.models import LintContext, LintFinding, finding_for
 from linter.questions import (
     DATE_TYPES,
@@ -254,49 +253,6 @@ def check_no_interview_date(schema: FormSchema, ctx: LintContext) -> Iterable[Li
             ),
             suggested_fix=(
                 "Add a `today` metadata row, or a `date` question for the " "interview date."
-            ),
-        )
-    ]
-
-
-@lint_check("dk_codes_not_counted", severity="warning", tags=("setup", "dk"))
-def check_dk_codes_not_counted(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
-    """
-    Don't-know codes the form uses that this survey is not set up to count.
-
-    Only runs against a saved survey: before one exists there is no
-    configuration to compare with, and the create screen pre-selects every
-    code this check would report.
-    """
-    if ctx.config_data is None:
-        return []
-    special_values = ctx.config_data.get("special_values") or {}
-    counted = dk_string_tokens(special_values)
-    counted.add(str(special_values.get("dk_value", -99)).strip().lower())
-
-    missing = [code for code in dont_know_codes(schema) if code.name.lower() not in counted]
-    if not missing:
-        return []
-    described = ", ".join(
-        f"`{code.name}` ({code.label})"
-        if code.label.lower() != code.name.lower()
-        else f"`{code.name}`"
-        for code in missing
-    )
-    return [
-        finding_for(
-            "dk_codes_not_counted",
-            "warning",
-            message=f"The form codes don't-know as {described}, which this survey does not count.",
-            why_it_matters=(
-                "The don't-know rate only counts the answer options listed in the "
-                "survey settings. Every submission that uses these codes is counted "
-                "as a real answer, so the rate reads lower than it is."
-            ),
-            suggested_fix=(
-                "In survey settings, under Don't know — answer options, add: "
-                + ", ".join(code.name for code in missing)
-                + "."
             ),
         )
     ]

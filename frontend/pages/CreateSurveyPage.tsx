@@ -38,6 +38,7 @@ const CreateSurveyPage: React.FC = () => {
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
   // The form's choice rows, carrying names and their label columns.
   const choiceRows: Array<Record<string, any>> = (koboToolData?.choices as any[]) || [];
+  const surveyRows: Array<Record<string, any>> = (koboToolData?.survey as any[]) || [];
 
   // Sampling frame CSV state
   const [samplingFrameData, setSamplingFrameData] = useState<Record<string, any>[] | null>(null);
@@ -141,7 +142,7 @@ const CreateSurveyPage: React.FC = () => {
       // DK rate, so every match is selected rather than none. Found by the
       // same rules the form check uses, so the two never disagree.
       let cancelled = false;
-      findDkValues((koboToolData.choices as any[]) || [])
+      findDkValues((koboToolData.survey as any[]) || [], (koboToolData.choices as any[]) || [])
         .then((found) => {
           if (cancelled || found.length === 0) return;
           setSpecialValues(prev =>
@@ -800,6 +801,7 @@ const CreateSurveyPage: React.FC = () => {
               <DkStringValues
                 values={specialValues.dk_string_value}
                 onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
+                survey={surveyRows}
                 choices={choiceRows}
               />
             </div>

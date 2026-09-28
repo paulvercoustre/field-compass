@@ -74,6 +74,7 @@ const SurveySettingsPage: React.FC = () => {
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
   // The form's choice rows, carrying names and their label columns.
   const choiceRows: Array<Record<string, any>> = (koboToolData?.choices as any[]) || [];
+  const surveyRows: Array<Record<string, any>> = (koboToolData?.survey as any[]) || [];
   // Outlier detection is the only picker that genuinely needs numbers.
   const [numericVariables, setNumericVariables] = useState<string[]>([]);
   const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
@@ -1565,6 +1566,7 @@ const SurveySettingsPage: React.FC = () => {
                 <DkStringValues
                   values={specialValues.dk_string_value}
                   onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
+                  survey={surveyRows}
                   choices={choiceRows}
                   readOnly={!canEditSurvey}
                 />

@@ -36,11 +36,14 @@ export const choiceLabel = (choice: Record<string, any>): string => {
  * An empty list on failure rather than a guess from a second set of rules:
  * the user can still add options by hand from the dropdown.
  */
-export const useDkSuggestions = (choices: Array<Record<string, any>>): string[] | null => {
+export const useDkSuggestions = (
+  survey: Array<Record<string, any>>,
+  choices: Array<Record<string, any>>
+): string[] | null => {
   const [values, setValues] = useState<string[] | null>(null);
 
   useEffect(() => {
-    if (!choices || choices.length === 0) {
+    if (!survey || survey.length === 0 || !choices || choices.length === 0) {
       // Callers pass a fresh `[]` each render when no form is loaded; keep the
       // same state object so that does not re-render in a loop.
       setValues((prev) => (prev && prev.length === 0 ? prev : []));
@@ -48,7 +51,7 @@ export const useDkSuggestions = (choices: Array<Record<string, any>>): string[] 
     }
     let cancelled = false;
     setValues(null);
-    findDkValues(choices)
+    findDkValues(survey, choices)
       .then((found: DkValue[]) => {
         if (!cancelled) setValues(found.map((value) => value.name));
       })
@@ -58,7 +61,7 @@ export const useDkSuggestions = (choices: Array<Record<string, any>>): string[] 
     return () => {
       cancelled = true;
     };
-  }, [choices]);
+  }, [survey, choices]);
 
   return values;
 };

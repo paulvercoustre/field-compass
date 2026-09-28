@@ -33,7 +33,7 @@ class LintFormRequest(BaseModel):
 
 
 class DkValuesRequest(BaseModel):
-    form: dict[str, Any] = Field(..., description="kobo_tool; only `choices` is read")
+    form: dict[str, Any] = Field(..., description="kobo_tool: survey rows and choices")
 
 
 class AdoptItem(BaseModel):
