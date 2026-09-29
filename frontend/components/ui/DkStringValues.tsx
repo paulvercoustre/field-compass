@@ -50,12 +50,15 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
   };
 
   const chosen = new Set(values.map((value) => value.toLowerCase()));
-  const suggestions = (useDkSuggestions(survey, choices) || []).filter(
-    (option) => !chosen.has(option.toLowerCase())
-  );
-  // Suggestions lead the dropdown, as they do for consent and enumerator;
-  // everything else follows, without repeating them.
-  const suggestedKeys = new Set(suggestions.map((option) => option.toLowerCase()));
+  const found = useDkSuggestions(survey, choices) || [];
+  // One-click adds only offer what is not added yet.
+  const suggestions = found.filter((option) => !chosen.has(option.toLowerCase()));
+  // The dropdown's "Suggested" group always lists every don't-know code the
+  // form has, as it does for consent and enumerator -- added ones stay
+  // visible but disabled, so the group does not vanish once the create
+  // screen has pre-selected them all. Everything else follows, without
+  // repeating them.
+  const suggestedKeys = new Set(found.map((option) => option.toLowerCase()));
   const remaining = Array.from(optionsByName.keys())
     .filter((name) => !chosen.has(name.toLowerCase()) && !suggestedKeys.has(name.toLowerCase()))
     .sort();
@@ -144,14 +147,18 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
               className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">-- Add another answer option --</option>
-              {suggestions.length > 0 ? (
+              {found.length > 0 ? (
                 <>
                   <optgroup label="Suggested">
-                    {suggestions.map((option) => (
-                      <option key={option} value={option}>
-                        {describe(option)}
-                      </option>
-                    ))}
+                    {found.map((option) => {
+                      const added = chosen.has(option.toLowerCase());
+                      return (
+                        <option key={option} value={option} disabled={added}>
+                          {describe(option)}
+                          {added ? ' (added)' : ''}
+                        </option>
+                      );
+                    })}
                   </optgroup>
                   <optgroup label="All answer options">
                     {remaining.map((option) => (
