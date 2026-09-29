@@ -28,6 +28,13 @@ def _language_name(language: str) -> str:
     return f"`{language}`"
 
 
+def _headline_language(language: str) -> str:
+    """`French (fr)` -> `French`; the unnamed column reads as the default label."""
+    if language == DEFAULT_LANGUAGE:
+        return "the default label"
+    return language.split("(")[0].strip() or language
+
+
 def _sample(names: list[str]) -> str:
     shown = ", ".join(names[:_SAMPLE_LIMIT])
     extra = "" if len(names) <= _SAMPLE_LIMIT else f" (+{len(names) - _SAMPLE_LIMIT} more)"
@@ -96,7 +103,8 @@ def check_missing_translations(schema: FormSchema, ctx: LintContext) -> Iterable
             finding_for(
                 "missing_translations",
                 "warning",
-                message=(
+                message=f"Some labels are missing in {_headline_language(language)}",
+                details=(
                     f"{' and '.join(counts)} have no label in "
                     f"{_language_name(language)}, which this form declares."
                 ),

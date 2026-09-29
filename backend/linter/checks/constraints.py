@@ -23,6 +23,7 @@ from linter.models import LintContext, LintFinding, finding_for
 from linter.questions import (
     NUMERIC_TYPES,
     has_vocabulary,
+    headline_label,
     is_answerable,
     iter_answerable,
     question_search_text,
@@ -77,6 +78,16 @@ def _has_choice_filter(question: Question) -> bool:
     return bool(str(raw.get("choice_filter") or "").strip())
 
 
+def _joined_meanings(choices: list[Choice]) -> str:
+    """“Don't know” and “None”, each meaning once, capitalised for a headline."""
+    meanings: list[str] = []
+    for choice in choices:
+        meaning = f"“{_meaning_of(choice).capitalize()}”"
+        if meaning not in meanings:
+            meanings.append(meaning)
+    return meanings[0] if len(meanings) == 1 else ", ".join(meanings[:-1]) + f" or {meanings[-1]}"
+
+
 def _meaning_of(choice: Choice) -> str:
     """Wording for a choice `exclusive_choices` has already classified."""
     return CATEGORY_LABELS[classify_choice(choice) or DONT_KNOW]
@@ -110,9 +121,11 @@ def check_dk_not_exclusive(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
                 "error",
                 question=question,
                 message=(
-                    f"“{question.label_for()}” lets {described} be selected "
-                    "alongside real answers."
+                    f"“{headline_label(question)}” allows "
+                    + _joined_meanings(unconstrained)
+                    + " to be ticked with other answers"
                 ),
+                details=(f"`{question.name}` lets {described} be selected alongside real answers."),
                 why_it_matters=(
                     "A don't-know, refused, or none option selected alongside a "
                     "real answer is not a usable response, and it also corrupts "
@@ -146,10 +159,8 @@ def check_unbounded_numeric(schema: FormSchema, ctx: LintContext) -> Iterable[Li
                 "unbounded_numeric",
                 "warning",
                 question=question,
-                message=(
-                    f"“{question.label_for()}” ({question.name}) is "
-                    f"{question.type} with no constraint.{extra}"
-                ),
+                message=f"“{headline_label(question)}” accepts any number",
+                details=(f"`{question.name}` is {question.type} with no constraint.{extra}"),
                 why_it_matters=(
                     "Unconstrained numeric questions are the main upstream source "
                     "of outliers. The form can reject impossible values at entry; "
@@ -178,9 +189,8 @@ def check_unbounded_date(schema: FormSchema, ctx: LintContext) -> Iterable[LintF
                 "unbounded_date",
                 "warning",
                 question=question,
-                message=(
-                    f"“{question.label_for()}” ({question.name}) is a date with " "no constraint."
-                ),
+                message=f"“{headline_label(question)}” accepts any date",
+                details=f"`{question.name}` is a date with no constraint.",
                 why_it_matters=(
                     "Without a constraint, enumerators can enter future birthdates "
                     "and interview dates outside the collection period. Those only "
@@ -207,9 +217,10 @@ def check_missing_required(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
                 "missing_required",
                 "warning",
                 question=question,
-                message=(
-                    f"“{question.label_for()}” ({question.name}) looks like an "
-                    "identifier or consent question but is not required."
+                message=f"“{headline_label(question)}” can be left blank",
+                details=(
+                    f"`{question.name}` looks like an identifier or consent question "
+                    "but is not required."
                 ),
                 why_it_matters=(
                     "Blank enumerator, consent, or case identifiers make every "
@@ -252,10 +263,10 @@ def check_unreachable_question(schema: FormSchema, ctx: LintContext) -> Iterable
                     "unreachable_question",
                     "warning",
                     question=question,
-                    message=(
-                        f"“{question.label_for()}” is relevant when "
-                        f"`{ref_name}` is `{value}`, but that value is not in "
-                        f"the `{referenced.list_name}` list."
+                    message=f"“{headline_label(question)}” can never be shown",
+                    details=(
+                        f"`{question.name}` is relevant when `{ref_name}` is `{value}`, "
+                        f"but that value is not in the `{referenced.list_name}` list."
                     ),
                     why_it_matters=(
                         "The question can never display, so it will always be "
@@ -283,7 +294,8 @@ def check_orphan_choice_list(schema: FormSchema, ctx: LintContext) -> Iterable[L
             finding_for(
                 "orphan_choice_list",
                 "info",
-                message=f"Choice list `{list_name}` is defined but never used.",
+                message=f"Choice list “{list_name}” is never used",
+                details=f"No question points at the `{list_name}` choice list.",
                 why_it_matters=(
                     "An unused list is usually a leftover from a renamed question. "
                     "It does not break collection, but it is a sign the form and "
@@ -310,7 +322,8 @@ def check_broken_calculation(schema: FormSchema, ctx: LintContext) -> Iterable[L
                 "broken_calculation",
                 "error",
                 question=question,
-                message=(
+                message=f"Calculation “{question.name}” refers to a missing question",
+                details=(
                     f"Calculate `{question.name}` references "
                     + ", ".join(f"`{name}`" for name in missing)
                     + ", which are not in this form."

@@ -14,6 +14,7 @@ from linter.questions import (
     DATE_TYPES,
     SELECT_TYPES,
     has_vocabulary,
+    headline_label,
     iter_answerable,
     question_search_text,
 )
@@ -83,7 +84,8 @@ def check_audit_not_enabled(schema: FormSchema, ctx: LintContext) -> Iterable[Li
             finding_for(
                 "audit_not_enabled",
                 "info",
-                message="Could not tell whether this form records an audit log.",
+                message="Audit log status unknown",
+                details="Could not tell whether this form records an audit log.",
                 why_it_matters=(
                     "The saved copy of this form does not say whether it has an "
                     "`audit` row. If it does not, interview duration and speeding "
@@ -99,7 +101,8 @@ def check_audit_not_enabled(schema: FormSchema, ctx: LintContext) -> Iterable[Li
         finding_for(
             "audit_not_enabled",
             "error",
-            message="This form does not record an audit log.",
+            message="Audit log is off",
+            details="This form has no row of type `audit`.",
             why_it_matters=(
                 "Interview duration, active interview time, and speeding detection "
                 "all come from the audit log. Without it those metrics are empty "
@@ -154,15 +157,19 @@ def check_inconsistent_dk_coding(schema: FormSchema, ctx: LintContext) -> Iterab
                 "inconsistent_dk_coding",
                 "warning",
                 message=(
+                    f"Some questions use a different code for the “{wording.capitalize()}” "
+                    "answer option"
+                ),
+                details=(
                     f"Select questions use more than one code for “{wording}”: "
                     + ", ".join(described[:-1])
                     + f" and {described[-1]}."
                 ),
                 why_it_matters=(
-                    "Don't-know rates only count the codes Field Compass is told "
-                    "to look for. A second code for the same answer is silently "
-                    "counted as a real answer, which understates the rate rather "
-                    "than failing loudly."
+                    "Anyone analysing the data has to know every code: a filter on "
+                    "one silently misses the others. The don't-know rate counts all "
+                    "of them only while each is listed under Core Identifiers, where "
+                    "they are pre-selected."
                 )
                 if category == DONT_KNOW
                 else (
@@ -199,7 +206,11 @@ def check_no_enumerator_field(schema: FormSchema, ctx: LintContext) -> Iterable[
         finding_for(
             "no_enumerator_field",
             "error",
-            message="No question looks like an enumerator identifier.",
+            message="No enumerator question found",
+            details=(
+                "No question looks like an enumerator identifier, none is set under "
+                "Core Identifiers, and there is no `username` metadata row."
+            ),
             why_it_matters=(
                 "The Field Team page, per-enumerator quality comparison, and the "
                 "enumerator filter on Submissions all need a question that records "
@@ -228,9 +239,10 @@ def check_sampling_var_not_select(schema: FormSchema, ctx: LintContext) -> Itera
                 "sampling_var_not_select",
                 "warning",
                 question=question,
-                message=(
-                    f"“{question.label_for()}” ({question.name}) looks like a "
-                    f"sampling variable but is {question.type}, not a select."
+                message=f"“{headline_label(question)}” is free text, not a list",
+                details=(
+                    f"`{question.name}` looks like a sampling variable but is "
+                    f"{question.type}, not a select."
                 ),
                 why_it_matters=(
                     "Collection targets per choice, and checking that a submitted "
@@ -261,7 +273,8 @@ def check_no_interview_date(schema: FormSchema, ctx: LintContext) -> Iterable[Li
         finding_for(
             "no_interview_date",
             "warning",
-            message="No date question and no `today` metadata field.",
+            message="No interview date recorded",
+            details="The form has no date question and no `today` metadata field.",
             why_it_matters=(
                 "Date-range and weekend checks need the date the interview took "
                 "place, which is not the same as the time Kobo received the "

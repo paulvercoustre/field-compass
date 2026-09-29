@@ -141,7 +141,7 @@ class TestAuditNotEnabled:
         report = run_lint(load_form_schema(NO_AUDIT))
         finding = _finding(report, "audit_not_enabled")
         assert finding.severity == "info"
-        assert "could not tell" in finding.message.lower()
+        assert "could not tell" in finding.details.lower()
 
     def test_recorded_audit_status_is_used_for_stored_rows(self):
         assert (
@@ -163,11 +163,11 @@ class TestInconsistentDk:
         report = run_lint(load_form_schema(INCONSISTENT_DK))
         finding = _finding(report, "inconsistent_dk_coding")
         assert finding.severity == "warning"
-        assert "dk" in finding.message.lower()
-        assert "-99" in finding.message
-        assert finding.message.startswith("Select questions use more than one code")
+        assert "dk" in finding.details.lower()
+        assert "-99" in finding.details
+        assert finding.details.startswith("Select questions use more than one code")
         # Each code names the questions that use it.
-        assert "`-99` (q2)" in finding.message and "`dk` (q1)" in finding.message
+        assert "`-99` (q2)" in finding.details and "`dk` (q1)" in finding.details
         assert "don't-know rate" in finding.why_it_matters.lower()
 
     def test_single_convention_is_silent(self):
@@ -182,8 +182,8 @@ class TestInconsistentDk:
     def test_prefixed_dk_code_counts_as_a_second_convention(self):
         report = run_lint(load_form_schema(DK_PREFIXED_CODE))
         finding = _finding(report, "inconsistent_dk_coding")
-        assert "dk_income" in finding.message
-        assert "don't know" in finding.message
+        assert "dk_income" in finding.details
+        assert "don't know" in finding.details
 
 
 class TestSpecialValueClassification:
@@ -244,8 +244,8 @@ class TestMissingTranslations:
         report = run_lint(load_form_schema(UNTRANSLATED))
         finding = _finding(report, "missing_translations")
         assert finding.severity == "warning"
-        assert "French (fr)" in finding.message
-        assert "1 question and 1 answer option" in finding.message
+        assert "French (fr)" in finding.details
+        assert "1 question and 1 answer option" in finding.details
         assert "age" in finding.suggested_fix
         assert "yn/no" in finding.suggested_fix
 
@@ -264,7 +264,7 @@ class TestConsentGating:
         finding = _finding(report, "consent_does_not_gate")
         assert finding.severity == "error"
         assert finding.question_path == "consent"
-        assert "full_name" in finding.message
+        assert "full_name" in finding.details
         assert "relevant" in finding.suggested_fix
 
     def test_gated_consent_is_silent(self):
@@ -325,8 +325,8 @@ class TestDkNotExclusive:
     def test_every_exclusive_option_is_covered_at_once(self):
         report = run_lint(load_form_schema(DK_AND_NONE_NOT_EXCLUSIVE))
         finding = _finding(report, "dk_not_exclusive")
-        assert "don't know" in finding.message
-        assert "none" in finding.message
+        assert "don't know" in finding.details
+        assert "none" in finding.details
         assert "selected(., 'dk') or selected(., 'none')" in finding.suggested_fix
 
 
@@ -386,7 +386,7 @@ class TestUnreachable:
         report = run_lint(load_form_schema(UNREACHABLE))
         finding = _finding(report, "unreachable_question")
         assert finding.question_path == "child_age"
-        assert "yess" in finding.message
+        assert "yess" in finding.details
 
     def test_choice_filter_is_skipped(self):
         report = run_lint(load_form_schema(UNREACHABLE_FILTERED))
@@ -404,7 +404,7 @@ class TestOrphanAndBroken:
         report = run_lint(load_form_schema(BROKEN_CALC))
         finding = _finding(report, "broken_calculation")
         assert finding.severity == "error"
-        assert "missing_question" in finding.message
+        assert "missing_question" in finding.details
 
     def test_valid_calculation_is_silent(self):
         report = run_lint(load_form_schema(HEALTHY))
@@ -480,13 +480,13 @@ class TestReviewRegressions:
         # `98 = Refused` next to `refused` is two codes for refusal, not a
         # second don't-know code: one finding, about refusal only.
         assert len(findings) == 1
-        assert "“refused”" in findings[0].message and "98" in findings[0].message
-        assert "don't know" not in findings[0].message
+        assert "“refused”" in findings[0].details and "98" in findings[0].details
+        assert "don't know" not in findings[0].details
 
     def test_constraint_on_dk_does_not_cover_refused(self):
         report = run_lint(load_form_schema(DK_EXCLUSIVE_REFUSED_NOT))
         finding = _finding(report, "dk_not_exclusive")
-        assert "refused" in finding.message
+        assert "refused" in finding.details
         assert "'refused'" in finding.suggested_fix
 
     def test_missing_required_offers_no_rule_that_cannot_fire(self):
@@ -585,3 +585,50 @@ class TestEnumeratorSources:
             load_form_schema(ENUMERATOR_BY_CONFIG), ctx=LintContext(config_data=stale)
         )
         assert _ids(report, "no_enumerator_field") == ["no_enumerator_field"]
+
+
+class TestHeadlines:
+    """Headlines state the problem in a few words; the specifics are in `details`."""
+
+    def test_headlines_are_short_and_carry_no_codes(self):
+        cases = {
+            "inconsistent_dk_coding": (
+                INCONSISTENT_DK,
+                "Some questions use a different code for the “Don't know” answer option",
+            ),
+            "unbounded_numeric": (UNBOUNDED_AGE, "“How old is the respondent?” accepts any number"),
+            "unreachable_question": (UNREACHABLE, "“Age of child” can never be shown"),
+            "no_enumerator_field": (NO_ENUMERATOR, "No enumerator question found"),
+            "no_interview_date": (NO_INTERVIEW_DATE, "No interview date recorded"),
+        }
+        for check_id, (form, headline) in cases.items():
+            finding = _finding(run_lint(load_form_schema(form)), check_id)
+            assert finding.message == headline
+            assert finding.details
+
+    def test_every_finding_has_a_short_headline_and_details(self):
+        forms = (
+            INCONSISTENT_DK,
+            UNBOUNDED_AGE,
+            UNREACHABLE,
+            NO_ENUMERATOR,
+            BROKEN_CALC,
+            ORPHAN_LIST,
+        )
+        for form in forms:
+            for finding in run_lint(load_form_schema(form)).findings:
+                assert len(finding.message) <= 90, finding.message
+                assert not finding.message.endswith("."), finding.message
+                assert finding.details, finding.check_id
+
+    def test_long_labels_are_shortened(self):
+        long_label = "How many " + "very " * 30 + "old"
+        form = {
+            **UNBOUNDED_AGE,
+            "survey": [
+                *UNBOUNDED_AGE["survey"][:-1],
+                {"type": "integer", "name": "age", "label::English (en)": long_label},
+            ],
+        }
+        finding = _finding(run_lint(load_form_schema(form)), "unbounded_numeric")
+        assert "…" in finding.message and len(finding.message) < 90

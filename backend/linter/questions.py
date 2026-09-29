@@ -125,3 +125,9 @@ def container_names(schema: FormSchema) -> set[str]:
         for group_path in (question.group_path, *_raw_list(raw.get("group_path"))):
             names.update(part for part in (group_path or "").split("/") if part)
     return names
+
+
+def headline_label(question: Question, limit: int = 60) -> str:
+    """A question's label, shortened to fit a finding headline."""
+    label = " ".join(question.label_for().split())
+    return label if len(label) <= limit else label[: limit - 1].rstrip() + "…"

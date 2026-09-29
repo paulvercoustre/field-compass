@@ -83,7 +83,8 @@ def check_consent_does_not_gate(schema: FormSchema, ctx: LintContext) -> Iterabl
             "consent_does_not_gate",
             "error",
             question=consent,
-            message=(
+            message="Questions still appear after consent is refused",
+            details=(
                 f"Consent (`{consent.name}`) does not gate later questions. "
                 f"A refusal still leaves these required or substantive: {sample}{extra}."
             ),

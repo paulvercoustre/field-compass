@@ -23,7 +23,10 @@ export interface LintFinding {
   check_id: string;
   severity: 'error' | 'warning' | 'info' | string;
   question_path: string | null;
+  /** Short headline: the problem in a few words. */
   message: string;
+  /** Specifics behind the headline: codes, question names, counts. */
+  details: string | null;
   why_it_matters: string;
   suggested_fix: string | null;
   auto_rule: Record<string, unknown> | null;

@@ -37,40 +37,68 @@ const SEVERITY_HEADINGS: Record<string, string> = {
   info: 'Worth knowing',
 };
 
+/**
+ * One finding: the headline always, the specifics on request.
+ *
+ * A real form can produce dozens of findings, so each one opens as a single
+ * line saying what is wrong; codes, question names, why it matters and the
+ * XLSForm fix are behind "Show details".
+ */
 const FindingCard: React.FC<{
   finding: LintFinding;
   canAdopt: boolean;
   adopting: boolean;
   onAdopt?: () => void;
-}> = ({ finding, canAdopt, adopting, onAdopt }) => (
-  <li className="p-3 bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 space-y-2">
-    <div className="flex items-start gap-2">
-      <span className={`shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${SEVERITY_STYLES[finding.severity] || SEVERITY_STYLES.info}`}>
-        {finding.severity}
-      </span>
-      <p className="text-sm text-gray-900 dark:text-white">{finding.message}</p>
-    </div>
-    {finding.question_path && (
-      <p className="text-xs font-mono text-gray-500 dark:text-gray-400">{finding.question_path}</p>
-    )}
-    <p className="text-xs text-gray-600 dark:text-gray-400">{finding.why_it_matters}</p>
-    {finding.suggested_fix && (
-      <pre className="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded overflow-x-auto text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-        {finding.suggested_fix}
-      </pre>
-    )}
-    {canAdopt && finding.auto_rule && onAdopt && (
-      <button
-        type="button"
-        onClick={onAdopt}
-        disabled={adopting}
-        className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
-      >
-        {adopting ? 'Adding…' : 'Add as quality check'}
-      </button>
-    )}
-  </li>
-);
+}> = ({ finding, canAdopt, adopting, onAdopt }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="p-3 bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 space-y-2">
+      <div className="flex items-start gap-2">
+        <span className={`shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${SEVERITY_STYLES[finding.severity] || SEVERITY_STYLES.info}`}>
+          {finding.severity}
+        </span>
+        <p className="flex-1 text-sm font-medium text-gray-900 dark:text-white">{finding.message}</p>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className="shrink-0 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+        >
+          {open ? 'Hide details' : 'Show details'}
+        </button>
+      </div>
+      {open && (
+        <div className="space-y-2 pl-1">
+          {finding.details && (
+            <p className="text-sm text-gray-800 dark:text-gray-200">{finding.details}</p>
+          )}
+          {finding.question_path && (
+            <p className="text-xs font-mono text-gray-500 dark:text-gray-400">{finding.question_path}</p>
+          )}
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            <span className="font-semibold">Why it matters: </span>
+            {finding.why_it_matters}
+          </p>
+          {finding.suggested_fix && (
+            <pre className="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded overflow-x-auto text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+              {finding.suggested_fix}
+            </pre>
+          )}
+        </div>
+      )}
+      {canAdopt && finding.auto_rule && onAdopt && (
+        <button
+          type="button"
+          onClick={onAdopt}
+          disabled={adopting}
+          className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {adopting ? 'Adding…' : 'Add as quality check'}
+        </button>
+      )}
+    </li>
+  );
+};
 
 const FormLogicMissingNotice: React.FC = () => (
   <p className="text-sm p-3 rounded-md bg-yellow-50 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">

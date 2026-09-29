@@ -19,9 +19,12 @@ class LintFinding:
 
     check_id: str
     severity: str
+    # A short headline stating the problem, readable at a glance. Codes,
+    # question lists and other specifics go in ``details``.
     message: str
     why_it_matters: str
     question_path: str | None = None
+    details: str | None = None
     suggested_fix: str | None = None
     auto_rule: dict[str, Any] | None = None
 
@@ -38,6 +41,7 @@ class LintFinding:
             "severity": self.severity,
             "question_path": self.question_path,
             "message": self.message,
+            "details": self.details,
             "why_it_matters": self.why_it_matters,
             "suggested_fix": self.suggested_fix,
             "auto_rule": self.auto_rule,
@@ -114,6 +118,7 @@ def finding_for(
     *,
     message: str,
     why_it_matters: str,
+    details: str | None = None,
     question: Question | None = None,
     suggested_fix: str | None = None,
     auto_rule: dict[str, Any] | None = None,
@@ -122,6 +127,7 @@ def finding_for(
         check_id=check_id,
         severity=severity,
         message=message,
+        details=details,
         why_it_matters=why_it_matters,
         question_path=question.path if question is not None else None,
         suggested_fix=suggested_fix,
