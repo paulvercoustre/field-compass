@@ -507,6 +507,13 @@ const SurveySettingsPage: React.FC = () => {
    * Replaces uploading an XLSForm: the project is the source of truth, and a
    * form edited mid-collection has to be picked up from there anyway.
    */
+  // The out-of-period check compares against the saved collection dates, and
+  // does nothing without at least one of them.
+  const hasCollectionDates = Boolean(
+    config?.config_data?.global_parameters?.data_collection_start_date ||
+      config?.config_data?.global_parameters?.data_collection_end_date
+  );
+
   // Bumped by each successful refresh; the form check runs when it changes.
   const [formCheckRunKey, setFormCheckRunKey] = useState(0);
   // Until it is saved, the refreshed form is what the check reads.
@@ -1125,6 +1132,20 @@ const SurveySettingsPage: React.FC = () => {
               </div>
             )}
 
+        {/* Rendered outside the tab switch and only hidden, so its results
+            survive leaving the tab -- and a refresh's check runs once, not
+            again on every return to "Data Quality Checks". */}
+        {selectedSurvey && (
+          <div className={activeTab === 'quality' ? 'mb-6' : 'hidden'}>
+            <FormLintPanel
+              surveyId={selectedSurvey.survey_id}
+              form={refreshedFormPayload}
+              canEdit={canEditSurvey}
+              onRulesAdopted={loadValidationRules}
+              autoRunKey={formCheckRunKey}
+            />
+          </div>
+        )}
         {activeTab === 'settings' ? (
           <div className="space-y-6">
             {/* Survey Profile */}
@@ -1749,15 +1770,6 @@ const SurveySettingsPage: React.FC = () => {
           </div>
         ) : activeTab === 'quality' ? (
           <div className="space-y-6">
-            {selectedSurvey && (
-              <FormLintPanel
-                surveyId={selectedSurvey.survey_id}
-                form={refreshedFormPayload}
-                canEdit={canEditSurvey}
-                onRulesAdopted={loadValidationRules}
-                autoRunKey={formCheckRunKey}
-              />
-            )}
             {/* General Quality Checks - dirty pattern like Survey Profile */}
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">General Quality Checks</h2>
@@ -1768,18 +1780,20 @@ const SurveySettingsPage: React.FC = () => {
                   <div className="flex h-5 items-center">
                     <input
                       type="checkbox"
-                      disabled={!canEditSurvey}
-                      checked={qualityChecks.flag_out_of_period}
+                      disabled={!canEditSurvey || !hasCollectionDates}
+                      checked={qualityChecks.flag_out_of_period && hasCollectionDates}
                       onChange={(e) => setQualityChecks({ ...qualityChecks, flag_out_of_period: e.target.checked })}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
                     />
                   </div>
                   <div className="ml-3">
-                    <label className="text-sm font-medium text-gray-900 dark:text-white">
+                    <label className={`text-sm font-medium ${hasCollectionDates ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
                       Flag submissions out of data collection period
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Create a flag if the interview date is outside the start/end dates defined in Global Parameters.
+                      {hasCollectionDates
+                        ? 'Create a flag if the interview date is before the start date or after the end date set in Survey Profile.'
+                        : 'Set a data collection start or end date under General → Survey Profile to use this check.'}
                     </p>
                   </div>
                 </div>
