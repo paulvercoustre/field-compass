@@ -19,6 +19,7 @@ from routers import (
     ai,
     etl,
     kobo,
+    lint,
     progress,
     quality,
     submissions,
@@ -123,6 +124,7 @@ app.include_router(validation_rules.router, prefix="/api", tags=["validation-rul
 app.include_router(quality.router, prefix="/api", tags=["quality"])
 app.include_router(ai.router, prefix="/api", tags=["ai"])
 app.include_router(kobo.router, prefix="/api", tags=["kobo"])
+app.include_router(lint.router, prefix="/api", tags=["lint"])
 
 
 @app.get("/")

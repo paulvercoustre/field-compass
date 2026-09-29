@@ -1,0 +1,550 @@
+"""
+Form fixtures for the linter.
+
+Each check has a form that triggers it and a form that does not, as required
+by #32 and #33. Built as xlsx-dialect kobo_tool dicts so they match what the
+create/settings screens persist.
+"""
+
+
+def _q(type: str, name: str, **extra):
+    row = {"type": type, "name": name, "label::English (en)": extra.pop("label", name)}
+    row.update(extra)
+    return row
+
+
+def _choice(list_name: str, name: str, label: str | None = None):
+    return {
+        "list_name": list_name,
+        "name": name,
+        "label::English (en)": label or name,
+    }
+
+
+def _ml(type: str, name: str, *, en: str, fr: str | None = None, **extra):
+    """A row in a two-language form. `fr=None` is a missing translation."""
+    row = {"type": type, "name": name, "label::English (en)": en}
+    if fr is not None:
+        row["label::French (fr)"] = fr
+    row.update(extra)
+    return row
+
+
+def _ml_choice(list_name: str, name: str, *, en: str, fr: str | None = None):
+    row = {"list_name": list_name, "name": name, "label::English (en)": en}
+    if fr is not None:
+        row["label::French (fr)"] = fr
+    return row
+
+
+def form(*survey, choices=None, settings=None):
+    payload = {"survey": list(survey), "choices": list(choices or [])}
+    if settings is not None:
+        payload["settings"] = settings
+    return payload
+
+
+# --- setup-critical ----------------------------------------------------------
+
+HEALTHY = form(
+    _q("start", "start"),
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID", required="yes"),
+    _q("select_one yn", "consent", label="Does the respondent consent?", required="yes"),
+    _q(
+        "integer",
+        "age",
+        label="Respondent age",
+        constraint="(. >= 0 and . <= 120) or . = -99",
+        relevant="${consent} = 'yes'",
+    ),
+    _q(
+        "select_one admin1",
+        "district",
+        label="District",
+        required="yes",
+        relevant="${consent} = 'yes'",
+    ),
+    _q(
+        "select_multiple foods",
+        "foods",
+        label="Which foods?",
+        constraint="not(selected(., 'dk') and count-selected(.) > 1)",
+        relevant="${consent} = 'yes'",
+    ),
+    _q("calculate", "copy_district", calculation="${district}"),
+    choices=[
+        _choice("enumerator_id", "E01", "Amina"),
+        _choice("yn", "yes", "Yes"),
+        _choice("yn", "no", "No"),
+        _choice("admin1", "north", "North"),
+        _choice("admin1", "south", "South"),
+        _choice("foods", "rice", "Rice"),
+        _choice("foods", "dk", "Don't know"),
+    ],
+)
+
+NO_AUDIT = form(
+    _q("start", "start"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    choices=[_choice("enumerator_id", "E01")],
+)
+
+# API dialect is the only one that can prove audit is absent (xlsx stores None).
+NO_AUDIT_API = {
+    "translations": ["English (en)"],
+    "survey": [
+        {"type": "start", "name": "start", "$xpath": "start", "label": ["Start"]},
+        {
+            "type": "select_one",
+            "name": "enumerator_id",
+            "label": ["Enumerator ID"],
+            "select_from_list_name": "enumerator_id",
+            "$xpath": "enumerator_id",
+        },
+        {"type": "today", "name": "today", "$xpath": "today"},
+    ],
+    "choices": [{"list_name": "enumerator_id", "name": "E01", "label": ["Amina"]}],
+}
+
+INCONSISTENT_DK = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one yn", "q1", label="Question one"),
+    _q("select_one yn2", "q2", label="Question two"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes", "Yes"),
+        _choice("yn", "dk", "Don't know"),
+        _choice("yn2", "yes", "Yes"),
+        _choice("yn2", "-99", "Don't know"),
+    ],
+)
+
+# `dk` alongside `none` is two different answers, consistently coded. The
+# prefixed `dk_income` is a second don't-know code and is the inconsistency.
+MIXED_SPECIAL_VALUES = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one assets", "assets", label="Which assets?"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("assets", "land", "Land"),
+        _choice("assets", "dk", "Don't know"),
+        _choice("assets", "none", "None"),
+        _choice("assets", "no", "No"),
+    ],
+)
+
+DK_PREFIXED_CODE = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one assets", "assets", label="Which assets?"),
+    _q("select_one income", "income", label="Monthly income band"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("assets", "land", "Land"),
+        _choice("assets", "dk", "Don't know"),
+        _choice("income", "low", "Under 100"),
+        _choice("income", "dk_income", "Don't know"),
+    ],
+)
+
+# --- translations ------------------------------------------------------------
+
+# `age` has no French label, and so does the `no` option on `yn`.
+UNTRANSLATED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _ml("select_one enumerator_id", "enumerator_id", en="Enumerator ID", fr="Code enquêteur"),
+    _ml("integer", "age", en="Respondent age", constraint=". <= 120"),
+    _ml("select_one yn", "owns_land", en="Do you own land?", fr="Possédez-vous des terres ?"),
+    choices=[
+        _ml_choice("enumerator_id", "E01", en="Amina", fr="Amina"),
+        _ml_choice("yn", "yes", en="Yes", fr="Oui"),
+        _ml_choice("yn", "no", en="No"),
+    ],
+)
+
+TRANSLATED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _ml("select_one enumerator_id", "enumerator_id", en="Enumerator ID", fr="Code enquêteur"),
+    _ml("integer", "age", en="Respondent age", fr="Âge du répondant", constraint=". <= 120"),
+    choices=[_ml_choice("enumerator_id", "E01", en="Amina", fr="Amina")],
+)
+
+NO_ENUMERATOR = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("integer", "age", label="Age", constraint=". <= 120"),
+)
+
+NO_INTERVIEW_DATE = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("integer", "age", label="Age", constraint=". <= 120"),
+    choices=[_choice("enumerator_id", "E01")],
+)
+
+# --- constraints -------------------------------------------------------------
+
+DK_NOT_EXCLUSIVE = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_multiple foods", "foods", label="Which foods did you eat?"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("foods", "rice", "Rice"),
+        _choice("foods", "dk", "Don't know"),
+    ],
+)
+
+DK_AND_NONE_NOT_EXCLUSIVE = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_multiple foods", "foods", label="Which foods did you eat?"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("foods", "rice", "Rice"),
+        _choice("foods", "dk", "Don't know"),
+        _choice("foods", "none", "None of the above"),
+    ],
+)
+
+UNBOUNDED_AGE = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID", required="yes"),
+    _q("today", "today"),
+    _q("integer", "age", label="How old is the respondent?"),
+    choices=[_choice("enumerator_id", "E01")],
+)
+
+UNBOUNDED_DATE = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("date", "date_of_birth", label="Date of birth"),
+    choices=[_choice("enumerator_id", "E01")],
+)
+
+MISSING_REQUIRED = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one yn", "consent", label="Does the respondent consent?"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+    ],
+)
+
+UNREACHABLE = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one yn", "has_children", label="Any children?"),
+    _q(
+        "integer",
+        "child_age",
+        label="Age of child",
+        relevant="${has_children} = 'yess'",
+        constraint=". <= 17",
+    ),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+    ],
+)
+
+# choice_filter means we must NOT flag even if relevant looks static.
+UNREACHABLE_FILTERED = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one yn", "has_children", label="Any children?"),
+    _q(
+        "select_one yn",
+        "child_in_school",
+        label="In school?",
+        relevant="${has_children} = 'yess'",
+        choice_filter="${has_children}",
+    ),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+    ],
+)
+
+ORPHAN_LIST = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("unused_list", "a", "A"),
+    ],
+)
+
+BROKEN_CALC = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("calculate", "copy", calculation="${missing_question}"),
+    choices=[_choice("enumerator_id", "E01")],
+)
+
+CONSENT_UNGATED = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one yn", "consent", label="Does the respondent consent?", required="yes"),
+    _q("text", "full_name", label="Full name", required="yes"),
+    _q("integer", "age", label="Age", required="yes", constraint=". <= 120"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+    ],
+)
+
+CONSENT_GATED = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one yn", "consent", label="Does the respondent consent?", required="yes"),
+    _q(
+        "text",
+        "full_name",
+        label="Full name",
+        required="yes",
+        relevant="${consent} = 'yes'",
+    ),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+    ],
+)
+
+# --- regressions from review --------------------------------------------------
+
+# dk, refused and none are different answers, not two DK conventions.
+DK_AND_REFUSED = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one yn", "q1", label="Question one"),
+    _q("select_one codes", "q2", label="Question two"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes", "Yes"),
+        _choice("yn", "dk", "Don't know"),
+        _choice("yn", "refused", "Refused"),
+        _choice("yn", "none", "None of the above"),
+        _choice("codes", "1", "Yes"),
+        # A numeric code labelled Refused is not a second DK convention.
+        _choice("codes", "98", "Refused"),
+        _choice("codes", "dk", "Don't know"),
+    ],
+)
+
+# The constraint makes dk exclusive but not refused.
+DK_EXCLUSIVE_REFUSED_NOT = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q(
+        "select_multiple foods",
+        "foods",
+        label="Which foods?",
+        constraint="not(selected(., 'dk') and count-selected(.) > 1)",
+    ),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("foods", "rice", "Rice"),
+        _choice("foods", "dk", "Don't know"),
+        _choice("foods", "refused", "Refused"),
+    ],
+)
+
+# "today" in a label is not an interview date.
+TODAY_IN_LABEL_ONLY = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("integer", "meals", label="How many meals eaten today?", constraint=". <= 10"),
+    choices=[_choice("enumerator_id", "E01")],
+)
+
+# API dialect: consent gates a whole group, and a calculation counts a repeat.
+GROUPED_API = {
+    "translations": ["English (en)"],
+    "survey": [
+        {"type": "audit", "name": "audit", "$xpath": "audit"},
+        {"type": "today", "name": "today", "$xpath": "today"},
+        {
+            "type": "select_one",
+            "name": "enumerator_id",
+            "label": ["Enumerator ID"],
+            "select_from_list_name": "enumerator_id",
+            "required": True,
+            "$xpath": "enumerator_id",
+        },
+        {
+            "type": "select_one",
+            "name": "consent",
+            "label": ["Does the respondent consent?"],
+            "select_from_list_name": "yn",
+            "required": True,
+            "$xpath": "consent",
+        },
+        {
+            "type": "begin_group",
+            "name": "main",
+            "relevant": "${consent} = 'yes'",
+            "$xpath": "main",
+        },
+        {
+            "type": "text",
+            "name": "full_name",
+            "label": ["Full name"],
+            "required": True,
+            "$xpath": "main/full_name",
+        },
+        {"type": "begin_repeat", "name": "hh_roster", "$xpath": "main/hh_roster"},
+        {
+            "type": "text",
+            "name": "member_name",
+            "label": ["Member name"],
+            "required": True,
+            "$xpath": "main/hh_roster/member_name",
+        },
+        {"type": "end_repeat"},
+        {
+            "type": "calculate",
+            "name": "hh_count",
+            "calculation": "count(${hh_roster})",
+            "$xpath": "main/hh_count",
+        },
+        {"type": "end_group"},
+    ],
+    "choices": [
+        {"list_name": "enumerator_id", "name": "E01", "label": ["Amina"]},
+        {"list_name": "yn", "name": "yes", "label": ["Yes"]},
+        {"list_name": "yn", "name": "no", "label": ["No"]},
+    ],
+}
+
+# The same form as the create/settings screens store it: no group rows, but
+# each question carries group_path, group_relevant and roster_name.
+GROUPED_STORED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID", required="yes"),
+    _q("select_one yn", "consent", label="Does the respondent consent?", required="yes"),
+    _q(
+        "text",
+        "full_name",
+        label="Full name",
+        required="yes",
+        group_path="main",
+        group_relevant=["${consent} = 'yes'"],
+    ),
+    _q(
+        "text",
+        "member_name",
+        label="Member name",
+        required="yes",
+        roster_name="hh_roster",
+        group_path="main/hh_roster",
+        group_relevant=["${consent} = 'yes'"],
+    ),
+    _q(
+        "calculate",
+        "hh_count",
+        calculation="count(${hh_roster})",
+        group_path="main",
+        group_relevant=["${consent} = 'yes'"],
+    ),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+    ],
+)
+
+# A Kobo-linked survey stored before the linter shipped: no logic columns.
+LEGACY_STORED = form(
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("select_one yn", "consent", label="Does the respondent consent?"),
+    _q("integer", "age", label="Respondent age"),
+    _q("date", "date_of_birth", label="Date of birth"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+    ],
+)
+
+# Don't-know codes by exact name, by label, by numeric code with a DK label,
+# and by prefix -- next to a numeric code labelled Refused, which is not one.
+DK_SHARED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID", required="yes"),
+    _q("select_one yn", "q1", label="Question one"),
+    _q("select_multiple src", "q2", label="Income sources"),
+    _q("select_one codes", "q3", label="Question three"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes", "Yes"),
+        _choice("yn", "dk", "Don't know"),
+        _choice("src", "wage", "Wage"),
+        _choice("src", "dk", "Don't know"),
+        _choice("src", "dont_know_answer", "Don't know / don't want to answer"),
+        _choice("codes", "1", "Yes"),
+        _choice("codes", "88", "Does not know"),
+        _choice("codes", "98", "Refused"),
+        _choice("codes", "dk_income", "Unsure of income"),
+    ],
+)
+
+ENUMERATOR_BY_USERNAME = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("username", "username"),
+    _q("integer", "age", label="Age", constraint=". <= 120"),
+)
+
+ENUMERATOR_BY_CONFIG = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _q("select_one collectors", "collector_code", label="Who collected this?", required="yes"),
+    choices=[_choice("collectors", "c1", "C1")],
+)
+
+# Two label languages, English first; the age question has no constraint so
+# its headline quotes the label.
+TRANSLATED_UNBOUNDED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _ml(
+        "select_one enumerator_id",
+        "enumerator_id",
+        en="Enumerator ID",
+        fr="Code enquêteur",
+        required="yes",
+    ),
+    _ml("integer", "age", en="Respondent age", fr="Âge du répondant"),
+    choices=[_ml_choice("enumerator_id", "E01", en="Amina", fr="Amina")],
+)

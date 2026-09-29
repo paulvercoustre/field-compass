@@ -28,20 +28,29 @@ export const parseKoboTool = (file: File): Promise<KoboToolData> => {
         
         // --- Roster Parsing Logic ---
         let currentRoster: string | null = null;
+        // Group rows are not kept, so each question records its enclosing
+        // groups' path and `relevant` conditions for the form linter.
+        const groupStack: Array<{ name: string; relevant?: string }> = [];
         const processedQuestions: KoboQuestion[] = [];
         allQuestions.forEach(q => {
-            const qType = q.type || '';
-            if (qType.startsWith('begin_repeat')) {
-                currentRoster = q.name;
-            } else if (qType.startsWith('end_repeat')) {
-                currentRoster = null;
+            const qType = (q.type || '').replace(/^(begin|end) (group|repeat)/, '$1_$2');
+            if (qType.startsWith('begin_group') || qType.startsWith('begin_repeat')) {
+                groupStack.push({ name: q.name || '', relevant: q.relevant || undefined });
+                if (qType.startsWith('begin_repeat')) currentRoster = q.name;
+            } else if (qType.startsWith('end_group') || qType.startsWith('end_repeat')) {
+                groupStack.pop();
+                if (qType.startsWith('end_repeat')) currentRoster = null;
             } else if (q.name) { // Only process questions with a 'name'
                 const [type, list_name] = qType.split(' ');
+                const groupPath = groupStack.map(g => g.name).filter(Boolean).join('/');
+                const groupRelevant = groupStack.flatMap(g => (g.relevant ? [g.relevant] : []));
                 processedQuestions.push({
                     ...q,
                     roster_name: currentRoster,
                     type,
                     list_name: list_name || null,
+                    ...(groupPath ? { group_path: groupPath } : {}),
+                    ...(groupRelevant.length ? { group_relevant: groupRelevant } : {}),
                 });
             }
         });
@@ -65,7 +74,11 @@ export const parseKoboTool = (file: File): Promise<KoboToolData> => {
             }
         });
 
-        resolve({ survey, choices, variableMap });
+        // The `audit` row is filtered out of `survey` above; record whether it
+        // was there so the form check can tell "no audit log" from "unknown".
+        const has_audit = allQuestions.some(q => String(q.type || '').trim() === 'audit');
+
+        resolve({ survey, choices, variableMap, has_audit });
 
       } catch (err) {
         reject(err);

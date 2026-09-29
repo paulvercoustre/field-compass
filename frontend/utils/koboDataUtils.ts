@@ -9,22 +9,21 @@ export const reconstructKoboToolData = (
   choices: any[],
   labelColumnSurvey?: string
 ): KoboToolData => {
-  // Filter to only relevant question types (same logic as parser)
-  const relevantTypes = ['select_one', 'select_multiple', 'integer', 'decimal', 'calculate', 'text', 'date', 'datetime'];
-  const filteredSurvey = survey.filter(q => {
+  // Keep every stored row — including audit/start/today — so a later save does
+  // not strip the fields the linter and duration checks need. The picker map
+  // still only includes answerable types.
+  const pickerTypes = ['select_one', 'select_multiple', 'integer', 'decimal', 'calculate', 'text', 'date', 'datetime'];
+  const pickerRows = survey.filter(q => {
     const qType = q.type || '';
-    return relevantTypes.some(t => qType.startsWith(t));
+    return pickerTypes.some(t => qType.startsWith(t));
   });
 
-  // Determine which label column to use
   const labelCol = labelColumnSurvey || 'label::English (en)';
 
-  // Rebuild variableMap
   const variableMap = new Map<string, KoboVariable>();
-  filteredSurvey.forEach(q => {
+  pickerRows.forEach(q => {
     if (q.name) {
       const choiceListName = q.type?.includes('select_') ? q.list_name || null : null;
-      // Use the specified label column, fallback to default, then to name
       const label = (q as any)[labelCol] || q['label::English (en)'] || q.name;
       variableMap.set(q.name, {
         type: q.type || '',
@@ -36,7 +35,7 @@ export const reconstructKoboToolData = (
   });
 
   return {
-    survey: filteredSurvey,
+    survey: survey,
     choices: choices,
     variableMap: variableMap,
   };

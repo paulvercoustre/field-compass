@@ -8,6 +8,7 @@ modes here are the ones a user actually hits: no token configured, a mistyped
 project ID, Kobo unreachable, or a project with no deployed form.
 """
 
+from copy import deepcopy
 from unittest.mock import patch
 
 import pytest
@@ -52,6 +53,8 @@ ASSET_PAYLOAD = {
                 "type": "integer",
                 "name": "age",
                 "label": ["Age", "سن"],
+                "constraint": ". <= 120",
+                "required": True,
                 "$xpath": "age",
                 "$kuid": "k5",
             },
@@ -120,6 +123,22 @@ class TestKoboAssetForm:
             "Dari (da)": "شماره",
         }
         assert by_name["enumerator_id"]["list_name"] == "enums"
+        assert by_name["age"]["constraint"] == ". <= 120"
+        assert by_name["age"]["required"] is True
+
+    def test_questions_carry_their_groups_conditions(self, client):
+        """Group rows are dropped, so the linter needs their `relevant` per question."""
+        payload = deepcopy(ASSET_PAYLOAD)
+        payload["content"]["survey"][1]["relevant"] = "${consent} = 'yes'"
+        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
+            "routers.kobo.KoboFetcher.get_asset_info", return_value=payload
+        ):
+            by_name = {q["name"]: q for q in _get(client).json()["questions"]}
+
+        assert by_name["enumerator_id"]["group_path"] == "intro"
+        assert by_name["enumerator_id"]["group_relevant"] == ["${consent} = 'yes'"]
+        assert by_name["age"]["group_path"] is None
+        assert by_name["age"]["group_relevant"] == []
 
     def test_structural_rows_and_notes_are_excluded(self, client):
         """The caller is populating pickers, not rendering the form."""

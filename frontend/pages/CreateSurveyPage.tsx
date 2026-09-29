@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { createSurvey, SurveyCreate } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
@@ -15,13 +15,15 @@ import SuccessMessage from '../components/ui/SuccessMessage';
 import QualityCheckPromptModal from '../components/QualityCheckPromptModal';
 import InfoTip from '../components/ui/InfoTip';
 import { parseKoboAssetId, looksLikeUrl, labelColumnFor } from '../utils/koboUrl';
-import { getKoboProjectForm, KoboProjectForm } from '../services/api';
+import { getKoboProjectForm } from '../services/api';
 import { CORE_IDENTIFIER_HELP, KOBO_LINK_HELP } from '../constants/coreIdentifiers';
 import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import { autoFillIdentifier } from '../utils/identifierSuggestions';
 import DkStringValues from '../components/ui/DkStringValues';
-import { suggestDkValues } from '../utils/dkSuggestions';
+import { findDkValues } from '../services/lintApi';
+import FormLintPanel from '../components/linter/FormLintPanel';
+import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 
 const CreateSurveyPage: React.FC = () => {
   const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
@@ -36,6 +38,7 @@ const CreateSurveyPage: React.FC = () => {
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
   // The form's choice rows, carrying names and their label columns.
   const choiceRows: Array<Record<string, any>> = (koboToolData?.choices as any[]) || [];
+  const surveyRows: Array<Record<string, any>> = (koboToolData?.survey as any[]) || [];
 
   // Sampling frame CSV state
   const [samplingFrameData, setSamplingFrameData] = useState<Record<string, any>[] | null>(null);
@@ -136,12 +139,24 @@ const CreateSurveyPage: React.FC = () => {
       // Don't-know codings differ from identifiers in one way: several matches
       // are not an ambiguity. A form can genuinely carry both `dk` and
       // `dont_know` for the same answer, and counting only one understates the
-      // DK rate, so every match is selected rather than none.
-      setSpecialValues(prev =>
-        prev.dk_string_value.length > 0
-          ? prev
-          : { ...prev, dk_string_value: suggestDkValues((koboToolData.choices as any[]) || []) }
-      );
+      // DK rate, so every match is selected rather than none. Found by the
+      // same rules the form check uses, so the two never disagree.
+      let cancelled = false;
+      findDkValues((koboToolData.survey as any[]) || [], (koboToolData.choices as any[]) || [])
+        .then((found) => {
+          if (cancelled || found.length === 0) return;
+          setSpecialValues(prev =>
+            prev.dk_string_value.length > 0
+              ? prev
+              : { ...prev, dk_string_value: found.map((value) => value.name) }
+          );
+        })
+        .catch(() => {
+          // Leave the field empty; the user can still pick options by hand.
+        });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [koboToolData]);
 
@@ -262,54 +277,6 @@ const CreateSurveyPage: React.FC = () => {
     setCurrentlyEditing(null);
   }, []);
 
-  /**
-   * Reshape a fetched project form into the stored `kobo_tool` shape.
-   *
-   * Everything downstream -- the rule builder, DK eligibility, label lookups --
-   * reads the sheet-row format the XLSX parser produces, so a fetched form is
-   * adapted rather than introducing a second shape those consumers would each
-   * need to learn.
-   */
-  const toKoboToolData = (form: KoboProjectForm, language: string): KoboToolData => {
-    // One column per translation, exactly as the XLSForm sheet has them, so a
-    // fetched form is stored in the same shape an uploaded one produces and the
-    // existing label machinery needs no special case.
-    const labelColumns = (labels: Record<string, string>) =>
-      Object.fromEntries(
-        Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text])
-      );
-
-    const survey = form.questions.map((q) => ({
-      type: q.type,
-      name: q.name,
-      ...labelColumns(q.labels),
-      roster_name: q.repeat_name,
-      list_name: q.list_name,
-    }));
-
-    const choices = Object.entries(form.choice_lists).flatMap(([list_name, options]) =>
-      options.map((option) => ({
-        list_name,
-        name: option.name,
-        ...labelColumns(option.labels),
-      }))
-    );
-
-    const variableMap = new Map(
-      form.questions.map((q) => [
-        q.name,
-        {
-          type: q.type,
-          label: q.labels[language] || q.name,
-          choiceListName: q.list_name,
-          roster_name: q.repeat_name,
-        },
-      ])
-    );
-
-    return { survey, choices, variableMap } as KoboToolData;
-  };
-
   // Required to create a survey that can actually run: without a project the
   // ETL has nothing to fetch.
   //
@@ -319,26 +286,43 @@ const CreateSurveyPage: React.FC = () => {
   // empty one, because `date_out_of_range` would then flag real submissions
   // against a date nobody meant. Unset simply means that check does not run.
   const canCreate = Boolean(surveyName.trim() && koboAssetId);
+  const lintFormPayload = useMemo(() => koboToolPayload(koboToolData), [koboToolData]);
 
-  const handleLoadProjectForm = async () => {
-    if (!koboAssetId) return;
+  // The project the form on screen was read for, and the one being read now,
+  // so a link edited mid-read cannot land the wrong project's form.
+  const readForAssetId = useRef<string | null>(null);
 
+  const handleLoadProjectForm = useCallback(async (assetId: string | null = koboAssetId) => {
+    if (!assetId) return;
+
+    readForAssetId.current = assetId;
     setIsLoadingProjectForm(true);
     setProjectFormError(null);
     try {
-      const form = await getKoboProjectForm(koboAssetId);
+      const form = await getKoboProjectForm(assetId);
+      if (readForAssetId.current !== assetId) return;
       const language = form.languages[0] || 'default';
       setFormLanguages(form.languages);
       setSelectedLanguage(language);
-      setKoboToolData(toKoboToolData(form, language));
-      setProjectFormName(form.asset_name || koboAssetId);
+      setKoboToolData(projectFormToKoboTool(form, language));
+      setProjectFormName(form.asset_name || assetId);
     } catch (err) {
+      if (readForAssetId.current !== assetId) return;
       setProjectFormError(err instanceof Error ? err.message : 'Could not read the form.');
       setProjectFormName(null);
     } finally {
-      setIsLoadingProjectForm(false);
+      if (readForAssetId.current === assetId) setIsLoadingProjectForm(false);
     }
-  };
+  }, [koboAssetId]);
+
+  // Read the form as soon as the link names a project -- no button needed.
+  // Short pause so typing a link character by character does not fire a
+  // request per keystroke; the button stays for retrying after an error.
+  useEffect(() => {
+    if (!koboAssetId || koboAssetId === readForAssetId.current) return;
+    const timer = setTimeout(() => handleLoadProjectForm(koboAssetId), 500);
+    return () => clearTimeout(timer);
+  }, [koboAssetId, handleLoadProjectForm]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -362,6 +346,7 @@ const CreateSurveyPage: React.FC = () => {
         kobo_tool: koboToolData ? {
           survey: koboToolData.survey,
           choices: koboToolData.choices,
+          has_audit: koboToolData.has_audit ?? null,
           label_column_survey: labelColumnFor(selectedLanguage),
           label_column_choices: labelColumnFor(selectedLanguage),
         } : undefined,
@@ -607,7 +592,7 @@ const CreateSurveyPage: React.FC = () => {
             <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={handleLoadProjectForm}
+                  onClick={() => handleLoadProjectForm(koboAssetId)}
                   disabled={!koboAssetId || isLoadingProjectForm}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
                 >
@@ -617,7 +602,7 @@ const CreateSurveyPage: React.FC = () => {
                       <span>Reading form...</span>
                     </>
                   ) : (
-                    <span>Read form from project</span>
+                    <span>{projectFormName ? 'Read form again' : 'Read form from project'}</span>
                   )}
                 </button>
                 {!koboAssetId && (
@@ -653,6 +638,14 @@ const CreateSurveyPage: React.FC = () => {
                 )}
             </div>
           </section>
+
+          {lintFormPayload && (
+            <FormLintPanel
+              form={lintFormPayload}
+              autoRunKey
+              labelColumn={selectedLanguage ? labelColumnFor(selectedLanguage) : null}
+            />
+          )}
 
           {/* Collection Targets */}
           <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -828,6 +821,7 @@ const CreateSurveyPage: React.FC = () => {
               <DkStringValues
                 values={specialValues.dk_string_value}
                 onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
+                survey={surveyRows}
                 choices={choiceRows}
               />
             </div>

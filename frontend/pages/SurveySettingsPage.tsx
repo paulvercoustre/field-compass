@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
@@ -15,13 +15,15 @@ import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import InfoTip from '../components/ui/InfoTip';
 import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
-import { getKoboProjectForm, KoboProjectForm } from '../services/api';
+import { getKoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
 import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
 import { inferSamplingMode } from '../utils/samplingMode';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
 import { readDkValues, sameDkValues } from '../utils/dkSuggestions';
+import FormLintPanel from '../components/linter/FormLintPanel';
+import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -72,6 +74,7 @@ const SurveySettingsPage: React.FC = () => {
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
   // The form's choice rows, carrying names and their label columns.
   const choiceRows: Array<Record<string, any>> = (koboToolData?.choices as any[]) || [];
+  const surveyRows: Array<Record<string, any>> = (koboToolData?.survey as any[]) || [];
   // Outlier detection is the only picker that genuinely needs numbers.
   const [numericVariables, setNumericVariables] = useState<string[]>([]);
   const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
@@ -401,7 +404,7 @@ const SurveySettingsPage: React.FC = () => {
           cd.kobo_tool.choices,
           cd.kobo_tool.label_column_survey
         );
-        setKoboToolData(reconstructed);
+        setKoboToolData({ ...reconstructed, has_audit: cd.kobo_tool.has_audit ?? null });
         setKoboToolFileName('(Loaded from saved config)');
       }
       
@@ -504,6 +507,21 @@ const SurveySettingsPage: React.FC = () => {
    * Replaces uploading an XLSForm: the project is the source of truth, and a
    * form edited mid-collection has to be picked up from there anyway.
    */
+  // The out-of-period check compares against the saved collection dates, and
+  // does nothing without at least one of them.
+  const hasCollectionDates = Boolean(
+    config?.config_data?.global_parameters?.data_collection_start_date ||
+      config?.config_data?.global_parameters?.data_collection_end_date
+  );
+
+  // Bumped by each successful refresh; the form check runs when it changes.
+  const [formCheckRunKey, setFormCheckRunKey] = useState(0);
+  // Until it is saved, the refreshed form is what the check reads.
+  const refreshedFormPayload = useMemo(
+    () => (formCheckRunKey > 0 && isEditingKoboTool ? koboToolPayload(koboToolData) : null),
+    [formCheckRunKey, isEditingKoboTool, koboToolData]
+  );
+
   const handleRefreshFormFromProject = async () => {
     const assetId = config?.kobo_asset_id;
     if (!assetId) {
@@ -514,41 +532,12 @@ const SurveySettingsPage: React.FC = () => {
     setIsLoadingTool(true);
     setError(null);
     try {
-      const form: KoboProjectForm = await getKoboProjectForm(assetId);
-      const labelColumns = (labels: Record<string, string>) =>
-        Object.fromEntries(
-          Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text])
-        );
-
-      const survey = form.questions.map((q) => ({
-        type: q.type,
-        name: q.name,
-        ...labelColumns(q.labels),
-        roster_name: q.repeat_name,
-        list_name: q.list_name,
-      }));
-      const choices = Object.entries(form.choice_lists).flatMap(([list_name, options]) =>
-        options.map((option) => ({
-          list_name,
-          name: option.name,
-          ...labelColumns(option.labels),
-        }))
-      );
+      const form = await getKoboProjectForm(assetId);
       const language = form.languages[0] || 'default';
-      const variableMap = new Map(
-        form.questions.map((q) => [
-          q.name,
-          {
-            type: q.type,
-            label: q.labels[language] || q.name,
-            choiceListName: q.list_name,
-            roster_name: q.repeat_name,
-          },
-        ])
-      );
-
-      setKoboToolData({ survey, choices, variableMap } as KoboToolData);
+      setKoboToolData(projectFormToKoboTool(form, language));
       setKoboToolFileName(form.asset_name || assetId);
+      // A freshly read form gets checked without the user asking.
+      setFormCheckRunKey((key) => key + 1);
 
       // Keep the chosen language if the form still has it; otherwise fall back.
       const available = form.languages.map(labelColumnFor);
@@ -675,6 +664,7 @@ const SurveySettingsPage: React.FC = () => {
       kobo_tool: koboToolData ? {
         survey: koboToolData.survey,
         choices: koboToolData.choices,
+        has_audit: koboToolData.has_audit ?? config?.config_data.kobo_tool?.has_audit ?? null,
         label_column_survey: labelColumnSurvey,
         label_column_choices: labelColumnChoices,
       } : config?.config_data.kobo_tool ? {
@@ -1142,6 +1132,21 @@ const SurveySettingsPage: React.FC = () => {
               </div>
             )}
 
+        {/* Rendered outside the tab switch and only hidden, so its results
+            survive leaving the tab -- and a refresh's check runs once, not
+            again on every return to "Data Quality Checks". */}
+        {selectedSurvey && (
+          <div className={activeTab === 'quality' ? 'mb-6' : 'hidden'}>
+            <FormLintPanel
+              surveyId={selectedSurvey.survey_id}
+              form={refreshedFormPayload}
+              canEdit={canEditSurvey}
+              onRulesAdopted={loadValidationRules}
+              autoRunKey={formCheckRunKey}
+              labelColumn={labelColumnSurvey}
+            />
+          </div>
+        )}
         {activeTab === 'settings' ? (
           <div className="space-y-6">
             {/* Survey Profile */}
@@ -1277,7 +1282,7 @@ const SurveySettingsPage: React.FC = () => {
                         <span>Reading form...</span>
                       </>
                     ) : (
-                      <span>Refresh form from project</span>
+                      <span>Refresh form</span>
                     )}
                   </button>
                   
@@ -1593,6 +1598,7 @@ const SurveySettingsPage: React.FC = () => {
                 <DkStringValues
                   values={specialValues.dk_string_value}
                   onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
+                  survey={surveyRows}
                   choices={choiceRows}
                   readOnly={!canEditSurvey}
                 />
@@ -1775,18 +1781,20 @@ const SurveySettingsPage: React.FC = () => {
                   <div className="flex h-5 items-center">
                     <input
                       type="checkbox"
-                      disabled={!canEditSurvey}
-                      checked={qualityChecks.flag_out_of_period}
+                      disabled={!canEditSurvey || !hasCollectionDates}
+                      checked={qualityChecks.flag_out_of_period && hasCollectionDates}
                       onChange={(e) => setQualityChecks({ ...qualityChecks, flag_out_of_period: e.target.checked })}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
                     />
                   </div>
                   <div className="ml-3">
-                    <label className="text-sm font-medium text-gray-900 dark:text-white">
+                    <label className={`text-sm font-medium ${hasCollectionDates ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
                       Flag submissions out of data collection period
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Create a flag if the interview date is outside the start/end dates defined in Global Parameters.
+                      {hasCollectionDates
+                        ? 'Create a flag if the interview date is before the start date or after the end date set in Survey Profile.'
+                        : 'Set a data collection start or end date under General → Survey Profile to use this check.'}
                     </p>
                   </div>
                 </div>

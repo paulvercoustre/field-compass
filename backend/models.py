@@ -282,6 +282,17 @@ class FormQuestion(BaseModel):
     type: str
     list_name: str | None = None
     repeat_name: str | None = None
+    # Needed so a form fetched from Kobo can be linted without a second
+    # round-trip: the create/settings screens persist these onto kobo_tool.
+    required: bool = False
+    constraint: str | None = None
+    relevant: str | None = None
+    calculation: str | None = None
+    choice_filter: str | None = None
+    # Group rows are not returned, so each question carries its enclosing
+    # groups' path and `relevant` conditions for the linter.
+    group_path: str | None = None
+    group_relevant: list[str] = []
 
 
 class FormChoice(BaseModel):
