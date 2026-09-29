@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from database.models import Base, ValidationRule
-from tests.lint_forms import LEGACY_STORED, UNBOUNDED_AGE
+from tests.lint_forms import LEGACY_STORED, TRANSLATED_UNBOUNDED, UNBOUNDED_AGE
 from tests.test_api_endpoints import (
     engine,
     override_current_user,
@@ -107,6 +107,33 @@ class TestLintEndpoints:
         values = response.json()["values"]
         assert [value["name"] for value in values] == ["dk", "dnk_1"]
         assert values[0] == {"name": "dk", "label": "Don't know", "lists": ["yn"]}
+
+    def test_findings_quote_the_label_language(self, client):
+        payload = {"form": TRANSLATED_UNBOUNDED, "label_column": "label::French (fr)"}
+        findings = client.post("/api/lint", json=payload).json()["findings"]
+        age = next(item for item in findings if item["check_id"] == "unbounded_numeric")
+        assert age["message"] == "“Âge du répondant” accepts any number"
+
+    def test_survey_lint_uses_the_saved_label_language(self, client):
+        survey = _create_survey(
+            client, {**TRANSLATED_UNBOUNDED, "label_column_survey": "label::French (fr)"}
+        )
+        url = f"/api/surveys/{survey['survey_id']}/lint"
+        age = next(
+            item
+            for item in client.get(url).json()["findings"]
+            if item["check_id"] == "unbounded_numeric"
+        )
+        assert age["message"] == "“Âge du répondant” accepts any number"
+        # The screen's current choice wins over the saved one.
+        age = next(
+            item
+            for item in client.get(url, params={"label_column": "label::English (en)"}).json()[
+                "findings"
+            ]
+            if item["check_id"] == "unbounded_numeric"
+        )
+        assert age["message"] == "“Respondent age” accepts any number"
 
     def test_lint_without_a_form_is_actionable(self, client):
         survey = _create_survey(client, {"survey": [], "choices": []})

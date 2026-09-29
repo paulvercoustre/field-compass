@@ -1143,6 +1143,7 @@ const SurveySettingsPage: React.FC = () => {
               canEdit={canEditSurvey}
               onRulesAdopted={loadValidationRules}
               autoRunKey={formCheckRunKey}
+              labelColumn={labelColumnSurvey}
             />
           </div>
         )}

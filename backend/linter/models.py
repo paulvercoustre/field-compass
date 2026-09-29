@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from forms.schema import FormSchema, Question
+from forms.schema import DEFAULT_LANGUAGE, FormSchema, Question
 
 SEVERITY_ERROR = "error"
 SEVERITY_WARNING = "warning"
@@ -59,6 +59,26 @@ class LintContext:
     """
 
     config_data: dict[str, Any] | None = None
+    # The language whose labels findings quote -- the survey's "label
+    # language" setting. None falls back to the default or first label.
+    language: str | None = None
+
+
+def language_from_label_column(column: str | None) -> str | None:
+    """
+    ``label::French (fr)`` -> ``French (fr)``; ``label`` -> the default key.
+
+    The screens store the label language as a sheet column name; the schema
+    keys labels by language. Anything else is not a label column.
+    """
+    if not column:
+        return None
+    column = column.strip()
+    if column == "label":
+        return DEFAULT_LANGUAGE
+    if column.startswith("label::"):
+        return column.split("::", 1)[1].strip() or None
+    return None
 
 
 @dataclass

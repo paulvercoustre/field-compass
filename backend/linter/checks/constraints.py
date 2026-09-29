@@ -95,7 +95,6 @@ def _meaning_of(choice: Choice) -> str:
 
 @lint_check("dk_not_exclusive", severity="error", tags=("constraints", "dk", "form_logic"))
 def check_dk_not_exclusive(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
-    del ctx
     findings: list[LintFinding] = []
     for question in iter_answerable(schema):
         if question.type != "select_multiple":
@@ -121,7 +120,7 @@ def check_dk_not_exclusive(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
                 "error",
                 question=question,
                 message=(
-                    f"“{headline_label(question)}” allows "
+                    f"“{headline_label(question, ctx.language)}” allows "
                     + _joined_meanings(unconstrained)
                     + " to be ticked with other answers"
                 ),
@@ -132,7 +131,7 @@ def check_dk_not_exclusive(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
                     "the don't-know rate."
                 ),
                 suggested_fix=f"not(({selected}) and count-selected(.) > 1)",
-                auto_rule=dk_not_exclusive_rule(question, codes),
+                auto_rule=dk_not_exclusive_rule(question, codes, ctx.language),
             )
         )
     return findings
@@ -140,7 +139,6 @@ def check_dk_not_exclusive(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
 
 @lint_check("unbounded_numeric", severity="warning", tags=("constraints", "form_logic"))
 def check_unbounded_numeric(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
-    del ctx
     findings: list[LintFinding] = []
     for question in iter_answerable(schema):
         if question.type not in NUMERIC_TYPES:
@@ -159,7 +157,7 @@ def check_unbounded_numeric(schema: FormSchema, ctx: LintContext) -> Iterable[Li
                 "unbounded_numeric",
                 "warning",
                 question=question,
-                message=f"“{headline_label(question)}” accepts any number",
+                message=f"“{headline_label(question, ctx.language)}” accepts any number",
                 details=(f"`{question.name}` is {question.type} with no constraint.{extra}"),
                 why_it_matters=(
                     "Unconstrained numeric questions are the main upstream source "
@@ -167,7 +165,7 @@ def check_unbounded_numeric(schema: FormSchema, ctx: LintContext) -> Iterable[Li
                     "a quality rule can only flag them after the interview."
                 ),
                 suggested_fix=suggested,
-                auto_rule=unbounded_numeric_rule(question, upper),
+                auto_rule=unbounded_numeric_rule(question, upper, ctx.language),
             )
         )
     return findings
@@ -175,7 +173,6 @@ def check_unbounded_numeric(schema: FormSchema, ctx: LintContext) -> Iterable[Li
 
 @lint_check("unbounded_date", severity="warning", tags=("constraints", "form_logic"))
 def check_unbounded_date(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
-    del ctx
     findings: list[LintFinding] = []
     for question in iter_answerable(schema):
         if question.type != "date":
@@ -189,7 +186,7 @@ def check_unbounded_date(schema: FormSchema, ctx: LintContext) -> Iterable[LintF
                 "unbounded_date",
                 "warning",
                 question=question,
-                message=f"“{headline_label(question)}” accepts any date",
+                message=f"“{headline_label(question, ctx.language)}” accepts any date",
                 details=f"`{question.name}` is a date with no constraint.",
                 why_it_matters=(
                     "Without a constraint, enumerators can enter future birthdates "
@@ -197,7 +194,7 @@ def check_unbounded_date(schema: FormSchema, ctx: LintContext) -> Iterable[LintF
                     "surface later, as quality flags."
                 ),
                 suggested_fix=suggested,
-                auto_rule=unbounded_date_future_rule(question) if past else None,
+                auto_rule=unbounded_date_future_rule(question, ctx.language) if past else None,
             )
         )
     return findings
@@ -205,7 +202,6 @@ def check_unbounded_date(schema: FormSchema, ctx: LintContext) -> Iterable[LintF
 
 @lint_check("missing_required", severity="warning", tags=("constraints", "form_logic"))
 def check_missing_required(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
-    del ctx
     findings: list[LintFinding] = []
     for question in iter_answerable(schema):
         if question.required:
@@ -217,7 +213,7 @@ def check_missing_required(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
                 "missing_required",
                 "warning",
                 question=question,
-                message=f"“{headline_label(question)}” can be left blank",
+                message=f"“{headline_label(question, ctx.language)}” can be left blank",
                 details=(
                     f"`{question.name}` looks like an identifier or consent question "
                     "but is not required."
@@ -244,7 +240,6 @@ def check_unreachable_question(schema: FormSchema, ctx: LintContext) -> Iterable
     Restricted to this statically-decidable case. Questions with
     ``choice_filter`` are skipped — those filters are data-dependent.
     """
-    del ctx
     findings: list[LintFinding] = []
     for question in schema.questions:
         if not is_answerable(question) or not question.relevant:
@@ -263,7 +258,7 @@ def check_unreachable_question(schema: FormSchema, ctx: LintContext) -> Iterable
                     "unreachable_question",
                     "warning",
                     question=question,
-                    message=f"“{headline_label(question)}” can never be shown",
+                    message=f"“{headline_label(question, ctx.language)}” can never be shown",
                     details=(
                         f"`{question.name}` is relevant when `{ref_name}` is `{value}`, "
                         f"but that value is not in the `{referenced.list_name}` list."

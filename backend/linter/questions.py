@@ -127,7 +127,7 @@ def container_names(schema: FormSchema) -> set[str]:
     return names
 
 
-def headline_label(question: Question, limit: int = 60) -> str:
-    """A question's label, shortened to fit a finding headline."""
-    label = " ".join(question.label_for().split())
+def headline_label(question: Question, language: str | None = None, limit: int = 60) -> str:
+    """A question's label in ``language``, shortened to fit a finding headline."""
+    label = " ".join(question.label_for(language).split())
     return label if len(label) <= limit else label[: limit - 1].rstrip() + "…"

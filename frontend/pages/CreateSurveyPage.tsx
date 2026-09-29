@@ -640,7 +640,11 @@ const CreateSurveyPage: React.FC = () => {
           </section>
 
           {lintFormPayload && (
-            <FormLintPanel form={lintFormPayload} autoRunKey />
+            <FormLintPanel
+              form={lintFormPayload}
+              autoRunKey
+              labelColumn={selectedLanguage ? labelColumnFor(selectedLanguage) : null}
+            />
           )}
 
           {/* Collection Targets */}

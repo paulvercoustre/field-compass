@@ -19,7 +19,7 @@ from linter.adopt import adopt_findings, select_findings
 from linter.dk import dont_know_codes
 from linter.engine import run_lint
 from linter.form_source import SurveyForm, load_survey_form, schema_from_payload
-from linter.models import LintContext
+from linter.models import LintContext, language_from_label_column
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
 from services.permissions import require_survey_access
@@ -30,6 +30,9 @@ router = APIRouter()
 class LintFormRequest(BaseModel):
     form: dict[str, Any] = Field(..., description="kobo_tool, asset content, or asset payload")
     enabled_checks: list[str] | None = None
+    label_column: str | None = Field(
+        None, description="Label language as a sheet column, e.g. `label::French (fr)`"
+    )
 
 
 class DkValuesRequest(BaseModel):
@@ -44,6 +47,13 @@ class AdoptItem(BaseModel):
 class AdoptRulesRequest(BaseModel):
     items: list[AdoptItem]
     is_active: bool = True
+    label_column: str | None = None
+
+
+def _survey_language(survey: SurveyConfig, label_column: str | None) -> str | None:
+    """The label language the screen asked for, else the survey's saved one."""
+    saved = ((survey.config_data or {}).get("kobo_tool") or {}).get("label_column_survey")
+    return language_from_label_column(label_column) or language_from_label_column(saved)
 
 
 def _parse_survey_id(survey_id: str) -> UUID:
@@ -108,7 +118,11 @@ async def lint_form_payload(
     """Lint a form that is not (yet) attached to a survey — the create-survey path."""
     del current_user
     schema = _require_form(schema_from_payload(payload.form))
-    return run_lint(schema, enabled_checks=payload.enabled_checks).as_dict()
+    return run_lint(
+        schema,
+        enabled_checks=payload.enabled_checks,
+        ctx=LintContext(language=language_from_label_column(payload.label_column)),
+    ).as_dict()
 
 
 @router.post("/lint/dk-values")
@@ -135,6 +149,7 @@ async def dk_values_for_form(
 @router.get("/surveys/{survey_id}/lint")
 async def lint_survey(
     survey_id: str,
+    label_column: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -144,7 +159,10 @@ async def lint_survey(
     survey_form = _survey_form(survey, current_user)
     return run_lint(
         survey_form.schema,
-        ctx=LintContext(config_data=survey.config_data),
+        ctx=LintContext(
+            config_data=survey.config_data,
+            language=_survey_language(survey, label_column),
+        ),
         form_logic_missing=survey_form.logic_missing,
     ).as_dict()
 
@@ -165,7 +183,13 @@ async def adopt_lint_rules(
     survey_uuid = _parse_survey_id(survey_id)
     survey = require_survey_access(db, current_user, survey_uuid, min_level="editor")
     survey_form = _survey_form(survey, current_user)
-    report = run_lint(survey_form.schema, form_logic_missing=survey_form.logic_missing)
+    # Same language as the findings the user saw, so an adopted rule's issue
+    # text quotes the label they read.
+    report = run_lint(
+        survey_form.schema,
+        ctx=LintContext(language=_survey_language(survey, payload.label_column)),
+        form_logic_missing=survey_form.logic_missing,
+    )
     selected = select_findings(
         report,
         [

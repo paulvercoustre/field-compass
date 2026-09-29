@@ -52,18 +52,26 @@ export interface AdoptedRule {
   created: boolean;
 }
 
-export async function lintForm(form: Record<string, unknown>): Promise<LintReport> {
+/**
+ * `labelColumn` is the survey's label language as a sheet column
+ * (`label::French (fr)`); findings quote question labels in it.
+ */
+export async function lintForm(
+  form: Record<string, unknown>,
+  labelColumn?: string | null
+): Promise<LintReport> {
   const response = await fetch(`${API_BASE_URL}/api/lint`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ form }),
+    body: JSON.stringify({ form, label_column: labelColumn || null }),
   });
   if (!response.ok) throw new Error(await readError(response, 'Could not lint this form.'));
   return response.json();
 }
 
-export async function lintSurvey(surveyId: string): Promise<LintReport> {
-  const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/lint`, {
+export async function lintSurvey(surveyId: string, labelColumn?: string | null): Promise<LintReport> {
+  const query = labelColumn ? `?label_column=${encodeURIComponent(labelColumn)}` : '';
+  const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/lint${query}`, {
     headers: authHeaders(),
   });
   if (!response.ok) throw new Error(await readError(response, 'Could not lint this survey.'));
@@ -73,12 +81,13 @@ export async function lintSurvey(surveyId: string): Promise<LintReport> {
 export async function adoptLintRules(
   surveyId: string,
   items: Array<{ check_id: string; question_path: string | null }>,
-  isActive = true
+  isActive = true,
+  labelColumn?: string | null
 ): Promise<AdoptedRule[]> {
   const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/lint/adopt-rules`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ items, is_active: isActive }),
+    body: JSON.stringify({ items, is_active: isActive, label_column: labelColumn || null }),
   });
   if (!response.ok) throw new Error(await readError(response, 'Could not add those quality checks.'));
   return response.json();

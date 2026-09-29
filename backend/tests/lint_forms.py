@@ -532,3 +532,19 @@ ENUMERATOR_BY_CONFIG = form(
     _q("select_one collectors", "collector_code", label="Who collected this?", required="yes"),
     choices=[_choice("collectors", "c1", "C1")],
 )
+
+# Two label languages, English first; the age question has no constraint so
+# its headline quotes the label.
+TRANSLATED_UNBOUNDED = form(
+    _q("audit", "audit"),
+    _q("today", "today"),
+    _ml(
+        "select_one enumerator_id",
+        "enumerator_id",
+        en="Enumerator ID",
+        fr="Code enquêteur",
+        required="yes",
+    ),
+    _ml("integer", "age", en="Respondent age", fr="Âge du répondant"),
+    choices=[_ml_choice("enumerator_id", "E01", en="Amina", fr="Amina")],
+)

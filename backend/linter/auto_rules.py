@@ -44,18 +44,22 @@ def _base_rule(
     }
 
 
-def unbounded_numeric_rule(question: Question, upper: int | None) -> dict[str, Any] | None:
+def unbounded_numeric_rule(
+    question: Question, upper: int | None, language: str | None = None
+) -> dict[str, Any] | None:
     if upper is None:
         return None
     return _base_rule(
         "unbounded_numeric",
         question,
-        issue=f"{question.label_for() or question.name} is outside the expected range",
+        issue=f"{question.label_for(language) or question.name} is outside the expected range",
         check_expression=f"{question.name} > {upper}",
     )
 
 
-def unbounded_date_future_rule(question: Question) -> dict[str, Any] | None:
+def unbounded_date_future_rule(
+    question: Question, language: str | None = None
+) -> dict[str, Any] | None:
     """
     Flag a date that is clearly in the far future (year 2100+).
 
@@ -66,12 +70,14 @@ def unbounded_date_future_rule(question: Question) -> dict[str, Any] | None:
     return _base_rule(
         "unbounded_date",
         question,
-        issue=f"{question.label_for() or question.name} is an implausible future date",
+        issue=f"{question.label_for(language) or question.name} is an implausible future date",
         check_expression=f'{question.name} >= "2100-01-01"',
     )
 
 
-def dk_not_exclusive_rule(question: Question, choice_names: list[str]) -> dict[str, Any] | None:
+def dk_not_exclusive_rule(
+    question: Question, choice_names: list[str], language: str | None = None
+) -> dict[str, Any] | None:
     """
     Flag a select_multiple where an exclusive option is one of several answers.
 
@@ -99,6 +105,6 @@ def dk_not_exclusive_rule(question: Question, choice_names: list[str]) -> dict[s
     return _base_rule(
         "dk_not_exclusive",
         question,
-        issue=f"{question.label_for() or question.name} combines {quoted} with another option",
+        issue=f"{question.label_for(language) or question.name} combines {quoted} with another option",
         check_expression=" or ".join(clauses),
     )

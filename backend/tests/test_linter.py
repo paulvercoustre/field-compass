@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 from database.models import ValidationRule
 from etl.hfc_engine import HFCEngine
-from forms.schema import DIALECT_API, Choice, load_form_schema
+from forms.schema import DEFAULT_LANGUAGE, DIALECT_API, Choice, load_form_schema
 from linter.adopt import adopt_findings
 from linter.auto_rules import rule_name_for
 from linter.dk import (
@@ -21,7 +21,7 @@ from linter.dk import (
 )
 from linter.engine import run_lint
 from linter.form_source import load_survey_form, schema_from_payload
-from linter.models import LintContext
+from linter.models import LintContext, language_from_label_column
 from linter.registry import registered_ids
 from tests.lint_forms import (
     BROKEN_CALC,
@@ -49,6 +49,7 @@ from tests.lint_forms import (
     ORPHAN_LIST,
     TODAY_IN_LABEL_ONLY,
     TRANSLATED,
+    TRANSLATED_UNBOUNDED,
     UNBOUNDED_AGE,
     UNBOUNDED_DATE,
     UNREACHABLE,
@@ -618,3 +619,31 @@ class TestHeadlines:
         }
         finding = _finding(run_lint(load_form_schema(form)), "unbounded_numeric")
         assert "…" in finding.message and len(finding.message) < 90
+
+
+class TestLabelLanguage:
+    """Headlines and adopted-rule text quote labels in the survey's label language."""
+
+    def test_headline_uses_the_chosen_language(self):
+        schema = load_form_schema(TRANSLATED_UNBOUNDED)
+        french = _finding(
+            run_lint(schema, ctx=LintContext(language="French (fr)")), "unbounded_numeric"
+        )
+        assert french.message == "“Âge du répondant” accepts any number"
+        english = _finding(
+            run_lint(schema, ctx=LintContext(language="English (en)")), "unbounded_numeric"
+        )
+        assert english.message == "“Respondent age” accepts any number"
+
+    def test_unknown_language_falls_back(self):
+        schema = load_form_schema(TRANSLATED_UNBOUNDED)
+        finding = _finding(
+            run_lint(schema, ctx=LintContext(language="Dari (prs)")), "unbounded_numeric"
+        )
+        assert finding.message == "“Respondent age” accepts any number"
+
+    def test_label_column_maps_to_a_language(self):
+        assert language_from_label_column("label::French (fr)") == "French (fr)"
+        assert language_from_label_column("label") == DEFAULT_LANGUAGE
+        assert language_from_label_column("hint::French (fr)") is None
+        assert language_from_label_column(None) is None

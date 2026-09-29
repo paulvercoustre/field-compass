@@ -32,6 +32,12 @@ interface FormLintPanelProps {
    * and changes, and again whenever the form changes while it is set.
    */
   autoRunKey?: number | boolean;
+  /**
+   * The survey's label language as a sheet column (`label::French (fr)`).
+   * Findings quote question labels in it; changing it re-checks a form that
+   * already has results.
+   */
+  labelColumn?: string | null;
 }
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -124,6 +130,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
   canEdit = false,
   onRulesAdopted,
   autoRunKey,
+  labelColumn,
 }) => {
   const [report, setReport] = useState<LintReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +151,9 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
     setError(null);
     setIsChecking(true);
     try {
-      const next = form ? await lintForm(form) : await lintSurvey(surveyId as string);
+      const next = form
+        ? await lintForm(form, labelColumn)
+        : await lintSurvey(surveyId as string, labelColumn);
       if (seq !== checkSeq.current) return;
       setReport(next);
     } catch (err) {
@@ -154,7 +163,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
     } finally {
       if (seq === checkSeq.current) setIsChecking(false);
     }
-  }, [surveyId, form]);
+  }, [surveyId, form, labelColumn]);
 
   // A different survey or form clears the previous results. The check itself
   // only runs when the user asks for it.
@@ -167,6 +176,18 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
     setIsChecking(false);
     setError(null);
   }, [surveyId, form]);
+
+  // A new label language re-quotes the labels in results already on screen;
+  // with nothing checked yet there is nothing to redo.
+  const hasReport = useRef(false);
+  hasReport.current = report !== null;
+  const lastLabelColumn = useRef(labelColumn);
+  useEffect(() => {
+    if (lastLabelColumn.current === labelColumn) return;
+    lastLabelColumn.current = labelColumn;
+    // With auto-run on, the effect below already re-runs on the new language.
+    if (hasReport.current && !autoRunKey) runCheck();
+  }, [labelColumn, runCheck, autoRunKey]);
 
   // Declared after the reset above so a new form is cleared, then checked.
   useEffect(() => {
@@ -186,9 +207,12 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
     setAdoptingKey(key);
     setError(null);
     try {
-      await adoptLintRules(surveyId, [
-        { check_id: finding.check_id, question_path: finding.question_path },
-      ]);
+      await adoptLintRules(
+        surveyId,
+        [{ check_id: finding.check_id, question_path: finding.question_path }],
+        true,
+        labelColumn
+      );
       onRulesAdopted?.();
       if (gen !== sourceGen.current) return;
       setAdoptedKeys((prev) => new Set(prev).add(key));
