@@ -165,6 +165,9 @@ class TestInconsistentDk:
         assert finding.severity == "error"
         assert "dk" in finding.message.lower()
         assert "-99" in finding.message
+        assert finding.message.startswith("Select questions use more than one code")
+        # Each code names the questions that use it.
+        assert "`-99` (q2)" in finding.message and "`dk` (q1)" in finding.message
         assert "don't-know rate" in finding.why_it_matters.lower()
 
     def test_single_convention_is_silent(self):

@@ -110,6 +110,13 @@ def check_audit_not_enabled(schema: FormSchema, ctx: LintContext) -> Iterable[Li
     ]
 
 
+def _question_names(occurrences: list) -> str:
+    """Question names for a finding message: the first few, then a count."""
+    names = [item.question_path.rsplit("/", 1)[-1] for item in occurrences]
+    shown = ", ".join(names[:4])
+    return shown if len(names) <= 4 else f"{shown} +{len(names) - 4} more"
+
+
 @lint_check("inconsistent_dk_coding", severity="error", tags=("setup", "dk"))
 def check_inconsistent_dk_coding(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     """
@@ -134,14 +141,20 @@ def check_inconsistent_dk_coding(schema: FormSchema, ctx: LintContext) -> Iterab
             extra = "" if len(occurrences) <= 8 else f" (+{len(occurrences) - 8} more)"
             lines.append(f"{convention}: {paths}{extra}")
 
+        # Only answer options of select questions are compared; a number
+        # question answered -99 is not an answer option and never appears here.
+        described = [
+            f"`{convention}` ({_question_names(occurrences)})"
+            for convention, occurrences in sorted(conventions.items())
+        ]
         findings.append(
             finding_for(
                 "inconsistent_dk_coding",
                 "error" if category == DONT_KNOW else "warning",
                 message=(
-                    f"This form codes “{wording}” as "
-                    + ", ".join(f"`{code}`" for code in sorted(conventions))
-                    + "."
+                    f"Select questions use more than one code for “{wording}”: "
+                    + ", ".join(described[:-1])
+                    + f" and {described[-1]}."
                 ),
                 why_it_matters=(
                     "Don't-know rates only count the codes Field Compass is told "
@@ -157,7 +170,8 @@ def check_inconsistent_dk_coding(schema: FormSchema, ctx: LintContext) -> Iterab
                     "form was assembled from more than one module."
                 ),
                 suggested_fix=(
-                    "Pick one code and use it on every list. Occurrences:\n" + "\n".join(lines)
+                    "Pick one code and use it in every choice list. Where each code "
+                    "is used:\n" + "\n".join(lines)
                 ),
             )
         )
