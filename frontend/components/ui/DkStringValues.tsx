@@ -82,6 +82,81 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
         <InfoTip help={CORE_IDENTIFIER_HELP.dk_string_value} />
       </label>
 
+      {readOnly ? null : (
+        <>
+          {optionsByName.size > 0 ? (
+            <select
+              value=""
+              onChange={(e) => {
+                add(e.target.value);
+                e.target.value = '';
+              }}
+              className="w-full mb-2 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">-- Add another answer option --</option>
+              {found.length > 0 ? (
+                <>
+                  <optgroup label="Suggested">
+                    {found.map((option) => {
+                      const added = chosen.has(option.toLowerCase());
+                      return (
+                        <option key={option} value={option} disabled={added}>
+                          {describe(option)}
+                          {added ? ' (added)' : ''}
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                  <optgroup label="All answer options">
+                    {remaining.map((option) => (
+                      <option key={option} value={option}>
+                        {describe(option)}
+                      </option>
+                    ))}
+                  </optgroup>
+                </>
+              ) : (
+                remaining.map((option) => (
+                  <option key={option} value={option}>
+                    {describe(option)}
+                  </option>
+                ))
+              )}
+            </select>
+          ) : (
+            // No form read yet. Typing is still allowed, for the same reason
+            // the identifier pickers allow it.
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    add(typed);
+                    setTyped('');
+                  }
+                }}
+                placeholder="Enter answer option"
+                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  add(typed);
+                  setTyped('');
+                }}
+                disabled={!typed.trim()}
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
       {values.length > 0 ? (
         <div className="flex flex-wrap gap-2 mb-2">
           {values.map((value) => (
@@ -134,77 +209,6 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
                   + {describe(option)}
                 </button>
               ))}
-            </div>
-          )}
-
-          {optionsByName.size > 0 ? (
-            <select
-              value=""
-              onChange={(e) => {
-                add(e.target.value);
-                e.target.value = '';
-              }}
-              className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">-- Add another answer option --</option>
-              {found.length > 0 ? (
-                <>
-                  <optgroup label="Suggested">
-                    {found.map((option) => {
-                      const added = chosen.has(option.toLowerCase());
-                      return (
-                        <option key={option} value={option} disabled={added}>
-                          {describe(option)}
-                          {added ? ' (added)' : ''}
-                        </option>
-                      );
-                    })}
-                  </optgroup>
-                  <optgroup label="All answer options">
-                    {remaining.map((option) => (
-                      <option key={option} value={option}>
-                        {describe(option)}
-                      </option>
-                    ))}
-                  </optgroup>
-                </>
-              ) : (
-                remaining.map((option) => (
-                  <option key={option} value={option}>
-                    {describe(option)}
-                  </option>
-                ))
-              )}
-            </select>
-          ) : (
-            // No form read yet. Typing is still allowed, for the same reason
-            // the identifier pickers allow it.
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    add(typed);
-                    setTyped('');
-                  }
-                }}
-                placeholder="Enter answer option"
-                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  add(typed);
-                  setTyped('');
-                }}
-                disabled={!typed.trim()}
-                className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Add
-              </button>
             </div>
           )}
         </>
