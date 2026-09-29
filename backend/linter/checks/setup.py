@@ -117,14 +117,16 @@ def _question_names(occurrences: list) -> str:
     return shown if len(names) <= 4 else f"{shown} +{len(names) - 4} more"
 
 
-@lint_check("inconsistent_dk_coding", severity="error", tags=("setup", "dk"))
+@lint_check("inconsistent_dk_coding", severity="warning", tags=("setup", "dk"))
 def check_inconsistent_dk_coding(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
     """
     One meaning coded more than one way.
 
     Compared within a meaning, never across: a form with a `dk` option and a
     `none` option is coded consistently, and reporting that pair was a false
-    positive. Only don't-know is an error — it is the one the DK rate reads.
+    positive. A warning in every case: the form still works, and the
+    don't-know field under Core Identifiers pre-selects every don't-know code
+    this check lists, so the DK rate counts them all.
     """
     del ctx
     findings: list[LintFinding] = []
@@ -150,7 +152,7 @@ def check_inconsistent_dk_coding(schema: FormSchema, ctx: LintContext) -> Iterab
         findings.append(
             finding_for(
                 "inconsistent_dk_coding",
-                "error" if category == DONT_KNOW else "warning",
+                "warning",
                 message=(
                     f"Select questions use more than one code for “{wording}”: "
                     + ", ".join(described[:-1])

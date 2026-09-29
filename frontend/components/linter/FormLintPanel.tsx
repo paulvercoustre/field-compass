@@ -7,6 +7,16 @@ import {
   LintReport,
 } from '../../services/lintApi';
 import { Spinner } from '../Spinner';
+import InfoTip from '../ui/InfoTip';
+import { FieldHelp } from '../../constants/coreIdentifiers';
+
+const FORM_CHECK_HELP: FieldHelp = {
+  title: 'Check this form for best practices',
+  text:
+    'Reads the form itself for things that will silently disable quality checks or ' +
+    'let avoidable field errors through. This is not the ODK XLSForm compiler: a form ' +
+    'that deploys can still fail these.',
+};
 
 interface FormLintPanelProps {
   surveyId?: string | null;
@@ -108,16 +118,17 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
     }
   }, [surveyId, form]);
 
+  // A different survey or form clears the previous results. The check itself
+  // only runs when the user asks for it.
   useEffect(() => {
     sourceGen.current += 1;
+    checkSeq.current += 1;
     setReport(null);
     setAdoptedKeys(new Set());
     setAdoptingKey(null);
+    setIsChecking(false);
     setError(null);
-    if (surveyId || form) {
-      runCheck();
-    }
-  }, [runCheck, surveyId, form]);
+  }, [surveyId, form]);
 
   const handleAdopt = async (finding: LintFinding) => {
     if (!surveyId) return;
@@ -150,23 +161,21 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
   return (
     <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700 space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Check this form for best practices
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Reads the form itself — not the submissions — for things that will silently
-            disable quality checks or let avoidable field errors through. This is not the
-            ODK XLSForm compiler: a form that deploys can still fail these.
-          </p>
-        </div>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          Check this form for best practices
+          <InfoTip help={FORM_CHECK_HELP} />
+        </h2>
         <button
           type="button"
           onClick={runCheck}
           disabled={isChecking}
-          className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
+          className={
+            report
+              ? 'px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md disabled:opacity-50'
+              : 'px-3 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50'
+          }
         >
-          {isChecking ? 'Checking…' : 'Check again'}
+          {isChecking ? 'Checking…' : report ? 'Check again' : 'Check form'}
         </button>
       </div>
 

@@ -159,10 +159,10 @@ class TestAuditNotEnabled:
 
 
 class TestInconsistentDk:
-    def test_two_conventions_are_an_error(self):
+    def test_two_conventions_are_a_warning(self):
         report = run_lint(load_form_schema(INCONSISTENT_DK))
         finding = _finding(report, "inconsistent_dk_coding")
-        assert finding.severity == "error"
+        assert finding.severity == "warning"
         assert "dk" in finding.message.lower()
         assert "-99" in finding.message
         assert finding.message.startswith("Select questions use more than one code")
@@ -477,10 +477,11 @@ class TestReviewRegressions:
     def test_numeric_code_labelled_refused_is_not_dont_know(self):
         report = run_lint(load_form_schema(DK_AND_REFUSED))
         findings = [f for f in report.findings if f.check_id == "inconsistent_dk_coding"]
-        # `98 = Refused` next to `refused` is two codes for refusal (a warning),
-        # not a second don't-know code (an error).
-        assert [f.severity for f in findings] == ["warning"]
-        assert "refused" in findings[0].message and "98" in findings[0].message
+        # `98 = Refused` next to `refused` is two codes for refusal, not a
+        # second don't-know code: one finding, about refusal only.
+        assert len(findings) == 1
+        assert "“refused”" in findings[0].message and "98" in findings[0].message
+        assert "don't know" not in findings[0].message
 
     def test_constraint_on_dk_does_not_cover_refused(self):
         report = run_lint(load_form_schema(DK_EXCLUSIVE_REFUSED_NOT))
