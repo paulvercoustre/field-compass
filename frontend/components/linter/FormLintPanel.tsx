@@ -20,9 +20,18 @@ const FORM_CHECK_HELP: FieldHelp = {
 
 interface FormLintPanelProps {
   surveyId?: string | null;
+  /**
+   * A form to check instead of the one saved on the survey: the create
+   * screen's form, or a refreshed form on settings that is not saved yet.
+   */
   form?: Record<string, unknown> | null;
   canEdit?: boolean;
   onRulesAdopted?: () => void;
+  /**
+   * Run the check without waiting for the button: whenever this is truthy
+   * and changes, and again whenever the form changes while it is set.
+   */
+  autoRunKey?: number | boolean;
 }
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -114,6 +123,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
   form,
   canEdit = false,
   onRulesAdopted,
+  autoRunKey,
 }) => {
   const [report, setReport] = useState<LintReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +144,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
     setError(null);
     setIsChecking(true);
     try {
-      const next = surveyId ? await lintSurvey(surveyId) : await lintForm(form as Record<string, unknown>);
+      const next = form ? await lintForm(form) : await lintSurvey(surveyId as string);
       if (seq !== checkSeq.current) return;
       setReport(next);
     } catch (err) {
@@ -157,6 +167,17 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
     setIsChecking(false);
     setError(null);
   }, [surveyId, form]);
+
+  // Declared after the reset above so a new form is cleared, then checked.
+  useEffect(() => {
+    if (autoRunKey && (surveyId || form)) {
+      runCheck();
+    }
+  }, [autoRunKey, runCheck, surveyId, form]);
+
+  // Quality checks are created from the form saved on the survey; while an
+  // unsaved form is shown, adopting would act on a different form.
+  const unsavedForm = Boolean(surveyId && form);
 
   const handleAdopt = async (finding: LintFinding) => {
     if (!surveyId) return;
@@ -220,6 +241,11 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
       {report && (
         <div className="space-y-4">
           {report.form_logic_missing && <FormLogicMissingNotice />}
+          {unsavedForm && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Checked the refreshed form. Save it to add findings as quality checks.
+            </p>
+          )}
           <p className="text-sm text-gray-700 dark:text-gray-300">
             {total === 0
               ? `Nothing to fix on ${report.question_count} questions.`
@@ -244,7 +270,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
                         // check id alone is not unique.
                         key={`${key}:${index}`}
                         finding={finding}
-                        canAdopt={Boolean(canEdit && surveyId && finding.auto_rule && !already)}
+                        canAdopt={Boolean(canEdit && surveyId && !unsavedForm && finding.auto_rule && !already)}
                         adopting={adoptingKey === key}
                         onAdopt={already ? undefined : () => handleAdopt(finding)}
                       />

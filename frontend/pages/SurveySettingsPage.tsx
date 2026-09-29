@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
@@ -23,7 +23,7 @@ import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
 import { readDkValues, sameDkValues } from '../utils/dkSuggestions';
 import FormLintPanel from '../components/linter/FormLintPanel';
-import { projectFormToKoboTool } from '../utils/koboForm';
+import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -507,6 +507,14 @@ const SurveySettingsPage: React.FC = () => {
    * Replaces uploading an XLSForm: the project is the source of truth, and a
    * form edited mid-collection has to be picked up from there anyway.
    */
+  // Bumped by each successful refresh; the form check runs when it changes.
+  const [formCheckRunKey, setFormCheckRunKey] = useState(0);
+  // Until it is saved, the refreshed form is what the check reads.
+  const refreshedFormPayload = useMemo(
+    () => (formCheckRunKey > 0 && isEditingKoboTool ? koboToolPayload(koboToolData) : null),
+    [formCheckRunKey, isEditingKoboTool, koboToolData]
+  );
+
   const handleRefreshFormFromProject = async () => {
     const assetId = config?.kobo_asset_id;
     if (!assetId) {
@@ -521,6 +529,8 @@ const SurveySettingsPage: React.FC = () => {
       const language = form.languages[0] || 'default';
       setKoboToolData(projectFormToKoboTool(form, language));
       setKoboToolFileName(form.asset_name || assetId);
+      // A freshly read form gets checked without the user asking.
+      setFormCheckRunKey((key) => key + 1);
 
       // Keep the chosen language if the form still has it; otherwise fall back.
       const available = form.languages.map(labelColumnFor);
@@ -1250,7 +1260,7 @@ const SurveySettingsPage: React.FC = () => {
                         <span>Reading form...</span>
                       </>
                     ) : (
-                      <span>Refresh form from project</span>
+                      <span>Refresh form</span>
                     )}
                   </button>
                   
@@ -1742,8 +1752,10 @@ const SurveySettingsPage: React.FC = () => {
             {selectedSurvey && (
               <FormLintPanel
                 surveyId={selectedSurvey.survey_id}
+                form={refreshedFormPayload}
                 canEdit={canEditSurvey}
                 onRulesAdopted={loadValidationRules}
+                autoRunKey={formCheckRunKey}
               />
             )}
             {/* General Quality Checks - dirty pattern like Survey Profile */}

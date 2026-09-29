@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { createSurvey, SurveyCreate } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
@@ -288,25 +288,41 @@ const CreateSurveyPage: React.FC = () => {
   const canCreate = Boolean(surveyName.trim() && koboAssetId);
   const lintFormPayload = useMemo(() => koboToolPayload(koboToolData), [koboToolData]);
 
-  const handleLoadProjectForm = async () => {
-    if (!koboAssetId) return;
+  // The project the form on screen was read for, and the one being read now,
+  // so a link edited mid-read cannot land the wrong project's form.
+  const readForAssetId = useRef<string | null>(null);
 
+  const handleLoadProjectForm = useCallback(async (assetId: string | null = koboAssetId) => {
+    if (!assetId) return;
+
+    readForAssetId.current = assetId;
     setIsLoadingProjectForm(true);
     setProjectFormError(null);
     try {
-      const form = await getKoboProjectForm(koboAssetId);
+      const form = await getKoboProjectForm(assetId);
+      if (readForAssetId.current !== assetId) return;
       const language = form.languages[0] || 'default';
       setFormLanguages(form.languages);
       setSelectedLanguage(language);
       setKoboToolData(projectFormToKoboTool(form, language));
-      setProjectFormName(form.asset_name || koboAssetId);
+      setProjectFormName(form.asset_name || assetId);
     } catch (err) {
+      if (readForAssetId.current !== assetId) return;
       setProjectFormError(err instanceof Error ? err.message : 'Could not read the form.');
       setProjectFormName(null);
     } finally {
-      setIsLoadingProjectForm(false);
+      if (readForAssetId.current === assetId) setIsLoadingProjectForm(false);
     }
-  };
+  }, [koboAssetId]);
+
+  // Read the form as soon as the link names a project -- no button needed.
+  // Short pause so typing a link character by character does not fire a
+  // request per keystroke; the button stays for retrying after an error.
+  useEffect(() => {
+    if (!koboAssetId || koboAssetId === readForAssetId.current) return;
+    const timer = setTimeout(() => handleLoadProjectForm(koboAssetId), 500);
+    return () => clearTimeout(timer);
+  }, [koboAssetId, handleLoadProjectForm]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -576,7 +592,7 @@ const CreateSurveyPage: React.FC = () => {
             <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={handleLoadProjectForm}
+                  onClick={() => handleLoadProjectForm(koboAssetId)}
                   disabled={!koboAssetId || isLoadingProjectForm}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
                 >
@@ -586,7 +602,7 @@ const CreateSurveyPage: React.FC = () => {
                       <span>Reading form...</span>
                     </>
                   ) : (
-                    <span>Read form from project</span>
+                    <span>{projectFormName ? 'Read form again' : 'Read form from project'}</span>
                   )}
                 </button>
                 {!koboAssetId && (
@@ -624,7 +640,7 @@ const CreateSurveyPage: React.FC = () => {
           </section>
 
           {lintFormPayload && (
-            <FormLintPanel form={lintFormPayload} />
+            <FormLintPanel form={lintFormPayload} autoRunKey />
           )}
 
           {/* Collection Targets */}
