@@ -53,8 +53,11 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
   const suggestions = (useDkSuggestions(survey, choices) || []).filter(
     (option) => !chosen.has(option.toLowerCase())
   );
+  // Suggestions lead the dropdown, as they do for consent and enumerator;
+  // everything else follows, without repeating them.
+  const suggestedKeys = new Set(suggestions.map((option) => option.toLowerCase()));
   const remaining = Array.from(optionsByName.keys())
-    .filter((name) => !chosen.has(name.toLowerCase()))
+    .filter((name) => !chosen.has(name.toLowerCase()) && !suggestedKeys.has(name.toLowerCase()))
     .sort();
 
   const add = (value: string) => {
@@ -141,11 +144,30 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
               className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">-- Add another answer option --</option>
-              {remaining.map((option) => (
-                <option key={option} value={option}>
-                  {describe(option)}
-                </option>
-              ))}
+              {suggestions.length > 0 ? (
+                <>
+                  <optgroup label="Suggested">
+                    {suggestions.map((option) => (
+                      <option key={option} value={option}>
+                        {describe(option)}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="All answer options">
+                    {remaining.map((option) => (
+                      <option key={option} value={option}>
+                        {describe(option)}
+                      </option>
+                    ))}
+                  </optgroup>
+                </>
+              ) : (
+                remaining.map((option) => (
+                  <option key={option} value={option}>
+                    {describe(option)}
+                  </option>
+                ))
+              )}
             </select>
           ) : (
             // No form read yet. Typing is still allowed, for the same reason
