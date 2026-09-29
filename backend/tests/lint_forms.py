@@ -185,14 +185,6 @@ NO_ENUMERATOR = form(
     _q("integer", "age", label="Age", constraint=". <= 120"),
 )
 
-SAMPLING_AS_TEXT = form(
-    _q("audit", "audit"),
-    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
-    _q("today", "today"),
-    _q("text", "district", label="What district are you in?"),
-    choices=[_choice("enumerator_id", "E01")],
-)
-
 NO_INTERVIEW_DATE = form(
     _q("audit", "audit"),
     _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),

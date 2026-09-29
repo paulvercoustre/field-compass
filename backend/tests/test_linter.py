@@ -47,7 +47,6 @@ from tests.lint_forms import (
     NO_ENUMERATOR,
     NO_INTERVIEW_DATE,
     ORPHAN_LIST,
-    SAMPLING_AS_TEXT,
     TODAY_IN_LABEL_ONLY,
     TRANSLATED,
     UNBOUNDED_AGE,
@@ -71,11 +70,11 @@ def _finding(report, check_id):
 class TestRegistry:
     def test_checks_register_without_a_manual_list(self):
         ids = registered_ids()
+        assert "sampling_var_not_select" not in ids
         for check_id in (
             "audit_not_enabled",
             "inconsistent_dk_coding",
             "no_enumerator_field",
-            "sampling_var_not_select",
             "no_interview_date",
             "dk_not_exclusive",
             "unbounded_numeric",
@@ -282,19 +281,6 @@ class TestNoEnumerator:
     def test_enumerator_id_is_recognised(self):
         report = run_lint(load_form_schema(HEALTHY))
         assert _ids(report, "no_enumerator_field") == []
-
-
-class TestSamplingVar:
-    def test_text_district_is_a_warning(self):
-        report = run_lint(load_form_schema(SAMPLING_AS_TEXT))
-        finding = _finding(report, "sampling_var_not_select")
-        assert finding.severity == "warning"
-        assert finding.question_path == "district"
-        assert "select_one" in finding.suggested_fix
-
-    def test_select_district_is_silent(self):
-        report = run_lint(load_form_schema(HEALTHY))
-        assert _ids(report, "sampling_var_not_select") == []
 
 
 class TestInterviewDate:

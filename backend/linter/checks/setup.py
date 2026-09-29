@@ -12,9 +12,7 @@ from linter.dk import CATEGORY_LABELS, DONT_KNOW, group_conventions
 from linter.models import LintContext, LintFinding, finding_for
 from linter.questions import (
     DATE_TYPES,
-    SELECT_TYPES,
     has_vocabulary,
-    headline_label,
     iter_answerable,
     question_search_text,
 )
@@ -33,28 +31,6 @@ ENUMERATOR_TOKENS = (
     "data collector",
 )
 
-SAMPLING_TOKENS = (
-    "admin1",
-    "admin2",
-    "admin3",
-    "admin 1",
-    "admin 2",
-    "province",
-    "district",
-    "region",
-    "village",
-    "cluster",
-    "stratum",
-    "strata",
-    "livelihood",
-    "sampling",
-    "governorate",
-    "commune",
-    "kebele",
-    "woreda",
-    "payam",
-    "county",
-)
 
 # "today" is deliberately not a token: as a word it matches labels such as
 # "meals eaten today". The `today` metadata row is recognised by name instead.
@@ -223,40 +199,6 @@ def check_no_enumerator_field(schema: FormSchema, ctx: LintContext) -> Iterable[
             ),
         )
     ]
-
-
-@lint_check("sampling_var_not_select", severity="warning", tags=("setup", "sampling"))
-def check_sampling_var_not_select(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
-    del ctx
-    findings: list[LintFinding] = []
-    for question in iter_answerable(schema):
-        if not has_vocabulary(question_search_text(question), SAMPLING_TOKENS):
-            continue
-        if question.type in SELECT_TYPES:
-            continue
-        findings.append(
-            finding_for(
-                "sampling_var_not_select",
-                "warning",
-                question=question,
-                message=f"“{headline_label(question)}” is free text, not a list",
-                details=(
-                    f"`{question.name}` looks like a sampling variable but is "
-                    f"{question.type}, not a select."
-                ),
-                why_it_matters=(
-                    "Collection targets per choice, and checking that a submitted "
-                    "stratum is a legal value, both need a choice list. Free text "
-                    "cannot be validated against the form and cannot produce a "
-                    "target table."
-                ),
-                suggested_fix=(
-                    f"Change `{question.name}` to `select_one` (or `select_multiple`) "
-                    "with an explicit choice list."
-                ),
-            )
-        )
-    return findings
 
 
 @lint_check("no_interview_date", severity="warning", tags=("setup",))
