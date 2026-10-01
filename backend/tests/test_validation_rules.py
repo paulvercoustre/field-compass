@@ -2,6 +2,8 @@
 Tests for validation rule evaluation in HFC engine.
 """
 
+from copy import deepcopy
+
 from database.models import ValidationRule
 from etl.hfc_engine import HFCEngine
 
@@ -263,3 +265,62 @@ class TestValidationRules:
 
         inactive_issues = [i for i in issues if i.check == "inactive_check"]
         assert len(inactive_issues) == 0
+
+
+def _add_rule(db, survey_id, check_id, expression, variable):
+    db.add(
+        ValidationRule(
+            survey_id=survey_id,
+            rule_name=check_id,
+            rule_data={
+                "check_id": check_id,
+                "issue": f"{check_id} fired",
+                "check_expression": expression,
+                "variables_involved": [variable],
+                "roster_name": None,
+            },
+            is_active=True,
+        )
+    )
+    db.commit()
+
+
+def _fired(engine, check_id, submission_data):
+    issues = engine.run_checks({**submission_data, "enumerator_id": "enum1"}, "uuid-dk")
+    return [i for i in issues if i.check == check_id]
+
+
+class TestRulesSkipDontKnow:
+    """A DK answer is not a real value, so no rule should judge it."""
+
+    def test_numeric_dk_sent_as_text_is_skipped(self, test_db, test_survey_config):
+        """Kobo sends integers as strings; `"-99" < 0` used to flag every DK."""
+        _add_rule(test_db, test_survey_config.survey_id, "age_negative", "age < 0", "age")
+        engine = HFCEngine(test_db, test_survey_config)
+
+        assert _fired(engine, "age_negative", {"age": "-99"}) == []
+        assert _fired(engine, "age_negative", {"age": -99}) == []
+        assert len(_fired(engine, "age_negative", {"age": "-5"})) == 1
+
+    def test_every_configured_dk_string_is_skipped(self, test_db, test_survey_config):
+        """A list-shaped `dk_string_value` never matched a raw `==`."""
+        config = deepcopy(test_survey_config.config_data)
+        config["special_values"]["dk_string_value"] = ["dk", "dont_know"]
+        test_survey_config.config_data = config
+        test_db.commit()
+
+        _add_rule(test_db, test_survey_config.survey_id, "crop_other", 'crop != "maize"', "crop")
+        engine = HFCEngine(test_db, test_survey_config)
+
+        assert _fired(engine, "crop_other", {"crop": "dont_know"}) == []
+        assert _fired(engine, "crop_other", {"crop": "DK"}) == []
+        assert len(_fired(engine, "crop_other", {"crop": "rice"})) == 1
+
+    def test_dk_among_other_options_is_still_evaluated(self, test_db, test_survey_config):
+        """`"dk rice"` is exactly what a dk_not_exclusive rule has to see."""
+        expression = '(crops != "dk") and ("dk " in crops or " dk" in crops)'
+        _add_rule(test_db, test_survey_config.survey_id, "dk_not_exclusive", expression, "crops")
+        engine = HFCEngine(test_db, test_survey_config)
+
+        assert len(_fired(engine, "dk_not_exclusive", {"crops": "dk rice"})) == 1
+        assert _fired(engine, "dk_not_exclusive", {"crops": "dk"}) == []

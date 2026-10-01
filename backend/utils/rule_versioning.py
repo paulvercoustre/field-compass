@@ -7,6 +7,8 @@ import json
 import re
 from typing import Any
 
+from etl.dk_utils import dk_string_tokens, is_dk_value
+
 
 def _canonical_json(value: dict[str, Any]) -> str:
     """Return stable JSON for hashing."""
@@ -77,20 +79,23 @@ def _resolve_field_value(submission_data: dict[str, Any], field_name: str) -> An
 def generate_llm_input_hash(
     submission_data: dict[str, Any],
     llm_fields: list[str],
-    dk_string_value: str,
+    dk_string_value: str | list[str] | None,
 ) -> str:
     """
     Compute hash of normalized qualitative inputs for selected fields.
 
     A change in any monitored text field value changes this hash.
     """
+    dk_tokens = dk_string_tokens({"dk_string_value": dk_string_value})
     normalized: dict[str, str] = {}
     for field in sorted(llm_fields or []):
         value = _resolve_field_value(submission_data, field)
         text = _normalize_text(value)
         if not text:
             continue
-        if text.lower() == dk_string_value.lower():
+        # Must match the worker's skip in qualitative_worker_runtime, or a
+        # DK answer changes the hash without ever being sent.
+        if is_dk_value(text, None, dk_tokens, split_multiple=False):
             continue
         normalized[field] = text
 

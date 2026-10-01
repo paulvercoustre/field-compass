@@ -11,6 +11,8 @@ from typing import Any
 
 from openai import OpenAI, OpenAIError
 
+from etl.dk_utils import describe_dk_strings
+
 logger = logging.getLogger(__name__)
 
 
@@ -101,7 +103,7 @@ class AIService:
 
             sv = survey_context.get("special_values", {})
             if sv:
-                survey_context_text += f"- Special values: DK numeric = {sv.get('dk_value', -99)}, DK string = {sv.get('dk_string_value', 'dk')}\n"
+                survey_context_text += f"- Special values: DK numeric = {sv.get('dk_value', -99)}, DK string = {describe_dk_strings(sv.get('dk_string_value', 'dk'))}\n"
 
         # Create system prompt
         system_prompt = """You are a data quality validation expert. Convert natural language rule descriptions into structured validation rules.
@@ -332,8 +334,8 @@ Generate a validation rule matching the exact JSON schema."""
         if special_values:
             sv = special_values
             dk_num = sv.get("dk_value", -99)
-            dk_str = sv.get("dk_string_value", "dk")
-            special_values_context = f'\n\nSPECIAL VALUES (Don\'t Know / Refused):\n- DK numeric value: {dk_num}\n- DK string value: "{dk_str}"\n'
+            dk_str = describe_dk_strings(sv.get("dk_string_value", "dk"))
+            special_values_context = f"\n\nSPECIAL VALUES (Don't Know / Refused):\n- DK numeric value: {dk_num}\n- DK string value: {dk_str}\n"
 
         # Build existing rules context
         existing_rules_text = ""
@@ -595,7 +597,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         field_values: dict[str, str],
         question_contexts: dict[str, str],
         dk_numeric: int,
-        dk_string: str,
+        dk_string: str | list[str] | None,
         check_types: list[str],
     ) -> list[dict[str, Any]]:
         """
@@ -625,7 +627,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         system_prompt = f"""You are a data quality expert analyzing survey text responses.
 
 IMPORTANT CONTEXT:
-- "Don't Know" responses are coded as {dk_numeric} (numeric) or "{dk_string}" (text)
+- "Don't Know" responses are coded as {dk_numeric} (numeric) or {describe_dk_strings(dk_string)} (text)
 - These are valid responses and should not be flagged
 - Support multilingual responses and evaluate in the response's language
 - Always provide your response in english

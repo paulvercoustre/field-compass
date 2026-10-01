@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 from database.models import SubmissionCurrent, SurveyConfig, ValidationRule
 from etl.dk_utils import (
     build_eligible_dk_question_index,
+    dk_string_tokens,
+    is_dk_value,
 )
 from etl.dk_utils import (
     compute_dk_metrics as compute_submission_dk_metrics,
@@ -75,6 +77,8 @@ class HFCEngine:
         self.special_values = special_values
         self.dk_value = special_values.get("dk_value", -99)
         self.dk_string_value = special_values.get("dk_string_value", "dk")
+        # `dk_string_value` may be one string or a list; compare against this.
+        self.dk_tokens = dk_string_tokens({"dk_string_value": self.dk_string_value})
 
         # Global parameters - date range
         self.data_collection_start_date = global_parameters.get("data_collection_start_date")
@@ -1511,11 +1515,11 @@ class HFCEngine:
             if value is None:
                 return issues  # Skip if any required variable is None
 
-            # Check for DK value
-            if isinstance(value, int | float) and value == self.dk_value:
-                return issues  # Skip if DK value
-            if isinstance(value, str) and value == self.dk_string_value:
-                return issues  # Skip if DK string value
+            # Skip DK answers. Kobo sends numbers as text, so `"-99"` has to
+            # match `dk_value` too. Whole answers only: `"dk rice"` is what a
+            # dk_not_exclusive rule exists to flag.
+            if is_dk_value(value, self.dk_value, self.dk_tokens, split_multiple=False):
+                return issues
 
         # Evaluate the check expression
         try:

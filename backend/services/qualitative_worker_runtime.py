@@ -14,6 +14,7 @@ if "/app" not in sys.path and os.path.isdir("/app"):
     sys.path.insert(0, "/app")
 
 from database.models import SubmissionCurrent, SurveyConfig
+from etl.dk_utils import is_dk_value
 from etl.hfc_engine import HFCEngine
 from services.ai_service import AIService
 from services.database import SessionLocal
@@ -111,7 +112,7 @@ def run_qualitative_check_job(payload: dict[str, Any], job_id: str) -> dict[str,
             text = value.strip()
             if not text:
                 continue
-            if text.lower() == engine.dk_string_value.lower():
+            if is_dk_value(text, None, engine.dk_tokens, split_multiple=False):
                 continue
             field_values[field] = text
 
