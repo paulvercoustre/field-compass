@@ -65,6 +65,44 @@ const GENERAL_CHECK_DEFINITIONS: Array<{
   { id: 'strata_value_not_in_form', label: 'Strata Value Not In Form', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && inferSamplingMode(c?.config_data?.sampling_frame) === 'by_variable' && c?.config_data?.sampling_frame?.variable), getDetails: (c, d) => { const v = c?.config_data?.sampling_frame?.variable; if (!v) return null; return { field: v, value: getFieldValueFromData(d, v) ?? 'N/A' }; } },
 ];
 
+/**
+ * What a submission's AI check status means, in plain words.
+ * `llm_last_error` is stored as "<category>: <provider message>".
+ */
+const describeAiCheck = (
+  status: string | null | undefined,
+  lastError: string | null | undefined,
+  hasFindings: boolean
+): { tone: 'busy' | 'ok' | 'warn' | 'muted'; title: string; detail?: string } => {
+  const [category, ...rest] = (lastError ?? '').split(': ');
+  const providerMessage = rest.join(': ').replace(/ \(retrying\)$/, '') || undefined;
+
+  if (status === 'pending' || status === 'running') {
+    return lastError
+      ? { tone: 'busy', title: 'Checking… retrying after a temporary error.', detail: providerMessage }
+      : { tone: 'busy', title: 'Checking the selected answers…' };
+  }
+  if (status === 'success') {
+    return hasFindings
+      ? { tone: 'ok', title: 'Checked.' }
+      : { tone: 'ok', title: 'Checked — no problems found in the selected answers.' };
+  }
+  if (status === 'failed') {
+    const reasons: Record<string, string> = {
+      auth: "Couldn't check: the AI provider rejected the key.",
+      provider_quota: "Couldn't check: the AI provider account is out of credit.",
+      not_configured: "Couldn't check: no AI provider is set up.",
+      bad_request: "Couldn't check: the AI provider refused the request.",
+    };
+    return {
+      tone: 'warn',
+      title: reasons[category] ?? "Couldn't check this time. It will be retried on the next pull.",
+      detail: providerMessage ?? lastError ?? undefined,
+    };
+  }
+  return { tone: 'muted', title: 'Not checked yet.' };
+};
+
 const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoading, onSubmissionUpdate }) => {
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
@@ -951,44 +989,48 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
             </div>
         )}
 
-        {/* Qualitative Quality Checks Section - AI-powered qualitative response analysis */}
+        {/* Qualitative Quality Checks Section - AI-powered qualitative response analysis.
+            Hidden when AI checks are off, unless earlier findings are still stored. */}
+        {(surveyConfig?.config_data?.quality_checks?.flag_llm_qualitative || qualitativeIssues.length > 0) && (() => {
+          const aiCheck = describeAiCheck(llm_check_status, llm_last_error, qualitativeIssues.length > 0);
+          const toneClass = {
+            busy: 'text-blue-700 dark:text-blue-300',
+            ok: 'text-gray-700 dark:text-gray-300',
+            warn: 'text-amber-700 dark:text-amber-300',
+            muted: 'text-gray-600 dark:text-gray-400',
+          }[aiCheck.tone];
+          return (
         <div className="mb-6">
           <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Qualitative Quality Checks</h3>
           <div className="p-4 rounded-md border bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-2 mb-3">
-              {(llm_check_status === 'pending' || llm_check_status === 'running') ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                  </svg>
-                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">AI qualitative check in progress</span>
-                </>
-              ) : (
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Status: {llm_check_status || 'skipped'}
-                </span>
+            <div className="flex flex-wrap items-center gap-2 mb-3" role="status">
+              {aiCheck.tone === 'busy' && (
+                <svg className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
               )}
-              {llm_checked_at && (
+              <span className={`text-sm font-medium ${toneClass}`}>{aiCheck.title}</span>
+              {llm_checked_at && aiCheck.tone !== 'busy' && (
                 <span className="text-xs text-gray-500 dark:text-gray-400">
-                  Last checked: {new Date(llm_checked_at).toLocaleString()}
+                  {new Date(llm_checked_at).toLocaleString()}
                 </span>
               )}
             </div>
 
-            {llm_last_error && (
-              <div className="mb-3 text-sm text-red-700 dark:text-red-400">
-                Error: {llm_last_error}
-              </div>
+            {aiCheck.detail && (
+              <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+                Provider message: {aiCheck.detail}
+              </p>
             )}
 
-            {qualitativeIssues.length === 0 ? (
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {llm_check_status === 'success'
-                  ? 'No qualitative issues detected in the latest AI check.'
-                  : 'No qualitative findings available yet.'}
+            {qualitativeIssues.length > 0 && aiCheck.tone === 'warn' && (
+              <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+                The findings below are from the last successful check.
               </p>
-            ) : (
+            )}
+
+            {qualitativeIssues.length === 0 ? null : (
               <div className="space-y-3">
                 {(() => {
                   const groupedByField = qualitativeIssues.reduce<Record<string, typeof qualitativeIssues>>(
@@ -1041,6 +1083,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
             )}
           </div>
         </div>
+          );
+        })()}
 
         {/* Outlier Checks Section - Shows outlier-specific issues */}
         {data_quality_issues.length > 0 && (() => {

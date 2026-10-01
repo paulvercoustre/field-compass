@@ -316,10 +316,17 @@ existing precedence (Approved or Not Approved in Kobo wins).
 
 ### 7.4 No check stays "in progress" forever (F-17 B)
 
-A Celery beat task runs every 5 minutes and marks `pending`/`running` checks
-older than 15 minutes as `failed` with `timeout: no result after 15 minutes`.
-They are re-queued on the next pull. Celery beat is a new process in
-`docker-compose.yml` and the production compose file.
+A Celery beat task runs every 5 minutes and marks as `failed`
+(`timeout: The AI check did not finish.`):
+- `running` checks started more than 15 minutes ago — a call times out after
+  120 s and at most four are made, so the worker is gone;
+- `pending` checks queued more than 6 hours ago — the queue message is lost.
+  A shorter limit would fail checks that a large pull legitimately keeps
+  queued.
+
+They are re-queued on the next pull. Beat runs inside the worker (`-B`); the
+sweep is an idempotent UPDATE, so a second beat from a scaled-out worker only
+repeats it.
 
 ### 7.5 Connection circuit breaker
 
@@ -407,6 +414,9 @@ provider and change.
 - Never returned by any endpoint; responses carry `api_key_hint` only.
 - Never logged: `AIClient` logs the connection id, host, model and category,
   not headers or bodies.
+- Providers echo part of a rejected key in their error text
+  (`sk-inval****ting`); stored errors replace any key fragment with
+  `[key hidden]`, since they are shown to everyone with access to the survey.
 - **Production must set `ENCRYPTION_KEY`.** Without it, the key is derived
   from `JWT_SECRET_KEY`, and rotating the JWT secret would make every stored
   AI and Kobo key unreadable. Startup should log an error when

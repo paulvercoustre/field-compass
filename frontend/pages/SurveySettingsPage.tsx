@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
-import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
+import { getSurveyConfig, updateSurvey, deleteSurvey, rerunAiChecks, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
 import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from '../utils/samplingFrameParser';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
@@ -833,6 +833,21 @@ const SurveySettingsPage: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setIsSavingLLM(false);
+    }
+  };
+
+  const [isRerunningAI, setIsRerunningAI] = useState(false);
+  const handleRerunAI = async () => {
+    if (!selectedSurvey) return;
+    setIsRerunningAI(true);
+    setError(null);
+    try {
+      const count = await rerunAiChecks(selectedSurvey.survey_id);
+      setSuccess(`AI checks will run again for ${count} submissions on the next pull.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reset AI checks');
+    } finally {
+      setIsRerunningAI(false);
     }
   };
 
@@ -2426,6 +2441,20 @@ const SurveySettingsPage: React.FC = () => {
                     <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
                       Enabled checks: content quality, relevance, and completeness.
                     </div>
+                  </div>
+                )}
+                {canEditSurvey && !isEditingLLM && qualityChecks.flag_llm_qualitative && (
+                  <div className="ml-7 flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={handleRerunAI}
+                      disabled={isRerunningAI}
+                      className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md disabled:opacity-50"
+                    >
+                      {isRerunningAI ? 'Resetting…' : 'Re-run AI checks'}
+                    </button>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Checks every submission again on the next pull, including ones already checked. Uses AI credit.
+                    </p>
                   </div>
                 )}
                 {isEditingLLM && (

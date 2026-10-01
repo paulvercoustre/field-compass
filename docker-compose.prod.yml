@@ -198,7 +198,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_started
-    command: celery -A services.job_queue.celery_app worker --loglevel=INFO -Q qualitative_checks
+    # -B runs beat inside the worker, for the stalled AI check sweep.
+    command: celery -A services.job_queue.celery_app worker --loglevel=INFO -Q qualitative_checks -B -s /tmp/celerybeat-schedule
     networks:
       - field-compass-network
 

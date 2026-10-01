@@ -310,6 +310,23 @@ export const deleteSurvey = async (surveyId: string): Promise<void> => {
   }
 };
 
+/**
+ * Make the next pull run every submission's AI check again (owner only).
+ * Returns how many submissions will be re-checked.
+ */
+export const rerunAiChecks = async (surveyId: string): Promise<number> => {
+  const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/ai-checks/rerun`, {
+    method: 'POST',
+    headers: createAuthHeaders(),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(errorData.detail || `Failed to reset AI checks: ${response.statusText}`);
+  }
+  const data = await response.json();
+  return data.submissions as number;
+};
+
 // ============================================================================
 // Survey Sharing API
 // ============================================================================

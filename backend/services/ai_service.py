@@ -12,8 +12,28 @@ from typing import Any
 from openai import OpenAI, OpenAIError
 
 from etl.dk_utils import describe_dk_strings
+from services.ai_errors import BAD_RESPONSE, NOT_CONFIGURED, AIError, classify
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_qualitative_reply(response: Any) -> list[dict[str, Any]]:
+    """The ``issues`` list from a qualitative-check reply, or AIError(bad_response)."""
+    choice = response.choices[0]
+    content = choice.message.content
+    if not content:
+        reason = getattr(choice, "finish_reason", None)
+        detail = "it ran out of output tokens" if reason == "length" else "it was empty"
+        raise AIError(BAD_RESPONSE, f"The AI reply could not be used: {detail}.")
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise AIError(BAD_RESPONSE, "The AI reply was not valid JSON.") from exc
+
+    issues = parsed.get("issues") if isinstance(parsed, dict) else None
+    if not isinstance(issues, list) or not all(isinstance(issue, dict) for issue in issues):
+        raise AIError(BAD_RESPONSE, "The AI reply did not have the expected shape.")
+    return issues
 
 
 class AIService:
@@ -627,9 +647,14 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
 
         Returns:
             List of issues with keys: field, value, check_type, message, reasoning
+
+        Raises:
+            AIError: when the call fails or the reply is unusable. An empty
+                list always means "checked, nothing found" -- never "could
+                not check".
         """
         if not self.is_available():
-            return []
+            raise AIError(NOT_CONFIGURED, "No AI provider is configured (OPENAI_API_KEY).")
 
         if not field_values:
             return []
@@ -734,16 +759,12 @@ Remember: "{dk_string}" and {dk_numeric} are valid "Don't Know" values."""
             elapsed = time.time() - start_time
             logger.info(f"Qualitative LLM check completed in {elapsed:.2f}s")
 
-            content = response.choices[0].message.content
-            parsed = json.loads(content)
-            issues = parsed.get("issues", [])
+            issues = _parse_qualitative_reply(response)
             return [issue for issue in issues if issue.get("check_type") in selected_types]
-        except OpenAIError as e:
-            logger.error(f"OpenAI API error in qualitative checks: {e}")
-            return []
         except Exception as e:
-            logger.error(f"Unexpected error in qualitative checks: {e}")
-            return []
+            error = classify(e)
+            logger.warning("Qualitative check failed (%s)", error)
+            raise error from e
 
     def _validate_rule_structure(self, rule: dict[str, Any]) -> None:
         """

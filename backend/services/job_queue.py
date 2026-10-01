@@ -26,6 +26,17 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_routes={
         "services.qualitative_worker.run_qualitative_check_task": {"queue": "qualitative_checks"},
+        "services.qualitative_worker.sweep_stalled_qualitative_checks": {
+            "queue": "qualitative_checks"
+        },
+    },
+    # Run by the worker's embedded beat (`-B`). The sweep is an idempotent
+    # UPDATE, so a second beat from a scaled-out worker only repeats it.
+    beat_schedule={
+        "sweep-stalled-qualitative-checks": {
+            "task": "services.qualitative_worker.sweep_stalled_qualitative_checks",
+            "schedule": 300.0,
+        },
     },
 )
 

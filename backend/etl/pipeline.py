@@ -252,9 +252,11 @@ class ETLPipeline:
                         ]
                         submission.data_quality_issues = deterministic_issues + preserved_llm_issues
 
-                        # Determine status based on HFC issues and Kobo validation status
+                        # Determine status from every stored issue, AI findings
+                        # included, and the Kobo validation status.
                         new_status = hfc_engine.determine_qa_status(
-                            issues, kobo_validation_status=submission.kobo_validation_status
+                            submission.data_quality_issues,
+                            kobo_validation_status=submission.kobo_validation_status,
                         )
 
                         # If status is None (On Hold), keep current status, otherwise update
@@ -331,7 +333,9 @@ class ETLPipeline:
                                 exc_info=True,
                             )
                             submission.llm_check_status = "failed"
-                            submission.llm_last_error = str(queue_error)[:1000]
+                            submission.llm_last_error = (
+                                f"unavailable: Could not queue the AI check ({queue_error})"
+                            )[:1000]
                             submission.llm_checked_at = datetime.utcnow()
                     else:
                         logger.debug(
