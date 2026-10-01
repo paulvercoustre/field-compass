@@ -14,7 +14,10 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({
   message,
   error, // Keep for backward compatibility
   onDismiss,
-  autoHide = true,
+  // Errors stay until dismissed or replaced. A timed-out error is missed by
+  // anyone who looked away, and by screen-magnifier users who were reading
+  // another part of the page.
+  autoHide = false,
   autoHideDelay = 5000,
   className = '',
   id,

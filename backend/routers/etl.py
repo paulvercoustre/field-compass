@@ -118,6 +118,7 @@ async def run_etl_pipeline(
                 "llm_skipped": stats.get("llm_skipped", 0),
                 "hfc_flagged": stats["hfc_flagged"],
                 "errors": stats["errors"],
+                "upstream_error": stats.get("upstream_error"),
                 "duration_seconds": stats.get("duration_seconds", 0),
             },
         )

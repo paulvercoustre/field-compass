@@ -32,20 +32,11 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
     }
   };
 
-  const handleIssueClick = (check: string) => {
-    // For now, just navigate to submissions
-    // TODO: Could extend to filter by issue type
-    if (onNavigateToSubmissions) {
-      onNavigateToSubmissions();
-    }
-  };
-
   return (
     <div className="h-full overflow-auto p-6">
       <QualityOverviewDashboard
         surveyId={selectedSurvey.survey_id}
         onStatusClick={handleStatusClick}
-        onIssueClick={handleIssueClick}
       />
     </div>
   );

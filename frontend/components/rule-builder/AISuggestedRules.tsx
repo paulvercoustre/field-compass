@@ -7,7 +7,8 @@ import SuccessMessage from '../ui/SuccessMessage';
 
 interface AISuggestedRulesProps {
   surveyId: string;
-  onRulesAdded: (rules: StagedRule[]) => void;
+  /** Saves the rules; rejects with a message if they could not be saved. */
+  onRulesAdded: (rules: StagedRule[]) => void | Promise<void>;
 }
 
 const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
@@ -59,7 +60,7 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
     setSelectedIds(newSelected);
   };
 
-  const handleAddSelected = () => {
+  const handleAddSelected = async () => {
     const selectedRules = suggestions
       .filter((_, idx) => selectedIds.has(idx))
       .map(rule => ({
@@ -68,13 +69,18 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
       }));
 
     if (selectedRules.length > 0) {
-      onRulesAdded(selectedRules);
+      setError(null);
+      try {
+        // Say "added" only once they are saved.
+        await onRulesAdded(selectedRules);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to save suggested rules');
+        return;
+      }
       setAddedCount(selectedRules.length);
       setShowSuccess(true);
       setSuggestions([]);
       setSelectedIds(new Set());
-      
-      setTimeout(() => setShowSuccess(false), 3000);
     }
   };
 
@@ -118,7 +124,7 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
             disabled={selectedIds.size === 0}
             className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
           >
-            Add Selected ({selectedIds.size})
+            {selectedIds.size === 1 ? 'Add 1 rule' : `Add ${selectedIds.size} rules`}
           </button>
           <button
             onClick={handleClear}
@@ -132,7 +138,12 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
       {error && <ErrorMessage error={error} />}
 
       {showSuccess && (
-        <SuccessMessage message={`${addedCount} rule${addedCount !== 1 ? 's' : ''} added to editor!`} />
+        <SuccessMessage
+          message={addedCount === 1
+            ? 'Rule added — it will run on the next pull from Kobo.'
+            : `${addedCount} rules added — they will run on the next pull from Kobo.`}
+          autoHide={false}
+        />
       )}
 
       {suggestions.length > 0 && (

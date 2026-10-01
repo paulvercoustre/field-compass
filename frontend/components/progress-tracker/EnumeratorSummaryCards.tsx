@@ -15,17 +15,13 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
     ? (totalSubmissions / totalEnumerators).toFixed(1) 
     : '0';
   
-  // Find best performer (highest % validated with at least 5 submissions)
-  const eligibleForBest = collection.filter(e => e.total >= 5);
-  const bestPerformer = eligibleForBest.length > 0
-    ? eligibleForBest.reduce((best, current) => {
-        const bestPercent = parseFloat(best.percentValidated);
-        const currentPercent = parseFloat(current.percentValidated);
-        return currentPercent > bestPercent ? current : best;
-      })
-    : null;
-  
-  // Count enumerators needing attention (>30% needs review or high issue rate)
+  // No "top performer" card. The only ranking available here is the share a
+  // reviewer has approved, which measures how far the review has got, not how
+  // good the interviews were -- it put an enumerator with every submission
+  // flagged on the podium.
+
+  // Count enumerators needing attention (>30% flagged and not approved, or a
+  // high issue rate)
   const enumeratorsNeedingAttention = collection.filter(e => {
     const needsReviewPercent = parseFloat(e.percentNeedsReview);
     const qualityStats = quality.find(q => q.id === e.id);
@@ -33,7 +29,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
     return needsReviewPercent > 30 || highIssueRate;
   }).length;
   
-  // Calculate team averages
+  // Share of all submissions a reviewer has approved in Kobo
   const teamAvgValidated = totalSubmissions > 0
     ? ((collection.reduce((sum, e) => sum + e.validated, 0) / totalSubmissions) * 100).toFixed(1)
     : '0';
@@ -44,14 +40,14 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
     : '0';
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
       {/* Total Enumerators */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
         <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">Enumerators</div>
         <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
           {totalEnumerators}
         </div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">active</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">active</div>
       </div>
       
       {/* Total Submissions */}
@@ -60,18 +56,19 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
         <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
           {totalSubmissions}
         </div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-          {avgSubmissionsPerEnumerator} avg/enum
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          {avgSubmissionsPerEnumerator} per enumerator on average
         </div>
       </div>
       
-      {/* Team Validation Rate */}
+      {/* Review progress: neutral, because a low number means "not reviewed
+          yet" as often as "rejected". */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">Team Validated</div>
-        <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+        <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">Approved by reviewer</div>
+        <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
           {teamAvgValidated}%
         </div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">approval rate</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">of submissions, approved in Kobo</div>
       </div>
       
       {/* Avg Issues per Submission */}
@@ -80,18 +77,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
         <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
           {teamAvgIssuesPerSubmission}
         </div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">per submission</div>
-      </div>
-      
-      {/* Best Performer */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">Top Performer</div>
-        <div className="text-lg font-bold text-amber-600 dark:text-amber-400 mt-1 truncate" title={bestPerformer?.id}>
-          {bestPerformer ? bestPerformer.id : 'N/A'}
-        </div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-          {bestPerformer ? `${bestPerformer.percentValidated} validated` : 'min 5 subs'}
-        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">per submission</div>
       </div>
       
       {/* Needs Attention */}
@@ -104,7 +90,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
         }`}>
           {enumeratorsNeedingAttention}
         </div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">enumerators</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">over 30% flagged and not approved, or over 2 issues per submission</div>
       </div>
     </div>
   );

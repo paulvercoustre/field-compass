@@ -319,7 +319,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
             value={totalTarget ?? ''}
             onChange={(e) => onTotalTargetChange(parseTarget(e.target.value))}
             placeholder="e.g. 500"
-            className="w-48 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-48 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
       )}
@@ -339,7 +339,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                   // nothing under a new one.
                   onTargetsByValueChange({});
                 }}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">-- Select a question --</option>
                 {strataVariables.map((item) => (
@@ -359,7 +359,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
 
           {variable && choices.length > 0 && (
             <>
-              <div className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md space-y-3">
+              <div className="p-3 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md space-y-3">
                 <p className="text-xs text-gray-600 dark:text-gray-400">
                   Fill the table from a number, then edit any group that differs.
                 </p>
@@ -374,7 +374,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                       value={plannedTotal}
                       onChange={(e) => setPlannedTotal(e.target.value)}
                       placeholder="e.g. 500"
-                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-500 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                   <button
@@ -400,7 +400,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                       value={perGroup}
                       onChange={(e) => setPerGroup(e.target.value)}
                       placeholder="e.g. 40"
-                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-500 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                   <button
@@ -419,7 +419,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+              <div className="overflow-x-auto rounded-md border border-gray-500 dark:border-gray-700">
                 <table className="min-w-full">
                   <thead className="bg-gray-100 dark:bg-gray-900">
                     <tr>
@@ -439,7 +439,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                       // question's row rather than replace it.
                       <tr
                         key={`${variable}:${choice.value}`}
-                        className="border-t border-gray-200 dark:border-gray-700"
+                        className="border-t border-gray-500 dark:border-gray-700"
                       >
                         <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
                           {choice.label}
@@ -456,14 +456,14 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                             value={targetsByValue[choice.value] ?? ''}
                             onChange={(e) => setOneTarget(choice.value, e.target.value)}
                             placeholder="—"
-                            className="w-28 px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-28 px-2 py-1 bg-white dark:bg-gray-900 border border-gray-500 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="bg-gray-50 dark:bg-gray-900">
-                    <tr className="border-t border-gray-200 dark:border-gray-700">
+                    <tr className="border-t border-gray-500 dark:border-gray-700">
                       <td className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                         Total
                       </td>

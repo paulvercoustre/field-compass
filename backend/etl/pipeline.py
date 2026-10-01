@@ -118,6 +118,9 @@ class ETLPipeline:
             "llm_queued": 0,
             "llm_skipped": 0,
             "errors": 0,
+            # Set when Kobo stopped answering part-way (or at once); whatever
+            # was fetched before that is still processed.
+            "upstream_error": None,
             "start_time": datetime.utcnow(),
         }
 
@@ -128,6 +131,7 @@ class ETLPipeline:
                 asset_uid=survey_config.kobo_asset_id, start=start_date, limit=limit
             )
             stats["fetched"] = len(kobo_submissions)
+            stats["upstream_error"] = self.kobo_fetcher.last_fetch_error
             logger.info(f"Fetched {stats['fetched']} submissions from Kobo")
 
             # Step 2: Initialize HFC engine

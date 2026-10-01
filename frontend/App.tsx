@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SurveyProvider, useSurvey } from './contexts/SurveyContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { FilterState } from './types';
@@ -29,8 +29,42 @@ const SURVEY_SCOPED_VIEWS: View[] = [
   'settings',
 ];
 
-const RequiresSurvey: React.FC<{ view: View; children: React.ReactNode }> = ({ view, children }) => {
+const VIEW_TITLES: Record<View, string> = {
+  dashboard: 'Submissions',
+  qualityOverview: 'Data Quality',
+  dataCollectionProgress: 'Data Collection Progress',
+  enumeratorPerformance: 'Field Team',
+  settings: 'Survey Settings',
+  createSurvey: 'Add a survey',
+  userSettings: 'Account settings',
+};
+
+// "Submissions · Household Survey 2026 · Field Compass". The tab title used to
+// read "Field compass" on every view, which tells a screen-reader user (and
+// anyone with several tabs open) nothing about where they are.
+const DocumentTitle: React.FC<{ view: View }> = ({ view }) => {
+  const { selectedSurvey } = useSurvey();
+  const surveyName = SURVEY_SCOPED_VIEWS.includes(view) ? selectedSurvey?.survey_name : undefined;
+
+  useEffect(() => {
+    document.title = [VIEW_TITLES[view], surveyName, 'Field Compass'].filter(Boolean).join(' · ');
+  }, [view, surveyName]);
+
+  return null;
+};
+
+const RequiresSurvey: React.FC<{
+  view: View;
+  notice?: string | null;
+  onNoticeSeen?: () => void;
+  children: React.ReactNode;
+}> = ({ view, notice, onNoticeSeen, children }) => {
   const { selectedSurvey, isLoading } = useSurvey();
+
+  // A notice about the previous selection is stale once another is chosen.
+  useEffect(() => {
+    if (selectedSurvey && notice) onNoticeSeen?.();
+  }, [selectedSurvey, notice, onNoticeSeen]);
 
   if (!SURVEY_SCOPED_VIEWS.includes(view) || selectedSurvey) {
     return <>{children}</>;
@@ -45,6 +79,11 @@ const RequiresSurvey: React.FC<{ view: View; children: React.ReactNode }> = ({ v
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
+        {notice && (
+          <p role="status" className="mb-6 px-4 py-2 rounded-md bg-green-50 dark:bg-green-900/40 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200">
+            {notice}
+          </p>
+        )}
         <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">No survey selected</p>
         <p className="text-gray-500 text-sm">
           Please select a survey from the sidebar to view its settings.
@@ -76,6 +115,9 @@ const AppContent: React.FC = () => {
   });
   
   const [dashboardFilters, setDashboardFilters] = useState<FilterState>({});
+  // Shown where the deleted survey's page was, since that page is gone.
+  const [surveyNotice, setSurveyNotice] = useState<string | null>(null);
+  const clearSurveyNotice = useCallback(() => setSurveyNotice(null), []);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     const saved = localStorage.getItem('sidebarOpen');
     return saved !== null ? saved === 'true' : true;
@@ -101,13 +143,33 @@ const AppContent: React.FC = () => {
       setView('dashboard');
     };
 
+    // From a failed pull: the fix is in the Kobo connection settings.
+    const handleNavigateToUserSettings = () => {
+      setView('userSettings');
+    };
+
+    const handleSurveyDeleted = (event: Event) => {
+      const name = (event as CustomEvent<{ name?: string }>).detail?.name;
+      setSurveyNotice(name ? `“${name}” was deleted.` : 'The survey was deleted.');
+    };
+
     window.addEventListener('navigateToSettings', handleNavigateToSettings);
     window.addEventListener('navigateToDashboard', handleNavigateToDashboard);
+    window.addEventListener('navigateToUserSettings', handleNavigateToUserSettings);
+    window.addEventListener('surveyDeleted', handleSurveyDeleted);
     return () => {
       window.removeEventListener('navigateToSettings', handleNavigateToSettings);
       window.removeEventListener('navigateToDashboard', handleNavigateToDashboard);
+      window.removeEventListener('navigateToUserSettings', handleNavigateToUserSettings);
+      window.removeEventListener('surveyDeleted', handleSurveyDeleted);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      document.title = 'Sign in · Field Compass';
+    }
+  }, [isLoading, user]);
 
   // Show loading state while checking auth
   if (isLoading) {
@@ -182,6 +244,7 @@ const AppContent: React.FC = () => {
 
   return (
     <SurveyProvider>
+      <DocumentTitle view={view} />
       <div className="flex h-full font-sans text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900">
         <Sidebar 
           onAddSurvey={handleAddSurvey} 
@@ -219,7 +282,9 @@ const AppContent: React.FC = () => {
           </header>
 
           <main className="flex-1 min-h-0 overflow-hidden">
-            <RequiresSurvey view={view}>{views[view]}</RequiresSurvey>
+            <RequiresSurvey view={view} notice={surveyNotice} onNoticeSeen={clearSurveyNotice}>
+              {views[view]}
+            </RequiresSurvey>
           </main>
         </div>
       </div>

@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
-import { API_BASE_URL } from '../services/apiBase';
+import { API_BASE_URL, apiFetch, setSessionExpiredHandler } from '../services/apiBase';
 import { forgetSurveyId } from '../utils/selectedSurveyStorage';
+import SessionExpiredDialog from '../components/SessionExpiredDialog';
 
 // User type
 export interface User {
@@ -84,6 +85,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [isLoading, setIsLoading] = useState(true);
+  // Set while a request is waiting on the user to sign in again. The ref lets
+  // logout() settle it, so a stale prompt never reappears after the next login.
+  type Reauth = { resolve: (token: string) => void; reject: (reason: Error) => void };
+  const [reauth, setReauthState] = useState<Reauth | null>(null);
+  const reauthRef = useRef<Reauth | null>(null);
+  const setReauth = (next: Reauth | null) => {
+    reauthRef.current = next;
+    setReauthState(next);
+  };
+
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      // Signed out already (a request finishing after logout): nothing to resume.
+      if (!localStorage.getItem(TOKEN_KEY)) {
+        return Promise.reject(new Error('Signed out'));
+      }
+      return new Promise<string>((resolve, reject) => setReauth({ resolve, reject }));
+    });
+    return () => setSessionExpiredHandler(null);
+  }, []);
 
   // Helper to make authenticated API requests
   const authFetch = async (endpoint: string, options: RequestInit = {}) => {
@@ -96,7 +117,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    // A 401 here first offers to sign in again (see apiFetch); only one that
+    // survives that -- the user chose to sign out -- ends the session.
+    const response = await apiFetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
     });
@@ -119,7 +142,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       try {
-        const response = await authFetch('/api/users/me');
+        // Plain fetch: an expired token at startup goes to the login page.
+        // There is no work on screen yet for a sign-in prompt to preserve.
+        const response = await fetch(`${API_BASE_URL}/api/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
@@ -203,7 +230,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await login(email, password);
   };
 
+  /**
+   * Sign the same account back in after its session expired, without the
+   * reset a fresh login does: the selected survey and the page stay put.
+   */
+  const reauthenticate = async (password: string) => {
+    if (!user || !reauth) return;
+
+    const formData = new URLSearchParams();
+    formData.append('username', user.email);
+    formData.append('password', password);
+
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(await errorDetail(response, 'Could not sign in'));
+    }
+
+    const newToken: string = (await response.json()).access_token;
+    setToken(newToken);
+    localStorage.setItem(TOKEN_KEY, newToken);
+    reauth.resolve(newToken);
+    setReauth(null);
+  };
+
+  const abandonSession = () => {
+    logout();
+  };
+
   const logout = () => {
+    reauthRef.current?.reject(new Error('Signed out'));
+    setReauth(null);
     setToken(null);
     setUser(null);
     localStorage.removeItem(TOKEN_KEY);
@@ -323,6 +384,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }}
     >
       {children}
+      {reauth && user && (
+        <SessionExpiredDialog
+          email={user.email}
+          onSignIn={reauthenticate}
+          onSignOut={abandonSession}
+        />
+      )}
     </AuthContext.Provider>
   );
 };

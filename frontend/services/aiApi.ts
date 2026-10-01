@@ -4,7 +4,7 @@
 
 import { StagedRule } from '../types';
 
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, apiFetch } from './apiBase';
 
 // Helper to get auth token from localStorage
 const getAuthToken = (): string | null => {
@@ -37,7 +37,7 @@ export async function generateRuleFromNaturalLanguage(
   surveyId: string,
   prompt: string
 ): Promise<Omit<StagedRule, 'id'>> {
-  const response = await fetch(`${API_BASE_URL}/api/ai/generate-rule`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/ai/generate-rule`, {
     method: 'POST',
     headers: createAuthHeaders(),
     body: JSON.stringify({
@@ -72,7 +72,7 @@ export async function generateRuleFromNaturalLanguage(
 export async function getSuggestedRules(
   surveyId: string
 ): Promise<Array<Omit<StagedRule, 'id'>>> {
-  const response = await fetch(`${API_BASE_URL}/api/ai/suggest-rules`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/ai/suggest-rules`, {
     method: 'POST',
     headers: createAuthHeaders(),
     body: JSON.stringify({

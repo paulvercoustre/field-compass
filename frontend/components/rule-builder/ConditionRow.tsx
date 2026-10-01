@@ -43,7 +43,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         <select 
             value={condition.value} 
             onChange={e => onChange({ ...condition, value: e.target.value })}
-            className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
             <option value="">Select variable...</option>
             {koboToolData.survey.map(q => {
@@ -59,7 +59,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
             <select
                 value={condition.value}
                 onChange={e => onChange({ ...condition, value: e.target.value })}
-                className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             >
                 <option value="">Select choice...</option>
                 {uniqueChoices.map(c => <option key={c.name} value={c.name}>{c['label::English (en)'] || c.name}</option>)}
@@ -73,7 +73,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         placeholder={condition.operator === '%in%' ? 'value1, value2' : isNumericVariable ? 'Enter number' : 'Enter static value'}
         value={condition.value}
         onChange={e => onChange({ ...condition, value: e.target.value })}
-        className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       />
     );
   };
@@ -84,7 +84,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
       <select 
         value={condition.variable} 
         onChange={e => onChange({ ...condition, variable: e.target.value, value: '' })} // Reset value on var change
-        className="flex-shrink-0 w-48 min-w-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        className="flex-shrink-0 w-48 min-w-0 bg-white dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       >
         <option value="">Select variable...</option>
         {koboToolData.survey.map(q => {
@@ -104,7 +104,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
             ...(isValuelessOperator(e.target.value) ? { value: '', valueType: 'static' as const } : {}),
           })
         }
-        className="flex-shrink-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        className="flex-shrink-0 bg-white dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       >
         {operators.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
       </select>

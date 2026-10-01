@@ -27,6 +27,11 @@ class KoboFetcher:
         """
         self.api_token = api_token
         self.api_url = api_url.rstrip("/")
+        # Why the last get_asset_submissions() stopped early, or None if it
+        # read every page. The fetch keeps the pages it already has rather
+        # than raising, so callers need this to tell "nothing new" apart from
+        # "Kobo could not be reached".
+        self.last_fetch_error: str | None = None
         self.session = requests.Session()
         self.session.headers.update(
             {"Authorization": f"Token {api_token}", "Content-Type": "application/json"}
@@ -84,6 +89,7 @@ class KoboFetcher:
             List of submission dictionaries
         """
         all_submissions = []
+        self.last_fetch_error = None
 
         # Handle None limit - use a large default or no limit
         effective_limit = limit if limit is not None else None
@@ -139,6 +145,7 @@ class KoboFetcher:
 
             except Exception as e:
                 logger.error(f"Error fetching submissions: {e}")
+                self.last_fetch_error = str(e)
                 break
 
         logger.info(f"Total submissions fetched: {len(all_submissions)}")

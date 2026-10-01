@@ -2,7 +2,7 @@
 import { Submission, SubmissionHistory, FilterState } from '../types';
 import { buildFilterParams } from '../utils/filterUtils';
 
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, apiFetch } from './apiBase';
 
 // Helper to get auth token from localStorage
 const getAuthToken = (): string | null => {
@@ -64,7 +64,7 @@ export const api = {
         }
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/submissions?${params}`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/submissions?${params}`, {
         headers: createHeaders(),
       });
 
@@ -87,7 +87,7 @@ export const api = {
    */
   getSubmission: async (koboId: number): Promise<Submission> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/submissions/${koboId}`, {
         headers: createHeaders(),
       });
       
@@ -112,7 +112,7 @@ export const api = {
    */
   getSubmissionHistory: async (koboId: number): Promise<SubmissionHistory[]> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}/history`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/submissions/${koboId}/history`, {
         headers: createHeaders(),
       });
       
@@ -141,7 +141,7 @@ export const api = {
       const params = new URLSearchParams({
         survey_id: surveyId,
       });
-      const response = await fetch(`${API_BASE_URL}/api/submissions/${koboId}/kobo-edit-url?${params}`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/submissions/${koboId}/kobo-edit-url?${params}`, {
         headers: createHeaders(),
       });
       
@@ -173,7 +173,7 @@ export const api = {
         survey_id: surveyId,
       });
       
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/submissions/${koboId}/validation-status?${params}`,
         {
           method: 'PATCH',
@@ -211,7 +211,7 @@ export const api = {
         survey_id: surveyId,
       });
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/submissions/${koboId}/reviewer-notes?${params}`,
         {
           method: 'PATCH',
@@ -273,7 +273,7 @@ export interface KoboProjectForm {
  * populated without the user exporting and uploading the XLSForm.
  */
 export const getKoboProjectForm = async (assetUid: string): Promise<KoboProjectForm> => {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_BASE_URL}/api/kobo/assets/${encodeURIComponent(assetUid)}/form`,
     { headers: createHeaders() }
   );

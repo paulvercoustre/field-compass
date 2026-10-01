@@ -133,7 +133,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search..."
-                  className="w-full px-2 py-1 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full px-2 py-1 bg-white dark:bg-gray-600 border border-gray-500 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   onClick={(e) => e.stopPropagation()}
                 />
               </div>

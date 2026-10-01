@@ -170,7 +170,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
                         placeholder={filterPlaceholder}
-                        className="w-full px-4 py-2 mb-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-4 py-2 mb-4 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                     <div className="overflow-x-auto rounded-lg shadow-md">
                         <table className="min-w-full">

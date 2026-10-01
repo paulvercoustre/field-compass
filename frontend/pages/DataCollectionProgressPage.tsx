@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { progressApi, triggerETL, ETLStats, getSurveyConfig, SurveyConfig } from '../services/progressApi';
+import { progressApi, triggerETL, getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import { useSurvey } from '../contexts/SurveyContext';
 import { ProgressData } from '../types';
 import { Spinner } from '../components/Spinner';
+import { PullButton, PullOutcomeBanner, PullOutcome, describePullResult, describePullFailure } from '../components/PullStatus';
 import ProgressDataView, { ProgressSubTab } from '../components/progress-tracker/ProgressDataView';
 
 const DataCollectionProgressPage: React.FC = () => {
@@ -12,9 +13,10 @@ const DataCollectionProgressPage: React.FC = () => {
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunningETL, setIsRunningETL] = useState(false);
-  const [etlStats, setEtlStats] = useState<ETLStats | null>(null);
+  // The page's data could not be loaded. Shown in place of the content.
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  // How the last pull from Kobo went; shown in the header only.
+  const [pullOutcome, setPullOutcome] = useState<PullOutcome | null>(null);
   const [approvedOnly, setApprovedOnly] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>('overall');
   const [filter, setFilter] = useState('');
@@ -44,29 +46,17 @@ const DataCollectionProgressPage: React.FC = () => {
   }, [fetchData]);
 
   const handleRefresh = async () => {
-    if (!selectedSurvey) {
-      setError('Please select a survey first');
-      return;
-    }
+    if (!selectedSurvey) return;
 
     setIsRunningETL(true);
-    setError(null);
-    setSuccess(null);
-    setEtlStats(null);
+    setPullOutcome(null);
 
     try {
       const stats = await triggerETL(selectedSurvey.survey_id);
-      setEtlStats(stats);
-      
+      setPullOutcome(describePullResult(stats));
       await fetchData();
-      
-      const checkedCount = (stats.validated || 0);
-      const skippedCount = (stats.skipped || 0);
-      setSuccess(
-        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`
-      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run ETL pipeline');
+      setPullOutcome(describePullFailure(err));
       console.error(err);
     } finally {
       setIsRunningETL(false);
@@ -99,42 +89,10 @@ const DataCollectionProgressPage: React.FC = () => {
                 />
               </button>
             </div>
-            {etlStats && (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                <span className="text-green-600 dark:text-green-400">✓</span> Last run: {etlStats.duration_seconds.toFixed(1)}s
-              </div>
-            )}
-            <button
-              onClick={handleRefresh}
-              disabled={isRunningETL || !selectedSurvey}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
-            >
-              {isRunningETL ? (
-                <>
-                  <Spinner />
-                  <span>Running ETL...</span>
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>Refresh from Kobo</span>
-                </>
-              )}
-            </button>
+            <PullButton onClick={handleRefresh} isPulling={isRunningETL} disabled={!selectedSurvey} />
           </div>
         </div>
-        {error && (
-          <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-md text-red-800 dark:text-red-200 text-sm">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/50 border border-green-200 dark:border-green-700 rounded-md text-green-800 dark:text-green-200 text-sm">
-            {success}
-          </div>
-        )}
+        <PullOutcomeBanner outcome={pullOutcome} onRetry={handleRefresh} isPulling={isRunningETL} />
       </div>
 
       {/* Main Content */}
@@ -144,7 +102,7 @@ const DataCollectionProgressPage: React.FC = () => {
             <Spinner />
           </div>
         ) : error && !isRunningETL ? (
-          <div className="p-4 text-center text-red-600 dark:text-red-400">{error}</div>
+          <div role="alert" className="p-4 text-center text-red-700 dark:text-red-400">{error}</div>
         ) : (
           <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-screen-2xl">
             {progressData && (

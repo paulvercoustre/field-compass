@@ -91,7 +91,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
                 add(e.target.value);
                 e.target.value = '';
               }}
-              className="w-full mb-2 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full mb-2 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">-- Add another answer option --</option>
               {found.length > 0 ? (
@@ -139,7 +139,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
                   }
                 }}
                 placeholder="Enter answer option"
-                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <button
                 type="button"
