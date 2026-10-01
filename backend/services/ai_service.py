@@ -135,13 +135,14 @@ DON'T KNOW VALUES:
   Example: If DK = -999, use conditions like: (age > 120 & age != -999) OR (age < 0 & age != -999)
 
 CONDITION STRUCTURE:
-- Each condition has: variable (string), operator (==, !=, >, <, >=, <=, %in%), value (string), valueType ("static" or "variable")
+- Each condition has: variable (string), operator (==, !=, >, <, >=, <=, %in%, is_empty, is_not_empty), value (string), valueType ("static" or "variable")
 - Multiple conditions are joined with {"joiner": "&"} for AND or {"joiner": "|"} for OR
 - Example: [{"variable": "age", "operator": ">", "value": "100", "valueType": "static"}, {"joiner": "&"}, {"variable": "age", "operator": "<", "value": "150", "valueType": "static"}]
 
 OPERATORS (STRICT - use ONLY these):
 - ==, !=, >, <, >=, <= : standard comparisons
 - %in% : value is in a list (use comma-separated values like "yes,no,maybe")
+- is_empty / is_not_empty : the question was shown but left blank / was answered. Set value to "". A question hidden by skip logic is never empty.
 - Do NOT use XLSForm functions (count-selected, position, etc.)
 - Do NOT create custom operators or expressions
 
@@ -187,7 +188,17 @@ Generate a validation rule matching the exact JSON schema."""
                                     },
                                     "operator": {
                                         "type": "string",
-                                        "enum": ["==", "!=", ">", "<", ">=", "<=", "%in%"],
+                                        "enum": [
+                                            "==",
+                                            "!=",
+                                            ">",
+                                            "<",
+                                            ">=",
+                                            "<=",
+                                            "%in%",
+                                            "is_empty",
+                                            "is_not_empty",
+                                        ],
                                         "description": "Comparison operator",
                                     },
                                     "value": {
@@ -396,6 +407,7 @@ DON'T KNOW VALUES:
 OPERATORS (STRICT - use ONLY these):
 - ==, !=, >, <, >=, <= : standard comparisons
 - %in% : value is in a list (use comma-separated values)
+- is_empty / is_not_empty : the question was shown but left blank / was answered. Set value to "". A question hidden by skip logic is never empty.
 - Do NOT use XLSForm functions (count-selected, position, etc.)
 - Do NOT create custom operators or expressions
 
@@ -403,7 +415,7 @@ REQUIREMENTS:
 - Suggest 5-10 diverse rules
 - Each rule must be different from existing rules, do not suggest duplicates or near-duplicates.
 - Prioritize practical, actionable rules
-- Use ONLY the operators listed above (==, !=, >, <, >=, <=, %in%)
+- Use ONLY the operators listed above (==, !=, >, <, >=, <=, %in%, is_empty, is_not_empty)
 - Set roster_name to null unless rule applies to a repeat group"""
 
         user_prompt = f"""SURVEY VARIABLES:
@@ -435,7 +447,17 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
                                     "variable": {"type": "string"},
                                     "operator": {
                                         "type": "string",
-                                        "enum": ["==", "!=", ">", "<", ">=", "<=", "%in%"],
+                                        "enum": [
+                                            "==",
+                                            "!=",
+                                            ">",
+                                            "<",
+                                            ">=",
+                                            "<=",
+                                            "%in%",
+                                            "is_empty",
+                                            "is_not_empty",
+                                        ],
                                     },
                                     "value": {"type": "string"},
                                     "valueType": {"type": "string", "enum": ["static", "variable"]},

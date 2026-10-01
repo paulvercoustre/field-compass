@@ -131,7 +131,9 @@ class ETLPipeline:
             logger.info(f"Fetched {stats['fetched']} submissions from Kobo")
 
             # Step 2: Initialize HFC engine
-            hfc_engine = HFCEngine(self.db, survey_config)
+            hfc_engine = HFCEngine(
+                self.db, survey_config, fetch_live_form=self.kobo_fetcher.get_asset_info
+            )
 
             # Pre-compute outlier statistics for consistency across all submissions
             hfc_engine.precompute_outlier_statistics()
@@ -421,7 +423,9 @@ class ETLPipeline:
         # Run HFC checks
         # Note: Duration check uses audit logs (active_interview_time) or form fields (start/end)
         # Metadata timestamps (_submission_time, end) are NOT used for duration
-        hfc_engine = HFCEngine(self.db, survey_config)
+        hfc_engine = HFCEngine(
+            self.db, survey_config, fetch_live_form=self.kobo_fetcher.get_asset_info
+        )
         issues = hfc_engine.run_checks(
             submission_data=submission.submission_data, submission_uuid=submission_uuid
         )

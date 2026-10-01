@@ -10,6 +10,7 @@ from collections.abc import Iterable
 from forms.schema import Choice, FormSchema, Question
 from linter.auto_rules import (
     dk_not_exclusive_rule,
+    missing_required_rule,
     unbounded_date_future_rule,
     unbounded_numeric_rule,
 )
@@ -223,10 +224,7 @@ def check_missing_required(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
                     "downstream check that keys on them silently skip the row."
                 ),
                 suggested_fix="Set `required` to `yes` on this question.",
-                # No runtime twin: Kobo leaves a blank answer out of the
-                # submission, and the HFC engine skips any rule whose variable
-                # is absent, so a "is blank" rule could never fire.
-                auto_rule=None,
+                auto_rule=missing_required_rule(question, ctx.language),
             )
         )
     return findings

@@ -476,10 +476,13 @@ class TestReviewRegressions:
         assert "refused" in finding.details
         assert "'refused'" in finding.suggested_fix
 
-    def test_missing_required_offers_no_rule_that_cannot_fire(self):
+    def test_missing_required_offers_a_blank_check(self):
+        """The engine now runs `is_empty()` on an absent answer, so the rule can fire."""
         report = run_lint(load_form_schema(MISSING_REQUIRED))
         finding = _finding(report, "missing_required")
-        assert finding.auto_rule is None
+        assert finding.auto_rule is not None
+        question = finding.auto_rule["variables_involved"][0]
+        assert finding.auto_rule["check_expression"] == f"is_empty({question})"
 
     def test_today_in_a_label_is_not_an_interview_date(self):
         report = run_lint(load_form_schema(TODAY_IN_LABEL_ONLY))

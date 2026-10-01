@@ -7,10 +7,11 @@ import logging
 import math
 import re
 import statistics
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from simpleeval import SimpleEval
+from simpleeval import DEFAULT_FUNCTIONS, SimpleEval
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -23,7 +24,9 @@ from etl.dk_utils import (
 from etl.dk_utils import (
     compute_dk_metrics as compute_submission_dk_metrics,
 )
+from etl.relevance import is_shown
 from forms.schema import load_form_schema
+from linter.form_source import SurveyForm, load_survey_form
 from models import QualityIssue
 from services.survey_config import (
     SAMPLING_MODE_BY_VARIABLE,
@@ -43,20 +46,80 @@ from utils.rule_versioning import (
 logger = logging.getLogger(__name__)
 
 
+class _BlankState:
+    """What a rule sees for a question that has no answer."""
+
+    def __init__(self, label: str):
+        self.label = label
+
+    def __repr__(self) -> str:
+        return f"<{self.label}>"
+
+
+# Shown to the respondent and left without an answer.
+_BLANK = _BlankState("blank")
+# Hidden by skip logic -- or we could not tell. Neither is a missing answer.
+_NOT_ASKED = _BlankState("not asked")
+
+# `is_empty(comments)` / `is_not_empty(comments)` in a rule expression.
+_BLANK_CALL = re.compile(r"\b(?:is_empty|is_not_empty)\s*\(\s*([A-Za-z_]\w*)\s*\)")
+
+
+def _is_empty(value: Any) -> bool:
+    if value is _BLANK or value is None:
+        return True
+    return isinstance(value, str) and not value.strip()
+
+
+def _is_not_empty(value: Any) -> bool:
+    return value is not _NOT_ASKED and not _is_empty(value)
+
+
+_RULE_FUNCTIONS = {**DEFAULT_FUNCTIONS, "is_empty": _is_empty, "is_not_empty": _is_not_empty}
+
+
+def blank_checked_only(expression: str, variables: list[str]) -> set[str]:
+    """
+    Variables the expression reads only through `is_empty()` / `is_not_empty()`.
+
+    Kobo leaves a blank answer out of the submission, so these are the
+    variables a rule may still run without. One that is also compared
+    (`x == "a" | is_empty(x)`) keeps the usual skip-when-absent behaviour.
+    """
+    called = set(_BLANK_CALL.findall(expression))
+    if not called:
+        return set()
+    rest = _BLANK_CALL.sub("", expression)
+    return {
+        var for var in variables if var in called and not re.search(rf"\b{re.escape(var)}\b", rest)
+    }
+
+
 class HFCEngine:
     """High-Frequency Check engine for data quality validation."""
 
-    def __init__(self, db: Session, survey_config: SurveyConfig):
+    def __init__(
+        self,
+        db: Session,
+        survey_config: SurveyConfig,
+        fetch_live_form: Callable[[str], Any] | None = None,
+    ):
         """
         Initialize HFC engine.
 
         Args:
             db: Database session
             survey_config: Survey configuration object
+            fetch_live_form: Optional; takes the Kobo asset UID and returns the
+                asset payload. Used only when the stored form has no skip
+                logic and a rule needs to know whether a question was shown.
         """
         self.db = db
         self.survey_config = survey_config
         self.config_data = survey_config.config_data
+        self._fetch_live_form = fetch_live_form
+        self._relevance_form: SurveyForm | None = None
+        self._relevance_form_loaded = False
 
         # Extract configuration - handle nested structure
         core_identifiers = self.config_data.get("core_identifiers", {})
@@ -1493,12 +1556,16 @@ class HFCEngine:
         if not check_expression:
             return issues
 
+        # Variables read only through is_empty()/is_not_empty() may be absent:
+        # that is what a blank answer looks like.
+        blank_checked = blank_checked_only(check_expression, variables_involved)
+
         # Check if all required variables exist (using path-based lookup)
         missing_vars = []
         var_values = {}
         for var in variables_involved:
             value, field_path = self._get_field_value(submission_data, var)
-            if value is None and field_path is None:
+            if value is None and field_path is None and var not in blank_checked:
                 missing_vars.append(var)
             else:
                 var_values[var] = (value, field_path or var)
@@ -1511,6 +1578,8 @@ class HFCEngine:
 
         # Filter out rows with NA or DK values in relevant columns
         for var in variables_involved:
+            if var in blank_checked:
+                continue  # Its presence is the question, not its value.
             value, field_path = var_values[var]
             if value is None:
                 return issues  # Skip if any required variable is None
@@ -1527,6 +1596,10 @@ class HFCEngine:
             eval_context = {}
             for var in variables_involved:
                 value, field_path = var_values[var]
+                if var in blank_checked and _is_empty(value):
+                    shown = self._question_shown(var, submission_data)
+                    eval_context[var] = _BLANK if shown else _NOT_ASKED
+                    continue
                 # Convert string numeric values to appropriate types (handles Kobo API string numbers)
                 converted_value = self._convert_value_type(value)
                 # Use the variable name from config in the expression, but get value from actual path
@@ -1566,6 +1639,53 @@ class HFCEngine:
 
         return issues
 
+    def _form_for_relevance(self) -> SurveyForm | None:
+        """
+        The form whose skip logic decides whether a question was shown.
+
+        Loaded once, on first need. A survey stored before logic columns were
+        kept is read live from Kobo when a fetcher was given; with no logic to
+        go on, None -- and no blank is flagged, since every question would
+        look as if it had been asked.
+        """
+        if not self._relevance_form_loaded:
+            self._relevance_form_loaded = True
+            try:
+                form = load_survey_form(self.survey_config, self._fetch_live_form)
+            except Exception as exc:
+                logger.warning("Could not read the form for skip logic: %s", exc)
+                form = None
+            if form is not None and (form.logic_missing or form.schema.is_empty):
+                logger.warning(
+                    "Survey %s: the stored form has no skip logic and the live form "
+                    "could not be read, so is_empty() rules will not flag anything. "
+                    "Refresh the form from the Kobo project in Survey Settings.",
+                    self.survey_config.survey_id,
+                )
+                form = None
+            self._relevance_form = form
+        return self._relevance_form
+
+    def _question_shown(self, variable: str, submission_data: dict[str, Any]) -> bool:
+        """
+        Whether the form showed ``variable`` for this submission.
+
+        False when it was hidden and also when that cannot be worked out --
+        an unknown question, logic this cannot evaluate, a repeat -- so a
+        blank check only fires on a question that was certainly asked.
+        """
+        form = self._form_for_relevance()
+        if form is None:
+            return False
+        question = form.schema.get(variable)
+        if question is None:
+            return False
+
+        def lookup(name: str) -> Any:
+            return self._get_field_value(submission_data, name)[0]
+
+        return is_shown(form.schema, question, lookup) is True
+
     def _safe_eval(self, expression: str, context: dict[str, Any]) -> bool:
         """
         Safely evaluate a boolean expression using simpleeval.
@@ -1598,7 +1718,7 @@ class HFCEngine:
 
             # Create SimpleEval instance with names from context
             # SimpleEval is safe by default - it doesn't allow dangerous operations
-            evaluator = SimpleEval(names=names)
+            evaluator = SimpleEval(names=names, functions=_RULE_FUNCTIONS)
 
             # Evaluate the expression
             result = evaluator.eval(expression)
