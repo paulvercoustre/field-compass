@@ -176,6 +176,32 @@ class SubmissionHistory(Base):
     submission = relationship("SubmissionCurrent", back_populates="history")
 
 
+class AIUsage(Base):
+    """
+    One AI call: what it was for, which model, how many tokens, how it ended.
+
+    The free allowance counts these, and the usage view reads them. No prompt
+    or reply text is stored.
+    """
+
+    __tablename__ = "ai_usage"
+
+    usage_id = Column(Integer, primary_key=True, autoincrement=True)
+    survey_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("survey_configs.survey_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # qualitative_check | rule_generation | rule_suggestion
+    feature = Column(String(32), nullable=False)
+    submission_id = Column(Integer, nullable=True)  # qualitative checks only
+    model = Column(String(128), nullable=False)
+    input_tokens = Column(Integer, nullable=True)  # as reported by the provider
+    output_tokens = Column(Integer, nullable=True)
+    outcome = Column(String(32), nullable=False)  # "ok" or an AIError category
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
 class SurveyAccess(Base):
     """ORM model for survey_access table - manages shared access to surveys."""
 

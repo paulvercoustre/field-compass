@@ -18,6 +18,7 @@ This test makes that class of bug impossible to merge: any table or column the
 application relies on must exist in the file production actually runs.
 """
 
+import importlib.util
 import re
 from pathlib import Path
 
@@ -257,21 +258,51 @@ def migration_tables() -> dict[str, set[str]]:
     return parse_schema_sql(MIGRATION_PATH.read_text())
 
 
+REVISIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+
+
+@pytest.fixture(scope="module")
+def revision_tables() -> dict[str, set[str]]:
+    """
+    Columns created by revisions after the baseline, from their UPGRADE_SQL.
+
+    A new table belongs in its own immutable revision, not in 006; this is
+    what lets the check below count it.
+    """
+    tables: dict[str, set[str]] = {}
+    for path in sorted(REVISIONS_DIR.glob("[0-9]*.py")):
+        if path.name.startswith("0001_"):
+            continue
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for table, columns in parse_schema_sql(getattr(module, "UPGRADE_SQL", "")).items():
+            tables.setdefault(table, set()).update(columns)
+    return tables
+
+
 def test_migration_file_is_parseable(migration_tables):
     assert migration_tables, f"nothing parsed from {MIGRATION_PATH}"
     assert "users" in migration_tables, "006 must create the users table"
 
 
 @pytest.mark.parametrize("table_name", sorted(Base.metadata.tables))
-def test_migration_006_covers_every_model_column(table_name, migration_tables, model_tables):
-    """Every ORM column must be either original, or added by migration 006.
+def test_migration_006_covers_every_model_column(
+    table_name, migration_tables, revision_tables, model_tables
+):
+    """Every ORM column must be original, added by migration 006, or created
+    by a later revision.
 
     Anything else is a column that exists in models.py and in schema.sql, but
     that an already-provisioned database will never gain -- exactly the failure
     this migration exists to prevent.
     """
     table = table_name.lower()
-    reachable = BASELINE_COLUMNS.get(table, set()) | migration_tables.get(table, set())
+    reachable = (
+        BASELINE_COLUMNS.get(table, set())
+        | migration_tables.get(table, set())
+        | revision_tables.get(table, set())
+    )
 
     missing = sorted(model_tables[table] - reachable)
     assert not missing, (

@@ -18,6 +18,7 @@ from etl.dk_utils import is_dk_value
 from etl.hfc_engine import HFCEngine
 from services.ai_errors import NOT_CONFIGURED, AIError
 from services.ai_service import AIService
+from services.ai_usage import QUALITATIVE_CHECK, usage_recorder
 from services.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,7 @@ def run_qualitative_check_job(
                     dk_numeric=engine.dk_value,
                     dk_string=engine.dk_string_value,
                     check_types=engine.llm_check_types,
+                    record=usage_recorder(db, survey_id, QUALITATIVE_CHECK, submission_id),
                 )
             except AIError as error:
                 if error.retryable and not final_attempt:

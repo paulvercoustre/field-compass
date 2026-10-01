@@ -135,8 +135,16 @@ profile** measured by its connection test (§6.2):
 }
 ```
 
+The profile is also **learned from rejections**: it starts at the most
+capable setting, and when an endpoint rejects a request because of one of
+these details (its error names `temperature`, the token parameter, or
+`response_format`), the client steps that detail down and retries, at most
+three times. The operator key keeps what it learned per model for the life
+of the process; connections will persist it (phase 2).
+
 Every response is still validated against the feature's schema, whatever the
-mode (§7.2). With `json_object` or `prompt_only`, the schema is included in
+mode (§7.2), and parsed leniently — some endpoints accept `response_format`
+and still wrap the JSON in prose or code fences. With `json_object` or `prompt_only`, the schema is included in
 the prompt and the reply is parsed leniently (first JSON object in the text).
 
 ## 5. Data model
@@ -184,7 +192,7 @@ display reads.
 |---|---|---|
 | `usage_id` | bigserial PK | |
 | `survey_id` | FK `survey_configs` | |
-| `connection_id` | FK, nullable | `NULL` = operator key |
+| `connection_id` | FK, nullable | `NULL` = operator key. Added in phase 2, with `ai_connections` |
 | `feature` | text | `qualitative_check`, `rule_generation`, `rule_suggestion` |
 | `submission_id` | bigint, nullable | Qualitative checks only |
 | `model` | text | |

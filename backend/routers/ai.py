@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from database.models import SurveyConfig, User
 from services.ai_service import ai_service
+from services.ai_usage import RULE_GENERATION, RULE_SUGGESTION, usage_recorder
 from services.auth import get_current_active_user
 from services.database import get_db
 from services.permissions import require_survey_access
@@ -144,6 +145,7 @@ async def generate_rule_from_natural_language(
             kobo_variables=kobo_variables,
             existing_rules=existing_rules_context,
             survey_context=survey_context,
+            record=usage_recorder(db, survey_uuid, RULE_GENERATION),
         )
 
         logger.info(
@@ -249,6 +251,7 @@ async def suggest_validation_rules(
             global_parameters=global_parameters,
             special_values=special_values,
             existing_rules=existing_rules_context,
+            record=usage_recorder(db, survey_uuid, RULE_SUGGESTION),
         )
 
         logger.info(

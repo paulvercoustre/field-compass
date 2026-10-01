@@ -132,6 +132,7 @@ services:
       # Rotating it makes existing stored Kobo tokens unreadable.
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env - see .env.example}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
       OPENAI_RULE_GEN_MODEL: ${OPENAI_RULE_GEN_MODEL:-gpt-5}
       OPENAI_QUAL_CHECK_MODEL: ${OPENAI_QUAL_CHECK_MODEL:-gpt-5-mini}
@@ -182,6 +183,7 @@ services:
       # Rotating it makes existing stored Kobo tokens unreadable.
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env - see .env.example}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
       OPENAI_RULE_GEN_MODEL: ${OPENAI_RULE_GEN_MODEL:-gpt-5}
       OPENAI_QUAL_CHECK_MODEL: ${OPENAI_QUAL_CHECK_MODEL:-gpt-5-mini}

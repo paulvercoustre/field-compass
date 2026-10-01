@@ -7,6 +7,7 @@ issues detected" and none was ever retried. These tests pin the rule that a
 failure is stored as a failure, with a category the UI can explain.
 """
 
+import json
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
@@ -16,7 +17,8 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from database.models import SubmissionCurrent
-from services import qualitative_worker, qualitative_worker_runtime
+from services import ai_client, qualitative_worker, qualitative_worker_runtime
+from services.ai_client import AIClient
 from services.ai_errors import (
     AUTH,
     BAD_REQUEST,
@@ -106,10 +108,16 @@ def _service_replying(content=None, raises=None, finish_reason="stop"):
             choices=[SimpleNamespace(message=message, finish_reason=finish_reason)]
         )
 
-    service.client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
-    )
+    fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    service.ai = AIClient(client_factory=lambda **_: fake)
     return service
+
+
+@pytest.fixture(autouse=True)
+def _operator_key(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    ai_client._OPERATOR_CAPABILITIES.clear()
 
 
 def _check(service):
@@ -127,8 +135,18 @@ class TestCheckQualitativeResponses:
         assert _check(_service_replying('{"issues": []}')) == []
 
     def test_findings_are_filtered_to_enabled_check_types(self):
-        reply = '{"issues": [{"check_type": "relevance"}, {"check_type": "completeness"}]}'
-        assert _check(_service_replying(reply)) == [{"check_type": "relevance"}]
+        relevance, completeness = (
+            {
+                "field": "comments",
+                "value": "x",
+                "check_type": kind,
+                "message": "m",
+                "reasoning": "r",
+            }
+            for kind in ("relevance", "completeness")
+        )
+        reply = json.dumps({"issues": [relevance, completeness]})
+        assert _check(_service_replying(reply)) == [relevance]
 
     def test_provider_error_is_raised_not_swallowed(self):
         service = _service_replying(
@@ -155,7 +173,7 @@ class TestCheckQualitativeResponses:
 
     def test_no_key_is_not_configured(self):
         service = _service_replying("{}")
-        service.client = None
+        service.api_key = None
         with pytest.raises(AIError) as raised:
             _check(service)
         assert raised.value.category == NOT_CONFIGURED

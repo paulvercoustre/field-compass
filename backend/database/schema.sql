@@ -205,6 +205,21 @@ COMMENT ON TABLE survey_access IS 'Junction table for sharing surveys with users
 COMMENT ON COLUMN survey_access.permission_level IS 'Access level: editor (can run ETL, resolve flags) or viewer (read-only)';
 COMMENT ON COLUMN survey_access.granted_by IS 'User who granted this access';
 
+CREATE TABLE ai_usage (
+    usage_id BIGSERIAL PRIMARY KEY,
+    survey_id UUID NOT NULL REFERENCES survey_configs(survey_id) ON DELETE CASCADE,
+    feature VARCHAR(32) NOT NULL,
+    submission_id INTEGER,
+    model VARCHAR(128) NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    outcome VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE ai_usage IS 'One row per AI call; counted for the free allowance. No prompt or reply text.';
+COMMENT ON COLUMN ai_usage.outcome IS 'ok, or the failure category (auth, rate_limited, ...)';
+
 -- ============================================================================
 -- Indexes for Performance
 -- ============================================================================
@@ -217,6 +232,9 @@ CREATE INDEX idx_users_active ON users(is_active) WHERE is_active = TRUE;
 -- Survey access indexes
 CREATE INDEX idx_survey_access_user ON survey_access(user_id);
 CREATE INDEX idx_survey_access_survey ON survey_access(survey_id);
+
+-- AI usage: the monthly allowance count per survey
+CREATE INDEX idx_ai_usage_survey_created ON ai_usage(survey_id, created_at);
 
 -- Survey configs indexes
 CREATE INDEX idx_survey_configs_name ON survey_configs(survey_name);

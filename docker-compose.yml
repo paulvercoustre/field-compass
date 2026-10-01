@@ -60,6 +60,7 @@ services:
       KOBO_API_URL: ${KOBO_API_URL:-https://kf.kobotoolbox.org/api/v2}
       # OpenAI API settings (for AI-powered rule generation)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
       OPENAI_RULE_GEN_MODEL: ${OPENAI_RULE_GEN_MODEL:-gpt-5}
       OPENAI_QUAL_CHECK_MODEL: ${OPENAI_QUAL_CHECK_MODEL:-gpt-5-mini}
@@ -105,6 +106,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/field_compass}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
       OPENAI_RULE_GEN_MODEL: ${OPENAI_RULE_GEN_MODEL:-gpt-5}
       OPENAI_QUAL_CHECK_MODEL: ${OPENAI_QUAL_CHECK_MODEL:-gpt-5-mini}
