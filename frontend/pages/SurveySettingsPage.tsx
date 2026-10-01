@@ -285,6 +285,8 @@ const SurveySettingsPage: React.FC = () => {
       setSuccess(null);
       setError(null);
       setSectionStatus({});
+      saveQueueRef.current = Promise.resolve();
+      savedConfigRef.current = null;
       loadSurveyConfig();
 
       // Check if we should open the quality tab (set from CreateSurveyPage)
