@@ -64,6 +64,11 @@ _NOT_ASKED = _BlankState("not asked")
 
 # `is_empty(comments)` / `is_not_empty(comments)` in a rule expression.
 _BLANK_CALL = re.compile(r"\b(?:is_empty|is_not_empty)\s*\(\s*([A-Za-z_]\w*)\s*\)")
+# Quoted values in a rule expression: `status == "comments"` names no variable.
+_STRING_LITERAL = re.compile(r"\"[^\"]*\"|'[^']*'")
+
+# The survey-sheet columns that decide which questions a submission was shown.
+_FORM_LOGIC_COLUMNS = ("name", "type", "relevant", "group_relevant", "roster_name", "group_path")
 
 
 def _is_empty(value: Any) -> bool:
@@ -87,10 +92,11 @@ def blank_checked_only(expression: str, variables: list[str]) -> set[str]:
     variables a rule may still run without. One that is also compared
     (`x == "a" | is_empty(x)`) keeps the usual skip-when-absent behaviour.
     """
-    called = set(_BLANK_CALL.findall(expression))
+    unquoted = _STRING_LITERAL.sub('""', expression)
+    called = set(_BLANK_CALL.findall(unquoted))
     if not called:
         return set()
-    rest = _BLANK_CALL.sub("", expression)
+    rest = _BLANK_CALL.sub("", unquoted)
     return {
         var for var in variables if var in called and not re.search(rf"\b{re.escape(var)}\b", rest)
     }
@@ -541,6 +547,14 @@ class HFCEngine:
         # hash and revalidate every submission on the next sync.
         if self.flag_empty_percentage:
             config["empty_config"] = {"threshold": self.empty_percentage_threshold}
+
+        # Blank checks read the form's skip logic, so a refreshed form with
+        # different skip logic has to revalidate what they decided.
+        uses_form = self.flag_empty_percentage or any(
+            _BLANK_CALL.search(rule.rule_data.get("check_expression") or "") for rule in rules
+        )
+        if uses_form:
+            config["form_logic"] = self._form_logic_fingerprint()
 
         # Convert to JSON string (sorted keys for consistency)
         config_json = json.dumps(config, sort_keys=True)
@@ -1723,6 +1737,27 @@ class HFCEngine:
             )
 
         return issues
+
+    def _form_logic_fingerprint(self) -> str:
+        """
+        Digest of the stored form's skip logic and answerable questions.
+
+        Labels and choices are left out: rewording a question changes no
+        blank check's result, and should not revalidate every submission.
+        """
+        import hashlib
+        import json
+
+        kobo_tool = (self.config_data or {}).get("kobo_tool") or {}
+        content = (
+            kobo_tool.get("content") if isinstance(kobo_tool.get("content"), dict) else kobo_tool
+        )
+        rows = [
+            {column: row.get(column) for column in _FORM_LOGIC_COLUMNS if row.get(column)}
+            for row in (content.get("survey") or [])
+            if isinstance(row, dict)
+        ]
+        return hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()[:16]
 
     def _form_for_relevance(self) -> SurveyForm | None:
         """

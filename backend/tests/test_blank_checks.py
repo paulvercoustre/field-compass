@@ -76,6 +76,10 @@ class TestBlankCheckedOnly:
         expression = 'consent == "yes" & is_not_empty(why_no)'
         assert blank_checked_only(expression, ["consent", "why_no"]) == {"why_no"}
 
+    def test_name_inside_a_quoted_value_is_not_a_use(self):
+        expression = 'is_empty(comments) & status == "comments"'
+        assert blank_checked_only(expression, ["comments", "status"]) == {"comments"}
+
     def test_name_inside_a_longer_name_is_not_a_use(self):
         expression = "is_empty(age) & age_months > 3"
         assert blank_checked_only(expression, ["age", "age_months"]) == {"age"}
@@ -187,6 +191,21 @@ class TestIsEmptyRule:
         engine = HFCEngine(test_db, test_survey_config)
 
         assert _fired(engine, "blank", {"comments": "dk"}) == []
+
+    def test_variable_named_in_a_quoted_value(self, test_db, test_survey_config):
+        """`"comments"` is a value, so the blank `comments` must not skip the rule."""
+        _with_form(test_db, test_survey_config, FORM)
+        _add_rule(
+            test_db,
+            test_survey_config.survey_id,
+            "blank_quoted",
+            'is_empty(comments) & crop == "comments"',
+            ["comments", "crop"],
+        )
+        engine = HFCEngine(test_db, test_survey_config)
+
+        assert len(_fired(engine, "blank_quoted", {"crop": "comments"})) == 1
+        assert _fired(engine, "blank_quoted", {"crop": "maize"}) == []
 
     def test_combined_with_a_condition(self, test_db, test_survey_config):
         _with_form(test_db, test_survey_config, FORM)
@@ -331,3 +350,49 @@ class TestEmptyPercentage:
 
         _enable_empty_check(test_db, test_survey_config, 40)
         assert HFCEngine(test_db, test_survey_config).compute_validation_hash() != before
+
+
+def _edit_form(db, survey, name, **changes):
+    tool = deepcopy(survey.config_data["kobo_tool"])
+    for row in tool["survey"]:
+        if row.get("name") == name:
+            row.update(changes)
+    _with_form(db, survey, tool)
+
+
+class TestValidationHashTracksSkipLogic:
+    """A refreshed form with new skip logic must revalidate blank checks."""
+
+    def _hash(self, db, survey):
+        return HFCEngine(db, survey).compute_validation_hash()
+
+    def test_empty_check_sees_a_skip_logic_change(self, test_db, test_survey_config):
+        _with_form(test_db, test_survey_config, FORM)
+        _enable_empty_check(test_db, test_survey_config, 40)
+        before = self._hash(test_db, test_survey_config)
+
+        _edit_form(test_db, test_survey_config, "why_no", relevant="${consent} = 'maybe'")
+        assert self._hash(test_db, test_survey_config) != before
+
+    def test_is_empty_rule_sees_a_skip_logic_change(self, test_db, test_survey_config):
+        _with_form(test_db, test_survey_config, FORM)
+        _add_rule(test_db, test_survey_config.survey_id, "blank", "is_empty(why_no)", ["why_no"])
+        before = self._hash(test_db, test_survey_config)
+
+        _edit_form(test_db, test_survey_config, "why_no", relevant="${consent} = 'maybe'")
+        assert self._hash(test_db, test_survey_config) != before
+
+    def test_rewording_a_question_does_not_revalidate(self, test_db, test_survey_config):
+        _with_form(test_db, test_survey_config, FORM)
+        _enable_empty_check(test_db, test_survey_config, 40)
+        before = self._hash(test_db, test_survey_config)
+
+        _edit_form(test_db, test_survey_config, "why_no", **{"label::English (en)": "Why not?"})
+        assert self._hash(test_db, test_survey_config) == before
+
+    def test_surveys_without_blank_checks_ignore_the_form(self, test_db, test_survey_config):
+        _with_form(test_db, test_survey_config, FORM)
+        before = self._hash(test_db, test_survey_config)
+
+        _edit_form(test_db, test_survey_config, "why_no", relevant="${consent} = 'maybe'")
+        assert self._hash(test_db, test_survey_config) == before
