@@ -25,8 +25,9 @@ from etl.dk_utils import (
     compute_dk_metrics as compute_submission_dk_metrics,
 )
 from etl.relevance import is_shown
-from forms.schema import load_form_schema
+from forms.schema import Question, load_form_schema
 from linter.form_source import SurveyForm, load_survey_form
+from linter.questions import iter_answerable
 from models import QualityIssue
 from services.survey_config import (
     SAMPLING_MODE_BY_VARIABLE,
@@ -120,6 +121,7 @@ class HFCEngine:
         self._fetch_live_form = fetch_live_form
         self._relevance_form: SurveyForm | None = None
         self._relevance_form_loaded = False
+        self._empty_eligible: list[Question] | None = None
 
         # Extract configuration - handle nested structure
         core_identifiers = self.config_data.get("core_identifiers", {})
@@ -187,6 +189,8 @@ class HFCEngine:
         )  # For IQR multiplier or Z-score threshold
         self.flag_dk_percentage = quality_checks.get("flag_dk_percentage", False)
         self.dk_percentage_threshold = quality_checks.get("dk_percentage_threshold", 50.0)
+        self.flag_empty_percentage = quality_checks.get("flag_empty_percentage", False)
+        self.empty_percentage_threshold = quality_checks.get("empty_percentage_threshold", 50.0)
         self.flag_llm_qualitative = quality_checks.get("flag_llm_qualitative", False)
         self.llm_qualitative_fields = quality_checks.get("llm_qualitative_fields", []) or []
         self.llm_check_types = quality_checks.get(
@@ -533,6 +537,11 @@ class HFCEngine:
             },
         }
 
+        # Only when on: a key every survey gained at once would change every
+        # hash and revalidate every submission on the next sync.
+        if self.flag_empty_percentage:
+            config["empty_config"] = {"threshold": self.empty_percentage_threshold}
+
         # Convert to JSON string (sorted keys for consistency)
         config_json = json.dumps(config, sort_keys=True)
 
@@ -802,6 +811,10 @@ class HFCEngine:
             dk_percentage_issues = self._check_dk_percentage(submission_data)
             issues.extend(dk_percentage_issues)
 
+        # 8. Check empty-answer percentage (if flag is enabled)
+        if self.flag_empty_percentage:
+            issues.extend(self._check_empty_percentage(submission_data))
+
         return issues
 
     def _check_dk_percentage(self, submission_data: dict[str, Any]) -> list[QualityIssue]:
@@ -833,6 +846,78 @@ class HFCEngine:
             )
 
         return issues
+
+    def _empty_eligible_questions(self) -> list[Question]:
+        """
+        Questions an empty-answer rate counts: ones a respondent fills in,
+        outside repeats (whether a repeat question was shown is per instance).
+        """
+        if self._empty_eligible is None:
+            form = self._form_for_relevance()
+            self._empty_eligible = (
+                [
+                    question
+                    for question in iter_answerable(form.schema)
+                    if not question.repeat_name and not (question.raw or {}).get("roster_name")
+                ]
+                if form is not None
+                else []
+            )
+        return self._empty_eligible
+
+    def compute_empty_metrics(
+        self, submission_data: dict[str, Any]
+    ) -> tuple[int, int, float | None]:
+        """
+        (empty_count, shown_count, percentage) for one submission.
+
+        Only questions the form's skip logic showed are counted, and only
+        those whose skip logic could be read: a question hidden from the
+        respondent was never theirs to leave empty. None without the form's
+        skip logic, rather than a rate that counts every hidden question.
+        """
+        form = self._form_for_relevance()
+        if form is None:
+            return (0, 0, None)
+
+        def lookup(name: str) -> Any:
+            return self._get_field_value(submission_data, name)[0]
+
+        empty_count = shown_count = 0
+        for question in self._empty_eligible_questions():
+            if is_shown(form.schema, question, lookup) is not True:
+                continue
+            shown_count += 1
+            if _is_empty(lookup(question.name)):
+                empty_count += 1
+
+        if shown_count == 0:
+            return (0, 0, None)
+        return (empty_count, shown_count, empty_count / shown_count * 100.0)
+
+    def _check_empty_percentage(self, submission_data: dict[str, Any]) -> list[QualityIssue]:
+        """Flag submission when the share of shown questions left empty exceeds the threshold."""
+        empty_count, shown_count, empty_percentage = self.compute_empty_metrics(submission_data)
+        if empty_percentage is None or empty_percentage < self.empty_percentage_threshold:
+            return []
+
+        return [
+            QualityIssue(
+                check="empty_percentage_high",
+                field="submission",
+                value=round(empty_percentage, 2),
+                message=(
+                    f"Empty answer percentage is high ({empty_count}/{shown_count} = "
+                    f"{empty_percentage:.2f}%), above threshold {self.empty_percentage_threshold}%"
+                ),
+                metadata={
+                    "empty_count": empty_count,
+                    "shown_count": shown_count,
+                    "empty_percentage": round(empty_percentage, 2),
+                    "threshold": self.empty_percentage_threshold,
+                },
+            )
+        ]
 
     def _check_duration(
         self,

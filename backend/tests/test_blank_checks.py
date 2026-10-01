@@ -255,3 +255,79 @@ class TestFormWithoutStoredLogic:
         assert len(_fired(engine, "blank", {"consent": "no"})) == 1
         assert _fired(engine, "blank", {"consent": "yes"}) == []
         assert fetched == [test_survey_config.kobo_asset_id]  # once per engine
+
+
+def _enable_empty_check(db, survey, threshold):
+    config = deepcopy(survey.config_data)
+    config.setdefault("quality_checks", {}).update(
+        {"flag_empty_percentage": True, "empty_percentage_threshold": threshold}
+    )
+    survey.config_data = config
+    db.commit()
+
+
+class TestEmptyPercentage:
+    """
+    FORM, outside its repeat, with consent = "yes" and age 30, shows: consent,
+    comments, age, job, full_name, crop -- six questions (`odd` has skip
+    logic this cannot read, so it is left out rather than guessed).
+    """
+
+    answers = {"consent": "yes", "age": "30", "crop": "maize"}
+
+    def test_counts_only_questions_that_were_shown(self, test_db, test_survey_config):
+        _with_form(test_db, test_survey_config, FORM)
+        engine = HFCEngine(test_db, test_survey_config)
+
+        # comments, job, full_name are empty; why_no and crop_other were hidden.
+        assert engine.compute_empty_metrics(self.answers) == (3, 6, 50.0)
+
+    def test_skip_logic_changes_the_denominator(self, test_db, test_survey_config):
+        _with_form(test_db, test_survey_config, FORM)
+        engine = HFCEngine(test_db, test_survey_config)
+
+        # consent = no: consent, comments, why_no, crop -- age, job, full_name hidden.
+        empty, shown, _ = engine.compute_empty_metrics({"consent": "no", "crop": "maize"})
+        assert (empty, shown) == (2, 4)
+
+    def test_flags_above_the_threshold(self, test_db, test_survey_config):
+        _with_form(test_db, test_survey_config, FORM)
+        _enable_empty_check(test_db, test_survey_config, 40)
+        engine = HFCEngine(test_db, test_survey_config)
+
+        issues = engine.run_checks({**self.answers, "enumerator_id": "e1"}, "uuid-empty")
+        flagged = [i for i in issues if i.check == "empty_percentage_high"]
+        assert len(flagged) == 1
+        assert flagged[0].metadata["empty_count"] == 3
+        assert flagged[0].metadata["shown_count"] == 6
+
+    def test_quiet_below_the_threshold(self, test_db, test_survey_config):
+        _with_form(test_db, test_survey_config, FORM)
+        _enable_empty_check(test_db, test_survey_config, 60)
+        engine = HFCEngine(test_db, test_survey_config)
+
+        issues = engine.run_checks({**self.answers, "enumerator_id": "e1"}, "uuid-empty")
+        assert [i for i in issues if i.check == "empty_percentage_high"] == []
+
+    def test_no_rate_without_skip_logic(self, test_db, test_survey_config):
+        """Every hidden question would count as empty."""
+        _with_form(test_db, test_survey_config, FORM_WITHOUT_LOGIC)
+        engine = HFCEngine(test_db, test_survey_config)
+
+        assert engine.compute_empty_metrics(self.answers) == (0, 0, None)
+
+    def test_hash_unchanged_while_the_check_is_off(self, test_db, test_survey_config):
+        """Adding the option must not revalidate every survey's submissions."""
+        _with_form(test_db, test_survey_config, FORM)
+        before = HFCEngine(test_db, test_survey_config).compute_validation_hash()
+
+        config = deepcopy(test_survey_config.config_data)
+        config.setdefault("quality_checks", {}).update(
+            {"flag_empty_percentage": False, "empty_percentage_threshold": 10}
+        )
+        test_survey_config.config_data = config
+        test_db.commit()
+        assert HFCEngine(test_db, test_survey_config).compute_validation_hash() == before
+
+        _enable_empty_check(test_db, test_survey_config, 40)
+        assert HFCEngine(test_db, test_survey_config).compute_validation_hash() != before
