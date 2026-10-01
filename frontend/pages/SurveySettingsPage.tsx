@@ -132,6 +132,9 @@ const SurveySettingsPage: React.FC = () => {
   useEffect(() => {
     savedConfigRef.current = config;
   }, [config]);
+  // The survey on screen now, for async work that finishes after a switch.
+  const selectedSurveyIdRef = useRef<string | undefined>(selectedSurvey?.survey_id);
+  selectedSurveyIdRef.current = selectedSurvey?.survey_id;
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false); // Used for Custom Quality Checks only
   const [isEditingOutlier, setIsEditingOutlier] = useState(false);
@@ -809,6 +812,11 @@ const SurveySettingsPage: React.FC = () => {
     // The section's fields already hold what was saved, so record the new
     // saved state rather than reloading -- a reload would also throw away
     // unsaved edits in every other section.
+    // The user switched survey while this was saving: the save landed on the
+    // survey it was meant for, but the page now shows another one, whose
+    // saved state must not be replaced with this one's.
+    if (selectedSurveyIdRef.current !== base.survey_id) return;
+
     const nextSaved = { ...base, survey_name: surveyNameToSave, kobo_asset_id: assetIdToSave, config_data: configData };
     // Updated synchronously so a save queued behind this one builds on it.
     savedConfigRef.current = nextSaved;
@@ -825,15 +833,21 @@ const SurveySettingsPage: React.FC = () => {
     setSaving?: (saving: boolean) => void,
     onSaved?: () => void
   ) => {
+    const surveyId = selectedSurvey?.survey_id;
+    // Section statuses belong to the survey on screen; a save that finishes
+    // after a switch must not report "Saved" (or an error) on the new one.
+    const stillOnSurvey = () => selectedSurveyIdRef.current === surveyId;
     setSaving?.(true);
     setSectionStatus((prev) => ({ ...prev, [section]: undefined }));
     try {
       const run = saveQueueRef.current.then(() => persistSection(section));
       saveQueueRef.current = run.catch(() => {});
       await run;
+      if (!stillOnSurvey()) return;
       setSectionStatus((prev) => ({ ...prev, [section]: { kind: 'saved', at: new Date() } }));
       onSaved?.();
     } catch (err) {
+      if (!stillOnSurvey()) return;
       setSectionStatus((prev) => ({
         ...prev,
         [section]: { kind: 'error', message: err instanceof Error ? err.message : 'Failed to save' },
@@ -1021,8 +1035,6 @@ const SurveySettingsPage: React.FC = () => {
   const [pendingRuleDelete, setPendingRuleDelete] = useState<{ ruleId: string; description: string } | null>(null);
 
   // Read by commitRuleDelete, which outlives the render that scheduled it.
-  const selectedSurveyIdRef = useRef<string | undefined>(selectedSurvey?.survey_id);
-  selectedSurveyIdRef.current = selectedSurvey?.survey_id;
   const loadValidationRulesRef = useRef<(() => Promise<void>) | null>(null);
   loadValidationRulesRef.current = loadValidationRules;
 
