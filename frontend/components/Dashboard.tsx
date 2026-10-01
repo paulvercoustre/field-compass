@@ -3,11 +3,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Submission, FilterState } from '../types';
 import { api } from '../services/api';
 import { useSurvey } from '../contexts/SurveyContext';
-import { triggerETL, ETLStats, getSurveyConfig, SurveyConfig } from '../services/progressApi';
+import { triggerETL, getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import SubmissionList from './SubmissionList';
 import SubmissionDetail from './SubmissionDetail';
 import SubmissionFilters from './SubmissionFilters';
 import { Spinner } from './Spinner';
+import { PullButton, PullOutcomeBanner, PullOutcome, describePullResult, describePullFailure } from './PullStatus';
 
 const MAX_PAGE_SIZE = 100; // Matches backend validation limit for page_size
 
@@ -25,9 +26,11 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
   const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(false);
   const [isRunningETL, setIsRunningETL] = useState<boolean>(false);
-  const [etlStats, setEtlStats] = useState<ETLStats | null>(null);
+  // The list could not be loaded. Shown in place of the list.
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  // How the last pull from Kobo went. Shown in the header only: a failed pull
+  // leaves the submissions already on screen valid, so it never replaces them.
+  const [pullOutcome, setPullOutcome] = useState<PullOutcome | null>(null);
 
   const fetchSubmissionsAcrossPages = useCallback(
     async (filters?: FilterState): Promise<Submission[]> => {
@@ -169,33 +172,20 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   }, [selectedSurvey, submissions, fetchFilteredSubmissions]);
 
   const handleRefresh = async () => {
-    if (!selectedSurvey) {
-      setError('Please select a survey first');
-      return;
-    }
+    if (!selectedSurvey) return;
 
     setIsRunningETL(true);
-    setError(null);
-    setSuccess(null);
-    setEtlStats(null);
+    setPullOutcome(null);
 
     try {
-      // Trigger ETL pipeline
       const stats = await triggerETL(selectedSurvey.survey_id);
-      setEtlStats(stats);
-      
+      setPullOutcome(describePullResult(stats));
+
       // Refresh submissions after ETL completes
       await fetchAllSubmissions();
       await fetchFilteredSubmissions();
-      
-      const checkedCount = (stats.validated || 0);
-      const skippedCount = (stats.skipped || 0);
-      const llmQueuedCount = stats.llm_queued || 0;
-      setSuccess(
-        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}, ${stats.hfc_flagged} flagged, ${llmQueuedCount} AI qualitative checks queued`
-      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run ETL pipeline');
+      setPullOutcome(describePullFailure(err));
       console.error(err);
     } finally {
       setIsRunningETL(false);
@@ -260,43 +250,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Submissions</h2>
-          <div className="flex items-center gap-3">
-            {etlStats && (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                <span className="text-green-600 dark:text-green-400">✓</span> Last run: {etlStats.duration_seconds.toFixed(1)}s
-              </div>
-            )}
-            <button
-              onClick={handleRefresh}
-              disabled={isRunningETL || !selectedSurvey}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
-            >
-              {isRunningETL ? (
-                <>
-                  <Spinner />
-                  <span>Running ETL...</span>
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>Refresh from Kobo</span>
-                </>
-              )}
-            </button>
-          </div>
+          <PullButton onClick={handleRefresh} isPulling={isRunningETL} disabled={!selectedSurvey} />
         </div>
-        {error && (
-          <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-md text-red-800 dark:text-red-200 text-sm">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/50 border border-green-200 dark:border-green-700 rounded-md text-green-800 dark:text-green-200 text-sm">
-            {success}
-          </div>
-        )}
+        <PullOutcomeBanner outcome={pullOutcome} onRetry={handleRefresh} isPulling={isRunningETL} />
       </div>
 
       {/* Main Content */}
@@ -316,7 +272,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
               <Spinner />
             </div>
           ) : error && !isRunningETL ? (
-            <div className="p-4 text-center text-red-600 dark:text-red-400">{error}</div>
+            <div role="alert" className="p-4 text-center text-red-700 dark:text-red-400">{error}</div>
           ) : (
             <div className="flex-1 min-h-0 overflow-hidden">
               <SubmissionList

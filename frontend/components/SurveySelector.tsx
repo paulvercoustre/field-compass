@@ -46,7 +46,7 @@ const SurveySelector: React.FC = () => {
             setSelectedSurvey(survey || null);
           }
         }}
-        className="px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        className="px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       >
         <option value="">-- Create New Survey --</option>
         {surveys.map((survey) => (

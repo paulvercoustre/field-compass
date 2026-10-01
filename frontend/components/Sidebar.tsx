@@ -154,7 +154,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           <PermissionBadge permission={survey.permission} isSelected={isSelected} />
                         </div>
                         {survey.kobo_asset_id && (
-                          <div className="text-xs opacity-75 truncate mt-0.5">
+                          <div className="text-xs opacity-90 truncate mt-0.5">
                             {survey.kobo_asset_id}
                           </div>
                         )}
@@ -220,7 +220,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             {isOpen && (
               <div className="flex-1 text-left truncate">
                 <div className="truncate">{user.username || 'Account'}</div>
-                <div className="text-xs opacity-60 truncate">{user.email}</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400 truncate">{user.email}</div>
               </div>
             )}
           </button>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
@@ -25,9 +25,111 @@ import { readDkValues, sameDkValues } from '../utils/dkSuggestions';
 import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 
+/**
+ * The independently saved sections of this page.
+ *
+ * Each Save writes only its own section, merged into the last *saved* config.
+ * It used to write every field on the page, so an unsaved tick in General
+ * checks went live when someone saved Outlier checks -- and changed what the
+ * next pull flagged.
+ */
+type SettingsSection =
+  | 'basicInfo'
+  | 'coreIdentifiers'
+  | 'koboTool'
+  | 'samplingFrame'
+  | 'generalFlags'
+  | 'outlier'
+  | 'llm';
+
+type QualityChecks = NonNullable<SurveyConfig['config_data']['quality_checks']>;
+type QualityCheckKey = keyof QualityChecks;
+
+// Which quality_checks keys each section owns.
+const GENERAL_FLAG_KEYS: QualityCheckKey[] = [
+  'flag_out_of_period',
+  'flag_weekend',
+  'weekend_days',
+  'flag_office_hours',
+  'office_hours_start',
+  'office_hours_end',
+  'flag_sampling_frame',
+  'flag_dk_percentage',
+  'dk_percentage_threshold',
+  'flag_empty_percentage',
+  'empty_percentage_threshold',
+];
+const OUTLIER_KEYS: QualityCheckKey[] = [
+  'flag_outliers',
+  'outlier_variables',
+  'outlier_log_transform_variables',
+  'outlier_method',
+  'outlier_threshold',
+];
+const LLM_KEYS: QualityCheckKey[] = ['flag_llm_qualitative', 'llm_qualitative_fields', 'llm_check_types'];
+
+const QUALITY_CHECK_DEFAULTS = {
+  flag_out_of_period: false,
+  flag_weekend: false,
+  weekend_days: [5, 6], // Default to Sat, Sun
+  flag_office_hours: false,
+  office_hours_start: '08:00',
+  office_hours_end: '17:00',
+  flag_sampling_frame: false,
+  flag_outliers: false,
+  outlier_variables: [] as string[],
+  outlier_log_transform_variables: [] as string[],
+  outlier_method: 'iqr' as 'iqr' | 'mad' | 'zscore',
+  outlier_threshold: 1.5,
+  flag_dk_percentage: false,
+  dk_percentage_threshold: 50,
+  flag_empty_percentage: false,
+  empty_percentage_threshold: 50,
+  flag_llm_qualitative: false,
+  llm_qualitative_fields: [] as string[],
+  llm_check_types: ['content_quality', 'relevance', 'completeness'] as Array<'content_quality' | 'relevance' | 'completeness'>,
+};
+
+const pickKeys = (source: Record<string, any>, keys: readonly string[]) =>
+  Object.fromEntries(keys.map((key) => [key, source[key]]));
+
+type SectionStatus = { kind: 'saved'; at: Date } | { kind: 'error'; message: string };
+
+/**
+ * A section's save outcome, shown inside that section.
+ *
+ * Confirmations used to go to the top of the page and were then wiped by the
+ * reload every save triggered, so nobody ever saw one. This stays until the
+ * section is edited again; errors stay until the next attempt.
+ */
+const SectionSaveStatus: React.FC<{
+  status?: SectionStatus;
+  isEditing: boolean;
+  appliesOnNextPull?: boolean;
+}> = ({ status, isEditing, appliesOnNextPull }) => {
+  if (!status) return null;
+  if (status.kind === 'error') {
+    return (
+      <p role="alert" className="mt-3 p-2 text-sm rounded-md bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-200">
+        Not saved: {status.message}
+      </p>
+    );
+  }
+  if (isEditing) return null;
+  return (
+    <p role="status" className="mt-3 text-sm text-green-700 dark:text-green-400">
+      ✓ Saved {status.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      {appliesOnNextPull && ' — applies from the next pull from Kobo.'}
+    </p>
+  );
+};
+
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
+  // The survey on screen now, for async work that finishes after a switch.
+  const selectedSurveyIdRef = useRef<string | undefined>(selectedSurvey?.survey_id);
+  selectedSurveyIdRef.current = selectedSurvey?.survey_id;
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false); // Used for Custom Quality Checks only
   const [isEditingOutlier, setIsEditingOutlier] = useState(false);
@@ -46,6 +148,7 @@ const SurveySettingsPage: React.FC = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [sectionStatus, setSectionStatus] = useState<Partial<Record<SettingsSection, SectionStatus>>>({});
   const [activeTab, setActiveTab] = useState<'settings' | 'access' | 'quality'>('settings');
 
   // Permission-based access control
@@ -154,27 +257,7 @@ const SurveySettingsPage: React.FC = () => {
     );
 
   // Quality Checks State
-  const [qualityChecks, setQualityChecks] = useState({
-    flag_out_of_period: false,
-    flag_weekend: false,
-    weekend_days: [5, 6], // Default to Sat, Sun
-    flag_office_hours: false,
-    office_hours_start: '08:00',
-    office_hours_end: '17:00',
-    flag_sampling_frame: false,
-    flag_outliers: false,
-    outlier_variables: [] as string[],
-    outlier_log_transform_variables: [] as string[],
-    outlier_method: 'iqr' as 'iqr' | 'mad' | 'zscore',
-    outlier_threshold: 1.5,
-    flag_dk_percentage: false,
-    dk_percentage_threshold: 50,
-    flag_empty_percentage: false,
-    empty_percentage_threshold: 50,
-    flag_llm_qualitative: false,
-    llm_qualitative_fields: [] as string[],
-    llm_check_types: ['content_quality', 'relevance', 'completeness'] as Array<'content_quality' | 'relevance' | 'completeness'>,
-  });
+  const [qualityChecks, setQualityChecks] = useState(QUALITY_CHECK_DEFAULTS);
 
   // Dirty flag for General Quality Checks section only (Save/Cancel when user edits)
   const savedQc = config?.config_data?.quality_checks;
@@ -199,6 +282,7 @@ const SurveySettingsPage: React.FC = () => {
       // Clear any success/error messages when switching to a different survey
       setSuccess(null);
       setError(null);
+      setSectionStatus({});
       loadSurveyConfig();
 
       // Check if we should open the quality tab (set from CreateSurveyPage)
@@ -293,7 +377,6 @@ const SurveySettingsPage: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
-    setSuccess(null);
     
     // Reset all state before loading new survey config to prevent stale data from previous survey
     // Sampling frame state
@@ -650,56 +733,132 @@ const SurveySettingsPage: React.FC = () => {
     }));
   };
 
-  // Persist current state to API (shared by section save handlers)
-  const persistSurveyConfig = async () => {
+  /**
+   * Save one section: the stored config with only this section's fields
+   * replaced. Other sections' unsaved edits stay on screen, unsaved.
+   *
+   * The base is read from the server, not from page state. Saves run one at
+   * a time (see saveSection), so this always sees every earlier save -- even
+   * one that finished after the user switched survey, which page state would
+   * not reflect. The section's values are the ones on screen when Save was
+   * clicked, for the survey it was clicked on.
+   */
+  const persistSection = async (section: SettingsSection) => {
     if (!selectedSurvey) return;
-    const configData: SurveyConfig['config_data'] = {
-      core_identifiers: coreIdentifiers,
-      sampling_frame: {
-        ...samplingFrame,
-        frame_data: samplingFrameData,
-      },
-      special_values: specialValues,
-      global_parameters: globalParameters,
-      quality_checks: qualityChecks,
-      pii_cols: config?.config_data.pii_cols || null,
-      roster_processing: config?.config_data.roster_processing || {
-        roster_uuid: '_submission__uuid',
-        roster_configs: {},
-      },
-      kobo_tool: koboToolData ? {
-        survey: koboToolData.survey,
-        choices: koboToolData.choices,
-        has_audit: koboToolData.has_audit ?? config?.config_data.kobo_tool?.has_audit ?? null,
-        label_column_survey: labelColumnSurvey,
-        label_column_choices: labelColumnChoices,
-      } : config?.config_data.kobo_tool ? {
-        ...config.config_data.kobo_tool,
-        label_column_survey: labelColumnSurvey,
-        label_column_choices: labelColumnChoices,
-      } : undefined,
-    };
-    await updateSurvey(selectedSurvey.survey_id, {
-      survey_name: surveyName,
-      kobo_asset_id: koboAssetId || null,
+    const surveyId = selectedSurvey.survey_id;
+    const base = await getSurveyConfig(surveyId);
+
+    const saved = base.config_data;
+    const configData: SurveyConfig['config_data'] = { ...saved };
+    let surveyNameToSave = base.survey_name;
+    let assetIdToSave = base.kobo_asset_id;
+
+    switch (section) {
+      case 'basicInfo':
+        surveyNameToSave = surveyName;
+        assetIdToSave = koboAssetId || null;
+        configData.global_parameters = {
+          ...saved.global_parameters,
+          data_collection_start_date: globalParameters.data_collection_start_date,
+          data_collection_end_date: globalParameters.data_collection_end_date,
+        };
+        break;
+      case 'coreIdentifiers':
+        configData.core_identifiers = coreIdentifiers;
+        configData.special_values = specialValues;
+        break;
+      case 'koboTool':
+        configData.kobo_tool = koboToolData ? {
+          survey: koboToolData.survey,
+          choices: koboToolData.choices,
+          has_audit: koboToolData.has_audit ?? saved.kobo_tool?.has_audit ?? null,
+          label_column_survey: labelColumnSurvey,
+          label_column_choices: labelColumnChoices,
+        } : saved.kobo_tool ? {
+          ...saved.kobo_tool,
+          label_column_survey: labelColumnSurvey,
+          label_column_choices: labelColumnChoices,
+        } : undefined;
+        break;
+      case 'samplingFrame':
+        configData.sampling_frame = { ...samplingFrame, frame_data: samplingFrameData };
+        break;
+      case 'generalFlags':
+        configData.quality_checks = { ...saved.quality_checks, ...pickKeys(qualityChecks, GENERAL_FLAG_KEYS) };
+        configData.global_parameters = {
+          ...saved.global_parameters,
+          min_survey_duration_minutes: globalParameters.min_survey_duration_minutes,
+          max_survey_duration_minutes: globalParameters.max_survey_duration_minutes,
+        };
+        break;
+      case 'outlier':
+        configData.quality_checks = { ...saved.quality_checks, ...pickKeys(qualityChecks, OUTLIER_KEYS) };
+        break;
+      case 'llm':
+        configData.quality_checks = { ...saved.quality_checks, ...pickKeys(qualityChecks, LLM_KEYS) };
+        break;
+    }
+
+    await updateSurvey(surveyId, {
+      survey_name: surveyNameToSave,
+      kobo_asset_id: assetIdToSave || null,
       config_data: configData,
+    });
+
+    // Record the new saved state for the page rather than reloading -- a
+    // reload would throw away unsaved edits in every other section. Skipped
+    // if the user has switched survey meanwhile: the page shows another one.
+    if (selectedSurveyIdRef.current !== surveyId) return;
+    setConfig({ ...base, survey_name: surveyNameToSave, kobo_asset_id: assetIdToSave, config_data: configData });
+  };
+
+  // Section saves run one at a time. Each sends the whole config, so two in
+  // flight would both read the same base and the later one would drop the
+  // earlier one's fields.
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const saveSection = async (
+    section: SettingsSection,
+    setSaving?: (saving: boolean) => void,
+    onSaved?: () => void
+  ) => {
+    const surveyId = selectedSurvey?.survey_id;
+    // Section statuses belong to the survey on screen; a save that finishes
+    // after a switch must not report "Saved" (or an error) on the new one.
+    const stillOnSurvey = () => selectedSurveyIdRef.current === surveyId;
+    setSaving?.(true);
+    setSectionStatus((prev) => ({ ...prev, [section]: undefined }));
+    try {
+      const run = saveQueueRef.current.then(() => persistSection(section));
+      saveQueueRef.current = run.catch(() => {});
+      await run;
+      if (!stillOnSurvey()) return;
+      setSectionStatus((prev) => ({ ...prev, [section]: { kind: 'saved', at: new Date() } }));
+      onSaved?.();
+    } catch (err) {
+      if (!stillOnSurvey()) return;
+      setSectionStatus((prev) => ({
+        ...prev,
+        [section]: { kind: 'error', message: err instanceof Error ? err.message : 'Failed to save' },
+      }));
+    } finally {
+      setSaving?.(false);
+    }
+  };
+
+  // Put one section's quality checks back to their saved values.
+  const resetQualityChecks = (keys: QualityCheckKey[]) => {
+    const savedChecks: Record<string, any> = config?.config_data?.quality_checks ?? {};
+    setQualityChecks((prev) => {
+      const next: Record<string, any> = { ...prev };
+      for (const key of keys) {
+        next[key] = savedChecks[key] ?? (QUALITY_CHECK_DEFAULTS as Record<string, any>)[key];
+      }
+      return next as typeof prev;
     });
   };
 
-  const handleSaveBasicInfo = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingBasicInfo(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Basic information updated');
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingBasicInfo(false);
-    }
-  };
+  const handleSaveBasicInfo = () => saveSection('basicInfo', setIsSavingBasicInfo);
 
   const handleCancelBasicInfo = () => {
     if (config) {
@@ -713,20 +872,7 @@ const SurveySettingsPage: React.FC = () => {
     }
   };
 
-  const handleSaveCoreIdentifiers = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingCoreIdentifiers(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Core identifiers updated');
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingCoreIdentifiers(false);
-    }
-  };
+  const handleSaveCoreIdentifiers = () => saveSection('coreIdentifiers', setIsSavingCoreIdentifiers);
 
   const handleCancelCoreIdentifiers = () => {
     if (config?.config_data?.core_identifiers) {
@@ -741,104 +887,47 @@ const SurveySettingsPage: React.FC = () => {
     }
   };
 
-  const handleSaveKoboTool = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingKoboTool(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Kobo tool updated');
-      setIsEditingKoboTool(false);
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingKoboTool(false);
-    }
-  };
+  const handleSaveKoboTool = () =>
+    saveSection('koboTool', setIsSavingKoboTool, () => setIsEditingKoboTool(false));
 
   const handleCancelKoboTool = () => {
     setIsEditingKoboTool(false);
     loadSurveyConfig();
   };
 
-  const handleSaveSamplingFrame = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingSamplingFrame(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Collection targets updated');
-      setIsEditingSamplingFrame(false);
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingSamplingFrame(false);
-    }
-  };
+  const handleSaveSamplingFrame = () =>
+    saveSection('samplingFrame', setIsSavingSamplingFrame, () => setIsEditingSamplingFrame(false));
 
   const handleCancelSamplingFrame = () => {
     setIsEditingSamplingFrame(false);
     loadSurveyConfig();
   };
 
-  const handleSaveGeneralFlags = async () => {
-    if (!selectedSurvey) return;
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('General flags updated');
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    }
-  };
+  const handleSaveGeneralFlags = () => saveSection('generalFlags');
 
   const handleCancelGeneralFlags = () => {
-    loadSurveyConfig();
+    resetQualityChecks(GENERAL_FLAG_KEYS);
+    const savedParams = config?.config_data?.global_parameters;
+    setGlobalParameters((prev) => ({
+      ...prev,
+      min_survey_duration_minutes: savedParams?.min_survey_duration_minutes ?? null,
+      max_survey_duration_minutes: savedParams?.max_survey_duration_minutes ?? null,
+    }));
   };
 
-  const handleSaveOutlier = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingOutlier(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Outlier checks updated');
-      setIsEditingOutlier(false);
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingOutlier(false);
-    }
-  };
+  const handleSaveOutlier = () =>
+    saveSection('outlier', setIsSavingOutlier, () => setIsEditingOutlier(false));
 
   const handleCancelOutlier = () => {
     setIsEditingOutlier(false);
-    loadSurveyConfig();
+    resetQualityChecks(OUTLIER_KEYS);
   };
 
-  const handleSaveLLM = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingLLM(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Qualitative quality checks updated');
-      setIsEditingLLM(false);
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingLLM(false);
-    }
-  };
+  const handleSaveLLM = () => saveSection('llm', setIsSavingLLM, () => setIsEditingLLM(false));
 
   const handleCancelLLM = () => {
     setIsEditingLLM(false);
-    loadSurveyConfig();
+    resetQualityChecks(LLM_KEYS);
   };
 
   const handleDeleteClick = () => {
@@ -857,7 +946,10 @@ const SurveySettingsPage: React.FC = () => {
 
     try {
       await deleteSurvey(selectedSurvey.survey_id);
-      setSuccess('Survey deleted successfully!');
+      // This page is replaced by the "no survey selected" state as soon as
+      // the selection clears, so a message set here would never be seen.
+      // The app shell shows it instead.
+      window.dispatchEvent(new CustomEvent('surveyDeleted', { detail: { name: config?.survey_name ?? surveyName } }));
       
       // Close confirmation dialog and reset state
       setShowDeleteConfirm(false);
@@ -918,20 +1010,67 @@ const SurveySettingsPage: React.FC = () => {
     }
   }, [stagedRules]);
 
+  /**
+   * Deleting a rule waits a few seconds so it can be undone.
+   *
+   * It used to go to the server at once, with no confirm and no way back,
+   * and the next pull stopped flagging on it. The rule leaves the list now
+   * and is deleted when the Undo window closes, when another rule is
+   * deleted, or when the page or survey changes. Closing the tab inside the
+   * window keeps the rule -- the safe way round.
+   */
+  const RULE_UNDO_MS = 8000;
+  const pendingRuleDeleteRef = useRef<{ surveyId: string; ruleId: string; timer: number } | null>(null);
+  const [pendingRuleDelete, setPendingRuleDelete] = useState<{ ruleId: string; description: string } | null>(null);
+
+  // Read by commitRuleDelete, which outlives the render that scheduled it.
+  const loadValidationRulesRef = useRef<(() => Promise<void>) | null>(null);
+  loadValidationRulesRef.current = loadValidationRules;
+
+  const commitRuleDelete = useCallback(async () => {
+    const pending = pendingRuleDeleteRef.current;
+    if (!pending) return;
+    window.clearTimeout(pending.timer);
+    pendingRuleDeleteRef.current = null;
+    setPendingRuleDelete(null);
+    try {
+      await deleteValidationRule(pending.surveyId, pending.ruleId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete validation rule');
+      // Put it back in the list: it is still on the server.
+      if (pending.surveyId === selectedSurveyIdRef.current) {
+        loadValidationRulesRef.current?.();
+      }
+    }
+  }, []);
+
+  // Leaving the survey or the page finishes any delete still waiting.
+  useEffect(() => () => { commitRuleDelete(); }, [selectedSurvey?.survey_id, commitRuleDelete]);
+
   const handleDeleteRule = useCallback(async (ruleId: string) => {
     if (!selectedSurvey) return;
 
-    try {
-      await deleteValidationRule(selectedSurvey.survey_id, ruleId);
-      setStagedRules(rules => rules.filter(r => r.id !== ruleId));
-      if (currentlyEditing?.id === ruleId) {
-        setCurrentlyEditing(null);
-      }
-      await loadValidationRules(); // Refresh from server
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete validation rule');
+    // One pending delete at a time: finish the previous one first.
+    await commitRuleDelete();
+
+    const rule = stagedRules.find(r => r.id === ruleId);
+    const timer = window.setTimeout(() => { commitRuleDelete(); }, RULE_UNDO_MS);
+    pendingRuleDeleteRef.current = { surveyId: selectedSurvey.survey_id, ruleId, timer };
+    setPendingRuleDelete({ ruleId, description: rule?.description || 'Rule' });
+    setStagedRules(rules => rules.filter(r => r.id !== ruleId));
+    if (currentlyEditing?.id === ruleId) {
+      setCurrentlyEditing(null);
     }
-  }, [currentlyEditing, selectedSurvey]);
+  }, [currentlyEditing, selectedSurvey, stagedRules, commitRuleDelete]);
+
+  const handleUndoRuleDelete = () => {
+    const pending = pendingRuleDeleteRef.current;
+    if (!pending) return;
+    window.clearTimeout(pending.timer);
+    pendingRuleDeleteRef.current = null;
+    setPendingRuleDelete(null);
+    loadValidationRules(); // the rule never left the server
+  };
 
   const handleCancelEdit = useCallback(() => {
     setCurrentlyEditing(null);
@@ -979,11 +1118,11 @@ const SurveySettingsPage: React.FC = () => {
           is_active: true,
         });
       }
-      await loadValidationRules(); // Refresh from server
-      setSuccess(`${rules.length} rule${rules.length !== 1 ? 's' : ''} added successfully!`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save suggested rules');
+    } finally {
+      // Some may have been saved before a failure; show what is there.
+      await loadValidationRules();
     }
+    // Errors propagate to AISuggestedRules, which reports them in place.
   }, [selectedSurvey]);
 
   const handleWeekendDayToggle = (day: number) => {
@@ -1007,8 +1146,7 @@ const SurveySettingsPage: React.FC = () => {
             <SuccessMessage
               message={success}
               onDismiss={() => setSuccess(null)}
-              autoHide={true}
-              autoHideDelay={5000}
+              autoHide={false}
             />
           </div>
           <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">No survey selected</p>
@@ -1046,12 +1184,11 @@ const SurveySettingsPage: React.FC = () => {
     <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
       <div className="w-full max-w-7xl mx-auto">
         <div className="mb-4 space-y-2">
-          <ErrorMessage error={error} className="text-base" />
+          <ErrorMessage error={error} onDismiss={() => setError(null)} className="text-base" />
           <SuccessMessage 
             message={success} 
             onDismiss={() => setSuccess(null)}
-            autoHide={true}
-            autoHideDelay={5000}
+            autoHide={false}
           />
         </div>
 
@@ -1075,7 +1212,7 @@ const SurveySettingsPage: React.FC = () => {
                   value={deleteConfirmInput}
                   onChange={(e) => setDeleteConfirmInput(e.target.value)}
                   placeholder="Survey name"
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-500 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
               {deleteError && (
@@ -1168,7 +1305,7 @@ const SurveySettingsPage: React.FC = () => {
                       type="text"
                       value={surveyName}
                       onChange={(e) => setSurveyName(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       required
                     />
                   ) : (
@@ -1186,7 +1323,7 @@ const SurveySettingsPage: React.FC = () => {
                       type="text"
                       value={koboAssetId}
                       onChange={(e) => setKoboAssetId(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       placeholder="e.g., a3wCWjYRXo46cSygF8gQAc"
                     />
                   ) : (
@@ -1205,7 +1342,7 @@ const SurveySettingsPage: React.FC = () => {
                         type="date"
                         value={globalParameters.data_collection_start_date}
                         onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     ) : (
                       <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
@@ -1222,7 +1359,7 @@ const SurveySettingsPage: React.FC = () => {
                         type="date"
                         value={globalParameters.data_collection_end_date}
                         onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     ) : (
                       <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
@@ -1250,6 +1387,7 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              <SectionSaveStatus status={sectionStatus.basicInfo} isEditing={isBasicInfoDirty} />
             </section>
 
             {/* Kobo Tool */}
@@ -1320,7 +1458,7 @@ const SurveySettingsPage: React.FC = () => {
                             setLabelColumnSurvey(e.target.value);
                             setLabelColumnChoices(e.target.value);
                           }}
-                          className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                           {languages.map((column) => (
                             <option key={column} value={column}>
@@ -1352,7 +1490,7 @@ const SurveySettingsPage: React.FC = () => {
                 <div className="text-gray-700 dark:text-gray-300">
                   {koboToolData ? (
                     <div>
-                      <div className="text-green-600 dark:text-green-400 mb-1">
+                      <div className="text-green-700 dark:text-green-400 mb-1">
                         ✓ Tool configured ({availableVariables.length} variables)
                       </div>
                       {koboToolFileName && (
@@ -1366,6 +1504,7 @@ const SurveySettingsPage: React.FC = () => {
                   )}
                 </div>
               )}
+              <SectionSaveStatus status={sectionStatus.koboTool} isEditing={isEditingKoboTool} />
             </section>
 
             {/* Collection Targets */}
@@ -1562,6 +1701,7 @@ const SurveySettingsPage: React.FC = () => {
                   ) : null}
                 </div>
               )}
+              <SectionSaveStatus status={sectionStatus.samplingFrame} isEditing={isEditingSamplingFrame} />
             </section>
 
             {/* Core Identifiers */}
@@ -1593,7 +1733,7 @@ const SurveySettingsPage: React.FC = () => {
                       type="number"
                       value={specialValues.dk_value}
                       onChange={(e) => setSpecialValues({ ...specialValues, dk_value: parseInt(e.target.value) || -99 })}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   ) : (
                     <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
@@ -1627,6 +1767,7 @@ const SurveySettingsPage: React.FC = () => {
                   </button>
                 </div>
               )}
+              <SectionSaveStatus status={sectionStatus.coreIdentifiers} isEditing={isCoreIdentifiersDirty} appliesOnNextPull />
             </section>
 
             {/* Delete Survey Section */}
@@ -1695,7 +1836,7 @@ const SurveySettingsPage: React.FC = () => {
                             <select
                               value={access.permission_level}
                               onChange={(e) => handleUpdateAccess(access.user_id, e.target.value as 'editor' | 'viewer')}
-                              className="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+                              className="text-sm px-3 py-1.5 border border-gray-500 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
                             >
                               <option value="viewer">Viewer</option>
                               <option value="editor">Editor</option>
@@ -1748,13 +1889,13 @@ const SurveySettingsPage: React.FC = () => {
                         value={shareEmail}
                         onChange={(e) => setShareEmail(e.target.value)}
                         placeholder="user@example.com"
-                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-500 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
                         required
                       />
                       <select
                         value={sharePermission}
                         onChange={(e) => setSharePermission(e.target.value as 'editor' | 'viewer')}
-                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
+                        className="px-3 py-2 border border-gray-500 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
                       >
                         <option value="viewer">Viewer</option>
                         <option value="editor">Editor</option>
@@ -1881,7 +2022,7 @@ const SurveySettingsPage: React.FC = () => {
                             type="time"
                             value={qualityChecks.office_hours_start}
                             onChange={(e) => setQualityChecks({ ...qualityChecks, office_hours_start: e.target.value })}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            className="w-full px-2 py-1 text-sm border border-gray-500 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           />
                         ) : (
                           <span className="text-sm text-gray-700 dark:text-gray-300">{qualityChecks.office_hours_start}</span>
@@ -1894,7 +2035,7 @@ const SurveySettingsPage: React.FC = () => {
                             type="time"
                             value={qualityChecks.office_hours_end}
                             onChange={(e) => setQualityChecks({ ...qualityChecks, office_hours_end: e.target.value })}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            className="w-full px-2 py-1 text-sm border border-gray-500 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           />
                         ) : (
                           <span className="text-sm text-gray-700 dark:text-gray-300">{qualityChecks.office_hours_end}</span>
@@ -1968,7 +2109,7 @@ const SurveySettingsPage: React.FC = () => {
                               ),
                             })
                           }
-                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="w-full px-2 py-1 text-sm border border-gray-500 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         />
                       ) : (
                         <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -2022,7 +2163,7 @@ const SurveySettingsPage: React.FC = () => {
                               ),
                             })
                           }
-                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="w-full px-2 py-1 text-sm border border-gray-500 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         />
                       ) : (
                         <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -2046,7 +2187,7 @@ const SurveySettingsPage: React.FC = () => {
                           type="number"
                           value={globalParameters.min_survey_duration_minutes || ''}
                           onChange={(e) => setGlobalParameters({ ...globalParameters, min_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           placeholder="e.g., 10"
                         />
                       ) : (
@@ -2064,7 +2205,7 @@ const SurveySettingsPage: React.FC = () => {
                           type="number"
                           value={globalParameters.max_survey_duration_minutes || ''}
                           onChange={(e) => setGlobalParameters({ ...globalParameters, max_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-500 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           placeholder="e.g., 240"
                         />
                       ) : (
@@ -2092,6 +2233,7 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              <SectionSaveStatus status={sectionStatus.generalFlags} isEditing={isGeneralFlagsDirty} appliesOnNextPull />
             </section>
 
             {/* Outlier Checks Settings */}
@@ -2267,7 +2409,7 @@ const SurveySettingsPage: React.FC = () => {
                                 outlier_threshold: defaultThresholds[newMethod],
                               });
                             }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            className="w-full px-2 py-1 text-sm border border-gray-500 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           >
                             <option value="iqr">IQR (Interquartile Range)</option>
                             <option value="mad">MAD (Median Absolute Deviation)</option>
@@ -2308,7 +2450,7 @@ const SurveySettingsPage: React.FC = () => {
                                 outlier_threshold: parseFloat(e.target.value) || 1.5,
                               })
                             }
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            className="w-full px-2 py-1 text-sm border border-gray-500 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           />
                         ) : (
                           <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -2345,6 +2487,7 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              <SectionSaveStatus status={sectionStatus.outlier} isEditing={isEditingOutlier} appliesOnNextPull />
             </section>
 
             {/* Qualitative Quality Checks */}
@@ -2447,6 +2590,7 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              <SectionSaveStatus status={sectionStatus.llm} isEditing={isEditingLLM} appliesOnNextPull />
             </section>
 
             {/* Custom Quality Checks */}
@@ -2525,6 +2669,14 @@ const SurveySettingsPage: React.FC = () => {
                       </div>
                       <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Saved Rules</h3>
+                        {pendingRuleDelete && (
+                          <div role="status" className="mb-3 p-2 flex items-center justify-between gap-3 text-sm rounded-md bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900">
+                            <span>Deleted “{pendingRuleDelete.description}”.</span>
+                            <button type="button" onClick={handleUndoRuleDelete} className="font-semibold underline hover:no-underline">
+                              Undo
+                            </button>
+                          </div>
+                        )}
                         {isLoadingRules ? (
                           <div className="flex items-center justify-center py-4">
                             <Spinner />

@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /*
+   * One visible focus ring for every control, current and future (WCAG 2.4.7).
+   * Keyboard focus used to be invisible on the submission list, where
+   * `focus:outline-none` removed the outline with nothing in its place.
+   * :focus-visible keeps mouse clicks free of the ring. Components that draw
+   * their own `focus:ring-*` keep it; this only fills the gaps.
+   */
+  :focus-visible {
+    outline: 2px solid #4f46e5; /* indigo-600: 6.3:1 on white */
+    outline-offset: 2px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :focus-visible {
+      outline-color: #818cf8; /* indigo-400: 5.6:1 on gray-900 */
+    }
+  }
+}

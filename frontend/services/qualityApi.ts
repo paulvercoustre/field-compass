@@ -4,7 +4,7 @@
 
 import { QualityOverviewResponse, QualityOverviewFilters } from '../types';
 
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, apiFetch } from './apiBase';
 
 // Helper to get auth token from localStorage
 const getAuthToken = (): string | null => {
@@ -52,7 +52,7 @@ export const fetchQualityOverview = async (
       params.append('sampling_filters', filters.samplingFilters);
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/quality/overview?${params}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/quality/overview?${params}`, {
       headers: createHeaders(),
     });
 
@@ -88,6 +88,8 @@ export interface ETLStats {
   validation_reasons?: Record<string, number>;  // Breakdown of why submissions were validated
   hfc_flagged: number;
   errors: number;
+  /** Why Kobo stopped answering, when it did; whatever was fetched first is kept. */
+  upstream_error?: string | null;
   duration_seconds: number;
 }
 
@@ -106,7 +108,7 @@ export const triggerETL = async (
     }
 
     const url = `${API_BASE_URL}/api/etl/run/${surveyId}${params.toString() ? `?${params}` : ''}`;
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       method: 'POST',
       headers: createHeaders(),
     });

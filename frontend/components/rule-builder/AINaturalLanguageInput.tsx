@@ -71,8 +71,6 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
         setShowSuccess(true);
         setGeneratedRule(null);
         setPrompt('');
-        
-        setTimeout(() => setShowSuccess(false), 3000);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save rule');
       } finally {
@@ -109,7 +107,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
           onKeyDown={handleKeyPress}
           placeholder="Example: Flag if respondent age is greater than 100"
           disabled={isGenerating}
-          className="w-full h-24 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full h-24 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         />
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           Press Cmd/Ctrl+Enter to generate, or click the button below
@@ -153,7 +151,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
       {error && <ErrorMessage error={error} />}
 
       {showSuccess && (
-        <SuccessMessage message="Rule saved successfully!" />
+        <SuccessMessage message="Rule added — it will run on the next pull from Kobo." autoHide={false} />
       )}
 
       {generatedRule && (
@@ -203,7 +201,9 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
               disabled={isGenerating}
               className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
             >
-              {isGenerating ? 'Saving...' : '✓ Accept & Add to Editor'}
+              {/* Saves the rule straight away: there is no editor step in
+                  between, so the button must not promise one. */}
+              {isGenerating ? 'Adding…' : '✓ Add rule'}
             </button>
             <button
               onClick={handleReject}

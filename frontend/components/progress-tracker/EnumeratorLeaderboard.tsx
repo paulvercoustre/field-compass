@@ -8,9 +8,20 @@ interface EnumeratorLeaderboardProps {
   onEnumeratorClick?: (enumeratorId: string) => void;
 }
 
+// What each list is, in each direction. These replace "Top 5 / Bottom 5
+// Performers": the metrics here are a list to look at, not a verdict on
+// people -- approval share is review progress, and interview length is
+// neither good nor bad on its own.
+const METRICS: Array<{ key: LeaderboardMetric; label: string; first: string; reversed: string }> = [
+  { key: 'avgIssues', label: 'Issues per submission', first: 'Fewest issues per submission', reversed: 'Most issues per submission' },
+  { key: 'submissions', label: 'Volume', first: 'Most submissions', reversed: 'Fewest submissions' },
+  { key: 'validated', label: 'Approved by reviewer', first: 'Highest share approved by a reviewer', reversed: 'Lowest share approved by a reviewer' },
+  { key: 'avgTime', label: 'Active time', first: 'Longest active interview time', reversed: 'Shortest active interview time' },
+];
+
 const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onEnumeratorClick }) => {
   const { collection, quality } = data;
-  const [metric, setMetric] = useState<LeaderboardMetric>('validated');
+  const [metric, setMetric] = useState<LeaderboardMetric>('avgIssues');
   const [showBottom, setShowBottom] = useState(false);
 
   const rankings = useMemo(() => {
@@ -47,8 +58,8 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
             ? b.avgIssues - a.avgIssues 
             : a.avgIssues - b.avgIssues;
         case 'avgTime':
-          // Context-dependent, but moderate is usually best
-          // For simplicity, sort by time descending for "top" (most thorough)
+          // Longest first. Not "most thorough": a long interview can be as
+          // much a problem as a short one, so this list has no winner.
           return showBottom 
             ? a.avgActiveTime - b.avgActiveTime 
             : b.avgActiveTime - a.avgActiveTime;
@@ -67,74 +78,61 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
       case 'validated':
         return {
           value: `${item.validatedPercent}%`,
-          sublabel: `${item.validated} of ${item.total}`,
-          color: item.validatedPercent >= 80 ? 'text-emerald-600 dark:text-emerald-400' : 
-                 item.validatedPercent >= 60 ? 'text-amber-600 dark:text-amber-400' : 
-                 'text-red-600 dark:text-red-400'
+          sublabel: `${item.validated} of ${item.total} approved`,
+          color: 'text-gray-900 dark:text-white'
         };
       case 'submissions':
         return {
           value: item.total.toString(),
-          sublabel: `${item.validatedPercent}% validated`,
+          sublabel: `${item.validatedPercent}% approved by reviewer`,
           color: 'text-indigo-600 dark:text-indigo-400'
         };
       case 'avgIssues':
         return {
           value: item.avgIssues.toFixed(2),
           sublabel: `per submission`,
-          color: item.avgIssues < 1 ? 'text-emerald-600 dark:text-emerald-400' : 
-                 item.avgIssues < 2 ? 'text-amber-600 dark:text-amber-400' : 
-                 'text-red-600 dark:text-red-400'
+          color: item.avgIssues < 1 ? 'text-emerald-700 dark:text-emerald-400' : 
+                 item.avgIssues < 2 ? 'text-amber-700 dark:text-amber-400' : 
+                 'text-red-700 dark:text-red-400'
         };
       case 'avgTime':
         return {
           value: `${item.avgActiveTime} min`,
           sublabel: `active time`,
-          color: 'text-blue-600 dark:text-blue-400'
+          color: 'text-gray-900 dark:text-white'
         };
     }
   };
 
-  const getMedalColor = (rank: number): string => {
-    if (showBottom) return 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300';
-    
-    switch (rank) {
-      case 0: return 'bg-amber-400 text-amber-900';
-      case 1: return 'bg-gray-300 text-gray-700';
-      case 2: return 'bg-amber-600 text-amber-100';
-      default: return 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300';
-    }
-  };
+  const current = METRICS.find(m => m.key === metric) ?? METRICS[0];
+  // Active time has no better end, so its list is not numbered as a ranking.
+  const isRanking = metric !== 'avgTime';
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700 w-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {showBottom ? 'Bottom 5' : 'Top 5'} Performers
+          {showBottom ? current.reversed : current.first}
         </h3>
         <button
           onClick={() => setShowBottom(!showBottom)}
-          className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
         >
-          Show {showBottom ? 'Top' : 'Bottom'}
+          Reverse order
         </button>
       </div>
 
       {/* Metric Selector */}
       <div className="flex flex-wrap gap-2 mb-4">
-        {[
-          { key: 'validated', label: 'Validation Rate' },
-          { key: 'submissions', label: 'Volume' },
-          { key: 'avgIssues', label: 'Fewest Issues' },
-          { key: 'avgTime', label: 'Active Time' },
-        ].map(m => (
+        {METRICS.map(m => (
           <button
             key={m.key}
-            onClick={() => setMetric(m.key as LeaderboardMetric)}
+            onClick={() => setMetric(m.key)}
+            aria-pressed={metric === m.key}
             className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
               metric === m.key
                 ? 'bg-indigo-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
             {m.label}
@@ -159,17 +157,19 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
                   onEnumeratorClick ? 'cursor-pointer' : ''
                 }`}
               >
-                {/* Rank Badge */}
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${getMedalColor(index)}`}>
-                  {index + 1}
-                </div>
+                {/* Position in the list -- plain, no medals */}
+                {isRanking && (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
+                    {index + 1}
+                  </div>
+                )}
                 
                 {/* Enumerator Info */}
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-gray-900 dark:text-white truncate">
                     {item.id}
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className="text-xs text-gray-600 dark:text-gray-400">
                     {display.sublabel}
                   </div>
                 </div>
@@ -185,8 +185,13 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
       </div>
       
       {rankings.length > 0 && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-3 text-center">
-          Based on enumerators with ≥3 submissions
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">
+          {metric === 'avgTime'
+            ? 'Neither long nor short is better on its own: check interviews at both ends. '
+            : metric === 'validated'
+              ? 'Shows how far review has got, not interview quality. '
+              : ''}
+          Enumerators with at least 3 submissions.
         </p>
       )}
     </div>

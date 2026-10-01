@@ -1,29 +1,31 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { IssueFrequency } from '../../types';
+import { checkLabel } from '../../utils/checkLabels';
 
 interface IssueFrequencyChartProps {
   data: IssueFrequency[];
-  onIssueClick?: (check: string) => void;
 }
 
 type DisplayLimit = 5 | 10 | 20 | 'all';
 
-const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssueClick }) => {
+// Bars are not clickable yet. They used to say "click to filter" and then open
+// the unfiltered list, which reads as "these are the matching submissions".
+// Wire them up once the submissions list can filter by issue.
+const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data }) => {
   const [displayLimit, setDisplayLimit] = useState<DisplayLimit>(5);
   
   const displayData = displayLimit === 'all' ? data : data.slice(0, displayLimit);
   
   // Prepare data for horizontal bar chart
   const chartData = displayData.map(item => ({
-    name: item.check,
+    name: checkLabel(item.check),
     count: item.count,
     percentage: item.percentage,
     affected: item.affected_submissions,
   }));
 
   const barColor = '#6366f1'; // indigo-500
-  const barHoverColor = '#4f46e5'; // indigo-600
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
@@ -35,7 +37,7 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
           <select
             value={displayLimit}
             onChange={(e) => setDisplayLimit(e.target.value === 'all' ? 'all' : parseInt(e.target.value) as DisplayLimit)}
-            className="text-sm bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-700 dark:text-gray-300"
+            className="text-sm bg-gray-100 dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded px-2 py-1 text-gray-700 dark:text-gray-300"
           >
             <option value={5}>Top 5</option>
             <option value={10}>Top 10</option>
@@ -62,10 +64,12 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
                 <YAxis 
                   type="category" 
                   dataKey="name" 
-                  width={150} 
+                  width={240}
                   stroke="#9ca3af" 
                   fontSize={12}
-                  tick={{ fill: '#9ca3af' }}
+                  tick={{ fill: 'currentColor' }}
+                  className="text-gray-700 dark:text-gray-300"
+                  interval={0}
                 />
                 <Tooltip
                   contentStyle={{
@@ -82,28 +86,14 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
                   }}
                   labelFormatter={(label) => `Issue: ${label}`}
                 />
-                <Bar 
-                  dataKey="count" 
-                  radius={[0, 4, 4, 0]}
-                  cursor={onIssueClick ? 'pointer' : 'default'}
-                  onClick={(data) => onIssueClick && onIssueClick(data.name)}
-                >
+                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                   {chartData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={barColor}
-                      className="hover:opacity-80 transition-opacity"
-                    />
+                    <Cell key={`cell-${index}`} fill={barColor} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-          {onIssueClick && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-              Click on a bar to filter submissions by that issue type
-            </p>
-          )}
         </>
       )}
     </div>

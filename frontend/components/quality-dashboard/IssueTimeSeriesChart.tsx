@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { IssueTimeSeriesPoint, IssueFrequency } from '../../types';
+import { checkLabel } from '../../utils/checkLabels';
 
 interface IssueTimeSeriesChartProps {
   data: IssueTimeSeriesPoint[];
@@ -160,7 +161,7 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
                   key={issue}
                   type="monotone" 
                   dataKey={issue}
-                  name={issue}
+                  name={checkLabel(issue)}
                   stroke={COLORS[allIssueTypes.indexOf(issue) % COLORS.length]} 
                   strokeWidth={2}
                   dot={false}

@@ -80,7 +80,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               onClick={() => { setIsLogin(true); setError(null); }}
               className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
                 isLogin
-                  ? 'bg-indigo-500 text-white shadow-lg'
+                  ? 'bg-indigo-600 text-white shadow-lg'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -91,7 +91,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               onClick={() => { setIsLogin(false); setError(null); }}
               className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
                 !isLogin
-                  ? 'bg-indigo-500 text-white shadow-lg'
+                  ? 'bg-indigo-600 text-white shadow-lg'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -115,6 +115,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               <input
                 id="email"
                 type="email"
+                autoComplete={isLogin ? 'username' : 'email'}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -132,6 +133,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   <input
                     id="username"
                     type="text"
+                    autoComplete="nickname"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
@@ -147,6 +149,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   <input
                     id="fullName"
                     type="text"
+                    autoComplete="name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
@@ -163,6 +166,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               <input
                 id="password"
                 type="password"
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -180,6 +184,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <input
                   id="confirmPassword"
                   type="password"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required

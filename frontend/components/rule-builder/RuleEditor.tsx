@@ -182,7 +182,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onBlur={() => handleBlur('description')}
-          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="bg-white dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         />
       </FormField>
       
@@ -199,7 +199,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
           value={issueMessage}
           onChange={(e) => setIssueMessage(e.target.value)}
           onBlur={() => handleBlur('issueMessage')}
-          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="bg-white dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         />
       </FormField>
 
@@ -219,7 +219,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
                   <select
                     value={part.joiner}
                     onChange={(e) => handleJoinerChange(index, e.target.value as '&' | '|')}
-                    className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 text-sm text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                    className="bg-white dark:bg-gray-900 border border-gray-500 dark:border-gray-600 rounded-md px-3 py-1 text-sm text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="&">& AND</option>
                     <option value="|">| OR</option>

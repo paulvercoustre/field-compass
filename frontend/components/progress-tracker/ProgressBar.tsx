@@ -31,18 +31,18 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ percentage }) => {
   const color = percentage >= 100 ? 'bg-green-500' : 'bg-blue-600';
 
   return (
-    <div className="w-32">
-        <div className="bg-gray-200 dark:bg-gray-800 rounded-full h-6 relative overflow-hidden">
+    // The label sits beside the bar, not on it: over the coloured fill it
+    // fell below 3.5:1, and whether it was over the fill depended on the value.
+    <div className="flex items-center gap-2">
+        <div className="w-24 bg-gray-200 dark:bg-gray-800 rounded-full h-3 overflow-hidden" aria-hidden="true">
         <div
             className={`h-full rounded-full ${color}`}
             style={{ width: `${widthPercentage}%` }}
         ></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xs font-bold text-gray-900 dark:text-white">
-            {percentage.toFixed(1)}%
-            </span>
         </div>
-        </div>
+        <span className="text-xs font-bold text-gray-900 dark:text-white tabular-nums">
+        {percentage.toFixed(1)}%
+        </span>
     </div>
   );
 };
