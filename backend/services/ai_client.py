@@ -176,7 +176,11 @@ class AIClient:
         ``record`` is told about every call, successful or not.
         """
         client = self._client_factory(
-            api_key=provider.api_key, base_url=provider.base_url or DEFAULT_BASE_URL
+            api_key=provider.api_key,
+            base_url=provider.base_url or DEFAULT_BASE_URL,
+            # The SDK follows redirects by default. A user-supplied endpoint
+            # must not bounce requests to an address it could not name itself.
+            http_client=openai.DefaultHttpxClient(follow_redirects=False),
         )
         capabilities = provider.capabilities
         input_tokens = output_tokens = None
@@ -213,6 +217,9 @@ class AIClient:
             outcome = error.category
             raise error from exc
         finally:
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
             logger.info(
                 "AI call %s model=%s outcome=%s in=%s out=%s %.1fs",
                 name,

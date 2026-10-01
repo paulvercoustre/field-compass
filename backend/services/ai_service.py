@@ -8,13 +8,13 @@ import os
 from typing import Any
 
 from etl.dk_utils import describe_dk_strings
-from services.ai_client import AIClient, UsageRecorder, operator_provider
+from services.ai_client import AIClient, ResolvedProvider, UsageRecorder, operator_provider
 from services.ai_errors import AUTH, BAD_RESPONSE, NOT_CONFIGURED, PROVIDER_QUOTA, AIError
 
 logger = logging.getLogger(__name__)
 
 
-def _rule_error_message(error: AIError) -> str:
+def rule_error_message(error: AIError) -> str:
     """What the rule builder shows when the AI call behind it fails."""
     if error.category == AUTH:
         return "The AI provider rejected the key. Ask the administrator to check it."
@@ -63,6 +63,7 @@ class AIService:
         existing_rules: list[dict[str, str]] | None = None,
         survey_context: dict[str, Any] | None = None,
         record: UsageRecorder | None = None,
+        provider: ResolvedProvider | None = None,
     ) -> dict[str, Any]:
         """
         Generate a validation rule from natural language description.
@@ -86,7 +87,7 @@ class AIService:
         Raises:
             ValueError: If AI service is not available or generation fails
         """
-        if not self.is_available():
+        if provider is None and not self.is_available():
             raise ValueError("AI service is not available. Please configure OPENAI_API_KEY.")
 
         # Build variable context for the prompt
@@ -251,7 +252,7 @@ Generate a validation rule matching the exact JSON schema."""
 
         try:
             rule_data = self.ai.complete_json(
-                operator_provider(self.rule_gen_model),
+                provider or operator_provider(self.rule_gen_model),
                 name="validation_rule",
                 system=system_prompt,
                 user=user_prompt,
@@ -260,7 +261,7 @@ Generate a validation rule matching the exact JSON schema."""
                 record=record,
             )
         except AIError as error:
-            raise ValueError(_rule_error_message(error)) from error
+            raise ValueError(rule_error_message(error)) from error
 
         self._validate_rule_structure(rule_data)
         logger.info(f"Successfully generated rule: {rule_data.get('description')}")
@@ -273,6 +274,7 @@ Generate a validation rule matching the exact JSON schema."""
         special_values: dict[str, Any] | None = None,
         existing_rules: list[dict[str, str]] | None = None,
         record: UsageRecorder | None = None,
+        provider: ResolvedProvider | None = None,
     ) -> list[dict[str, Any]]:
         """
         Suggest validation rules based on Kobo form structure.
@@ -289,7 +291,7 @@ Generate a validation rule matching the exact JSON schema."""
         Raises:
             ValueError: If AI service is not available or generation fails
         """
-        if not self.is_available():
+        if provider is None and not self.is_available():
             raise ValueError("AI service is not available. Please configure OPENAI_API_KEY.")
 
         # Build variable context
@@ -465,7 +467,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
 
         try:
             parsed = self.ai.complete_json(
-                operator_provider(self.rule_gen_model),
+                provider or operator_provider(self.rule_gen_model),
                 name="suggested_rules",
                 system=system_prompt,
                 user=user_prompt,
@@ -480,7 +482,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
                 record=record,
             )
         except AIError as error:
-            raise ValueError(_rule_error_message(error)) from error
+            raise ValueError(rule_error_message(error)) from error
 
         validated_rules = []
         for rule in parsed["rules"]:
@@ -538,6 +540,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         dk_string: str | list[str] | None,
         check_types: list[str],
         record: UsageRecorder | None = None,
+        provider: ResolvedProvider | None = None,
     ) -> list[dict[str, Any]]:
         """
         Check qualitative text responses for quality issues using a cheap model.
@@ -550,7 +553,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
                 list always means "checked, nothing found" -- never "could
                 not check".
         """
-        if not self.is_available():
+        if provider is None and not self.is_available():
             raise AIError(NOT_CONFIGURED, "No AI provider is configured (OPENAI_API_KEY).")
 
         if not field_values:
@@ -631,7 +634,7 @@ Remember: {describe_dk_strings(dk_string)} and {dk_numeric} are valid "Don't Kno
 
         try:
             parsed = self.ai.complete_json(
-                operator_provider(self.qual_check_model),
+                provider or operator_provider(self.qual_check_model),
                 name="qualitative_check_results",
                 system=system_prompt,
                 user=user_prompt,

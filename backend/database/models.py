@@ -61,6 +61,13 @@ class SurveyConfig(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    # The survey owner's own AI provider; NULL uses the operator's key.
+    ai_connection_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("ai_connections.connection_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     owner = relationship("User", back_populates="owned_surveys", foreign_keys=[user_id])
     shared_access = relationship(
         "SurveyAccess", back_populates="survey", cascade="all, delete-orphan"
@@ -176,6 +183,37 @@ class SubmissionHistory(Base):
     submission = relationship("SubmissionCurrent", back_populates="history")
 
 
+class AIConnection(Base):
+    """
+    A user's own AI provider: any OpenAI-compatible endpoint, key and model.
+
+    Owned by a user and attached to surveys they own. The key is encrypted
+    at rest and never returned by the API (``api_key_hint`` is).
+    """
+
+    __tablename__ = "ai_connections"
+
+    connection_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    label = Column(String(120), nullable=False)
+    # openai | azure | openrouter | mistral | groq | self_hosted | custom
+    preset = Column(String(32), nullable=False, default="custom")
+    base_url = Column(Text, nullable=False)
+    api_key_encrypted = Column(Text, nullable=True)  # NULL for keyless self-hosted servers
+    api_key_hint = Column(String(8), nullable=True)  # last 4 characters, for display
+    check_model = Column(String(128), nullable=False)
+    rule_model = Column(String(128), nullable=True)  # falls back to check_model
+    capabilities = Column(JSONB, nullable=True)  # learned request profile
+    status = Column(String(16), nullable=False, default="untested")  # untested | ok | failing
+    consecutive_failures = Column(Integer, nullable=False, default=0)
+    last_tested_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)  # "<category>: <message>"
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AIUsage(Base):
     """
     One AI call: what it was for, which model, how many tokens, how it ended.
@@ -199,6 +237,11 @@ class AIUsage(Base):
     input_tokens = Column(Integer, nullable=True)  # as reported by the provider
     output_tokens = Column(Integer, nullable=True)
     outcome = Column(String(32), nullable=False)  # "ok" or an AIError category
+    connection_id = Column(  # NULL: the operator's key
+        UUID(as_uuid=True),
+        ForeignKey("ai_connections.connection_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 

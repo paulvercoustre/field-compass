@@ -17,6 +17,7 @@ from database.models import SubmissionCurrent, SurveyConfig
 from etl.dk_utils import is_dk_value
 from etl.hfc_engine import HFCEngine
 from services.ai_errors import NOT_CONFIGURED, AIError
+from services.ai_providers import CHECKS, resolve_provider
 from services.ai_service import AIService
 from services.ai_usage import QUALITATIVE_CHECK, usage_recorder
 from services.database import SessionLocal
@@ -121,7 +122,16 @@ def run_qualitative_check_job(
 
         engine = HFCEngine(db, survey_config)
         ai_service = AIService()
-        if not ai_service.is_available():
+        try:
+            provider = resolve_provider(db, survey_config, CHECKS)
+        except AIError as error:  # the survey's own provider is paused or unusable
+            submission.llm_check_status = "failed"
+            submission.llm_last_error = str(error)[:1000]
+            submission.llm_checked_at = datetime.utcnow()
+            db.commit()
+            return {"status": "failed", "submission_id": submission_id, "category": error.category}
+        model = provider.model if provider else ai_service.qual_check_model
+        if provider is None and not ai_service.is_available():
             submission.llm_check_status = "failed"
             submission.llm_last_error = str(
                 AIError(NOT_CONFIGURED, "No AI provider is configured (OPENAI_API_KEY).")
@@ -154,7 +164,10 @@ def run_qualitative_check_job(
                     dk_numeric=engine.dk_value,
                     dk_string=engine.dk_string_value,
                     check_types=engine.llm_check_types,
-                    record=usage_recorder(db, survey_id, QUALITATIVE_CHECK, submission_id),
+                    record=usage_recorder(
+                        db, survey_id, QUALITATIVE_CHECK, submission_id, provider=provider
+                    ),
+                    provider=provider,
                 )
             except AIError as error:
                 if error.retryable and not final_attempt:
@@ -189,7 +202,7 @@ def run_qualitative_check_job(
                         "source": LLM_ISSUE_SOURCE,
                         "llm_checked_at": checked_at,
                         "llm_rule_version": requested_rules_hash,
-                        "llm_model": ai_service.qual_check_model,
+                        "llm_model": model,
                         "llm_reasoning": result.get("reasoning", ""),
                     },
                 }
@@ -198,7 +211,7 @@ def run_qualitative_check_job(
         # Idempotent update: replace all prior LLM issues with fresh set.
         submission.data_quality_issues = non_llm_issues + llm_issues
         submission.llm_check_status = "success"
-        submission.llm_model_used = ai_service.qual_check_model
+        submission.llm_model_used = model
         submission.llm_checked_at = datetime.utcnow()
         submission.llm_last_error = None
         _recompute_qa_status(engine, submission)

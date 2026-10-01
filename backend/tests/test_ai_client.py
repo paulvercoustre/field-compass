@@ -127,9 +127,16 @@ class TestRequestShape:
         endpoint = FakeEndpoint(_reply('{"answer": "yes"}'))
         _call(endpoint, provider)
 
-        assert endpoint.client_kwargs == [
-            {"api_key": "sk-azure", "base_url": "https://r.openai.azure.com/openai/v1/"}
-        ]
+        kwargs = endpoint.client_kwargs[0]
+        assert (kwargs["api_key"], kwargs["base_url"]) == (
+            "sk-azure",
+            "https://r.openai.azure.com/openai/v1/",
+        )
+
+    def test_redirects_are_not_followed(self):
+        endpoint = FakeEndpoint(_reply('{"answer": "yes"}'))
+        _call(endpoint)
+        assert endpoint.client_kwargs[0]["http_client"].follow_redirects is False
 
     def test_default_endpoint_is_explicit(self):
         endpoint = FakeEndpoint(_reply('{"answer": "yes"}'))

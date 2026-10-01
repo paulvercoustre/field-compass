@@ -16,6 +16,7 @@ from etl.audit_processor import download_and_process_audit
 from etl.data_merger import merge_submission, parse_kobo_submission
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
+from services.ai_providers import paused_error, survey_connection
 from services.ai_service import AIService
 from services.qualitative_worker import run_qualitative_check_task
 
@@ -117,6 +118,7 @@ class ETLPipeline:
             "validation_reasons": {},  # NEW: Reasons for validation
             "llm_queued": 0,
             "llm_skipped": 0,
+            "llm_paused": 0,
             "errors": 0,
             "start_time": datetime.utcnow(),
         }
@@ -142,7 +144,13 @@ class ETLPipeline:
             current_rule_hash = hfc_engine.compute_validation_hash()
             logger.info(f"Current validation rule hash: {current_rule_hash}")
             ai_service = AIService()
-            llm_rules_hash = hfc_engine.compute_llm_rules_hash(ai_service.qual_check_model)
+            # The survey's own provider's model when it has one.
+            connection = survey_connection(self.db, survey_config)
+            qual_check_model = connection.check_model if connection else ai_service.qual_check_model
+            llm_rules_hash = hfc_engine.compute_llm_rules_hash(qual_check_model)
+            # Set when the survey's own provider is paused: checks are marked
+            # failed with its error rather than queued to fail again.
+            llm_paused_error = paused_error(self.db, survey_config)
 
             # Get Kobo API token for audit downloads
             kobo_token = self.kobo_api_token
@@ -300,7 +308,12 @@ class ETLPipeline:
                         llm_input_hash=current_llm_input_hash,
                     )
 
-                    if llm_needs_check:
+                    if llm_needs_check and llm_paused_error:
+                        submission.llm_check_status = "failed"
+                        submission.llm_last_error = llm_paused_error
+                        submission.llm_checked_at = datetime.utcnow()
+                        stats["llm_paused"] += 1
+                    elif llm_needs_check:
                         dedupe_key = f"{submission.survey_id}:{submission._id}:{llm_rules_hash}:{current_llm_input_hash}"
                         task_id = hashlib.sha256(dedupe_key.encode("utf-8")).hexdigest()
                         payload = {
@@ -323,7 +336,7 @@ class ETLPipeline:
                             submission.llm_last_error = None
                             submission.llm_rules_hash = llm_rules_hash
                             submission.llm_input_hash = current_llm_input_hash
-                            submission.llm_model_used = ai_service.qual_check_model
+                            submission.llm_model_used = qual_check_model
                             stats["llm_queued"] += 1
                         except Exception as queue_error:
                             logger.error(

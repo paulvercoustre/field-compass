@@ -11,7 +11,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database.models import SurveyConfig, User
-from services.ai_service import ai_service
+from services.ai_client import ResolvedProvider
+from services.ai_errors import AIError
+from services.ai_providers import RULES, resolve_provider
+from services.ai_service import ai_service, rule_error_message
 from services.ai_usage import RULE_GENERATION, RULE_SUGGESTION, usage_recorder
 from services.auth import get_current_active_user
 from services.database import get_db
@@ -52,6 +55,20 @@ class GeneratedRule(BaseModel):
     roster_name: str | None = None
 
 
+def _provider_for(db: Session, survey_config: SurveyConfig) -> ResolvedProvider | None:
+    """The survey's own AI provider, None for the operator key, or an HTTP error."""
+    try:
+        provider = resolve_provider(db, survey_config, RULES)
+    except AIError as error:
+        raise HTTPException(status_code=503, detail=rule_error_message(error)) from error
+    if provider is None and not ai_service.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="AI service is not available. Please configure OPENAI_API_KEY in the environment.",
+        )
+    return provider
+
+
 @router.post("/ai/generate-rule", response_model=GeneratedRule)
 @limiter.limit("20/hour")
 async def generate_rule_from_natural_language(
@@ -73,13 +90,6 @@ async def generate_rule_from_natural_language(
             "prompt": "Flag if respondent age is greater than 100"
         }
     """
-    # Check if AI service is available
-    if not ai_service.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="AI service is not available. Please configure OPENAI_API_KEY in the environment.",
-        )
-
     # Validate survey_id format
     try:
         survey_uuid = UUID(payload.survey_id)
@@ -99,6 +109,8 @@ async def generate_rule_from_natural_language(
             status_code=404,
             detail=f"Survey configuration not found for survey_id: {payload.survey_id}",
         )
+
+    provider = _provider_for(db, survey_config)
 
     # Extract variables from config
     kobo_variables = _extract_variables_from_config(survey_config)
@@ -145,7 +157,8 @@ async def generate_rule_from_natural_language(
             kobo_variables=kobo_variables,
             existing_rules=existing_rules_context,
             survey_context=survey_context,
-            record=usage_recorder(db, survey_uuid, RULE_GENERATION),
+            record=usage_recorder(db, survey_uuid, RULE_GENERATION, provider=provider),
+            provider=provider,
         )
 
         logger.info(
@@ -184,13 +197,6 @@ async def suggest_validation_rules(
             "survey_id": "123e4567-e89b-12d3-a456-426614174000"
         }
     """
-    # Check if AI service is available
-    if not ai_service.is_available():
-        raise HTTPException(
-            status_code=503,
-            detail="AI service is not available. Please configure OPENAI_API_KEY in the environment.",
-        )
-
     # Validate survey_id format
     try:
         survey_uuid = UUID(payload.survey_id)
@@ -210,6 +216,8 @@ async def suggest_validation_rules(
             status_code=404,
             detail=f"Survey configuration not found for survey_id: {payload.survey_id}",
         )
+
+    provider = _provider_for(db, survey_config)
 
     # Extract variables, global parameters, and special values from config
     config_data = survey_config.config_data
@@ -251,7 +259,8 @@ async def suggest_validation_rules(
             global_parameters=global_parameters,
             special_values=special_values,
             existing_rules=existing_rules_context,
-            record=usage_recorder(db, survey_uuid, RULE_SUGGESTION),
+            record=usage_recorder(db, survey_uuid, RULE_SUGGESTION, provider=provider),
+            provider=provider,
         )
 
         logger.info(

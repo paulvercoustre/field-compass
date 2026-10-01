@@ -44,6 +44,27 @@ COMMENT ON COLUMN users.is_active IS 'Whether user account is active';
 COMMENT ON COLUMN users.is_admin IS 'Whether user has admin privileges';
 COMMENT ON COLUMN users.last_login_at IS 'Timestamp of last successful login';
 
+CREATE TABLE ai_connections (
+    connection_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    label VARCHAR(120) NOT NULL,
+    preset VARCHAR(32) NOT NULL DEFAULT 'custom',
+    base_url TEXT NOT NULL,
+    api_key_encrypted TEXT,
+    api_key_hint VARCHAR(8),
+    check_model VARCHAR(128) NOT NULL,
+    rule_model VARCHAR(128),
+    capabilities JSONB,
+    status VARCHAR(16) NOT NULL DEFAULT 'untested',
+    consecutive_failures INTEGER NOT NULL DEFAULT 0,
+    last_tested_at TIMESTAMP WITH TIME ZONE,
+    last_error TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE ai_connections IS 'Users'' own OpenAI-compatible AI providers; key encrypted, never returned';
+
 -- ============================================================================
 -- Table: survey_configs
 -- ============================================================================
@@ -57,6 +78,7 @@ CREATE TABLE survey_configs (
     kobo_asset_id VARCHAR(255),
     config_data JSONB NOT NULL,
     user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    ai_connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(survey_name)
@@ -214,6 +236,7 @@ CREATE TABLE ai_usage (
     input_tokens INTEGER,
     output_tokens INTEGER,
     outcome VARCHAR(32) NOT NULL,
+    connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -235,6 +258,7 @@ CREATE INDEX idx_survey_access_survey ON survey_access(survey_id);
 
 -- AI usage: the monthly allowance count per survey
 CREATE INDEX idx_ai_usage_survey_created ON ai_usage(survey_id, created_at);
+CREATE INDEX idx_ai_connections_owner ON ai_connections(owner_user_id);
 
 -- Survey configs indexes
 CREATE INDEX idx_survey_configs_name ON survey_configs(survey_name);

@@ -13,6 +13,8 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from database.models import SubmissionCurrent, SurveyConfig, User, ValidationRule
+from routers.ai_connections import connection_summary
+from services.ai_providers import survey_connection
 from services.auth import get_current_active_user
 from services.database import get_db
 from services.permissions import (
@@ -27,6 +29,11 @@ from services.permissions import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _ai_connection_summary(db: Session, survey: SurveyConfig) -> dict | None:
+    connection = survey_connection(db, survey)
+    return connection_summary(connection) if connection else None
 
 
 # =============================================================================
@@ -118,6 +125,8 @@ async def get_survey(
         "permission": permission,
         "owner_id": str(survey.user_id) if survey.user_id else None,
         "is_owner": survey.user_id == current_user.user_id,
+        # Which AI provider the survey uses; null is the operator's key.
+        "ai_connection": _ai_connection_summary(db, survey),
         "created_at": survey.created_at.isoformat() if survey.created_at else None,
         "updated_at": survey.updated_at.isoformat() if survey.updated_at else None,
     }
