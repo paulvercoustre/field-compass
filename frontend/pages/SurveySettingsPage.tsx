@@ -167,6 +167,9 @@ const SurveySettingsPage: React.FC = () => {
   const [currentlyEditing, setCurrentlyEditing] = useState<StagedRule | null>(null);
   const [isLoadingRules, setIsLoadingRules] = useState(false);
 
+  // Prevent overlapping section saves from clobbering each other
+  const savingInProgressRef = useRef(false);
+
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
   const [koboToolFileName, setKoboToolFileName] = useState<string>('');
@@ -805,6 +808,11 @@ const SurveySettingsPage: React.FC = () => {
     setSaving?: (saving: boolean) => void,
     onSaved?: () => void
   ) => {
+    // Block concurrent saves to prevent config clobbering
+    if (savingInProgressRef.current) {
+      return;
+    }
+    savingInProgressRef.current = true;
     setSaving?.(true);
     setSectionStatus((prev) => ({ ...prev, [section]: undefined }));
     try {
@@ -817,6 +825,7 @@ const SurveySettingsPage: React.FC = () => {
         [section]: { kind: 'error', message: err instanceof Error ? err.message : 'Failed to save' },
       }));
     } finally {
+      savingInProgressRef.current = false;
       setSaving?.(false);
     }
   };
