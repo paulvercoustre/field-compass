@@ -601,7 +601,7 @@ Examples of responses to NOT flag (meaning is clear):
 - Listing 6 items when asked for 3-5 (over-complete is acceptable)
 
 Return only clear issues. If no clear issue exists, return an empty list.
-Remember: "{dk_string}" and {dk_numeric} are valid "Don't Know" values."""
+Remember: {describe_dk_strings(dk_string)} and {dk_numeric} are valid "Don't Know" values."""
 
         response_schema = {
             "type": "object",

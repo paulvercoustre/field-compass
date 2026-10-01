@@ -131,6 +131,31 @@ class TestRequestShape:
             {"api_key": "sk-azure", "base_url": "https://r.openai.azure.com/openai/v1/"}
         ]
 
+    def test_default_endpoint_is_explicit(self):
+        endpoint = FakeEndpoint(_reply('{"answer": "yes"}'))
+        _call(endpoint)
+        assert endpoint.client_kwargs[0]["base_url"] == "https://api.openai.com/v1"
+
+    def test_empty_base_url_in_the_environment_is_not_used(self, monkeypatch):
+        """Compose sets OPENAI_BASE_URL="" when unset; the real SDK must not pick it up."""
+        monkeypatch.setenv("OPENAI_BASE_URL", "")
+        captured = []
+
+        def real_sdk(**kwargs):
+            client = openai.OpenAI(**kwargs)
+            captured.append(str(client.base_url))
+            return FakeEndpoint(_reply('{"answer": "yes"}'))
+
+        AIClient(client_factory=real_sdk).complete_json(
+            ResolvedProvider(api_key="sk-test", model="m"),
+            name="answer",
+            system="s",
+            user="u",
+            schema=SCHEMA,
+            max_output=10,
+        )
+        assert captured == ["https://api.openai.com/v1/"]
+
 
 class TestSteppingDown:
     def test_temperature_rejected_by_a_reasoning_model(self):

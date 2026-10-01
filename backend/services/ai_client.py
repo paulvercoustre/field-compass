@@ -45,6 +45,11 @@ JSON_SCHEMA = "json_schema"
 JSON_OBJECT = "json_object"
 PROMPT_ONLY = "prompt_only"
 
+# Passed explicitly, never left to the SDK: given no base URL, the SDK reads
+# OPENAI_BASE_URL from the environment itself -- and docker compose sets it
+# to "" when unset, which sent every request to an empty address.
+DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
 MAX_COMPLETION_TOKENS = "max_completion_tokens"
 MAX_TOKENS = "max_tokens"
 
@@ -170,7 +175,9 @@ class AIClient:
         callers that would rather drop a bad item than the whole reply.
         ``record`` is told about every call, successful or not.
         """
-        client = self._client_factory(api_key=provider.api_key, base_url=provider.base_url)
+        client = self._client_factory(
+            api_key=provider.api_key, base_url=provider.base_url or DEFAULT_BASE_URL
+        )
         capabilities = provider.capabilities
         input_tokens = output_tokens = None
         outcome = "ok"

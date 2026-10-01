@@ -464,3 +464,28 @@ class TestRerunEndpoint:
 
         response = client.post(f"/api/surveys/{survey_id}/ai-checks/rerun")
         assert response.status_code == 403
+
+
+def test_prompt_names_dk_strings_not_a_python_list():
+    """The prompt read `Remember: "['dk']"` with a list-shaped dk_string_value."""
+    sent = []
+
+    def create(**request):
+        sent.append(request)
+        message = SimpleNamespace(content='{"issues": []}', refusal=None)
+        return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason="stop")])
+
+    service = _service_replying()
+    fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    service.ai = AIClient(client_factory=lambda **_: fake)
+    service.check_qualitative_responses(
+        field_values={"comments": "fine"},
+        question_contexts={"comments": "Comments"},
+        dk_numeric=-99,
+        dk_string=["dk", "dont_know"],
+        check_types=["relevance"],
+    )
+
+    prompt = " ".join(message["content"] for message in sent[0]["messages"])
+    assert "['" not in prompt
+    assert '"dk" or "dont_know"' in prompt
