@@ -1,5 +1,4 @@
 
-import type { AIConnectionSummary } from './aiConnectionsApi';
 import { ProgressData, PerformanceData, SamplingMode } from '../types';
 
 import { API_BASE_URL } from './apiBase';
@@ -46,9 +45,6 @@ export interface SurveyConfig {
   survey_id: string;
   survey_name: string;
   kobo_asset_id: string | null;
-  /** The owner's own AI provider; null uses the Field Compass AI allowance. */
-  ai_connection?: AIConnectionSummary | null;
-  is_owner?: boolean;
   config_data: {
     core_identifiers?: {
       uuid?: string;

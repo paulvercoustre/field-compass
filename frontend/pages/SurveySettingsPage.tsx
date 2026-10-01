@@ -14,7 +14,6 @@ import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import InfoTip from '../components/ui/InfoTip';
-import SurveyAIProviderCard from '../components/ai/SurveyAIProviderCard';
 import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
 import { getKoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
@@ -2366,7 +2365,7 @@ const SurveySettingsPage: React.FC = () => {
             {/* Qualitative Quality Checks */}
             <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">AI checks and AI rule writing</h2>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Qualitative Quality Checks</h2>
                 {canEditSurvey && !isEditingLLM && (
                   <button
                     onClick={() => setIsEditingLLM(true)}
@@ -2377,14 +2376,6 @@ const SurveySettingsPage: React.FC = () => {
                 )}
               </div>
               <div className="space-y-4">
-                {selectedSurvey && (
-                  <SurveyAIProviderCard
-                    surveyId={selectedSurvey.survey_id}
-                    isOwner={Boolean(config?.is_owner)}
-                    current={config?.ai_connection ?? null}
-                    onChanged={(ai_connection) => setConfig((prev) => (prev ? { ...prev, ai_connection } : prev))}
-                  />
-                )}
                 <div className="flex items-start">
                   <div className="flex h-5 items-center">
                     <input
