@@ -812,14 +812,14 @@ const SurveySettingsPage: React.FC = () => {
     // The section's fields already hold what was saved, so record the new
     // saved state rather than reloading -- a reload would also throw away
     // unsaved edits in every other section.
+    const nextSaved = { ...base, survey_name: surveyNameToSave, kobo_asset_id: assetIdToSave, config_data: configData };
+    // Updated synchronously so a save queued behind this one builds on it.
+    savedConfigRef.current = nextSaved;
     // The user switched survey while this was saving: the save landed on the
     // survey it was meant for, but the page now shows another one, whose
     // saved state must not be replaced with this one's.
     if (selectedSurveyIdRef.current !== base.survey_id) return;
 
-    const nextSaved = { ...base, survey_name: surveyNameToSave, kobo_asset_id: assetIdToSave, config_data: configData };
-    // Updated synchronously so a save queued behind this one builds on it.
-    savedConfigRef.current = nextSaved;
     setConfig(nextSaved);
   };
 
