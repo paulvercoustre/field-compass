@@ -127,6 +127,11 @@ const SectionSaveStatus: React.FC<{
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
+  // Mirrors `config` for saves queued behind one another (see persistSection).
+  const savedConfigRef = useRef<SurveyConfig | null>(null);
+  useEffect(() => {
+    savedConfigRef.current = config;
+  }, [config]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false); // Used for Custom Quality Checks only
   const [isEditingOutlier, setIsEditingOutlier] = useState(false);
@@ -735,12 +740,19 @@ const SurveySettingsPage: React.FC = () => {
    * replaced. Other sections' unsaved edits stay on screen, unsaved.
    */
   const persistSection = async (section: SettingsSection) => {
-    if (!selectedSurvey || !config) return;
+    if (!selectedSurvey) return;
 
-    const saved = config.config_data;
+    // The latest saved config, not the one this render saw: an earlier save
+    // queued ahead of this one may have just changed it (see saveSection).
+    const base = savedConfigRef.current;
+    if (!base || base.survey_id !== selectedSurvey.survey_id) {
+      throw new Error('The survey changed before this could be saved. Please try again.');
+    }
+
+    const saved = base.config_data;
     const configData: SurveyConfig['config_data'] = { ...saved };
-    let surveyNameToSave = config.survey_name;
-    let assetIdToSave = config.kobo_asset_id;
+    let surveyNameToSave = base.survey_name;
+    let assetIdToSave = base.kobo_asset_id;
 
     switch (section) {
       case 'basicInfo':
@@ -797,8 +809,16 @@ const SurveySettingsPage: React.FC = () => {
     // The section's fields already hold what was saved, so record the new
     // saved state rather than reloading -- a reload would also throw away
     // unsaved edits in every other section.
-    setConfig({ ...config, survey_name: surveyNameToSave, kobo_asset_id: assetIdToSave, config_data: configData });
+    const nextSaved = { ...base, survey_name: surveyNameToSave, kobo_asset_id: assetIdToSave, config_data: configData };
+    // Updated synchronously so a save queued behind this one builds on it.
+    savedConfigRef.current = nextSaved;
+    setConfig(nextSaved);
   };
+
+  // Section saves run one at a time. Each sends the whole config, so two in
+  // flight from the same snapshot would let the later one drop the earlier
+  // one's fields.
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const saveSection = async (
     section: SettingsSection,
@@ -808,7 +828,9 @@ const SurveySettingsPage: React.FC = () => {
     setSaving?.(true);
     setSectionStatus((prev) => ({ ...prev, [section]: undefined }));
     try {
-      await persistSection(section);
+      const run = saveQueueRef.current.then(() => persistSection(section));
+      saveQueueRef.current = run.catch(() => {});
+      await run;
       setSectionStatus((prev) => ({ ...prev, [section]: { kind: 'saved', at: new Date() } }));
       onSaved?.();
     } catch (err) {

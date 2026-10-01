@@ -33,7 +33,9 @@ def test_complete_fetch_reports_no_error(_sleep):
 def test_unreachable_kobo_returns_nothing_and_says_why(_sleep):
     fetcher = _fetcher()
     with patch.object(
-        fetcher, "_make_request", side_effect=requests.exceptions.ConnectionError("connection refused")
+        fetcher,
+        "_make_request",
+        side_effect=requests.exceptions.ConnectionError("connection refused"),
     ):
         submissions = fetcher.get_asset_submissions("aAsset")
 
@@ -59,7 +61,9 @@ def test_failure_part_way_keeps_fetched_pages_and_says_why(_sleep):
 @patch("etl.kobo_fetcher.time.sleep")
 def test_error_is_reset_by_the_next_fetch(_sleep):
     fetcher = _fetcher()
-    with patch.object(fetcher, "_make_request", side_effect=requests.exceptions.Timeout("timed out")):
+    with patch.object(
+        fetcher, "_make_request", side_effect=requests.exceptions.Timeout("timed out")
+    ):
         fetcher.get_asset_submissions("aAsset")
     assert fetcher.last_fetch_error is not None
 
