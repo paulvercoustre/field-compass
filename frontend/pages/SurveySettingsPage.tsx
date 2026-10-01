@@ -127,11 +127,6 @@ const SectionSaveStatus: React.FC<{
 const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
-  // Mirrors `config` for saves queued behind one another (see persistSection).
-  const savedConfigRef = useRef<SurveyConfig | null>(null);
-  useEffect(() => {
-    savedConfigRef.current = config;
-  }, [config]);
   // The survey on screen now, for async work that finishes after a switch.
   const selectedSurveyIdRef = useRef<string | undefined>(selectedSurvey?.survey_id);
   selectedSurveyIdRef.current = selectedSurvey?.survey_id;
@@ -739,18 +734,19 @@ const SurveySettingsPage: React.FC = () => {
   };
 
   /**
-   * Save one section: the last saved config with only this section's fields
+   * Save one section: the stored config with only this section's fields
    * replaced. Other sections' unsaved edits stay on screen, unsaved.
+   *
+   * The base is read from the server, not from page state. Saves run one at
+   * a time (see saveSection), so this always sees every earlier save -- even
+   * one that finished after the user switched survey, which page state would
+   * not reflect. The section's values are the ones on screen when Save was
+   * clicked, for the survey it was clicked on.
    */
   const persistSection = async (section: SettingsSection) => {
     if (!selectedSurvey) return;
-
-    // The latest saved config, not the one this render saw: an earlier save
-    // queued ahead of this one may have just changed it (see saveSection).
-    const base = savedConfigRef.current;
-    if (!base || base.survey_id !== selectedSurvey.survey_id) {
-      throw new Error('The survey changed before this could be saved. Please try again.');
-    }
+    const surveyId = selectedSurvey.survey_id;
+    const base = await getSurveyConfig(surveyId);
 
     const saved = base.config_data;
     const configData: SurveyConfig['config_data'] = { ...saved };
@@ -803,29 +799,22 @@ const SurveySettingsPage: React.FC = () => {
         break;
     }
 
-    await updateSurvey(selectedSurvey.survey_id, {
+    await updateSurvey(surveyId, {
       survey_name: surveyNameToSave,
       kobo_asset_id: assetIdToSave || null,
       config_data: configData,
     });
 
-    // The section's fields already hold what was saved, so record the new
-    // saved state rather than reloading -- a reload would also throw away
-    // unsaved edits in every other section.
-    // The user switched survey while this was saving: the save landed on the
-    // survey it was meant for, but the page now shows another one, whose
-    // saved state must not be replaced with this one's.
-    if (selectedSurveyIdRef.current !== base.survey_id) return;
-
-    const nextSaved = { ...base, survey_name: surveyNameToSave, kobo_asset_id: assetIdToSave, config_data: configData };
-    // Updated synchronously so a save queued behind this one builds on it.
-    savedConfigRef.current = nextSaved;
-    setConfig(nextSaved);
+    // Record the new saved state for the page rather than reloading -- a
+    // reload would throw away unsaved edits in every other section. Skipped
+    // if the user has switched survey meanwhile: the page shows another one.
+    if (selectedSurveyIdRef.current !== surveyId) return;
+    setConfig({ ...base, survey_name: surveyNameToSave, kobo_asset_id: assetIdToSave, config_data: configData });
   };
 
   // Section saves run one at a time. Each sends the whole config, so two in
-  // flight from the same snapshot would let the later one drop the earlier
-  // one's fields.
+  // flight would both read the same base and the later one would drop the
+  // earlier one's fields.
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const saveSection = async (
