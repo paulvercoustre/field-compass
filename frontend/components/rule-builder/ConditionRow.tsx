@@ -1,5 +1,6 @@
 import React from 'react';
 import { KoboToolData, RuleCondition } from '../../types';
+import { isValuelessOperator } from '../../utils/ruleConverter';
 
 interface ConditionRowProps {
   condition: RuleCondition;
@@ -17,6 +18,8 @@ const operators = [
     { value: '>=', label: 'is greater than or equal to' },
     { value: '<=', label: 'is less than or equal to' },
     { value: '%in%', label: 'is one of (comma-separated)' },
+    { value: 'is_empty', label: 'is empty' },
+    { value: 'is_not_empty', label: 'is not empty' },
 ];
 
 const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, onChange, onRemove, canRemove }) => {
@@ -93,13 +96,25 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
       {/* Operator Select */}
       <select 
         value={condition.operator} 
-        onChange={e => onChange({ ...condition, operator: e.target.value })}
+        onChange={e =>
+          onChange({
+            ...condition,
+            operator: e.target.value,
+            // No value to carry over into an "is empty" check.
+            ...(isValuelessOperator(e.target.value) ? { value: '', valueType: 'static' as const } : {}),
+          })
+        }
         className="flex-shrink-0 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       >
         {operators.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
       </select>
       
       {/* Value Input Area */}
+      {isValuelessOperator(condition.operator) ? (
+        <p className="flex-1 min-w-0 text-xs text-gray-500 dark:text-gray-400">
+          Only when the question was shown: skip logic that hid it does not count as empty.
+        </p>
+      ) : (
       <div className="flex-1 flex items-center gap-2 min-w-0">
         <div className="flex-shrink-0 flex rounded-md bg-gray-200 dark:bg-gray-900 p-0.5">
             <button type="button" onClick={() => handleValueTypeToggle('static')} className={`px-2 py-1 text-xs rounded ${condition.valueType === 'static' ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-700'}`}>Value</button>
@@ -107,6 +122,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         </div>
         {renderValueInput()}
       </div>
+      )}
 
       {/* Remove Button */}
       <button

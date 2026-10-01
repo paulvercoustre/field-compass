@@ -36,6 +36,23 @@ def test_generate_llm_input_hash_is_stable_with_whitespace():
     assert hash_a == hash_b
 
 
+def test_generate_llm_input_hash_accepts_a_list_of_dk_strings():
+    """A list-shaped `dk_string_value` used to crash on `.lower()`."""
+    fields = ["reason", "comments"]
+    without_dk = generate_llm_input_hash({"reason": "hello"}, fields, ["dont_know", "dk"])
+
+    for dk_answer in ("dk", "Dont_Know"):
+        submission = {"reason": "hello", "comments": dk_answer}
+        assert generate_llm_input_hash(submission, fields, ["dont_know", "dk"]) == without_dk
+
+
+def test_generate_llm_input_hash_keeps_text_that_mentions_dk():
+    fields = ["comments"]
+    assert generate_llm_input_hash(
+        {"comments": "ask the dk office"}, fields, "dk"
+    ) != generate_llm_input_hash({}, fields, "dk")
+
+
 def test_should_enqueue_llm_check_decision_matrix():
     current_rules = "rulesA"
     current_input = "inputA"

@@ -169,6 +169,8 @@ const SurveySettingsPage: React.FC = () => {
     outlier_threshold: 1.5,
     flag_dk_percentage: false,
     dk_percentage_threshold: 50,
+    flag_empty_percentage: false,
+    empty_percentage_threshold: 50,
     flag_llm_qualitative: false,
     llm_qualitative_fields: [] as string[],
     llm_check_types: ['content_quality', 'relevance', 'completeness'] as Array<'content_quality' | 'relevance' | 'completeness'>,
@@ -186,6 +188,8 @@ const SurveySettingsPage: React.FC = () => {
     qualityChecks.flag_sampling_frame !== (savedQc.flag_sampling_frame ?? false) ||
     qualityChecks.flag_dk_percentage !== (savedQc.flag_dk_percentage ?? false) ||
     qualityChecks.dk_percentage_threshold !== (savedQc.dk_percentage_threshold ?? 50) ||
+    qualityChecks.flag_empty_percentage !== (savedQc.flag_empty_percentage ?? false) ||
+    qualityChecks.empty_percentage_threshold !== (savedQc.empty_percentage_threshold ?? 50) ||
     globalParameters.min_survey_duration_minutes !== (config?.config_data?.global_parameters?.min_survey_duration_minutes ?? null) ||
     globalParameters.max_survey_duration_minutes !== (config?.config_data?.global_parameters?.max_survey_duration_minutes ?? null)
   ) : false;
@@ -384,6 +388,8 @@ const SurveySettingsPage: React.FC = () => {
           outlier_threshold: cd.quality_checks.outlier_threshold ?? 1.5,
           flag_dk_percentage: cd.quality_checks.flag_dk_percentage ?? false,
           dk_percentage_threshold: cd.quality_checks.dk_percentage_threshold ?? 50,
+          flag_empty_percentage: cd.quality_checks.flag_empty_percentage ?? false,
+          empty_percentage_threshold: cd.quality_checks.empty_percentage_threshold ?? 50,
           flag_llm_qualitative: cd.quality_checks.flag_llm_qualitative ?? false,
           llm_qualitative_fields: cd.quality_checks.llm_qualitative_fields ?? [],
           llm_check_types: cd.quality_checks.llm_check_types ?? ['content_quality', 'relevance', 'completeness'],
@@ -1933,7 +1939,7 @@ const SurveySettingsPage: React.FC = () => {
                     </div>
                     <div className="ml-3">
                       <label className="text-sm font-medium text-gray-900 dark:text-white">
-                        Flag submissions with high Don't know percentage
+                        Flag submissions with a high percentage of "Don't know" answers
                       </label>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         Create a flag when the percentage of Don't know answers in eligible questions exceeds a threshold.
@@ -1967,6 +1973,60 @@ const SurveySettingsPage: React.FC = () => {
                       ) : (
                         <span className="text-sm text-gray-700 dark:text-gray-300">
                           {qualityChecks.dk_percentage_threshold}%
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Empty Answer Percentage Flag */}
+                <div className="space-y-2">
+                  <div className="flex items-start">
+                    <div className="flex h-5 items-center">
+                      <input
+                        type="checkbox"
+                        disabled={!canEditSurvey}
+                        checked={qualityChecks.flag_empty_percentage}
+                        onChange={(e) => setQualityChecks({ ...qualityChecks, flag_empty_percentage: e.target.checked })}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                      />
+                    </div>
+                    <div className="ml-3">
+                      <label className="text-sm font-medium text-gray-900 dark:text-white">
+                        Flag submissions with a high percentage of empty answers
+                      </label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Create a flag when the percentage of questions left empty exceeds a threshold. Only questions the respondent was shown count: skip logic that hid a question does not make it empty.
+                      </p>
+                    </div>
+                  </div>
+
+                  {qualityChecks.flag_empty_percentage && (
+                    <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Threshold (%)
+                      </label>
+                      {canEditSurvey ? (
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={qualityChecks.empty_percentage_threshold}
+                          onChange={(e) =>
+                            setQualityChecks({
+                              ...qualityChecks,
+                              empty_percentage_threshold: Math.max(
+                                0,
+                                Math.min(100, Number.parseFloat(e.target.value) || 0)
+                              ),
+                            })
+                          }
+                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      ) : (
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {qualityChecks.empty_percentage_threshold}%
                         </span>
                       )}
                     </div>

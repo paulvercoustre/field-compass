@@ -1,6 +1,18 @@
 import { StagedRule, RulePart, RuleCondition } from '../types';
 
 /**
+ * Operators that test whether a question was answered, so take no value.
+ * Stored as `is_empty(var)`: the engine counts a question its skip logic
+ * hid as not asked rather than empty.
+ */
+export const VALUELESS_OPERATORS = ['is_empty', 'is_not_empty'];
+
+export const isValuelessOperator = (operator: string): boolean =>
+  VALUELESS_OPERATORS.includes(operator);
+
+const VALUELESS_CALL = /^(is_empty|is_not_empty)\(\s*([A-Za-z_]\w*)\s*\)$/;
+
+/**
  * Convert a StagedRule (frontend format) to database format
  * Database format: { check_id, issue, check_expression, variables_involved, roster_name }
  */
@@ -91,7 +103,11 @@ const buildConditionString = (condition: RuleCondition): string => {
   const varName = condition.variable;
   const operator = condition.operator;
   const value = condition.value;
-  
+
+  if (isValuelessOperator(operator)) {
+    return `${operator}(${varName})`;
+  }
+
   if (!value) return '';
   
   // Handle %in% operator specially
@@ -180,6 +196,11 @@ const parseCheckExpression = (expression: string, variables: string[]): RulePart
  * Example: "age > 90" or 'income == "high"'
  */
 const parseCondition = (conditionStr: string, variables: string[]): RuleCondition | null => {
+  const valueless = conditionStr.match(VALUELESS_CALL);
+  if (valueless) {
+    return { variable: valueless[2], operator: valueless[1], value: '', valueType: 'static' };
+  }
+
   // Try to match: variable operator value
   // Operators: ==, !=, >, <, >=, <=
   

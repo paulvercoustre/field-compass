@@ -11,6 +11,8 @@ from typing import Any
 
 from openai import OpenAI, OpenAIError
 
+from etl.dk_utils import describe_dk_strings
+
 logger = logging.getLogger(__name__)
 
 
@@ -101,7 +103,7 @@ class AIService:
 
             sv = survey_context.get("special_values", {})
             if sv:
-                survey_context_text += f"- Special values: DK numeric = {sv.get('dk_value', -99)}, DK string = {sv.get('dk_string_value', 'dk')}\n"
+                survey_context_text += f"- Special values: DK numeric = {sv.get('dk_value', -99)}, DK string = {describe_dk_strings(sv.get('dk_string_value', 'dk'))}\n"
 
         # Create system prompt
         system_prompt = """You are a data quality validation expert. Convert natural language rule descriptions into structured validation rules.
@@ -133,13 +135,14 @@ DON'T KNOW VALUES:
   Example: If DK = -999, use conditions like: (age > 120 & age != -999) OR (age < 0 & age != -999)
 
 CONDITION STRUCTURE:
-- Each condition has: variable (string), operator (==, !=, >, <, >=, <=, %in%), value (string), valueType ("static" or "variable")
+- Each condition has: variable (string), operator (==, !=, >, <, >=, <=, %in%, is_empty, is_not_empty), value (string), valueType ("static" or "variable")
 - Multiple conditions are joined with {"joiner": "&"} for AND or {"joiner": "|"} for OR
 - Example: [{"variable": "age", "operator": ">", "value": "100", "valueType": "static"}, {"joiner": "&"}, {"variable": "age", "operator": "<", "value": "150", "valueType": "static"}]
 
 OPERATORS (STRICT - use ONLY these):
 - ==, !=, >, <, >=, <= : standard comparisons
 - %in% : value is in a list (use comma-separated values like "yes,no,maybe")
+- is_empty / is_not_empty : the question was shown but left blank / was answered. Set value to "". A question hidden by skip logic is never empty.
 - Do NOT use XLSForm functions (count-selected, position, etc.)
 - Do NOT create custom operators or expressions
 
@@ -185,7 +188,17 @@ Generate a validation rule matching the exact JSON schema."""
                                     },
                                     "operator": {
                                         "type": "string",
-                                        "enum": ["==", "!=", ">", "<", ">=", "<=", "%in%"],
+                                        "enum": [
+                                            "==",
+                                            "!=",
+                                            ">",
+                                            "<",
+                                            ">=",
+                                            "<=",
+                                            "%in%",
+                                            "is_empty",
+                                            "is_not_empty",
+                                        ],
                                         "description": "Comparison operator",
                                     },
                                     "value": {
@@ -332,8 +345,8 @@ Generate a validation rule matching the exact JSON schema."""
         if special_values:
             sv = special_values
             dk_num = sv.get("dk_value", -99)
-            dk_str = sv.get("dk_string_value", "dk")
-            special_values_context = f'\n\nSPECIAL VALUES (Don\'t Know / Refused):\n- DK numeric value: {dk_num}\n- DK string value: "{dk_str}"\n'
+            dk_str = describe_dk_strings(sv.get("dk_string_value", "dk"))
+            special_values_context = f"\n\nSPECIAL VALUES (Don't Know / Refused):\n- DK numeric value: {dk_num}\n- DK string value: {dk_str}\n"
 
         # Build existing rules context
         existing_rules_text = ""
@@ -394,6 +407,7 @@ DON'T KNOW VALUES:
 OPERATORS (STRICT - use ONLY these):
 - ==, !=, >, <, >=, <= : standard comparisons
 - %in% : value is in a list (use comma-separated values)
+- is_empty / is_not_empty : the question was shown but left blank / was answered. Set value to "". A question hidden by skip logic is never empty.
 - Do NOT use XLSForm functions (count-selected, position, etc.)
 - Do NOT create custom operators or expressions
 
@@ -401,7 +415,7 @@ REQUIREMENTS:
 - Suggest 5-10 diverse rules
 - Each rule must be different from existing rules, do not suggest duplicates or near-duplicates.
 - Prioritize practical, actionable rules
-- Use ONLY the operators listed above (==, !=, >, <, >=, <=, %in%)
+- Use ONLY the operators listed above (==, !=, >, <, >=, <=, %in%, is_empty, is_not_empty)
 - Set roster_name to null unless rule applies to a repeat group"""
 
         user_prompt = f"""SURVEY VARIABLES:
@@ -433,7 +447,17 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
                                     "variable": {"type": "string"},
                                     "operator": {
                                         "type": "string",
-                                        "enum": ["==", "!=", ">", "<", ">=", "<=", "%in%"],
+                                        "enum": [
+                                            "==",
+                                            "!=",
+                                            ">",
+                                            "<",
+                                            ">=",
+                                            "<=",
+                                            "%in%",
+                                            "is_empty",
+                                            "is_not_empty",
+                                        ],
                                     },
                                     "value": {"type": "string"},
                                     "valueType": {"type": "string", "enum": ["static", "variable"]},
@@ -595,7 +619,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         field_values: dict[str, str],
         question_contexts: dict[str, str],
         dk_numeric: int,
-        dk_string: str,
+        dk_string: str | list[str] | None,
         check_types: list[str],
     ) -> list[dict[str, Any]]:
         """
@@ -625,7 +649,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         system_prompt = f"""You are a data quality expert analyzing survey text responses.
 
 IMPORTANT CONTEXT:
-- "Don't Know" responses are coded as {dk_numeric} (numeric) or "{dk_string}" (text)
+- "Don't Know" responses are coded as {dk_numeric} (numeric) or {describe_dk_strings(dk_string)} (text)
 - These are valid responses and should not be flagged
 - Support multilingual responses and evaluate in the response's language
 - Always provide your response in english

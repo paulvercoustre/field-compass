@@ -1,16 +1,8 @@
-"""ETL package for data ingestion and processing."""
+"""
+ETL package for data ingestion and processing.
 
-from etl.data_merger import merge_submission, merge_submissions_batch, parse_kobo_submission
-from etl.hfc_engine import HFCEngine
-from etl.kobo_fetcher import KoboFetcher, create_fetcher_from_env
-from etl.pipeline import ETLPipeline
-
-__all__ = [
-    "KoboFetcher",
-    "create_fetcher_from_env",
-    "parse_kobo_submission",
-    "merge_submission",
-    "merge_submissions_batch",
-    "HFCEngine",
-    "ETLPipeline",
-]
+Import from the submodules directly (`from etl.pipeline import ETLPipeline`).
+Nothing is re-exported here: doing so loaded the whole pipeline -- and through
+it the AI service -- whenever any `etl.*` module was imported, so a service
+that needed only `etl.dk_utils` closed an import cycle back onto itself.
+"""

@@ -44,6 +44,21 @@ def _base_rule(
     }
 
 
+def missing_required_rule(question: Question, language: str | None = None) -> dict[str, Any] | None:
+    """
+    Flag the question when it was shown and left blank.
+
+    ``is_empty`` reads skip logic: a question its ``relevant`` hid is not
+    blank, it was never asked.
+    """
+    return _base_rule(
+        "missing_required",
+        question,
+        issue=f"{question.label_for(language) or question.name} is blank",
+        check_expression=f"is_empty({question.name})",
+    )
+
+
 def unbounded_numeric_rule(
     question: Question, upper: int | None, language: str | None = None
 ) -> dict[str, Any] | None:

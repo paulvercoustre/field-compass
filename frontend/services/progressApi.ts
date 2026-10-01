@@ -104,6 +104,8 @@ export interface SurveyConfig {
       outlier_threshold?: number;
       flag_dk_percentage?: boolean;
       dk_percentage_threshold?: number;
+      flag_empty_percentage?: boolean;
+      empty_percentage_threshold?: number;
       flag_llm_qualitative?: boolean;
       llm_qualitative_fields?: string[];
       llm_check_types?: ('content_quality' | 'relevance' | 'completeness')[];

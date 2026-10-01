@@ -3,7 +3,7 @@ Utilities for computing "Don't know" (DK) metrics on submissions.
 """
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -12,6 +12,9 @@ class EligibleDKIndex:
     """Precomputed index of question names eligible for DK counting."""
 
     eligible_question_names: set[str]
+    # The eligible questions whose answers are space-delimited lists, and so
+    # the only ones a DK code may be found inside of.
+    select_multiple_names: set[str] = field(default_factory=set)
 
 
 def _normalize_token(value: Any) -> str:
@@ -39,13 +42,32 @@ def dk_string_tokens(special_values: dict[str, Any] | None) -> set[str]:
     return {_normalize_token(v) for v in values if v is not None and str(v).strip()}
 
 
-def is_dk_value(value: Any, dk_value: Any, dk_tokens: set[str]) -> bool:
+def describe_dk_strings(dk_string_value: Any) -> str:
+    """
+    The configured DK strings as prompt text: `"dk" or "dont_know"`.
+
+    Takes the raw `dk_string_value`, which may be one string or a list.
+    """
+    tokens = sorted(dk_string_tokens({"dk_string_value": dk_string_value}))
+    if not tokens:
+        return "(none configured)"
+    return " or ".join(f'"{token}"' for token in tokens)
+
+
+def is_dk_value(
+    value: Any, dk_value: Any, dk_tokens: set[str], *, split_multiple: bool = True
+) -> bool:
     """
     Whether one submitted value means "don't know".
 
     Compares against every configured string, and against `dk_value` itself --
     a numeric DK code often arrives as text, depending on the question type it
     was answered under.
+
+    With `split_multiple`, a string is also read as a space-delimited
+    `select_multiple` answer, so `"rice dk"` counts. Pass False when the value
+    is known to be free text or a single choice: there, "call the dk office"
+    is a real answer.
     """
     if value is None:
         return False
@@ -64,13 +86,17 @@ def is_dk_value(value: Any, dk_value: Any, dk_tokens: set[str]) -> bool:
     if isinstance(value, str):
         if _normalize_token(value) in tokens:
             return True
+        if not split_multiple:
+            return False
         # `select_multiple` answers arrive as a space-delimited list, so a DK
         # coding can sit among other selected options.
         return any(part.strip().lower() in tokens for part in value.split() if part.strip())
 
     # Defensive handling if list values appear.
     if isinstance(value, list):
-        return any(is_dk_value(item, dk_value, dk_tokens) for item in value)
+        return any(
+            is_dk_value(item, dk_value, dk_tokens, split_multiple=split_multiple) for item in value
+        )
 
     return False
 
@@ -96,7 +122,7 @@ def build_eligible_dk_question_index(config_data: dict[str, Any]) -> EligibleDKI
     Build an index of eligible question names for DK metrics.
 
     Eligible questions:
-    - integer
+    - integer, decimal
     - text
     - select_one/select_multiple only when their choice list contains DK option
     """
@@ -112,7 +138,7 @@ def build_eligible_dk_question_index(config_data: dict[str, Any]) -> EligibleDKI
         dk_tokens.add(_normalize_token(dk_value))
 
     # If no DK token is configured, no select question can be considered DK-eligible.
-    # integer/text remain eligible because DK can still be represented as dk_value.
+    # integer/decimal/text remain eligible because DK can still be represented as dk_value.
     choices_by_list: dict[str, set[str]] = {}
     for choice in choices_sheet:
         list_name = choice.get("list_name")
@@ -125,6 +151,7 @@ def build_eligible_dk_question_index(config_data: dict[str, Any]) -> EligibleDKI
         choices_by_list[key].add(_normalize_token(choice_name))
 
     eligible_question_names: set[str] = set()
+    select_multiple_names: set[str] = set()
     skip_types = {"begin_group", "end_group", "begin_repeat", "end_repeat", "note"}
 
     for question in survey_sheet:
@@ -135,7 +162,7 @@ def build_eligible_dk_question_index(config_data: dict[str, Any]) -> EligibleDKI
         if not q_name or q_type in skip_types:
             continue
 
-        if q_type in {"integer", "text"}:
+        if q_type in {"integer", "decimal", "text"}:
             eligible_question_names.add(str(q_name))
             continue
 
@@ -146,8 +173,13 @@ def build_eligible_dk_question_index(config_data: dict[str, Any]) -> EligibleDKI
             list_choices = choices_by_list.get(list_name, set())
             if any(token in list_choices for token in dk_tokens):
                 eligible_question_names.add(str(q_name))
+                if q_type == "select_multiple":
+                    select_multiple_names.add(str(q_name))
 
-    return EligibleDKIndex(eligible_question_names=eligible_question_names)
+    return EligibleDKIndex(
+        eligible_question_names=eligible_question_names,
+        select_multiple_names=select_multiple_names,
+    )
 
 
 def _flatten_leaf_values(data: Any, path: str = "") -> Iterator[tuple[str, Any]]:
@@ -205,6 +237,7 @@ def compute_dk_metrics(
       (dk_count, dk_eligible_count, dk_percentage_or_none)
     """
     eligible_names = eligible_index.eligible_question_names if eligible_index else set()
+    select_multiple_names = eligible_index.select_multiple_names if eligible_index else set()
     if not eligible_names:
         return (0, 0, None)
 
@@ -223,7 +256,9 @@ def compute_dk_metrics(
             continue
 
         dk_eligible_count += 1
-        if is_dk_value(value, dk_value, dk_tokens):
+        if is_dk_value(
+            value, dk_value, dk_tokens, split_multiple=field_name in select_multiple_names
+        ):
             dk_count += 1
 
     if dk_eligible_count == 0:

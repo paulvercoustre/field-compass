@@ -1,5 +1,6 @@
 
 import { GlobalParameters, StagedRule, KoboVariable, RulePart, RuleCondition } from '../types';
+import { isValuelessOperator } from './ruleConverter';
 
 const compileRuleFromStructure = (ruleData: StagedRule, variableMap: Map<string, KoboVariable> | undefined) => {
     const conditions: string[] = [];
@@ -15,6 +16,11 @@ const compileRuleFromStructure = (ruleData: StagedRule, variableMap: Map<string,
             variables_involved.add(variable);
             
             const variableInfo = variableMap?.get(variable);
+
+            if (isValuelessOperator(operator)) {
+                conditions.push(`${operator}(${variable})`);
+                return;
+            }
 
             if (valueType === 'static') {
                 // For 'is one of', format as c('a', 'b', 'c')

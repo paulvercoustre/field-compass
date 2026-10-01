@@ -9,6 +9,7 @@ rewritten, so the single-string form stays live indefinitely.
 from etl.dk_utils import (
     build_eligible_dk_question_index,
     compute_dk_metrics,
+    describe_dk_strings,
     dk_string_tokens,
     is_dk_value,
 )
@@ -71,6 +72,24 @@ class TestIsDkValue:
         assert is_dk_value(["yes", "dk"], -99, self.tokens)
         assert not is_dk_value(["yes", "no"], -99, self.tokens)
 
+    def test_whole_answer_only_when_not_split(self):
+        """Free text mentioning `dk` is a real answer."""
+        assert not is_dk_value("call the dk office", -99, self.tokens, split_multiple=False)
+        assert is_dk_value(" DK ", -99, self.tokens, split_multiple=False)
+        assert is_dk_value("-99", -99, self.tokens, split_multiple=False)
+
+
+class TestDescribeDkStrings:
+    def test_single_string(self):
+        assert describe_dk_strings("dk") == '"dk"'
+
+    def test_list(self):
+        assert describe_dk_strings(["dont_know", "dk"]) == '"dk" or "dont_know"'
+
+    def test_nothing_configured(self):
+        assert describe_dk_strings(None) == "(none configured)"
+        assert describe_dk_strings([]) == "(none configured)"
+
 
 class TestMultipleValuesEndToEnd:
     """A form coding the same answer two ways counts both."""
@@ -120,3 +139,48 @@ class TestMultipleValuesEndToEnd:
             {"q_income": 400, "q_crop": "dont_know"}, index, legacy["special_values"]
         )
         assert (dk_count, eligible) == (1, 2)
+
+
+class TestQuestionTypes:
+    """Which answers are split, and which types count at all."""
+
+    config = {
+        "kobo_tool": {
+            "survey": [
+                {"name": "q_note", "type": "text"},
+                {"name": "q_weight", "type": "decimal"},
+                {"name": "q_crops", "type": "select_multiple crops"},
+            ],
+            "choices": [
+                {"list_name": "crops", "name": "maize"},
+                {"list_name": "crops", "name": "dk"},
+            ],
+        },
+        "special_values": {"dk_value": -99, "dk_string_value": "dk"},
+    }
+
+    def test_decimal_is_eligible(self):
+        index = build_eligible_dk_question_index(self.config)
+        assert "q_weight" in index.eligible_question_names
+
+    def test_decimal_dk_is_counted(self):
+        index = build_eligible_dk_question_index(self.config)
+        dk_count, eligible, _ = compute_dk_metrics(
+            {"q_weight": "-99"}, index, self.config["special_values"]
+        )
+        assert (dk_count, eligible) == (1, 1)
+
+    def test_text_mentioning_dk_is_not_counted(self):
+        index = build_eligible_dk_question_index(self.config)
+        dk_count, eligible, _ = compute_dk_metrics(
+            {"q_note": "call the dk office"}, index, self.config["special_values"]
+        )
+        assert (dk_count, eligible) == (0, 1)
+
+    def test_select_multiple_is_still_split(self):
+        index = build_eligible_dk_question_index(self.config)
+        assert index.select_multiple_names == {"q_crops"}
+        dk_count, eligible, _ = compute_dk_metrics(
+            {"q_crops": "maize dk"}, index, self.config["special_values"]
+        )
+        assert (dk_count, eligible) == (1, 1)
