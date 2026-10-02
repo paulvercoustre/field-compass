@@ -17,6 +17,13 @@ export interface User {
   last_login_at: string | null;
 }
 
+/** The Kobo account an API key belongs to, when Kobo says. */
+export interface KoboUser {
+  username: string;
+  email: string;
+  organization?: string;
+}
+
 // Auth context type
 interface AuthContextType {
   user: User | null;
@@ -27,9 +34,9 @@ interface AuthContextType {
   register: (email: string, username: string, password: string, fullName?: string) => Promise<void>;
   logout: () => void;
   updateUser: (updates: { username?: string; full_name?: string; kobo_api_url?: string }) => Promise<void>;
-  setKoboApiKey: (apiKey: string) => Promise<void>;
+  connectKobo: (apiUrl: string, apiKey: string) => Promise<KoboUser | null>;
   deleteKoboApiKey: () => Promise<void>;
-  testKoboApiKey: () => Promise<{ status: string; message: string; kobo_user?: { username: string; email: string; organization: string } }>;
+  testKoboApiKey: () => Promise<{ status: string; message: string; kobo_user?: KoboUser | null }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   deleteAccount: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -226,19 +233,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem(USER_KEY, JSON.stringify(userData));
   };
 
-  const setKoboApiKey = async (apiKey: string) => {
-    const response = await authFetch('/api/users/me/kobo-api-key', {
+  // Server and key are checked by Kobo and saved together; nothing is saved
+  // if Kobo turns the key down.
+  const connectKobo = async (apiUrl: string, apiKey: string): Promise<KoboUser | null> => {
+    const response = await authFetch('/api/users/me/kobo-connection', {
       method: 'PUT',
-      body: JSON.stringify({ kobo_api_token: apiKey }),
+      body: JSON.stringify({ kobo_api_url: apiUrl, kobo_api_token: apiKey }),
     });
 
     if (!response.ok) {
-      throw new Error(await errorDetail(response, 'Failed to set API key'));
+      throw new Error(await errorDetail(response, 'Could not connect to Kobo'));
     }
 
-    const userData = await response.json();
+    const { user: userData, kobo_user } = await response.json();
     setUser(userData);
     localStorage.setItem(USER_KEY, JSON.stringify(userData));
+    return kobo_user ?? null;
   };
 
   const deleteKoboApiKey = async () => {
@@ -314,7 +324,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         register,
         logout,
         updateUser,
-        setKoboApiKey,
+        connectKobo,
         deleteKoboApiKey,
         testKoboApiKey,
         changePassword,
