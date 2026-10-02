@@ -11,6 +11,7 @@ import SurveySettingsPage from './pages/SurveySettingsPage';
 import UserSettingsPage from './pages/UserSettingsPage';
 import LoginPage from './pages/LoginPage';
 import Sidebar from './components/Sidebar';
+import SetupChecklist from './components/onboarding/SetupChecklist';
 
 type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'qualityOverview' | 'createSurvey' | 'settings' | 'userSettings';
 
@@ -29,8 +30,12 @@ const SURVEY_SCOPED_VIEWS: View[] = [
   'settings',
 ];
 
-const RequiresSurvey: React.FC<{ view: View; children: React.ReactNode }> = ({ view, children }) => {
-  const { selectedSurvey, isLoading } = useSurvey();
+const RequiresSurvey: React.FC<{ view: View; onAddSurvey: () => void; children: React.ReactNode }> = ({
+  view,
+  onAddSurvey,
+  children,
+}) => {
+  const { selectedSurvey, surveys, isLoading } = useSurvey();
 
   if (!SURVEY_SCOPED_VIEWS.includes(view) || selectedSurvey) {
     return <>{children}</>;
@@ -42,12 +47,18 @@ const RequiresSurvey: React.FC<{ view: View; children: React.ReactNode }> = ({ v
     return null;
   }
 
+  // No surveys at all: a new user. Show what to do, in order, rather than
+  // pointing at an empty sidebar.
+  if (surveys.length === 0) {
+    return <SetupChecklist onAddSurvey={onAddSurvey} />;
+  }
+
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
         <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">No survey selected</p>
         <p className="text-gray-500 text-sm">
-          Please select a survey from the sidebar to view its settings.
+          Choose a survey from the list on the left.
         </p>
       </div>
     </div>
@@ -219,7 +230,9 @@ const AppContent: React.FC = () => {
           </header>
 
           <main className="flex-1 min-h-0 overflow-hidden">
-            <RequiresSurvey view={view}>{views[view]}</RequiresSurvey>
+            <RequiresSurvey view={view} onAddSurvey={handleAddSurvey}>
+              {views[view]}
+            </RequiresSurvey>
           </main>
         </div>
       </div>
