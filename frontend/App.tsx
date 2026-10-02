@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SurveyProvider, useSurvey } from './contexts/SurveyContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { FilterState } from './types';
@@ -111,22 +111,18 @@ const AppContent: React.FC = () => {
     return saved !== null ? saved === 'true' : true;
   });
 
-  // Track if this is the first render to avoid persisting the mobile default
-  const isFirstRender = useRef(true);
-
   // Save current view to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('currentView', view);
   }, [view]);
 
-  // Save sidebar state to localStorage whenever it changes (but not on initial mount)
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    localStorage.setItem('sidebarOpen', String(isSidebarOpen));
-  }, [isSidebarOpen]);
+  const handleSidebarToggle = () => {
+    setIsSidebarOpen(prev => {
+      const next = !prev;
+      localStorage.setItem('sidebarOpen', String(next));
+      return next;
+    });
+  };
 
   // Listen for navigation events from CreateSurveyPage
   useEffect(() => {
@@ -232,7 +228,7 @@ const AppContent: React.FC = () => {
           onLogout={logout}
           isUserSettingsActive={view === 'userSettings'}
           isOpen={isSidebarOpen}
-          onToggle={() => setIsSidebarOpen(prev => !prev)}
+          onToggle={handleSidebarToggle}
         />
         
         <div className="flex flex-col flex-1 min-w-0">
