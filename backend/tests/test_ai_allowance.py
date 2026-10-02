@@ -298,7 +298,11 @@ class TestHttp:
 
         from tests.test_api_endpoints import TEST_USER_ID, TestingSessionLocal
 
+        from services.ai_service import ai_service
+
         monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY", "1")
+        # The shared service read OPENAI_API_KEY at import; CI has none.
+        monkeypatch.setattr(ai_service, "api_key", "sk-operator")
         survey_id = _api_survey(client)
         db = TestingSessionLocal()
         _usage(
