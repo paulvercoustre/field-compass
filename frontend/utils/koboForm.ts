@@ -1,5 +1,6 @@
 import { KoboProjectForm } from '../services/api';
-import { KoboToolData, KoboVariable } from '../types';
+import { KoboToolData } from '../types';
+import { reconstructKoboToolData } from './koboDataUtils';
 import { labelColumnFor } from './koboUrl';
 
 /**
@@ -40,17 +41,10 @@ export function projectFormToKoboTool(
     }))
   );
 
-  const variableMap = new Map<string, KoboVariable>(
-    form.questions.map((q) => [
-      q.name,
-      {
-        type: q.type,
-        label: q.labels[language] || q.name,
-        choiceListName: q.list_name,
-        roster_name: q.repeat_name,
-      },
-    ])
-  );
+  // Build the variable list the same way a saved tool is rebuilt on load, so
+  // the count shown after a refresh matches the one shown after Save. Every
+  // question is kept in `survey`; only answerable types become variables.
+  const { variableMap } = reconstructKoboToolData(survey, choices, labelColumnFor(language));
 
   return { survey, choices, variableMap, has_audit: form.has_audit } as KoboToolData;
 }
