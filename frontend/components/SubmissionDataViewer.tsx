@@ -82,13 +82,14 @@ const SectionCard: React.FC<SectionCardProps> = ({ title, children, defaultOpen 
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-left"
+        aria-expanded={open}
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors text-left"
       >
-        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 tracking-wide uppercase">
+        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
           {title}
         </span>
         <svg
@@ -101,18 +102,18 @@ const SectionCard: React.FC<SectionCardProps> = ({ title, children, defaultOpen 
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && <div className="divide-y divide-gray-100 dark:divide-gray-700/50">{children}</div>}
+      {open && <div className="divide-y divide-gray-100 dark:divide-gray-800">{children}</div>}
     </div>
   );
 };
 
 // Column header row for question/answer grid
 const GridHeader: React.FC = () => (
-  <div className="grid grid-cols-2 gap-4 px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-    <span className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+  <div className="grid grid-cols-2 gap-4 px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950">
+    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
       Question
     </span>
-    <span className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
       Answer
     </span>
   </div>

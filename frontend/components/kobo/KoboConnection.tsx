@@ -26,9 +26,9 @@ const hostOf = (apiUrl: string | undefined): string => {
 const apiKeyPageFor = (host: string) => `https://${host}/#/account/security`;
 
 const inputClass =
-  'w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
+  'w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
 const secondaryButton =
-  'px-3 py-2 text-sm font-medium rounded-md border disabled:opacity-50 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700';
+  'h-8 px-3 text-sm font-medium rounded-md border shadow-xs disabled:opacity-50 bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800';
 
 /**
  * Connect (or change) the user's KoboToolbox account.
@@ -150,7 +150,7 @@ const KoboConnection: React.FC = () => {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm text-gray-900 dark:text-white">
-              <span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-2 align-middle" aria-hidden="true" />
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 mr-2 align-middle" aria-hidden="true" />
               Connected to <strong>{savedHost}</strong>
               {koboUser?.username && (
                 <>
@@ -160,12 +160,12 @@ const KoboConnection: React.FC = () => {
               )}
             </p>
             {justConnected && (
-              <p role="status" className="text-sm text-green-700 dark:text-green-400 mt-1">
+              <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400 mt-1">
                 ✓ Kobo accepted your key. Field Compass can now read your projects.
               </p>
             )}
             {testMessage && (
-              <p role="status" className="text-sm text-green-700 dark:text-green-400 mt-1">
+              <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400 mt-1">
                 ✓ {testMessage}
               </p>
             )}
@@ -183,7 +183,7 @@ const KoboConnection: React.FC = () => {
                 setRemoveError(null);
                 setConfirmingRemove(true);
               }}
-              className="px-3 py-2 text-sm font-medium rounded-md border text-red-600 border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-900/20"
+              className="h-8 px-3 text-sm font-medium rounded-md border text-red-600 border-red-200 dark:text-red-400 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-500/10"
             >
               Disconnect
             </button>
@@ -193,14 +193,14 @@ const KoboConnection: React.FC = () => {
 
         {/* Same dialog style as deleting a survey */}
         {confirmingRemove && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[2px] flex items-center justify-center z-50">
             <div
               role="dialog"
               aria-modal="true"
               aria-labelledby="disconnect-kobo-title"
-              className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700"
+              className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in"
             >
-              <h2 id="disconnect-kobo-title" className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              <h2 id="disconnect-kobo-title" className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
                 Disconnect KoboToolbox
               </h2>
               <p className="text-gray-700 dark:text-gray-300 mb-4">
@@ -208,7 +208,7 @@ const KoboConnection: React.FC = () => {
                 surveys until you connect again. Your surveys and their data stay as they are.
               </p>
               {removeError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
+                <div className="p-3 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
                   <p className="text-sm text-red-600 dark:text-red-400">{removeError}</p>
                 </div>
               )}
@@ -216,14 +216,14 @@ const KoboConnection: React.FC = () => {
                 <button
                   onClick={() => setConfirmingRemove(false)}
                   disabled={isRemoving}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-sm font-medium"
+                  className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleRemove}
                   disabled={isRemoving}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-700 disabled:cursor-not-allowed text-sm font-medium"
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
                   {isRemoving ? 'Disconnecting...' : 'Disconnect'}
                 </button>
@@ -256,7 +256,7 @@ const KoboConnection: React.FC = () => {
                 name="kobo-server"
                 checked={server === s.id}
                 onChange={() => setServer(s.id)}
-                className="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                className="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-800"
               />
               {s.label} <span className="text-gray-500 dark:text-gray-400">— {s.host}</span>
             </label>
@@ -267,7 +267,7 @@ const KoboConnection: React.FC = () => {
               name="kobo-server"
               checked={server === 'other'}
               onChange={() => setServer('other')}
-              className="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+              className="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-800"
             />
             Your organisation's own server
           </label>
@@ -310,7 +310,7 @@ const KoboConnection: React.FC = () => {
               aria-disabled={!canOpenKobo}
               className={`inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md ${
                 canOpenKobo
-                  ? 'text-white bg-indigo-600 hover:bg-indigo-700'
+                  ? 'text-white bg-indigo-600 hover:bg-indigo-500'
                   : 'text-white bg-indigo-300 dark:bg-indigo-900 cursor-not-allowed'
               }`}
             >
@@ -343,7 +343,7 @@ const KoboConnection: React.FC = () => {
               <button
                 type="submit"
                 disabled={isConnecting || !apiKey.trim()}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-indigo-400"
+                className="h-8 px-3 text-sm font-medium text-white bg-indigo-600 rounded-md shadow-xs hover:bg-indigo-500 disabled:opacity-50"
               >
                 {isConnecting ? 'Checking with Kobo…' : 'Connect'}
               </button>
@@ -374,7 +374,7 @@ const KoboConnection: React.FC = () => {
       </ol>
 
       {error && (
-        <div role="alert" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+        <div role="alert" className="p-3 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg">
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
       )}

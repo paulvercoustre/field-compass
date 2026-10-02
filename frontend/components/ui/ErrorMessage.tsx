@@ -48,7 +48,7 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({
       id={id}
       role="alert"
       aria-live="polite"
-      className={`p-4 bg-red-50 dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-md text-red-800 dark:text-red-200 flex items-center justify-between transition-opacity duration-300 ${className}`}
+      className={`px-3 py-2 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg text-red-900 dark:text-red-200 flex items-center justify-between animate-fade-in ${className}`}
     >
       <span>{errorText}</span>
       {onDismiss && (
@@ -57,11 +57,11 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({
             setIsVisible(false);
             setTimeout(onDismiss, 300);
           }}
-          className="ml-4 text-red-700 dark:text-red-300 hover:text-red-900 dark:hover:text-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+          className="ml-4 p-0.5 text-red-700/70 dark:text-red-300/70 hover:text-red-900 dark:hover:text-red-100 rounded"
           aria-label="Dismiss error message"
         >
           <svg
-            className="w-5 h-5"
+            className="w-4 h-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

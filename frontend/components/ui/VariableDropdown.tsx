@@ -40,7 +40,7 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
         {label}
         {helpKey && CORE_IDENTIFIER_HELP[helpKey] && <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />}
       </label>
@@ -53,7 +53,7 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="">-- Select variable --</option>
           {suggested.length > 0 ? (
@@ -88,7 +88,7 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           placeholder="Enter variable name"
         />
       )}

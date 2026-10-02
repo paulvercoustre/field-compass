@@ -97,7 +97,7 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
         <button
           onClick={handleGetSuggestions}
           disabled={isLoading}
-          className="w-full px-4 py-2 font-bold text-white bg-purple-600 rounded-md hover:bg-purple-500 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
+          className="w-full px-4 py-2 font-bold text-white bg-purple-600 rounded-md hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
         >
           {isLoading ? (
             <span className="flex items-center justify-center">
@@ -116,7 +116,7 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
           <button
             onClick={handleAddSelected}
             disabled={selectedIds.size === 0}
-            className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+            className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
           >
             Add Selected ({selectedIds.size})
           </button>

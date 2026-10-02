@@ -77,7 +77,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
         Don't know — answer options
         <InfoTip help={CORE_IDENTIFIER_HELP.dk_string_value} />
       </label>
@@ -91,7 +91,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
                 add(e.target.value);
                 e.target.value = '';
               }}
-              className="w-full mb-2 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full mb-2 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">-- Add another answer option --</option>
               {found.length > 0 ? (
@@ -139,7 +139,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
                   }
                 }}
                 placeholder="Enter answer option"
-                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <button
                 type="button"
@@ -194,7 +194,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
                 <button
                   type="button"
                   onClick={() => onChange([...values, ...suggestions])}
-                  className="px-2 py-1 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  className="px-2 py-1 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-500"
                 >
                   + Add all {suggestions.length}
                 </button>

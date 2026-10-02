@@ -20,7 +20,7 @@ interface ProgressBarProps {
 const ProgressBar: React.FC<ProgressBarProps> = ({ percentage }) => {
   if (percentage === null || percentage === undefined || Number.isNaN(percentage)) {
     return (
-      <span className="text-sm text-gray-500 dark:text-gray-400" title="No target set">
+      <span className="text-sm text-gray-400 dark:text-gray-500" title="No target set">
         —
       </span>
     );
@@ -28,21 +28,19 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ percentage }) => {
 
   // Cap the visual width of the bar at 100%, but use the actual percentage for color logic
   const widthPercentage = Math.min(100, percentage);
-  const color = percentage >= 100 ? 'bg-green-500' : 'bg-blue-600';
+  const color = percentage >= 100 ? 'bg-emerald-500' : 'bg-indigo-500';
 
   return (
-    <div className="w-32">
-        <div className="bg-gray-200 dark:bg-gray-800 rounded-full h-6 relative overflow-hidden">
+    <div className="flex w-44 items-center gap-3">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
         <div
-            className={`h-full rounded-full ${color}`}
-            style={{ width: `${widthPercentage}%` }}
+          className={`h-full rounded-full ${color}`}
+          style={{ width: `${widthPercentage}%` }}
         ></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xs font-bold text-gray-900 dark:text-white">
-            {percentage.toFixed(1)}%
-            </span>
-        </div>
-        </div>
+      </div>
+      <span className="tabular w-12 text-right text-xs font-medium text-gray-700 dark:text-gray-300">
+        {percentage.toFixed(1)}%
+      </span>
     </div>
   );
 };

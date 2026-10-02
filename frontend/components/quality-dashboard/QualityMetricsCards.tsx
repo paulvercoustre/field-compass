@@ -1,5 +1,6 @@
 import React from 'react';
 import { QualityMetricsSummary } from '../../types';
+import { SectionLabel } from '../ui/Card';
 
 interface MetricCardProps {
   label: string;
@@ -8,17 +9,17 @@ interface MetricCardProps {
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({ label, value, subtitle }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 min-w-0">
-    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+  <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-card dark:border-gray-800 dark:bg-gray-900">
+    <span className="text-sm text-gray-500 dark:text-gray-400">
       {label}
     </span>
-    <div className="mt-1">
-      <span className="text-2xl font-bold text-gray-900 dark:text-white">
+    <div className="mt-2">
+      <span className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
         {typeof value === 'number' ? value.toLocaleString() : value}
       </span>
     </div>
     {subtitle && (
-      <span className="text-sm text-gray-500 dark:text-gray-400">
+      <span className="tabular mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
         {subtitle}
       </span>
     )}
@@ -32,28 +33,26 @@ interface QualityMetricsCardsProps {
 const QualityMetricsCards: React.FC<QualityMetricsCardsProps> = ({ data }) => {
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">
-        Quality Metrics
-      </h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <SectionLabel>Quality metrics</SectionLabel>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))]">
         <MetricCard
-          label="Total Issues"
+          label="Total issues"
           value={data.total_issues}
           subtitle={`across ${data.submissions_with_issues} submissions`}
         />
         <MetricCard
-          label="Avg Issues / Submission"
+          label="Issues per submission"
           value={data.avg_issues_per_submission.toFixed(2)}
         />
         {data.avg_dk_percentage != null && (
           <MetricCard
-            label="Avg DK % / Submission"
+            label="Don’t-know answers, average"
             value={`${data.avg_dk_percentage.toFixed(1)}%`}
           />
         )}
         {data.avg_active_duration_minutes != null && (
           <MetricCard
-            label="Avg Active Duration"
+            label="Active duration, average"
             value={`${data.avg_active_duration_minutes.toFixed(1)} min`}
           />
         )}

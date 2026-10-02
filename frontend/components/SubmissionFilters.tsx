@@ -75,12 +75,12 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
 
   return (
     <div className="flex flex-col gap-1" ref={dropdownRef}>
-      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+      <label className="text-xs font-medium text-gray-600 dark:text-gray-400">{label}</label>
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full min-w-[200px] min-h-[2.5rem] px-3 py-2 text-left bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hover:border-gray-400 dark:hover:border-gray-500 transition-colors ${
+          className={`w-full min-w-[200px] min-h-[2.25rem] pl-2.5 pr-8 py-1.5 text-left bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white text-sm hover:border-gray-400 dark:hover:border-gray-600 transition-colors ${
             isOpen ? 'ring-2 ring-indigo-500 border-indigo-500' : ''
           }`}
         >
@@ -94,7 +94,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                   return (
                     <span
                       key={value}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-600/20 text-indigo-800 dark:text-indigo-300 text-xs font-medium rounded border border-indigo-500"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20"
                     >
                       {option?.label || value}
                       <button
@@ -125,15 +125,15 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full min-w-[200px] mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-hidden">
+          <div className="absolute z-50 w-full min-w-[200px] mt-1 bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 rounded-lg shadow-popover max-h-60 overflow-hidden animate-fade-in">
             {options.length > 5 && (
-              <div className="p-2 border-b border-gray-200 dark:border-gray-600">
+              <div className="p-2 border-b border-gray-100 dark:border-gray-800">
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search..."
-                  className="w-full px-2 py-1 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded text-gray-900 dark:text-white text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   onClick={(e) => e.stopPropagation()}
                 />
               </div>
@@ -147,13 +147,13 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                 filteredOptions.map(option => (
                   <label
                     key={option.value}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-sm"
+                    className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-sm"
                   >
                     <input
                       type="checkbox"
                       checked={selectedValues.includes(option.value)}
                       onChange={() => handleToggleOption(option.value)}
-                      className="rounded border-gray-400 dark:border-gray-500 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
+                      className="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
                     />
                     <span className="text-gray-900 dark:text-white break-words" title={option.label}>
                       {option.label}
@@ -163,7 +163,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
               )}
             </div>
             {selectedValues.length > 0 && (
-              <div className="border-t border-gray-200 dark:border-gray-600 p-2">
+              <div className="border-t border-gray-100 dark:border-gray-800 p-2">
                 <button
                   onClick={() => onChange([])}
                   className="w-full text-left text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
@@ -275,58 +275,54 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
   }, [activeFilters]);
 
   return (
-    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <div className="border-b border-gray-200 dark:border-gray-800">
       {/* Collapsed Header */}
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex h-11 items-center justify-between px-3">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-2 px-3 py-1 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            aria-expanded={isExpanded}
+            className="flex h-7 items-center gap-1.5 px-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
           >
-            <svg
-              className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 5h18M6 12h12M10 19h4" />
             </svg>
             <span>Filters</span>
             {activeFilterCount > 0 && (
-              <span className="bg-indigo-600 text-white text-xs px-2 py-0.5 rounded-full">
+              <span className="tabular min-w-[1.25rem] bg-indigo-600 text-white text-xs leading-5 px-1.5 rounded-full text-center">
                 {activeFilterCount}
               </span>
             )}
           </button>
-          {isLoading && <Spinner />}
+          {isLoading && <Spinner size="sm" />}
         </div>
         {activeFilterCount > 0 && (
           <button
             onClick={handleClearAllFilters}
-            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+            className="h-7 rounded-md px-2 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
           >
-            Clear All
+            Clear all
           </button>
         )}
       </div>
 
       {/* Expanded Filter Panel */}
       {isExpanded && (
-        <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="px-3 pb-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
           {/* Filter Summary */}
           {activeFilterCount > 0 && (
             <div className="mt-4 mb-4">
-              <div className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                Active filters ({activeFilterCount})
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                Active filters
               </div>
               <div className="flex flex-wrap gap-2">
                 {/* Validation Status Chips */}
                 {(activeFilters.validationStatuses || []).map((status) => (
-                  <span key={status} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-600/20 text-indigo-800 dark:text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
+                  <span key={status} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
                     Status: {status}
                     <button
                       onClick={() => handleRemoveFilter('validationStatuses', status)}
-                      className="ml-1 hover:text-indigo-900 dark:hover:text-white"
+                      className="ml-0.5 rounded px-1 hover:bg-indigo-100 hover:text-indigo-900 dark:hover:bg-indigo-500/20 dark:hover:text-white"
                     >
                       ×
                     </button>
@@ -335,11 +331,11 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
 
                 {/* Enumerator Chips */}
                 {(activeFilters.enumerators || []).map((enumerator) => (
-                  <span key={enumerator} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-600/20 text-indigo-800 dark:text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
+                  <span key={enumerator} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
                     Enumerator: {enumerator}
                     <button
                       onClick={() => handleRemoveFilter('enumerators', enumerator)}
-                      className="ml-1 hover:text-indigo-900 dark:hover:text-white"
+                      className="ml-0.5 rounded px-1 hover:bg-indigo-100 hover:text-indigo-900 dark:hover:bg-indigo-500/20 dark:hover:text-white"
                     >
                       ×
                     </button>
@@ -349,11 +345,11 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
                 {/* Sampling Filter Chips */}
                 {(activeFilters.samplingFilters || []).map((filter) =>
                   filter.values.map((value) => (
-                    <span key={`${filter.variable}-${value}`} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-600/20 text-indigo-800 dark:text-indigo-300 text-xs font-medium rounded-full border border-indigo-500">
+                    <span key={`${filter.variable}-${value}`} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
                       {filter.variable}: {value}
                       <button
                         onClick={() => handleRemoveFilter('samplingFilters', value, filter.variable)}
-                        className="ml-1 hover:text-indigo-900 dark:hover:text-white"
+                        className="ml-0.5 rounded px-1 hover:bg-indigo-100 hover:text-indigo-900 dark:hover:bg-indigo-500/20 dark:hover:text-white"
                       >
                         ×
                       </button>
@@ -365,7 +361,7 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
           )}
 
           {/* Filter Controls */}
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4 mt-3">
             {/* Validation Status Multi-Select */}
             <MultiSelectDropdown
               label="Validation Status"
@@ -397,7 +393,7 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
             {/* Sampling Variables */}
             {supportsSamplingFiltering(surveyConfig) && (
               <div className="flex flex-col gap-2 xl:col-span-1">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Sampling Variables</label>
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400">Sampling Variables</label>
                 <div className="space-y-3">
                   {filterOptions.samplingVariables.map((variable) => {
                     const values = extractUniqueSamplingValues(submissions, variable, surveyConfig);

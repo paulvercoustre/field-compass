@@ -135,7 +135,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
       <button
         onClick={handleGenerate}
         disabled={isGenerating || !prompt.trim()}
-        className="w-full px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
+        className="w-full px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
       >
         {isGenerating ? (
           <span className="flex items-center justify-center">
@@ -159,7 +159,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
       {generatedRule && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md space-y-3">
           <div className="flex items-start justify-between">
-            <h4 className="font-semibold text-blue-900 dark:text-blue-100">Generated Rule</h4>
+            <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">Generated Rule</h4>
             <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 rounded">
               AI Generated
             </span>
@@ -201,7 +201,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
             <button
               onClick={handleAccept}
               disabled={isGenerating}
-              className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? 'Saving...' : '✓ Accept & Add to Editor'}
             </button>

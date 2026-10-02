@@ -500,8 +500,8 @@ const CreateSurveyPage: React.FC = () => {
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
-      <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-2xl p-4 md:p-6 mx-auto max-w-4xl">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">Create New Survey</h1>
+      <div className="mx-auto max-w-3xl py-2">
+        <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white mb-6">New survey</h1>
 
         <div className="mb-4 space-y-2">
           <ErrorMessage error={error} className="text-base" />
@@ -515,23 +515,23 @@ const CreateSurveyPage: React.FC = () => {
 
         <div className="space-y-6">
           {/* Basic Information */}
-          <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Basic Information</h2>
+          <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Basic Information</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Survey Name *
                 </label>
                 <input
                   type="text"
                   value={surveyName}
                   onChange={(e) => setSurveyName(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Kobo project link *
                   <InfoTip help={KOBO_LINK_HELP} />
                 </label>
@@ -539,7 +539,7 @@ const CreateSurveyPage: React.FC = () => {
                   type="text"
                   value={koboLink}
                   onChange={(e) => setKoboLink(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="https://kf.kobotoolbox.org/#/forms/aXXXXXXXXXXXXXXXXXXXXX"
                   required
                 />
@@ -557,25 +557,25 @@ const CreateSurveyPage: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Data Collection Start Date
                   </label>
                   <input
                     type="date"
                     value={globalParameters.data_collection_start_date}
                     onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Data Collection End Date
                   </label>
                   <input
                     type="date"
                     value={globalParameters.data_collection_end_date}
                     onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
               </div>
@@ -583,8 +583,8 @@ const CreateSurveyPage: React.FC = () => {
           </section>
 
           {/* Survey form */}
-          <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-1 text-gray-900 dark:text-white">Survey form</h2>
+          <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+            <h2 className="text-base font-semibold tracking-tight mb-1 text-gray-900 dark:text-white">Survey form</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Field Compass needs your form's questions to fill in the settings below.
             </p>
@@ -594,11 +594,11 @@ const CreateSurveyPage: React.FC = () => {
                   type="button"
                   onClick={() => handleLoadProjectForm(koboAssetId)}
                   disabled={!koboAssetId || isLoadingProjectForm}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
                 >
                   {isLoadingProjectForm ? (
                     <>
-                      <Spinner />
+                      <Spinner size="sm" className="text-current" />
                       <span>Reading form...</span>
                     </>
                   ) : (
@@ -617,13 +617,13 @@ const CreateSurveyPage: React.FC = () => {
                 )}
                 {formLanguages.length > 1 && (
                   <div className="pt-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Show question labels in
                     </label>
                     <select
                       value={selectedLanguage}
                       onChange={(e) => setSelectedLanguage(e.target.value)}
-                      className="w-full sm:w-64 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full sm:w-64 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       {formLanguages.map((language) => (
                         <option key={language} value={language}>
@@ -648,8 +648,8 @@ const CreateSurveyPage: React.FC = () => {
           )}
 
           {/* Collection Targets */}
-          <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Data collection targets</h2>
+          <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Data collection targets</h2>
             <div className="space-y-4">
               <CollectionTargets
                 mode={samplingFrame.mode}
@@ -771,7 +771,7 @@ const CreateSurveyPage: React.FC = () => {
               />
               {samplingFrame.mode === 'uploaded' && samplingFrame.sampling_cols.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Grouping columns matched
                   </label>
                   <div className="flex flex-wrap gap-2">
@@ -790,8 +790,8 @@ const CreateSurveyPage: React.FC = () => {
           </section>
 
           {/* Core Identifiers */}
-          <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
+          <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <VariableDropdown
                 value={coreIdentifiers.enumerator}
@@ -808,14 +808,14 @@ const CreateSurveyPage: React.FC = () => {
                 availableVariables={availableVariables}
               />
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">DK Numeric Value
                   <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
                 </label>
                 <input
                   type="number"
                   value={specialValues.dk_value}
                   onChange={(e) => setSpecialValues({ ...specialValues, dk_value: parseInt(e.target.value) || -99 })}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <DkStringValues
@@ -832,7 +832,7 @@ const CreateSurveyPage: React.FC = () => {
             <button
               onClick={handleSave}
               disabled={isSaving || !canCreate}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? 'Creating...' : 'Create Survey'}
             </button>

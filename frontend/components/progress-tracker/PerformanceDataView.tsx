@@ -211,7 +211,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
     infoKey?: string;
   }> = ({ label, sortKey, currentSort, onSort, infoKey }) => (
     <th 
-      className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-800 transition-colors select-none"
+      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none"
       onClick={() => onSort(sortKey)}
     >
       <div className="flex items-center">
@@ -226,7 +226,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
     if (activeSubTab === 'collected') {
       return (
         <table className="min-w-full">
-          <thead className="bg-gray-200 dark:bg-gray-900">
+          <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
               <SortableHeader label="Enumerator ID" sortKey="id" currentSort={collectionSort} onSort={handleCollectionSort} />
               <SortableHeader label="Needs Review" sortKey="needsReview" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="needsReview" />
@@ -236,33 +236,33 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
               <SortableHeader label="% Needs Review" sortKey="percentNeedsReview" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="percentNeedsReview" />
             </tr>
           </thead>
-          <tbody className="bg-white dark:bg-gray-850 divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="bg-white dark:bg-gray-950 divide-y divide-gray-100 dark:divide-gray-800">
             {filteredCollectionData.map(row => (
               <tr 
                 key={row.id} 
                 className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onEnumeratorClick ? 'cursor-pointer' : ''}`}
                 onClick={() => onEnumeratorClick?.(row.id)}
               >
-                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
                   {row.id}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.needsReview}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.validated}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.total}
                   {getComparisonBadge(row.total, teamAverages.total, true)}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
                   <span className={`px-2 py-1 rounded-md text-xs font-medium ${getValidatedColor(row.percentValidated)}`}>
                     {row.percentValidated}
                   </span>
                   {getComparisonBadge(parseFloat(row.percentValidated), teamAverages.validatedPercent, true)}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
                   <span className={`px-2 py-1 rounded-md text-xs font-medium ${getNeedsReviewColor(row.percentNeedsReview)}`}>
                     {row.percentNeedsReview}
                   </span>
@@ -277,7 +277,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
     if (activeSubTab === 'quality') {
       return (
         <table className="min-w-full">
-          <thead className="bg-gray-200 dark:bg-gray-900">
+          <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
               <SortableHeader label="Enumerator ID" sortKey="id" currentSort={qualitySort} onSort={handleQualitySort} />
               <SortableHeader label="Avg Active Time (min)" sortKey="avgActiveTime" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgActiveTime" />
@@ -286,27 +286,27 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
               <SortableHeader label="Avg Issues/Survey" sortKey="avgIssuesPerSurvey" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgIssuesPerSurvey" />
             </tr>
           </thead>
-          <tbody className="bg-white dark:bg-gray-850 divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="bg-white dark:bg-gray-950 divide-y divide-gray-100 dark:divide-gray-800">
             {filteredQualityData.map(row => (
               <tr 
                 key={row.id}
                 className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onEnumeratorClick ? 'cursor-pointer' : ''}`}
                 onClick={() => onEnumeratorClick?.(row.id)}
               >
-                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
                   {row.id}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.avgActiveTime}
                   {getComparisonBadge(row.avgActiveTime, teamAverages.activeTime, true)}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.avgTotalTime}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.avgDkRate}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
                   <span className={`px-2 py-1 rounded-md text-xs font-medium ${getIssuesColor(row.avgIssuesPerSurvey)}`}>
                     {row.avgIssuesPerSurvey.toFixed(2)}
                   </span>
@@ -326,17 +326,17 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
       {modalContent && <InfoModal title={modalContent.title} text={modalContent.text} onClose={() => setModalContent(null)} />}
       
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Detailed Data</h2>
+        <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Detailed Data</h2>
         <input
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter by Enumerator ID..."
-          className="w-full sm:w-64 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+          className="w-full sm:w-64 px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
         />
       </div>
       
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="mb-4 inline-flex flex-wrap gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
         <SubTabButton<PerformanceSubTab> tabId="collected" activeTab={activeSubTab} onClick={setActiveSubTab}>
           Survey Collected
         </SubTabButton>
@@ -365,7 +365,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
         </div>
       </div>
       
-      <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-card dark:border-gray-800 dark:bg-gray-950">
         {renderContent()}
       </div>
       

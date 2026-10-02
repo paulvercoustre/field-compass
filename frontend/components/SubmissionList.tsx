@@ -13,11 +13,11 @@ const SubmissionList: React.FC<SubmissionListProps> = ({ submissions, onSelect, 
 
   return (
     <div className="flex flex-col h-full min-h-0">
-        <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
-            <p className="text-xs text-gray-600 dark:text-gray-400">
+        <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 dark:border-gray-800">
+            <p className="tabular text-xs text-gray-500 dark:text-gray-400">
               {submissions.length === 0
                 ? "No submissions match your filters."
-                : `Showing ${submissions.length} submission${submissions.length !== 1 ? 's' : ''}.`
+                : `${submissions.length.toLocaleString()} submission${submissions.length !== 1 ? 's' : ''}`
               }
             </p>
         </div>
@@ -35,7 +35,7 @@ const SubmissionList: React.FC<SubmissionListProps> = ({ submissions, onSelect, 
                     ))}
                 </ul>
             ) : (
-                <div className="flex items-center justify-center h-full p-4 text-center text-gray-500">
+                <div className="flex items-center justify-center h-full p-4 text-center text-sm text-gray-500 dark:text-gray-400">
                     <p>No submissions found.</p>
                 </div>
             )}

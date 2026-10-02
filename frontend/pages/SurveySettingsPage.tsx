@@ -1072,9 +1072,9 @@ const SurveySettingsPage: React.FC = () => {
 
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Delete Survey</h2>
+          <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[2px] flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in">
+              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Delete Survey</h2>
               <p className="text-gray-700 dark:text-gray-300 mb-4">
                 Are you sure you want to delete <strong className="text-gray-900 dark:text-white">{surveyName}</strong>?
                 <br />
@@ -1082,7 +1082,7 @@ const SurveySettingsPage: React.FC = () => {
                 This action cannot be undone. This will permanently delete the survey configuration and all associated data.
               </p>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Type <strong className="text-gray-900 dark:text-white">{surveyName}</strong> to confirm
                 </label>
                 <input
@@ -1094,7 +1094,7 @@ const SurveySettingsPage: React.FC = () => {
                 />
               </div>
               {deleteError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
+                <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
                   <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>
                 </div>
               )}
@@ -1102,7 +1102,7 @@ const SurveySettingsPage: React.FC = () => {
                 <button
                   onClick={handleDeleteCancel}
                   disabled={isDeleting}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-sm font-medium"
+                  className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
                   Cancel
                 </button>
@@ -1122,7 +1122,7 @@ const SurveySettingsPage: React.FC = () => {
         <div className="flex gap-8 items-start">
           {/* Left navigation */}
           <aside className="w-48 flex-shrink-0">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Survey Settings</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Survey settings</h2>
             <nav className="space-y-0.5">
               {navItems.map((item) => {
                 const isActive = activeTab === item.id;
@@ -1130,10 +1130,11 @@ const SurveySettingsPage: React.FC = () => {
                   <button
                     key={item.id}
                     onClick={() => setActiveTab(item.id)}
-                    className={`w-full text-left pl-3 pr-2 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`w-full text-left px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200 font-semibold'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-700 dark:hover:text-gray-300'
+                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900 hover:text-gray-900 dark:hover:text-white'
                     }`}
                   >
                     {item.label}
@@ -1144,7 +1145,7 @@ const SurveySettingsPage: React.FC = () => {
           </aside>
 
           {/* Right content - pt-10 aligns first content with first nav button (matches h2 + mb-4) */}
-          <main className="flex-1 min-w-0 pt-10">
+          <main className="flex-1 min-w-0 max-w-4xl pt-11">
             {activeTab === 'settings' && !canEditSurvey && userPermission && (
               <div className="mb-6">
                 <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
@@ -1171,11 +1172,11 @@ const SurveySettingsPage: React.FC = () => {
         {activeTab === 'settings' ? (
           <div className="space-y-6">
             {/* Survey Profile */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Survey Profile</h2>
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Survey Profile</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Survey Name *
                   </label>
                   {canEditSurvey ? (
@@ -1183,7 +1184,7 @@ const SurveySettingsPage: React.FC = () => {
                       type="text"
                       value={surveyName}
                       onChange={(e) => setSurveyName(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       required
                     />
                   ) : (
@@ -1193,7 +1194,7 @@ const SurveySettingsPage: React.FC = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Kobo Asset ID
                   </label>
                   {canEditSurvey ? (
@@ -1201,7 +1202,7 @@ const SurveySettingsPage: React.FC = () => {
                       type="text"
                       value={koboAssetId}
                       onChange={(e) => setKoboAssetId(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       placeholder="e.g., a3wCWjYRXo46cSygF8gQAc"
                     />
                   ) : (
@@ -1212,7 +1213,7 @@ const SurveySettingsPage: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Data Collection Start Date
                     </label>
                     {canEditSurvey ? (
@@ -1220,7 +1221,7 @@ const SurveySettingsPage: React.FC = () => {
                         type="date"
                         value={globalParameters.data_collection_start_date}
                         onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     ) : (
                       <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
@@ -1229,7 +1230,7 @@ const SurveySettingsPage: React.FC = () => {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Data Collection End Date
                     </label>
                     {canEditSurvey ? (
@@ -1237,7 +1238,7 @@ const SurveySettingsPage: React.FC = () => {
                         type="date"
                         value={globalParameters.data_collection_end_date}
                         onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     ) : (
                       <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
@@ -1251,14 +1252,14 @@ const SurveySettingsPage: React.FC = () => {
                     <button
                       onClick={handleSaveBasicInfo}
                       disabled={isSavingBasicInfo}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
                       {isSavingBasicInfo ? 'Saving...' : 'Save Changes'}
                     </button>
                     <button
                       onClick={handleCancelBasicInfo}
                       disabled={isSavingBasicInfo}
-                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -1268,9 +1269,9 @@ const SurveySettingsPage: React.FC = () => {
             </section>
 
             {/* Kobo Tool */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Kobo Tool</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Kobo Tool</h2>
                 {canEditSurvey && !isEditingKoboTool && (
                   <button
                     onClick={() => setIsEditingKoboTool(true)}
@@ -1295,11 +1296,11 @@ const SurveySettingsPage: React.FC = () => {
                     type="button"
                     onClick={handleRefreshFormFromProject}
                     disabled={isLoadingTool || !config?.kobo_asset_id}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
                   >
                     {isLoadingTool ? (
                       <>
-                        <Spinner />
+                        <Spinner size="sm" className="text-current" />
                         <span>Reading form...</span>
                       </>
                     ) : (
@@ -1335,7 +1336,7 @@ const SurveySettingsPage: React.FC = () => {
                             setLabelColumnSurvey(e.target.value);
                             setLabelColumnChoices(e.target.value);
                           }}
-                          className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                           {languages.map((column) => (
                             <option key={column} value={column}>
@@ -1350,14 +1351,14 @@ const SurveySettingsPage: React.FC = () => {
                     <button
                       onClick={handleSaveKoboTool}
                       disabled={isSavingKoboTool}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
                       {isSavingKoboTool ? 'Saving...' : 'Save Changes'}
                     </button>
                     <button
                       onClick={handleCancelKoboTool}
                       disabled={isSavingKoboTool}
-                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -1384,9 +1385,9 @@ const SurveySettingsPage: React.FC = () => {
             </section>
 
             {/* Collection Targets */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Data collection targets</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Data collection targets</h2>
                 {canEditSurvey && !isEditingSamplingFrame && (
                   <button
                     onClick={() => setIsEditingSamplingFrame(true)}
@@ -1520,7 +1521,7 @@ const SurveySettingsPage: React.FC = () => {
                   />
                   {samplingFrame.mode === 'uploaded' && samplingFrame.sampling_cols.length > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                         Grouping columns matched
                       </label>
                       <div className="flex flex-wrap gap-2">
@@ -1539,14 +1540,14 @@ const SurveySettingsPage: React.FC = () => {
                     <button
                       onClick={handleSaveSamplingFrame}
                       disabled={isSavingSamplingFrame}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
                       {isSavingSamplingFrame ? 'Saving...' : 'Save Changes'}
                     </button>
                     <button
                       onClick={handleCancelSamplingFrame}
                       disabled={isSavingSamplingFrame}
-                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -1580,8 +1581,8 @@ const SurveySettingsPage: React.FC = () => {
             </section>
 
             {/* Core Identifiers */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <VariableDropdown
                   value={coreIdentifiers.enumerator}
@@ -1600,7 +1601,7 @@ const SurveySettingsPage: React.FC = () => {
                   readOnly={!canEditSurvey}
                 />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">DK Numeric Value
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">DK Numeric Value
                   <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
                 </label>
                   {canEditSurvey ? (
@@ -1608,7 +1609,7 @@ const SurveySettingsPage: React.FC = () => {
                       type="number"
                       value={specialValues.dk_value}
                       onChange={(e) => setSpecialValues({ ...specialValues, dk_value: parseInt(e.target.value) || -99 })}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   ) : (
                     <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
@@ -1629,14 +1630,14 @@ const SurveySettingsPage: React.FC = () => {
                   <button
                     onClick={handleSaveCoreIdentifiers}
                     disabled={isSavingCoreIdentifiers}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                   >
                     {isSavingCoreIdentifiers ? 'Saving...' : 'Save Changes'}
                   </button>
                   <button
                     onClick={handleCancelCoreIdentifiers}
                     disabled={isSavingCoreIdentifiers}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+                    className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                   >
                     Cancel
                   </button>
@@ -1647,7 +1648,7 @@ const SurveySettingsPage: React.FC = () => {
             {/* Delete Survey Section */}
             {canDeleteSurvey && (
               <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900/50 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete Survey</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-2">Delete Survey</h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   Permanently delete this survey and all associated data. This action cannot be undone.
                 </p>
@@ -1666,8 +1667,8 @@ const SurveySettingsPage: React.FC = () => {
         ) : activeTab === 'access' ? (
           <div className="space-y-6">
             {/* Who has access */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Who has access</h2>
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Who has access</h2>
               
               {isLoadingAccess ? (
                 <div className="flex items-center justify-center py-8">
@@ -1742,8 +1743,8 @@ const SurveySettingsPage: React.FC = () => {
             </section>
 
             {/* Share Survey */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Share Survey</h2>
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Share Survey</h2>
               
               {!canManageAccess ? (
                 <div className="p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md">
@@ -1777,7 +1778,7 @@ const SurveySettingsPage: React.FC = () => {
                       <button
                         type="submit"
                         disabled={isSharing || !shareEmail.trim()}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                       >
                         {isSharing ? 'Sharing...' : 'Share'}
                       </button>
@@ -1793,8 +1794,8 @@ const SurveySettingsPage: React.FC = () => {
         ) : activeTab === 'quality' ? (
           <div className="space-y-6">
             {/* General Quality Checks - dirty pattern like Survey Profile */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">General Quality Checks</h2>
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">General Quality Checks</h2>
               <div className="space-y-6">
                 
                 {/* Out of Period Flag */}
@@ -2050,10 +2051,10 @@ const SurveySettingsPage: React.FC = () => {
 
                 {/* Survey Duration Limits */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                  <h3 className="text-md font-medium text-gray-900 dark:text-white mb-3">Survey Duration Limits</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Survey Duration Limits</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                         Min Survey Duration (minutes)
                       </label>
                       {canEditSurvey ? (
@@ -2061,7 +2062,7 @@ const SurveySettingsPage: React.FC = () => {
                           type="number"
                           value={globalParameters.min_survey_duration_minutes || ''}
                           onChange={(e) => setGlobalParameters({ ...globalParameters, min_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           placeholder="e.g., 10"
                         />
                       ) : (
@@ -2071,7 +2072,7 @@ const SurveySettingsPage: React.FC = () => {
                       )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                         Max Survey Duration (minutes)
                       </label>
                       {canEditSurvey ? (
@@ -2079,7 +2080,7 @@ const SurveySettingsPage: React.FC = () => {
                           type="number"
                           value={globalParameters.max_survey_duration_minutes || ''}
                           onChange={(e) => setGlobalParameters({ ...globalParameters, max_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           placeholder="e.g., 240"
                         />
                       ) : (
@@ -2094,13 +2095,13 @@ const SurveySettingsPage: React.FC = () => {
                   <div className="flex gap-3 pt-4">
                     <button
                       onClick={handleSaveGeneralFlags}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 text-sm font-medium"
                     >
                       Save Changes
                     </button>
                     <button
                       onClick={handleCancelGeneralFlags}
-                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -2110,9 +2111,9 @@ const SurveySettingsPage: React.FC = () => {
             </section>
 
             {/* Outlier Checks Settings */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Outlier Checks</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Outlier Checks</h2>
                 {canEditSurvey && !isEditingOutlier && (
                   <button
                     onClick={() => setIsEditingOutlier(true)}
@@ -2308,7 +2309,7 @@ const SurveySettingsPage: React.FC = () => {
 
                       {/* Threshold */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                           Threshold
                         </label>
                         {isEditingOutlier ? (
@@ -2346,14 +2347,14 @@ const SurveySettingsPage: React.FC = () => {
                     <button
                       onClick={handleSaveOutlier}
                       disabled={isSavingOutlier}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
                       {isSavingOutlier ? 'Saving...' : 'Save Changes'}
                     </button>
                     <button
                       onClick={handleCancelOutlier}
                       disabled={isSavingOutlier}
-                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -2363,9 +2364,9 @@ const SurveySettingsPage: React.FC = () => {
             </section>
 
             {/* Qualitative Quality Checks */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Qualitative Quality Checks</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Qualitative Quality Checks</h2>
                 {canEditSurvey && !isEditingLLM && (
                   <button
                     onClick={() => setIsEditingLLM(true)}
@@ -2462,14 +2463,14 @@ const SurveySettingsPage: React.FC = () => {
                     <button
                       onClick={handleSaveLLM}
                       disabled={isSavingLLM}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
                       {isSavingLLM ? 'Saving...' : 'Save Changes'}
                     </button>
                     <button
                       onClick={handleCancelLLM}
                       disabled={isSavingLLM}
-                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -2479,9 +2480,9 @@ const SurveySettingsPage: React.FC = () => {
             </section>
 
             {/* Custom Quality Checks */}
-            <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Custom Quality Checks</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Custom Quality Checks</h2>
                 {canEditSurvey && (
                   isEditing ? (
                     <button
@@ -2513,7 +2514,7 @@ const SurveySettingsPage: React.FC = () => {
                         <div className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-indigo-200 dark:border-indigo-800">
                           <div className="flex items-center mb-4">
                             <span className="text-2xl mr-2">✨</span>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Rule Builder</h3>
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">AI Rule Builder</h3>
                             <span className="ml-2 text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full">
                               Beta
                             </span>
@@ -2533,7 +2534,7 @@ const SurveySettingsPage: React.FC = () => {
                         <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-purple-200 dark:border-purple-800">
                           <div className="flex items-center mb-4">
                             <span className="text-2xl mr-2">💡</span>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Suggestions</h3>
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">AI Suggestions</h3>
                           </div>
                           <AISuggestedRules 
                             surveyId={selectedSurvey.survey_id}
@@ -2544,7 +2545,7 @@ const SurveySettingsPage: React.FC = () => {
 
                       {/* Manual Rule Editor */}
                       <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Create Rule Manually</h3>
+                        <h3 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white">Create Rule Manually</h3>
                         <RuleEditor
                           koboToolData={koboToolData}
                           onSave={handleSaveRule}
@@ -2553,7 +2554,7 @@ const SurveySettingsPage: React.FC = () => {
                         />
                       </div>
                       <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                        <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Saved Rules</h3>
+                        <h3 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white">Saved Rules</h3>
                         {isLoadingRules ? (
                           <div className="flex items-center justify-center py-4">
                             <Spinner />
@@ -2579,13 +2580,13 @@ const SurveySettingsPage: React.FC = () => {
                   ) : stagedRules.length > 0 ? (
                     <div className="space-y-2">
                       {stagedRules.map((rule) => (
-                        <div key={rule.id} className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                        <div key={rule.id} className="px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
                           <div className="flex justify-between items-start">
                             <div>
-                              <p className="font-semibold text-gray-900 dark:text-white">{rule.description}</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{rule.issue_message}</p>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">{rule.description}</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{rule.issue_message}</p>
                               {rule.roster_name && (
-                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Context: {rule.roster_name}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Context: {rule.roster_name}</p>
                               )}
                             </div>
                           </div>
@@ -2593,7 +2594,7 @@ const SurveySettingsPage: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-sm">No validation rules configured for this survey.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No validation rules configured for this survey.</p>
                   )}
                 </div>
               )}

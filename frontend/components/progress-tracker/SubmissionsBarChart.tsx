@@ -45,7 +45,7 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
     if (active && payload && payload.length) {
       const d = payload[0].payload;
       return (
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-900 px-3 py-2 text-xs rounded-lg shadow-popover border border-gray-200 dark:border-gray-700">
           <p className="font-semibold text-gray-900 dark:text-white">{d.id}</p>
           <div className="text-sm mt-1 space-y-1">
             <p className="text-gray-600 dark:text-gray-300">
@@ -68,8 +68,8 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700 w-full flex flex-col">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+    <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800 w-full flex flex-col">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
         Submissions by Enumerator
       </h3>
       <div className="flex-1 min-h-0">
@@ -78,17 +78,21 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
             data={chartData}
             margin={{ top: 10, right: 10, left: 0, bottom: 40 }}
           >
-            <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+            <CartesianGrid stroke="var(--fc-chart-grid)" />
             <XAxis 
               dataKey="id" 
               angle={-45}
               textAnchor="end"
               height={60}
-              tick={{ fontSize: 10, fill: 'currentColor' }}
+              tick={{ fontSize: 11, fill: 'var(--fc-chart-tick)' }}
+              tickLine={false}
+              stroke="var(--fc-chart-axis)"
               className="text-gray-600 dark:text-gray-400"
             />
             <YAxis 
-              tick={{ fontSize: 12, fill: 'currentColor' }}
+              tick={{ fontSize: 12, fill: 'var(--fc-chart-tick)' }}
+              tickLine={false}
+              stroke="var(--fc-chart-axis)"
               className="text-gray-600 dark:text-gray-400"
             />
             <Tooltip content={<CustomTooltip />} />

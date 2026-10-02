@@ -59,7 +59,7 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
     if (active && payload && payload.length) {
       const d = payload[0].payload;
       return (
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-900 px-3 py-2 text-xs rounded-lg shadow-popover border border-gray-200 dark:border-gray-700">
           <p className="font-semibold text-gray-900 dark:text-white">{d.id}</p>
           <div className="text-sm mt-2 space-y-1">
             <p className="text-gray-600 dark:text-gray-300">
@@ -101,8 +101,8 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+    <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
         Quality vs. Quantity
       </h3>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
@@ -111,12 +111,14 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+            <CartesianGrid stroke="var(--fc-chart-grid)" />
             <XAxis 
               type="number"
               dataKey="submissions"
               name="Submissions"
-              tick={{ fontSize: 12, fill: 'currentColor' }}
+              tick={{ fontSize: 12, fill: 'var(--fc-chart-tick)' }}
+              tickLine={false}
+              stroke="var(--fc-chart-axis)"
               label={{ 
                 value: 'Total Submissions', 
                 position: 'bottom', 
@@ -130,7 +132,9 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
               dataKey="validatedPercent"
               name="Validated %"
               domain={[0, 100]}
-              tick={{ fontSize: 12, fill: 'currentColor' }}
+              tick={{ fontSize: 12, fill: 'var(--fc-chart-tick)' }}
+              tickLine={false}
+              stroke="var(--fc-chart-axis)"
               label={{ 
                 value: 'Validated %', 
                 angle: -90, 

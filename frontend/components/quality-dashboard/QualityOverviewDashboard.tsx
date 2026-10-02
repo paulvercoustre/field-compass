@@ -7,6 +7,10 @@ import IssueFrequencyChart from './IssueFrequencyChart';
 import SubmissionStatusChart from './SubmissionStatusChart';
 import IssueTimeSeriesChart from './IssueTimeSeriesChart';
 import { Spinner } from '../Spinner';
+import PageHeader from '../ui/PageHeader';
+import Button from '../ui/Button';
+import Banner from '../ui/Banner';
+import { RefreshIcon } from '../ui/icons';
 
 interface QualityOverviewDashboardProps {
   surveyId: string;
@@ -122,15 +126,15 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
 
   if (error) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-        <p className="text-red-700 dark:text-red-300">{error}</p>
+      <Banner tone="error">
+        <p>{error}</p>
         <button 
           onClick={handleRefresh}
-          className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline"
+          className="mt-1 text-sm font-medium underline underline-offset-2 hover:no-underline"
         >
           Try again
         </button>
-      </div>
+      </Banner>
     );
   }
 
@@ -141,57 +145,35 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Header with filters */}
-      <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 -mx-6 -mt-6 mb-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Data Quality
-          </h2>
-          <div className="flex items-center gap-3">
-            <select
-              value={datePreset}
-              onChange={(e) => handleDatePresetChange(e.target.value)}
-              className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-gray-700 dark:text-gray-300"
-            >
-              <option value="all">All Time</option>
-              <option value="last7">Last 7 Days</option>
-              <option value="last30">Last 30 Days</option>
-              <option value="last90">Last 90 Days</option>
-            </select>
-            <button
-              onClick={handleRefresh}
-              disabled={isRunningETL}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
-            >
-              {isRunningETL ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>Running ETL...</span>
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>Refresh from Kobo</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-        
-        {/* ETL success message */}
-        {etlMessage && (
-          <div className="mt-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-            <p className="text-sm text-green-700 dark:text-green-300">{etlMessage}</p>
-          </div>
-        )}
+      <div className="-mx-6 -mt-6 mb-6">
+        <PageHeader
+          title="Data quality"
+          actions={
+            <>
+              <select
+                value={datePreset}
+                onChange={(e) => handleDatePresetChange(e.target.value)}
+                aria-label="Date range"
+                className="h-8 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs pl-2.5 pr-8 py-0 text-gray-700 dark:text-gray-200"
+              >
+                <option value="all">All time</option>
+                <option value="last7">Last 7 days</option>
+                <option value="last30">Last 30 days</option>
+                <option value="last90">Last 90 days</option>
+              </select>
+              <Button variant="primary" onClick={handleRefresh} loading={isRunningETL} icon={<RefreshIcon />}>
+                {isRunningETL ? 'Running ETL…' : 'Refresh from Kobo'}
+              </Button>
+            </>
+          }
+        >
+          {/* ETL success message */}
+          {etlMessage && <Banner tone="success" className="mt-3">{etlMessage}</Banner>}
+        </PageHeader>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="space-y-6">
         <StatusSummaryCards data={data.status_summary} onStatusClick={onStatusClick} />
         <QualityMetricsCards data={data.quality_metrics} />
       </div>

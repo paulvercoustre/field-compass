@@ -204,7 +204,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
       </FormField>
 
       <div>
-        <h4 className="text-md font-semibold text-gray-800 dark:text-gray-200 mb-2">Condition (defines the error)</h4>
+        <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Condition (defines the error)</h4>
         {errors.context && (
           <ErrorMessage error={errors.context} className="mb-2" />
         )}
@@ -253,7 +253,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
         <button 
           type="submit" 
           disabled={!isFormValid}
-          className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
+          className="px-4 py-2 font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
         >
           {editingRule ? 'Update Rule' : 'Add Rule to List'}
         </button>

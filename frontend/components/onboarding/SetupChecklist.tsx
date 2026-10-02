@@ -6,13 +6,13 @@ type StepState = 'done' | 'current' | 'upcoming';
 
 const StepMarker: React.FC<{ number: number; state: StepState }> = ({ number, state }) => {
   const styles = {
-    done: 'bg-green-600 text-white',
+    done: 'bg-emerald-600 text-white',
     current: 'bg-indigo-600 text-white',
     upcoming: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
   }[state];
   return (
     <span
-      className={`flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${styles}`}
+      className={`flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${styles}`}
       aria-hidden="true"
     >
       {state === 'done' ? '✓' : number}
@@ -53,14 +53,14 @@ const SetupChecklist: React.FC<{ onAddSurvey: () => void }> = ({ onAddSurvey }) 
   const connected = Boolean(user?.has_kobo_api_key);
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
+    <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-950">
       <div className="max-w-2xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Set up your first survey</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">Set up your first survey</h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
           Three steps, then pull submissions from Kobo and start reviewing.
         </p>
 
-        <ol className="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 divide-y divide-gray-200 dark:divide-gray-700">
+        <ol className="mt-6 bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6 divide-y divide-gray-200 dark:divide-gray-700">
           <Step number={1} state={connected ? 'done' : 'current'} title="Connect KoboToolbox">
             {!connected && (
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -78,7 +78,7 @@ const SetupChecklist: React.FC<{ onAddSurvey: () => void }> = ({ onAddSurvey }) 
               type="button"
               onClick={onAddSurvey}
               disabled={!connected}
-              className="mt-3 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 dark:disabled:text-gray-400 disabled:cursor-not-allowed"
+              className="mt-3 h-8 px-3 text-sm font-medium text-white bg-indigo-600 rounded-md shadow-xs hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               + Add a survey
             </button>
