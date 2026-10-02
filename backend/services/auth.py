@@ -113,6 +113,13 @@ class KoboApiKeyUpdate(BaseModel):
     kobo_api_token: str
 
 
+class KoboConnectionUpdate(BaseModel):
+    """Server and API key, saved together and only once Kobo accepts them."""
+
+    kobo_api_url: str
+    kobo_api_token: str
+
+
 class PasswordChange(BaseModel):
     """Password change payload.
 

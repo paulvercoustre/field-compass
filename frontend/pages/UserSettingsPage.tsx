@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth, User } from '../contexts/AuthContext';
+import KoboConnection from '../components/kobo/KoboConnection';
 import AIProvidersSection from '../components/ai/AIProvidersSection';
 import AIUsageSection from '../components/ai/AIUsageSection';
 
@@ -7,9 +8,6 @@ const UserSettingsPage: React.FC = () => {
   const {
     user,
     updateUser,
-    setKoboApiKey,
-    deleteKoboApiKey,
-    testKoboApiKey,
     changePassword,
     deleteAccount,
   } = useAuth();
@@ -23,15 +21,6 @@ const UserSettingsPage: React.FC = () => {
 
   const isProfileDirty =
     username !== (user?.username || '') || fullName !== (user?.full_name || '');
-
-  // Kobo API key state
-  const [newApiKey, setNewApiKey] = useState('');
-  const [koboApiUrl, setKoboApiUrl] = useState(user?.kobo_api_url || 'https://kf.kobotoolbox.org/api/v2');
-  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
-  const [apiKeySuccess, setApiKeySuccess] = useState<string | null>(null);
-  const [isUpdatingApiKey, setIsUpdatingApiKey] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ status: string; kobo_user?: { username: string; email: string } } | null>(null);
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -56,7 +45,6 @@ const UserSettingsPage: React.FC = () => {
       await updateUser({
         username: username !== user?.username ? username : undefined,
         full_name: fullName,
-        kobo_api_url: koboApiUrl,
       });
       setProfileSuccess('Profile updated successfully');
     } catch (err) {
@@ -90,56 +78,6 @@ const UserSettingsPage: React.FC = () => {
   const handleDeleteAccountCancel = () => {
     setShowDeleteConfirm(false);
     setDeleteError(null);
-  };
-
-  const handleSetApiKey = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setApiKeyError(null);
-    setApiKeySuccess(null);
-    setIsUpdatingApiKey(true);
-
-    try {
-      await setKoboApiKey(newApiKey);
-      setNewApiKey('');
-      setApiKeySuccess('Kobo API key saved successfully');
-      setTestResult(null);
-    } catch (err) {
-      setApiKeyError(err instanceof Error ? err.message : 'Failed to save API key');
-    } finally {
-      setIsUpdatingApiKey(false);
-    }
-  };
-
-  const handleDeleteApiKey = async () => {
-    if (!confirm('Are you sure you want to remove your Kobo API key? You will not be able to fetch data until you add a new one.')) {
-      return;
-    }
-
-    setApiKeyError(null);
-    setApiKeySuccess(null);
-
-    try {
-      await deleteKoboApiKey();
-      setApiKeySuccess('Kobo API key removed');
-      setTestResult(null);
-    } catch (err) {
-      setApiKeyError(err instanceof Error ? err.message : 'Failed to remove API key');
-    }
-  };
-
-  const handleTestApiKey = async () => {
-    setIsTesting(true);
-    setApiKeyError(null);
-    setTestResult(null);
-
-    try {
-      const result = await testKoboApiKey();
-      setTestResult(result);
-    } catch (err) {
-      setApiKeyError(err instanceof Error ? err.message : 'Failed to test API key');
-    } finally {
-      setIsTesting(false);
-    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -186,7 +124,7 @@ const UserSettingsPage: React.FC = () => {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Settings</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Manage your account and Kobo API configuration</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Manage your account, Kobo connection and AI providers</p>
         </div>
 
         {/* Profile Section */}
@@ -266,139 +204,24 @@ const UserSettingsPage: React.FC = () => {
           </form>
         </section>
 
-        {/* Kobo API Key Section */}
+        {/* Kobo connection: server and key are saved together */}
         <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-start justify-between gap-4 mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Kobo API Configuration</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">KoboToolbox connection</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Configure your KoboToolbox API credentials for data fetching
+                Field Compass reads your projects and submissions from Kobo with your API key.
               </p>
             </div>
-            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+            <span className={`flex-shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
               user.has_kobo_api_key
                 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                 : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
             }`}>
-              {user.has_kobo_api_key ? '✓ Configured' : '⚠ Not Configured'}
+              {user.has_kobo_api_key ? '✓ Connected' : '⚠ Not connected'}
             </span>
           </div>
-
-          <div className="space-y-4">
-            {/* API URL */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Kobo API URL
-              </label>
-              <input
-                type="url"
-                value={koboApiUrl}
-                onChange={(e) => setKoboApiUrl(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="https://kf.kobotoolbox.org/api/v2"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                For self-hosted Kobo, use your server's API URL
-              </p>
-            </div>
-
-            {/* API Key Input */}
-            <form onSubmit={handleSetApiKey} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {user.has_kobo_api_key ? 'Replace API Token' : 'API Token'}
-                </label>
-                <input
-                  type="password"
-                  value={newApiKey}
-                  onChange={(e) => setNewApiKey(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder={
-                    user.has_kobo_api_key
-                      ? '••••••••••••••••'
-                      : 'Paste your Kobo API token'
-                  }
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Find your token at{' '}
-                  <a
-                    href="https://kf.kobotoolbox.org/token/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-600 hover:text-indigo-500"
-                  >
-                    kf.kobotoolbox.org/token
-                  </a>
-                </p>
-              </div>
-
-              {apiKeyError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-600 dark:text-red-400">{apiKeyError}</p>
-                </div>
-              )}
-
-              {apiKeySuccess && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <p className="text-sm text-green-600 dark:text-green-400">{apiKeySuccess}</p>
-                </div>
-              )}
-
-              {testResult && (
-                <div className={`p-3 rounded-lg ${
-                  testResult.status === 'success'
-                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                    : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-                }`}>
-                  {testResult.status === 'success' ? (
-                    <div className="text-sm text-green-600 dark:text-green-400">
-                      <p className="font-medium">✓ API key is valid</p>
-                      {testResult.kobo_user && (
-                        <p className="mt-1">
-                          Connected as: {testResult.kobo_user.username} ({testResult.kobo_user.email})
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-red-600 dark:text-red-400">
-                      ✗ API key validation failed
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="submit"
-                  disabled={isUpdatingApiKey || !newApiKey}
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-medium rounded-lg transition-colors"
-                >
-                  {isUpdatingApiKey ? 'Saving...' : user.has_kobo_api_key ? 'Update Token' : 'Save Token'}
-                </button>
-
-                {user.has_kobo_api_key && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleTestApiKey}
-                      disabled={isTesting}
-                      className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg transition-colors"
-                    >
-                      {isTesting ? 'Testing...' : 'Test Connection'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleDeleteApiKey}
-                      className="px-4 py-2.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium transition-colors"
-                    >
-                      Remove Token
-                    </button>
-                  </>
-                )}
-              </div>
-            </form>
-          </div>
+          <KoboConnection />
         </section>
 
         <AIProvidersSection />

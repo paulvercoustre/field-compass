@@ -5,7 +5,9 @@ Provides user registration, login, profile management, and Kobo API key manageme
 
 import logging
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
+import requests
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -14,6 +16,7 @@ from database.models import User
 from services.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     KoboApiKeyUpdate,
+    KoboConnectionUpdate,
     PasswordChange,
     Token,
     UserCreate,
@@ -269,6 +272,128 @@ async def delete_kobo_api_key(
     return user_to_response(current_user)
 
 
+def normalize_kobo_api_url(raw: str) -> str:
+    """
+    The API address for whatever server address the user gives.
+
+    People paste what they have: the address bar of their Kobo project
+    (`https://eu.kobotoolbox.org/#/forms/a...`), the bare host, or the API URL.
+    Kobo serves its v2 API at the root of the host, so keep only the scheme
+    and host and add `/api/v2`.
+    """
+    text = (raw or "").strip()
+    if not text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Enter your Kobo server address."
+        )
+    if "://" not in text:
+        text = f"https://{text}"
+    parsed = urlparse(text)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc or " " in parsed.netloc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That doesn't look like a server address, e.g. https://kobo.example.org",
+        )
+    return f"{parsed.scheme}://{parsed.netloc}/api/v2"
+
+
+def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
+    """
+    Ask Kobo whether it accepts this key, and who it belongs to.
+
+    Raises an HTTPException a person can act on when Kobo says no or can't be
+    reached. Returns the Kobo account (username, email, organization) when Kobo
+    shares it, otherwise None -- the key is still good.
+    """
+    base_url = api_url.rstrip("/")
+    host = urlparse(base_url).netloc or base_url
+    headers = {"Authorization": f"Token {api_token}"}
+
+    try:
+        # /assets/?limit=0 exists on every Kobo deployment, so it is the check.
+        response = requests.get(
+            f"{base_url}/assets/", params={"limit": 0}, headers=headers, timeout=10
+        )
+    except requests.exceptions.Timeout:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"{host} took too long to answer. Try again in a moment.",
+        )
+    except requests.exceptions.RequestException:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not reach a Kobo server at {host}. Check the server address.",
+        )
+
+    if response.status_code in (401, 403):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{host} didn't accept that API key. Copy it again from Kobo, and check "
+                "it comes from the same server you picked."
+            ),
+        )
+    if response.status_code == 404:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No Kobo API found at {host}. Check the server address.",
+        )
+    if not response.ok:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"{host} answered with an error ({response.status_code}). Try again in a moment.",
+        )
+
+    # Who the key belongs to is a courtesy; the key is valid either way.
+    try:
+        me = requests.get(f"{base_url}/users/me/", headers=headers, timeout=5)
+        if me.status_code == 200:
+            data = me.json()
+            return {
+                "username": data.get("username"),
+                "email": data.get("email"),
+                "organization": data.get("organization", ""),
+            }
+    except Exception:
+        pass
+    return None
+
+
+@router.put("/users/me/kobo-connection")
+async def set_kobo_connection(
+    payload: KoboConnectionUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Connect the user's Kobo account: server and API key together.
+
+    Both are checked against Kobo first and saved only if Kobo accepts the key,
+    so a typo never replaces a connection that worked. Saving them separately
+    is what let a server address sit unsaved while the key was saved against
+    the default server.
+    """
+    api_url = normalize_kobo_api_url(payload.kobo_api_url)
+    api_token = (payload.kobo_api_token or "").strip()
+    if len(api_token) < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That's too short to be a Kobo API key. Copy the whole key from Kobo.",
+        )
+
+    kobo_user = verify_kobo_token(api_url, api_token)
+
+    current_user.kobo_api_url = api_url
+    current_user.kobo_api_token_encrypted = encrypt_api_key(api_token)
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+
+    logger.info(f"Kobo connection saved for user: {current_user.email} ({api_url})")
+
+    return {"user": user_to_response(current_user), "kobo_user": kobo_user}
+
+
 @router.get("/users/me/kobo-api-key/test")
 async def test_kobo_api_key(
     current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
@@ -286,61 +411,9 @@ async def test_kobo_api_key(
             detail="No Kobo API key configured. Please set your API key first.",
         )
 
-    import requests
-
     kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-
-    try:
-        # Use /assets/?limit=0 - a standard Kobo API v2 endpoint that validates the token
-        # The /me/ endpoint may not exist on all Kobo deployments
-        base_url = kobo_api_url.rstrip("/")
-        response = requests.get(
-            f"{base_url}/assets/",
-            params={"limit": 0},
-            headers={"Authorization": f"Token {api_token}"},
-            timeout=10,
-        )
-
-        if response.status_code == 401:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid Kobo API key. Please check your token and try again.",
-            )
-
-        response.raise_for_status()
-
-        # Try to get user info from /users/me/ if available (optional, for richer response)
-        kobo_user = None
-        try:
-            me_response = requests.get(
-                f"{base_url}/users/me/", headers={"Authorization": f"Token {api_token}"}, timeout=5
-            )
-            if me_response.status_code == 200:
-                me_data = me_response.json()
-                kobo_user = {
-                    "username": me_data.get("username"),
-                    "email": me_data.get("email"),
-                    "organization": me_data.get("organization", ""),
-                }
-        except Exception:
-            pass  # User info is optional; token validity is confirmed by assets call
-
-        return {"status": "success", "message": "Kobo API key is valid", "kobo_user": kobo_user}
-
-    except requests.exceptions.ConnectionError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Could not connect to Kobo API at {kobo_api_url}",
-        )
-    except requests.exceptions.Timeout:
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Kobo API request timed out"
-        )
-    except requests.exceptions.RequestException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error testing Kobo API key: {str(e)}",
-        )
+    kobo_user = verify_kobo_token(kobo_api_url, api_token)
+    return {"status": "success", "message": "Kobo API key is valid", "kobo_user": kobo_user}
 
 
 # =============================================================================
