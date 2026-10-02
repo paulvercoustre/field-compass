@@ -321,7 +321,7 @@ export const rerunAiChecks = async (surveyId: string): Promise<number> => {
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(errorData.detail || `Failed to reset AI checks: ${response.statusText}`);
+    throw new Error(errorData.detail || `Could not schedule the review: ${response.statusText}`);
   }
   const data = await response.json();
   return data.submissions as number;

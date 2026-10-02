@@ -379,7 +379,7 @@ class ETLPipeline:
                             )
                             submission.llm_check_status = "failed"
                             submission.llm_last_error = (
-                                f"unavailable: Could not queue the AI check ({queue_error})"
+                                f"unavailable: Could not queue the AI review ({queue_error})"
                             )[:1000]
                             submission.llm_checked_at = datetime.utcnow()
                     else:

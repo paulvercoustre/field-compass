@@ -78,20 +78,6 @@ const RequiresSurvey: React.FC<{ view: View; onAddSurvey: () => void; children: 
   );
 };
 
-// Rendered inside SurveyProvider - can use useSurvey
-const SurveyNameInHeader: React.FC = () => {
-  const { selectedSurvey } = useSurvey();
-  if (!selectedSurvey) return null;
-  return (
-    <div className="hidden min-w-0 flex-shrink-0 items-center gap-4 sm:flex">
-      <h2 className="max-w-[160px] truncate text-sm font-semibold tracking-tight text-gray-900 dark:text-white sm:max-w-[260px]">
-        {selectedSurvey.survey_name}
-      </h2>
-      <span className="h-5 w-px bg-gray-200 dark:bg-gray-800" aria-hidden="true" />
-    </div>
-  );
-};
-
 // Main app content (authenticated)
 const AppContent: React.FC = () => {
   const { user, isLoading, logout } = useAuth();
@@ -234,7 +220,6 @@ const AppContent: React.FC = () => {
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex-shrink-0 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
             <div className="flex h-12 items-stretch gap-4 px-4">
-              <SurveyNameInHeader />
               <nav aria-label="Survey views" className="-mb-px flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto">
                 <NavButton currentView={view} targetView="dashboard" onClick={() => { setDashboardFilters({}); setView('dashboard'); }}>
                   Submissions

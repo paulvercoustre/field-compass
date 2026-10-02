@@ -134,7 +134,7 @@ def paused(connection: AIConnection) -> AIError:
     category, _, message = (connection.last_error or "").partition(": ")
     if not message:
         category, message = BAD_REQUEST, connection.last_error or "The AI provider is failing."
-    return AIError(category, f"{message} AI checks are paused until it is fixed.")
+    return AIError(category, f"{message} AI review is paused until it is fixed.")
 
 
 def paused_error(db: Session, survey: SurveyConfig) -> str | None:

@@ -5,7 +5,8 @@ import SubmissionDataViewer from './SubmissionDataViewer';
 import { Spinner } from './Spinner';
 import { Badge, EditIcon, AlertIcon } from './Badge';
 import Banner from './ui/Banner';
-import { ExternalLinkIcon } from './ui/icons';
+import { ExternalLinkIcon, SparkleIcon } from './ui/icons';
+import { aiFindingName, issueName } from '../utils/issueNames';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, SurveyConfig, getValidationRules, ValidationRule } from '../services/progressApi';
 import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
@@ -54,21 +55,21 @@ const GENERAL_CHECK_DEFINITIONS: Array<{
   enabled: (config: SurveyConfig | null) => boolean;
   getDetails: (config: SurveyConfig | null, submissionData: Record<string, any>) => { field: string; value: any } | null;
 }> = [
-  { id: 'missing_uuid', label: 'Missing UUID', enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.uuid || '_uuid'; const v = getFieldValueFromData(d, f) ?? d?._uuid; return v != null ? { field: f, value: v } : null; } },
-  { id: 'missing_enumerator', label: 'Missing Enumerator', enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.enumerator; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
-  { id: 'date_out_of_range', label: 'Date Out Of Range', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_out_of_period && (c?.config_data?.global_parameters?.data_collection_start_date || c?.config_data?.global_parameters?.data_collection_end_date)), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
-  { id: 'interview_on_weekend', label: 'Interview On Weekend', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_weekend), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
-  { id: 'interview_out_of_office_hours', label: 'Interview Out Of Office Hours', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_office_hours), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.start_time; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
-  { id: 'dk_percentage_high', label: 'High Percentage of "Don\'t Know" Answers', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_dk_percentage), getDetails: () => ({ field: 'submission', value: 'Within threshold' }) },
-  { id: 'empty_percentage_high', label: 'High Percentage of Empty Answers', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_empty_percentage), getDetails: () => ({ field: 'submission', value: 'Within threshold' }) },
-  { id: 'duration_too_short', label: 'Duration Too Short', enabled: (c) => c?.config_data?.global_parameters?.min_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
-  { id: 'duration_too_long', label: 'Duration Too Long', enabled: (c) => c?.config_data?.global_parameters?.max_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
-  { id: 'sampling_frame_mismatch', label: 'Sampling Frame Mismatch', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && c?.config_data?.sampling_frame?.sampling_cols?.length && inferSamplingMode(c?.config_data?.sampling_frame) === 'uploaded'), getDetails: (c, d) => { const cols = c?.config_data?.sampling_frame?.sampling_cols; if (!cols?.length) return null; const combo = cols.map((col: string) => `${col}=${getFieldValueFromData(d, col) ?? 'N/A'}`).join(', '); return { field: cols.join(', '), value: combo }; } },
-  { id: 'strata_value_not_in_form', label: 'Strata Value Not In Form', enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && inferSamplingMode(c?.config_data?.sampling_frame) === 'by_variable' && c?.config_data?.sampling_frame?.variable), getDetails: (c, d) => { const v = c?.config_data?.sampling_frame?.variable; if (!v) return null; return { field: v, value: getFieldValueFromData(d, v) ?? 'N/A' }; } },
+  { id: 'missing_uuid', label: issueName('missing_uuid'), enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.uuid || '_uuid'; const v = getFieldValueFromData(d, f) ?? d?._uuid; return v != null ? { field: f, value: v } : null; } },
+  { id: 'missing_enumerator', label: issueName('missing_enumerator'), enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.enumerator; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
+  { id: 'date_out_of_range', label: issueName('date_out_of_range'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_out_of_period && (c?.config_data?.global_parameters?.data_collection_start_date || c?.config_data?.global_parameters?.data_collection_end_date)), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
+  { id: 'interview_on_weekend', label: issueName('interview_on_weekend'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_weekend), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
+  { id: 'interview_out_of_office_hours', label: issueName('interview_out_of_office_hours'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_office_hours), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.start_time; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
+  { id: 'dk_percentage_high', label: issueName('dk_percentage_high'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_dk_percentage), getDetails: () => ({ field: 'submission', value: 'Within threshold' }) },
+  { id: 'empty_percentage_high', label: issueName('empty_percentage_high'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_empty_percentage), getDetails: () => ({ field: 'submission', value: 'Within threshold' }) },
+  { id: 'duration_too_short', label: issueName('duration_too_short'), enabled: (c) => c?.config_data?.global_parameters?.min_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
+  { id: 'duration_too_long', label: issueName('duration_too_long'), enabled: (c) => c?.config_data?.global_parameters?.max_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
+  { id: 'sampling_frame_mismatch', label: issueName('sampling_frame_mismatch'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && c?.config_data?.sampling_frame?.sampling_cols?.length && inferSamplingMode(c?.config_data?.sampling_frame) === 'uploaded'), getDetails: (c, d) => { const cols = c?.config_data?.sampling_frame?.sampling_cols; if (!cols?.length) return null; const combo = cols.map((col: string) => `${col}=${getFieldValueFromData(d, col) ?? 'N/A'}`).join(', '); return { field: cols.join(', '), value: combo }; } },
+  { id: 'strata_value_not_in_form', label: issueName('strata_value_not_in_form'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && inferSamplingMode(c?.config_data?.sampling_frame) === 'by_variable' && c?.config_data?.sampling_frame?.variable), getDetails: (c, d) => { const v = c?.config_data?.sampling_frame?.variable; if (!v) return null; return { field: v, value: getFieldValueFromData(d, v) ?? 'N/A' }; } },
 ];
 
 /**
- * What a submission's AI check status means, in plain words.
+ * What a submission's AI review status means, in plain words.
  * `llm_last_error` is stored as "<category>: <provider message>".
  */
 const describeAiCheck = (
@@ -81,32 +82,32 @@ const describeAiCheck = (
 
   if (status === 'pending' || status === 'running') {
     return lastError
-      ? { tone: 'busy', title: 'Checking… retrying after a temporary error.', detail: providerMessage }
-      : { tone: 'busy', title: 'Checking the selected answers…' };
+      ? { tone: 'busy', title: 'Reviewing… retrying after a temporary error.', detail: providerMessage }
+      : { tone: 'busy', title: 'Reviewing the selected answers…' };
   }
   if (status === 'success') {
     return hasFindings
-      ? { tone: 'ok', title: 'Checked.' }
-      : { tone: 'ok', title: 'Checked — no problems found in the selected answers.' };
+      ? { tone: 'ok', title: 'Reviewed.' }
+      : { tone: 'ok', title: 'Reviewed — nothing flagged.' };
   }
   if (status === 'not_run_allowance') {
-    // Stored as "allowance: This survey has used its free AI checks for October. ..."
-    return { tone: 'warn', title: providerMessage ?? 'Not checked: this survey has used its free AI checks for this month.' };
+    // Stored as "allowance: This survey has used its free AI review allowance for October. ..."
+    return { tone: 'warn', title: providerMessage ?? 'Not reviewed: this survey has used its free AI allowance for this month.' };
   }
   if (status === 'failed') {
     const reasons: Record<string, string> = {
-      auth: "Couldn't check: the AI provider rejected the key.",
-      provider_quota: "Couldn't check: the AI provider account is out of credit.",
-      not_configured: "Couldn't check: no AI provider is set up.",
-      bad_request: "Couldn't check: the AI provider refused the request.",
+      auth: "Couldn't review: the AI provider rejected the key.",
+      provider_quota: "Couldn't review: the AI provider account is out of credit.",
+      not_configured: "Couldn't review: no AI provider is set up.",
+      bad_request: "Couldn't review: the AI provider refused the request.",
     };
     return {
       tone: 'warn',
-      title: reasons[category] ?? "Couldn't check this time. It will be retried on the next pull.",
+      title: reasons[category] ?? "Couldn't review this time. It will be retried on the next pull.",
       detail: providerMessage ?? lastError ?? undefined,
     };
   }
-  return { tone: 'muted', title: 'Not checked yet.' };
+  return { tone: 'muted', title: 'Not reviewed yet.' };
 };
 
 const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoading, onSubmissionUpdate }) => {
@@ -565,7 +566,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
         {/* Metadata Panel */}
         {metadata && (
           <div className="mb-6">
-            <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Submission Overview</h3>
+            <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Submission overview</h3>
             <div className="p-4 bg-gray-50/70 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Enumerator - Always show if field is configured */}
@@ -586,7 +587,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
               {/* Interview Date - Show this instead of submission date */}
               {metadata.dateInterview ? (
                 <div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400 block mb-1">Interview Date</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 block mb-1">Interview date</span>
                   <div className="flex items-center">
                     <svg className="w-4 h-4 mr-2 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -624,7 +625,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
               {/* Active Duration */}
               {metadata.activeDuration !== undefined && (
                 <div>
-                  <span className="text-xs text-gray-600 dark:text-gray-400 block mb-1">Active Duration</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 block mb-1">Active duration</span>
                   <div className="flex items-center">
                     <svg className="w-4 h-4 mr-2 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -637,7 +638,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
               {/* Sampling Information - Always show if configured */}
               {metadata.sampling && Object.keys(metadata.sampling).length > 0 && (
                 <div className="md:col-span-2 lg:col-span-4">
-                  <span className="text-xs text-gray-600 dark:text-gray-400 block mb-2">Sampling Information</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 block mb-2">Sampling</span>
                   <div className="flex flex-wrap gap-3">
                     {Object.entries(metadata.sampling).map(([key, value]) => (
                       <div key={key} className="flex items-center">
@@ -657,20 +658,17 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
               {/* Reviewer Notes */}
               <div className="md:col-span-2 lg:col-span-4">
-                <span className="text-xs text-gray-600 dark:text-gray-400 block mb-2">Reviewer Notes</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 block mb-2">Reviewer notes</span>
                 <div className="space-y-2">
                   <textarea
                     value={reviewerNotes}
                     onChange={(e) => setReviewerNotes(e.target.value)}
-                    placeholder="Add reviewer notes for this submission..."
+                    placeholder="Add a note for other reviewers…"
                     rows={3}
-                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full rounded-md border border-gray-300 dark:border-gray-700 shadow-xs bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     disabled={isSavingReviewerNotes}
                   />
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Notes are saved to this submission and visible to reviewers with access.
-                    </p>
+                  <div className="flex items-center justify-end gap-3">
                     <button
                       type="button"
                       onClick={handleSaveReviewerNotes}
@@ -693,7 +691,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
         {/* General Quality Checks Section - Collapsed when all passed, full list when any failed */}
         <div className="mb-6">
             <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">General Quality Checks</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">General checks</h3>
                 {enabledGeneralChecks.length > 0 && (
                     <span className={`tabular text-xs font-medium ${
                         allGeneralPassed
@@ -842,7 +840,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
         {validationRules.length > 0 && (
             <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Custom Quality Checks</h3>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Custom checks</h3>
                     {!isLoadingRules && (
                         <span className={`tabular text-xs font-medium ${
                             allPassed
@@ -992,8 +990,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
             </div>
         )}
 
-        {/* Qualitative Quality Checks Section - AI-powered qualitative response analysis.
-            Hidden when AI checks are off, unless earlier findings are still stored. */}
+        {/* AI review of open-text answers. Hidden when it is off, unless
+            earlier findings are still stored. */}
         {(surveyConfig?.config_data?.quality_checks?.flag_llm_qualitative || qualitativeIssues.length > 0) && (() => {
           const aiCheck = describeAiCheck(llm_check_status, llm_last_error, qualitativeIssues.length > 0);
           const toneClass = {
@@ -1004,8 +1002,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
           }[aiCheck.tone];
           return (
         <div className="mb-6">
-          <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Qualitative Quality Checks</h3>
-          <div className="p-4 rounded-md border bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700">
+          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-white"><SparkleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />AI review</h3>
+          <div className="px-4 py-3 rounded-lg border bg-white dark:bg-gray-900/60 border-gray-200 dark:border-gray-800">
             <div className="flex flex-wrap items-center gap-2 mb-3" role="status">
               {aiCheck.tone === 'busy' && (
                 <svg className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -1052,7 +1050,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                     return (
                       <div
                         key={field}
-                        className="p-3 rounded-md border bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700/40"
+                        className="p-3 rounded-lg border bg-amber-50/60 dark:bg-amber-500/[0.06] border-amber-200 dark:border-amber-500/25"
                       >
                         <div className="space-y-2 text-sm">
                           <p className="text-gray-800 dark:text-gray-200">
@@ -1065,13 +1063,13 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                           </p>
                           <div className="space-y-2 mt-3">
                             {issues.map((issue) => {
-                              const issueType = issue.check.replace(/^qual_/, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                              const issueType = aiFindingName(issue.check);
                               const aiAnalysis = (issue.metadata as Record<string, any> | undefined)?.llm_reasoning || issue.message;
                               return (
-                                <div key={issue.check} className="pl-3 border-l-2 border-purple-300 dark:border-purple-600/50">
+                                <div key={issue.check} className="pl-3 border-l-2 border-amber-300 dark:border-amber-500/40">
                                   <p className="text-gray-800 dark:text-gray-200">
                                     <span className="font-semibold">{issueType}:</span>{' '}
-                                    <span className="text-purple-900 dark:text-purple-100">{aiAnalysis}</span>
+                                    <span className="text-gray-700 dark:text-gray-300">{aiAnalysis}</span>
                                   </p>
                                 </div>
                               );
@@ -1103,7 +1101,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
             return (
                 <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Outlier Checks</h3>
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Outlier checks</h3>
                         <button
                             type="button"
                             onClick={() => setShowOutlierDetails(!showOutlierDetails)}
@@ -1162,7 +1160,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                             <svg className="w-5 h-5 text-amber-600 dark:text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                             </svg>
-                                            <span className="text-sm font-medium text-amber-800 dark:text-amber-300">Outlier Detected</span>
+                                            <span className="text-sm font-medium text-amber-800 dark:text-amber-300">Outlier</span>
                                         </div>
                                     </div>
 

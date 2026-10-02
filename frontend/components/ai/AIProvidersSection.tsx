@@ -114,8 +114,7 @@ const AIProvidersSection: React.FC = () => {
         <div>
           <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">AI providers</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Use your own OpenAI-compatible account for AI checks and rule writing on surveys you own. Surveys without
-            one use the Field Compass AI allowance. Keys are stored encrypted and never shown again.
+            Your own OpenAI-compatible account.
           </p>
         </div>
         <button
@@ -153,7 +152,7 @@ const AIProvidersSection: React.FC = () => {
                     </p>
                     {connection.status === 'failing' && (
                       <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                        {describeAIError(connection.last_error)} AI checks on its surveys are paused until it passes a test.
+                        {describeAIError(connection.last_error)} AI review on its surveys is paused until it passes a test.
                       </p>
                     )}
                     {connection.status !== 'failing' && connection.last_error && (
@@ -233,7 +232,7 @@ const AIProvidersSection: React.FC = () => {
                       </div>
                     )}
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      For these surveys, the answers to the questions selected for AI checks are sent, with their
+                      For these surveys, the answers to the questions selected for AI review are sent, with their
                       question labels, to {connection.label} ({connection.host}).
                     </p>
                   </fieldset>

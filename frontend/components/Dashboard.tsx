@@ -200,7 +200,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
         ...(stats.llm_paused ? [`${stats.llm_paused} not run (your AI provider is not working)`] : []),
       ];
       setSuccess(
-        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}, ${stats.hfc_flagged} flagged. AI checks: ${aiParts.join(', ')}.`
+        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}, ${stats.hfc_flagged} flagged. AI review: ${aiParts.join(', ')}.`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run ETL pipeline');

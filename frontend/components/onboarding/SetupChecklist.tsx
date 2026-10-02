@@ -56,23 +56,15 @@ const SetupChecklist: React.FC<{ onAddSurvey: () => void }> = ({ onAddSurvey }) 
     <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-950">
       <div className="max-w-2xl mx-auto px-4 py-10">
         <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">Set up your first survey</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">
-          Three steps, then pull submissions from Kobo and start reviewing.
-        </p>
 
         <ol className="mt-6 bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6 divide-y divide-gray-200 dark:divide-gray-700">
           <Step number={1} state={connected ? 'done' : 'current'} title="Connect KoboToolbox">
-            {!connected && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Field Compass reads your forms and submissions from Kobo with your API key. You only do this once.
-              </p>
-            )}
             <KoboConnection />
           </Step>
 
           <Step number={2} state={connected ? 'current' : 'upcoming'} title="Add a survey">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Paste the link to your Kobo project. Field Compass reads its form, so there's nothing to upload.
+              Paste the link to your Kobo project.
             </p>
             <button
               type="button"
@@ -89,8 +81,7 @@ const SetupChecklist: React.FC<{ onAddSurvey: () => void }> = ({ onAddSurvey }) 
 
           <Step number={3} state="upcoming" title="Choose quality checks">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Once the survey is added, pick the checks to run on each submission. You can change them any time in
-              Survey Settings.
+              Pick the checks to run on each submission.
             </p>
           </Step>
         </ol>

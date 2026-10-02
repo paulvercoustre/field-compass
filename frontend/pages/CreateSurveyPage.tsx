@@ -13,11 +13,11 @@ import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import QualityCheckPromptModal from '../components/QualityCheckPromptModal';
-import InfoTip from '../components/ui/InfoTip';
+import FieldLabel from '../components/ui/FieldLabel';
 import { parseKoboAssetId, looksLikeUrl, labelColumnFor } from '../utils/koboUrl';
 import { getKoboProjectForm } from '../services/api';
-import { CORE_IDENTIFIER_HELP, KOBO_LINK_HELP } from '../constants/coreIdentifiers';
-import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
+import { CORE_IDENTIFIER_HINTS, KOBO_LINK_HINT } from '../constants/coreIdentifiers';
+import CollectionTargets, { totalFromFrameRows } from '../components/ui/CollectionTargets';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import { autoFillIdentifier } from '../utils/identifierSuggestions';
 import DkStringValues from '../components/ui/DkStringValues';
@@ -516,11 +516,11 @@ const CreateSurveyPage: React.FC = () => {
         <div className="space-y-6">
           {/* Basic Information */}
           <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Basic Information</h2>
+            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Basic information</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Survey Name *
+                  Survey name *
                 </label>
                 <input
                   type="text"
@@ -531,10 +531,7 @@ const CreateSurveyPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Kobo project link *
-                  <InfoTip help={KOBO_LINK_HELP} />
-                </label>
+                <FieldLabel hint={KOBO_LINK_HINT}>Kobo project link *</FieldLabel>
                 <input
                   type="text"
                   value={koboLink}
@@ -558,7 +555,7 @@ const CreateSurveyPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Data Collection Start Date
+                    Collection start date
                   </label>
                   <input
                     type="date"
@@ -569,7 +566,7 @@ const CreateSurveyPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Data Collection End Date
+                    Collection end date
                   </label>
                   <input
                     type="date"
@@ -584,10 +581,7 @@ const CreateSurveyPage: React.FC = () => {
 
           {/* Survey form */}
           <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-            <h2 className="text-base font-semibold tracking-tight mb-1 text-gray-900 dark:text-white">Survey form</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Field Compass needs your form's questions to fill in the settings below.
-            </p>
+            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Survey form</h2>
 
             <div className="space-y-2">
                 <button
@@ -611,9 +605,10 @@ const CreateSurveyPage: React.FC = () => {
                   </p>
                 )}
                 {projectFormName && (
-                  <p className="text-sm text-green-600 dark:text-green-400">
-                    ✓ {projectFormName} ({availableVariables.length} questions)
-                  </p>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{projectFormName}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{availableVariables.length} questions</p>
+                  </div>
                 )}
                 {formLanguages.length > 1 && (
                   <div className="pt-2">
@@ -654,10 +649,6 @@ const CreateSurveyPage: React.FC = () => {
               <CollectionTargets
                 mode={samplingFrame.mode}
                 onModeChange={handleTargetsModeChange}
-                pendingDiscard={discardedByModeChange(samplingFrame.mode, {
-                  ...samplingFrame,
-                  frame_data: samplingFrameData,
-                })}
                 totalTarget={samplingFrame.total_target}
                 onTotalTargetChange={(total_target) =>
                   setSamplingFrame((prev) => ({ ...prev, total_target }))
@@ -681,24 +672,15 @@ const CreateSurveyPage: React.FC = () => {
                 uploadedSlot={
                   <>
               {samplingFrameData && (
-                <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-300">
-                  {samplingFrameFileName && (
-                    <div className="text-green-600 dark:text-green-400 mb-1">
-                      ✓ {samplingFrameFileName} ({samplingFrameData.length} rows)
-                    </div>
-                  )}
-                  {samplingFrame.sampling_cols.length > 0 && (
-                    <div className="text-xs mb-1">
-                      Grouping columns matched: {samplingFrame.sampling_cols.join(', ')}
-                    </div>
-                  )}
-                  {totalFromFrameRows(samplingFrameData, isTargetColumn) !== null && (
-                    <div className="text-xs mb-1">
-                      Total interviews planned: {totalFromFrameRows(samplingFrameData, isTargetColumn)}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    Upload a new CSV/XLSX to replace this file, or keep it as it is.
+                <div className="mb-3">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{samplingFrameFileName || 'Targets file'}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {[
+                      `${samplingFrameData.length} rows`,
+                      samplingFrame.sampling_cols.length > 0 && `grouped by ${samplingFrame.sampling_cols.join(', ')}`,
+                      totalFromFrameRows(samplingFrameData, isTargetColumn) !== null &&
+                        `${totalFromFrameRows(samplingFrameData, isTargetColumn)} interviews planned`,
+                    ].filter(Boolean).join(' · ')}
                   </p>
                 </div>
               )}
@@ -715,7 +697,7 @@ const CreateSurveyPage: React.FC = () => {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    File Format Requirements
+                    File format
                   </button>
                 </div>
                 {showSamplingFrameHelp && (
@@ -762,37 +744,20 @@ const CreateSurveyPage: React.FC = () => {
                 )}
                 {!koboToolData && (
                   <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-                    ⚠ Read the form from your Kobo project first, so its columns can be checked against your questions
+                    Read the form from your Kobo project first.
                   </p>
                 )}
               </div>
                   </>
                 }
               />
-              {samplingFrame.mode === 'uploaded' && samplingFrame.sampling_cols.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Grouping columns matched
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {samplingFrame.sampling_cols.map((col) => (
-                      <span
-                        key={col}
-                        className="inline-flex items-center px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-md text-sm text-gray-900 dark:text-white"
-                      >
-                        {col}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </section>
 
           {/* Core Identifiers */}
           <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Core identifiers</h2>
+            <div className="field-grid">
               <VariableDropdown
                 value={coreIdentifiers.enumerator}
                 onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value })}
@@ -807,10 +772,8 @@ const CreateSurveyPage: React.FC = () => {
                 helpKey="consent"
                 availableVariables={availableVariables}
               />
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">DK Numeric Value
-                  <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
-                </label>
+              <div className="field-cell">
+                <FieldLabel hint={CORE_IDENTIFIER_HINTS.dk_value}>Don't know — numeric code</FieldLabel>
                 <input
                   type="number"
                   value={specialValues.dk_value}
@@ -834,7 +797,7 @@ const CreateSurveyPage: React.FC = () => {
               disabled={isSaving || !canCreate}
               className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSaving ? 'Creating...' : 'Create Survey'}
+              {isSaving ? 'Creating...' : 'Create survey'}
             </button>
           </div>
         </div>

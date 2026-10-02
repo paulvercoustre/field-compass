@@ -69,6 +69,18 @@
   }
 }
 
+@layer components {
+  /* A two-column form whose fields share row tracks: label (with hint),
+     control, extras. A hint that wraps to two lines makes its whole row
+     taller, so the controls beside each other still line up. */
+  .field-grid {
+    @apply grid grid-cols-1 gap-x-4 md:grid-cols-2;
+  }
+  .field-cell {
+    @apply row-span-3 grid grid-cols-1 grid-rows-subgrid content-start items-start pb-4;
+  }
+}
+
 @layer utilities {
   /* Numbers that line up in columns and do not jitter as they change. */
   .tabular {

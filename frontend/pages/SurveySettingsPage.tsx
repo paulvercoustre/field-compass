@@ -6,18 +6,17 @@ import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
 import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
 import { StagedRule, SamplingMode } from '../types';
-import RuleEditor from '../components/rule-builder/RuleEditor';
-import StagedRulesList from '../components/rule-builder/StagedRulesList';
-import AINaturalLanguageInput from '../components/rule-builder/AINaturalLanguageInput';
-import AISuggestedRules from '../components/rule-builder/AISuggestedRules';
+import CustomChecks from '../components/rule-builder/CustomChecks';
 import { Spinner } from '../components/Spinner';
+import SettingsLayout from '../components/ui/SettingsLayout';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
-import InfoTip from '../components/ui/InfoTip';
-import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
+import FieldLabel from '../components/ui/FieldLabel';
+import { SparkleIcon } from '../components/ui/icons';
+import { CORE_IDENTIFIER_HINTS } from '../constants/coreIdentifiers';
 import { getKoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
-import CollectionTargets, { discardedByModeChange, totalFromFrameRows } from '../components/ui/CollectionTargets';
+import CollectionTargets, { totalFromFrameRows } from '../components/ui/CollectionTargets';
 import { inferSamplingMode } from '../utils/samplingMode';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
@@ -29,7 +28,8 @@ const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false); // Used for Custom Quality Checks only
+  // Opens the custom-check composer on arrival, after a survey is created
+  const [isEditing, setIsEditing] = useState(false);
   const [isEditingOutlier, setIsEditingOutlier] = useState(false);
   const [isEditingLLM, setIsEditingLLM] = useState(false);
   const [isSavingOutlier, setIsSavingOutlier] = useState(false);
@@ -64,7 +64,6 @@ const SurveySettingsPage: React.FC = () => {
   // Validation rules state
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
   const [stagedRules, setStagedRules] = useState<StagedRule[]>([]);
-  const [currentlyEditing, setCurrentlyEditing] = useState<StagedRule | null>(null);
   const [isLoadingRules, setIsLoadingRules] = useState(false);
 
   // Kobo tool state
@@ -342,7 +341,7 @@ const SurveySettingsPage: React.FC = () => {
         });
         if (cd.sampling_frame.frame_data) {
           setSamplingFrameData(cd.sampling_frame.frame_data);
-          setSamplingFrameFileName('(Loaded from saved config)');
+          setSamplingFrameFileName('');
         }
       }
       if (cd.special_values) {
@@ -411,7 +410,7 @@ const SurveySettingsPage: React.FC = () => {
           cd.kobo_tool.label_column_survey
         );
         setKoboToolData({ ...reconstructed, has_audit: cd.kobo_tool.has_audit ?? null });
-        setKoboToolFileName('(Loaded from saved config)');
+        setKoboToolFileName('');
       }
       
       // Load validation rules
@@ -826,7 +825,7 @@ const SurveySettingsPage: React.FC = () => {
     setError(null);
     try {
       await persistSurveyConfig();
-      setSuccess('Qualitative quality checks updated');
+      setSuccess('AI review settings saved');
       setIsEditingLLM(false);
       await loadSurveyConfig();
     } catch (err) {
@@ -843,9 +842,9 @@ const SurveySettingsPage: React.FC = () => {
     setError(null);
     try {
       const count = await rerunAiChecks(selectedSurvey.survey_id);
-      setSuccess(`AI checks will run again for ${count} submissions on the next pull.`);
+      setSuccess(`${count} submissions will be reviewed again on the next pull.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reset AI checks');
+      setError(err instanceof Error ? err.message : 'Could not schedule the review');
     } finally {
       setIsRerunningAI(false);
     }
@@ -898,40 +897,29 @@ const SurveySettingsPage: React.FC = () => {
     setDeleteError(null);
   };
 
-  const handleSaveRule = useCallback(async (rule: Omit<StagedRule, 'id'>) => {
+  const handleSaveCustomCheck = useCallback(async (rule: Omit<StagedRule, 'id'>, ruleId: string | null) => {
     if (!selectedSurvey) return;
 
     try {
       const dbRule = stagedRuleToDbFormat({ ...rule, id: '' });
-      
-      if (currentlyEditing) {
-        // Update existing rule
-        await updateValidationRule(selectedSurvey.survey_id, currentlyEditing.id, {
+      if (ruleId) {
+        await updateValidationRule(selectedSurvey.survey_id, ruleId, {
           rule_name: rule.description,
           rule_data: dbRule,
         });
       } else {
-        // Create new rule
         await createValidationRule(selectedSurvey.survey_id, {
           rule_name: rule.description,
           rule_data: dbRule,
           is_active: true,
         });
       }
-      
-      setCurrentlyEditing(null);
       await loadValidationRules(); // Refresh from server
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save validation rule');
+      setError(err instanceof Error ? err.message : 'Failed to save the check');
+      throw err; // Lets the form stay open with what the user entered
     }
-  }, [currentlyEditing, selectedSurvey]);
-
-  const handleEditRule = useCallback((ruleId: string) => {
-    const ruleToEdit = stagedRules.find(r => r.id === ruleId);
-    if (ruleToEdit) {
-      setCurrentlyEditing(ruleToEdit);
-    }
-  }, [stagedRules]);
+  }, [selectedSurvey]);
 
   const handleDeleteRule = useCallback(async (ruleId: string) => {
     if (!selectedSurvey) return;
@@ -939,47 +927,11 @@ const SurveySettingsPage: React.FC = () => {
     try {
       await deleteValidationRule(selectedSurvey.survey_id, ruleId);
       setStagedRules(rules => rules.filter(r => r.id !== ruleId));
-      if (currentlyEditing?.id === ruleId) {
-        setCurrentlyEditing(null);
-      }
       await loadValidationRules(); // Refresh from server
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete validation rule');
+      setError(err instanceof Error ? err.message : 'Failed to delete the check');
     }
-  }, [currentlyEditing, selectedSurvey]);
-
-  const handleCancelEdit = useCallback(() => {
-    setCurrentlyEditing(null);
-  }, []);
-
-  const handleAIRuleGenerated = useCallback(async (rule: StagedRule) => {
-    if (!selectedSurvey) {
-      throw new Error('No survey selected');
-    }
-
-    // Clear any currently editing rule
-    if (currentlyEditing) {
-      setCurrentlyEditing(null);
-    }
-
-    try {
-      const dbRule = stagedRuleToDbFormat({ ...rule, id: '' });
-      
-      // Create new rule
-      await createValidationRule(selectedSurvey.survey_id, {
-        rule_name: rule.description,
-        rule_data: dbRule,
-        is_active: true,
-      });
-      
-      // Refresh the rules list from server
-      await loadValidationRules();
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save validation rule';
-      setError(errorMessage);
-      throw new Error(errorMessage); // Re-throw so the AI component can catch it
-    }
-  }, [currentlyEditing, selectedSurvey]);
+  }, [selectedSurvey]);
 
   const handleAISuggestedRulesAdded = useCallback(async (rules: StagedRule[]) => {
     // Save all suggested rules to the database
@@ -995,9 +947,9 @@ const SurveySettingsPage: React.FC = () => {
         });
       }
       await loadValidationRules(); // Refresh from server
-      setSuccess(`${rules.length} rule${rules.length !== 1 ? 's' : ''} added successfully!`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save suggested rules');
+      setError(err instanceof Error ? err.message : 'Failed to add the suggested checks');
+      throw err;
     }
   }, [selectedSurvey]);
 
@@ -1054,13 +1006,17 @@ const SurveySettingsPage: React.FC = () => {
   const navItems = [
     { id: 'settings' as const, label: 'General' },
     { id: 'access' as const, label: 'Access' },
-    { id: 'quality' as const, label: 'Data Quality Checks' },
+    { id: 'quality' as const, label: 'Quality checks' },
   ];
 
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
-      <div className="w-full max-w-7xl mx-auto">
-        <div className="mb-4 space-y-2">
+    <SettingsLayout
+      title="Survey settings"
+      items={navItems}
+      active={activeTab}
+      onSelect={setActiveTab}
+      banner={<>
+        {(error || success) && <div className="mb-4 space-y-2">
           <ErrorMessage error={error} className="text-base" />
           <SuccessMessage 
             message={success} 
@@ -1068,13 +1024,13 @@ const SurveySettingsPage: React.FC = () => {
             autoHide={true}
             autoHideDelay={5000}
           />
-        </div>
+        </div>}
 
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (
           <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[2px] flex items-center justify-center z-50">
             <div className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in">
-              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Delete Survey</h2>
+              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Delete survey</h2>
               <p className="text-gray-700 dark:text-gray-300 mb-4">
                 Are you sure you want to delete <strong className="text-gray-900 dark:text-white">{surveyName}</strong>?
                 <br />
@@ -1111,41 +1067,15 @@ const SurveySettingsPage: React.FC = () => {
                   disabled={isDeleting || deleteConfirmInput !== surveyName}
                   className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-700 disabled:cursor-not-allowed text-sm font-medium"
                 >
-                  {isDeleting ? 'Deleting...' : 'Delete Survey'}
+                  {isDeleting ? 'Deleting...' : 'Delete survey'}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Two-column layout: left nav + content */}
-        <div className="flex gap-8 items-start">
-          {/* Left navigation */}
-          <aside className="w-48 flex-shrink-0">
-            <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Survey settings</h2>
-            <nav className="space-y-0.5">
-              {navItems.map((item) => {
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`w-full text-left px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </aside>
-
-          {/* Right content - pt-10 aligns first content with first nav button (matches h2 + mb-4) */}
-          <main className="flex-1 min-w-0 max-w-4xl pt-11">
+</>}
+    >
             {activeTab === 'settings' && !canEditSurvey && userPermission && (
               <div className="mb-6">
                 <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
@@ -1156,7 +1086,7 @@ const SurveySettingsPage: React.FC = () => {
 
         {/* Rendered outside the tab switch and only hidden, so its results
             survive leaving the tab -- and a refresh's check runs once, not
-            again on every return to "Data Quality Checks". */}
+            again on every return to "Quality checks". */}
         {selectedSurvey && (
           <div className={activeTab === 'quality' ? 'mb-6' : 'hidden'}>
             <FormLintPanel
@@ -1173,11 +1103,11 @@ const SurveySettingsPage: React.FC = () => {
           <div className="space-y-6">
             {/* Survey Profile */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Survey Profile</h2>
+              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Survey profile</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Survey Name *
+                    Survey name *
                   </label>
                   {canEditSurvey ? (
                     <input
@@ -1195,7 +1125,7 @@ const SurveySettingsPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Kobo Asset ID
+                    Kobo asset ID
                   </label>
                   {canEditSurvey ? (
                     <input
@@ -1214,7 +1144,7 @@ const SurveySettingsPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Data Collection Start Date
+                      Collection start date
                     </label>
                     {canEditSurvey ? (
                       <input
@@ -1231,7 +1161,7 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Data Collection End Date
+                      Collection end date
                     </label>
                     {canEditSurvey ? (
                       <input
@@ -1254,7 +1184,7 @@ const SurveySettingsPage: React.FC = () => {
                       disabled={isSavingBasicInfo}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingBasicInfo ? 'Saving...' : 'Save Changes'}
+                      {isSavingBasicInfo ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
                       onClick={handleCancelBasicInfo}
@@ -1271,7 +1201,7 @@ const SurveySettingsPage: React.FC = () => {
             {/* Kobo Tool */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Kobo Tool</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Kobo form</h2>
                 {canEditSurvey && !isEditingKoboTool && (
                   <button
                     onClick={() => setIsEditingKoboTool(true)}
@@ -1284,12 +1214,9 @@ const SurveySettingsPage: React.FC = () => {
               {isEditingKoboTool ? (
                 <div className="space-y-2">
                   {koboToolData && (
-                    <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-300">
-                      {koboToolFileName && (
-                        <div className="text-green-600 dark:text-green-400 mb-1">
-                          ✓ {koboToolFileName} ({availableVariables.length} variables)
-                        </div>
-                      )}
+                    <div className="mb-3">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{koboToolFileName || 'Form loaded'}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{availableVariables.length} variables</p>
                     </div>
                   )}
                   <button
@@ -1353,7 +1280,7 @@ const SurveySettingsPage: React.FC = () => {
                       disabled={isSavingKoboTool}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingKoboTool ? 'Saving...' : 'Save Changes'}
+                      {isSavingKoboTool ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
                       onClick={handleCancelKoboTool}
@@ -1368,17 +1295,11 @@ const SurveySettingsPage: React.FC = () => {
                 <div className="text-gray-700 dark:text-gray-300">
                   {koboToolData ? (
                     <div>
-                      <div className="text-green-600 dark:text-green-400 mb-1">
-                        ✓ Tool configured ({availableVariables.length} variables)
-                      </div>
-                      {koboToolFileName && (
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          {koboToolFileName}
-                        </div>
-                      )}
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{koboToolFileName || 'Form loaded'}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{availableVariables.length} variables</p>
                     </div>
                   ) : (
-                    '—'
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No form loaded yet.</p>
                   )}
                 </div>
               )}
@@ -1402,10 +1323,6 @@ const SurveySettingsPage: React.FC = () => {
                   <CollectionTargets
                     mode={samplingFrame.mode}
                     onModeChange={handleTargetsModeChange}
-                    pendingDiscard={discardedByModeChange(samplingFrame.mode, {
-                      ...samplingFrame,
-                      frame_data: samplingFrameData,
-                    })}
                     totalTarget={samplingFrame.total_target}
                     onTotalTargetChange={(total_target) =>
                       setSamplingFrame((prev) => ({ ...prev, total_target }))
@@ -1430,25 +1347,15 @@ const SurveySettingsPage: React.FC = () => {
                     uploadedSlot={
                       <>
                   {samplingFrameData && (
-                    <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-sm text-gray-700 dark:text-gray-300">
-                      {samplingFrameFileName && (
-                        <div className="text-green-600 dark:text-green-400 mb-1">
-                          ✓ {samplingFrameFileName} ({samplingFrameData.length} rows)
-                        </div>
-                      )}
-                      {samplingFrame.sampling_cols.length > 0 && (
-                        <div className="text-xs mb-1">
-                          Grouping columns matched: {samplingFrame.sampling_cols.join(', ')}
-                        </div>
-                      )}
-                      {totalFromFrameRows(samplingFrameData, isTargetColumn) !== null && (
-                        <div className="text-xs mb-1">
-                          Total interviews planned:{' '}
-                          {totalFromFrameRows(samplingFrameData, isTargetColumn)}
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        Upload a new CSV/XLSX to replace this file, or keep it as it is.
+                    <div className="mb-3">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{samplingFrameFileName || 'Targets file'}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {[
+                          `${samplingFrameData.length} rows`,
+                          samplingFrame.sampling_cols.length > 0 && `grouped by ${samplingFrame.sampling_cols.join(', ')}`,
+                          totalFromFrameRows(samplingFrameData, isTargetColumn) !== null &&
+                            `${totalFromFrameRows(samplingFrameData, isTargetColumn)} interviews planned`,
+                        ].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                   )}
@@ -1465,7 +1372,7 @@ const SurveySettingsPage: React.FC = () => {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        File Format Requirements
+                        File format
                       </button>
                     </div>
                     {showSamplingFrameHelp && (
@@ -1512,37 +1419,20 @@ const SurveySettingsPage: React.FC = () => {
                     )}
                     {!koboToolData && (
                       <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-                        ⚠ Read the form from your Kobo project first, so its columns can be checked against your questions
+                        Read the form from your Kobo project first.
                       </p>
                     )}
                   </div>
                       </>
                     }
                   />
-                  {samplingFrame.mode === 'uploaded' && samplingFrame.sampling_cols.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                        Grouping columns matched
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {samplingFrame.sampling_cols.map((col) => (
-                          <span
-                            key={col}
-                            className="inline-flex items-center px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-md text-sm text-gray-900 dark:text-white"
-                          >
-                            {col}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                   <div className="flex gap-3 mt-4">
                     <button
                       onClick={handleSaveSamplingFrame}
                       disabled={isSavingSamplingFrame}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingSamplingFrame ? 'Saving...' : 'Save Changes'}
+                      {isSavingSamplingFrame ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
                       onClick={handleCancelSamplingFrame}
@@ -1582,8 +1472,8 @@ const SurveySettingsPage: React.FC = () => {
 
             {/* Core Identifiers */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Core Identifiers</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Core identifiers</h2>
+              <div className="field-grid">
                 <VariableDropdown
                   value={coreIdentifiers.enumerator}
                   onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value })}
@@ -1600,10 +1490,8 @@ const SurveySettingsPage: React.FC = () => {
                   availableVariables={availableVariables}
                   readOnly={!canEditSurvey}
                 />
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">DK Numeric Value
-                  <InfoTip help={CORE_IDENTIFIER_HELP.dk_value} />
-                </label>
+                <div className="field-cell">
+                  <FieldLabel hint={CORE_IDENTIFIER_HINTS.dk_value}>Don't know — numeric code</FieldLabel>
                   {canEditSurvey ? (
                     <input
                       type="number"
@@ -1632,7 +1520,7 @@ const SurveySettingsPage: React.FC = () => {
                     disabled={isSavingCoreIdentifiers}
                     className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                   >
-                    {isSavingCoreIdentifiers ? 'Saving...' : 'Save Changes'}
+                    {isSavingCoreIdentifiers ? 'Saving...' : 'Save changes'}
                   </button>
                   <button
                     onClick={handleCancelCoreIdentifiers}
@@ -1645,12 +1533,12 @@ const SurveySettingsPage: React.FC = () => {
               )}
             </section>
 
-            {/* Delete Survey Section */}
+            {/* Delete survey Section */}
             {canDeleteSurvey && (
               <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900/50 p-6">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-2">Delete Survey</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-2">Delete survey</h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Permanently delete this survey and all associated data. This action cannot be undone.
+                  Permanently deletes the survey and its data. This cannot be undone.
                 </p>
 
                 <button
@@ -1659,7 +1547,7 @@ const SurveySettingsPage: React.FC = () => {
                   disabled={isDeleting}
                   className="px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium rounded-lg transition-colors"
                 >
-                  Delete Survey
+                  Delete survey
                 </button>
               </section>
             )}
@@ -1744,7 +1632,7 @@ const SurveySettingsPage: React.FC = () => {
 
             {/* Share Survey */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Share Survey</h2>
+              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Share survey</h2>
               
               {!canManageAccess ? (
                 <div className="p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md">
@@ -1795,7 +1683,7 @@ const SurveySettingsPage: React.FC = () => {
           <div className="space-y-6">
             {/* General Quality Checks - dirty pattern like Survey Profile */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">General Quality Checks</h2>
+              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">General checks</h2>
               <div className="space-y-6">
                 
                 {/* Out of Period Flag */}
@@ -1811,13 +1699,13 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                   <div className="ml-3">
                     <label className={`text-sm font-medium ${hasCollectionDates ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-                      Flag submissions out of data collection period
+                      Flag submissions outside the collection period
                     </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {hasCollectionDates
-                        ? 'Create a flag if the interview date is before the start date or after the end date set in Survey Profile.'
-                        : 'Set a data collection start or end date under General → Survey Profile to use this check.'}
-                    </p>
+                    {!hasCollectionDates && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Needs a collection start or end date (General → Survey profile).
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1837,9 +1725,6 @@ const SurveySettingsPage: React.FC = () => {
                       <label className="text-sm font-medium text-gray-900 dark:text-white">
                         Flag submissions on weekends
                       </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Create a flag if the interview date falls on selected weekend days.
-                      </p>
                     </div>
                   </div>
                   
@@ -1882,9 +1767,6 @@ const SurveySettingsPage: React.FC = () => {
                       <label className="text-sm font-medium text-gray-900 dark:text-white">
                         Flag submissions outside office hours
                       </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Create a flag if the interview start time is outside defined office hours.
-                      </p>
                     </div>
                   </div>
 
@@ -1936,7 +1818,7 @@ const SurveySettingsPage: React.FC = () => {
                       Flag submissions outside the collection targets
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Flags a submission whose group was not one you planned for: a combination missing from an uploaded targets file, or an answer that is not in the question's list of options.
+                      Includes groups missing from the targets file and answers not among the question’s options.
                     </p>
                   </div>
                 </div>
@@ -1957,9 +1839,6 @@ const SurveySettingsPage: React.FC = () => {
                       <label className="text-sm font-medium text-gray-900 dark:text-white">
                         Flag submissions with a high percentage of "Don't know" answers
                       </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Create a flag when the percentage of Don't know answers in eligible questions exceeds a threshold.
-                      </p>
                     </div>
                   </div>
 
@@ -2012,7 +1891,7 @@ const SurveySettingsPage: React.FC = () => {
                         Flag submissions with a high percentage of empty answers
                       </label>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Create a flag when the percentage of questions left empty exceeds a threshold. Only questions the respondent was shown count: skip logic that hid a question does not make it empty.
+                        Questions hidden by skip logic don’t count as empty.
                       </p>
                     </div>
                   </div>
@@ -2051,11 +1930,11 @@ const SurveySettingsPage: React.FC = () => {
 
                 {/* Survey Duration Limits */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Survey Duration Limits</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Interview duration limits</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                        Min Survey Duration (minutes)
+                        Minimum (minutes)
                       </label>
                       {canEditSurvey ? (
                         <input
@@ -2073,7 +1952,7 @@ const SurveySettingsPage: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                        Max Survey Duration (minutes)
+                        Maximum (minutes)
                       </label>
                       {canEditSurvey ? (
                         <input
@@ -2097,7 +1976,7 @@ const SurveySettingsPage: React.FC = () => {
                       onClick={handleSaveGeneralFlags}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 text-sm font-medium"
                     >
-                      Save Changes
+                      Save changes
                     </button>
                     <button
                       onClick={handleCancelGeneralFlags}
@@ -2113,7 +1992,7 @@ const SurveySettingsPage: React.FC = () => {
             {/* Outlier Checks Settings */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Outlier Checks</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Outlier checks</h2>
                 {canEditSurvey && !isEditingOutlier && (
                   <button
                     onClick={() => setIsEditingOutlier(true)}
@@ -2140,9 +2019,6 @@ const SurveySettingsPage: React.FC = () => {
                       <label className="text-sm font-medium text-gray-900 dark:text-white">
                         Flag outlier values
                       </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Create a flag if numeric values in selected variables are statistical outliers.
-                      </p>
                     </div>
                   </div>
 
@@ -2151,11 +2027,8 @@ const SurveySettingsPage: React.FC = () => {
                       {/* Variable Selection */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Select Variables to Check
+                          Variables to check
                         </label>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                          Only numeric variables (integer, decimal, calculate) are shown.
-                        </p>
                         {isEditingOutlier ? (
                           <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
                             {numericVariables.length > 0 ? (
@@ -2264,7 +2137,7 @@ const SurveySettingsPage: React.FC = () => {
                       {/* Method Selection */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Detection Method
+                          Detection method
                         </label>
                         {isEditingOutlier ? (
                           <select
@@ -2349,7 +2222,7 @@ const SurveySettingsPage: React.FC = () => {
                       disabled={isSavingOutlier}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingOutlier ? 'Saving...' : 'Save Changes'}
+                      {isSavingOutlier ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
                       onClick={handleCancelOutlier}
@@ -2363,10 +2236,10 @@ const SurveySettingsPage: React.FC = () => {
               </div>
             </section>
 
-            {/* Qualitative Quality Checks */}
+            {/* AI review of open-text answers */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Qualitative Quality Checks</h2>
+                <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white"><SparkleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />AI review</h2>
                 {canEditSurvey && !isEditingLLM && (
                   <button
                     onClick={() => setIsEditingLLM(true)}
@@ -2394,20 +2267,20 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                   <div className="ml-3">
                     <label className="text-sm font-medium text-gray-900 dark:text-white">
-                      Enable AI-powered analysis of qualitative responses
+                      Flag weak open-text answers
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Uses asynchronous checks and only re-runs when monitored text responses or LLM rules change.
+                      Unreadable, off-topic or too vague answers to the questions you pick. Uses AI allowance.
                     </p>
                   </div>
                 </div>
 
                 {qualityChecks.flag_llm_qualitative && (
                   <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                    <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Text Fields to Analyze</h3>
+                    <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Questions to review</h3>
                     {textVariables.length === 0 ? (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        No text fields found. Upload Kobo tool metadata with text questions to enable field selection.
+                        This form has no open-text questions.
                       </p>
                     ) : (
                       <div className="max-h-48 overflow-y-auto space-y-1">
@@ -2439,9 +2312,6 @@ const SurveySettingsPage: React.FC = () => {
                         ))}
                       </div>
                     )}
-                    <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                      Enabled checks: content quality, relevance, and completeness.
-                    </div>
                   </div>
                 )}
                 {canEditSurvey && !isEditingLLM && qualityChecks.flag_llm_qualitative && (
@@ -2451,10 +2321,10 @@ const SurveySettingsPage: React.FC = () => {
                       disabled={isRerunningAI}
                       className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md disabled:opacity-50"
                     >
-                      {isRerunningAI ? 'Resetting…' : 'Re-run AI checks'}
+                      {isRerunningAI ? 'Scheduling…' : 'Review all answers again'}
                     </button>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Checks every submission again on the next pull, including ones already checked. Uses AI credit.
+                      On the next pull, including answers already reviewed. Uses AI allowance.
                     </p>
                   </div>
                 )}
@@ -2465,7 +2335,7 @@ const SurveySettingsPage: React.FC = () => {
                       disabled={isSavingLLM}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingLLM ? 'Saving...' : 'Save Changes'}
+                      {isSavingLLM ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
                       onClick={handleCancelLLM}
@@ -2479,132 +2349,24 @@ const SurveySettingsPage: React.FC = () => {
               </div>
             </section>
 
-            {/* Custom Quality Checks */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Custom Quality Checks</h2>
-                {canEditSurvey && (
-                  isEditing ? (
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
-                    >
-                      Done
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                    >
-                      Edit
-                    </button>
-                  )
-                )}
-              </div>
-              {isEditing ? (
-                <div className="space-y-6">
-                  {!koboToolData ? (
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Please ensure Kobo tool is loaded first to create validation rules.
-                    </p>
-                  ) : (
-                    <>
-                      {/* AI Rule Builder Section */}
-                      {selectedSurvey && (
-                        <div className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-indigo-200 dark:border-indigo-800">
-                          <div className="flex items-center mb-4">
-                            <span className="text-2xl mr-2">✨</span>
-                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">AI Rule Builder</h3>
-                            <span className="ml-2 text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full">
-                              Beta
-                            </span>
-                          </div>
-                          <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                            Describe your rule in plain English, and AI will convert it to a validation rule.
-                          </p>
-                          <AINaturalLanguageInput 
-                            surveyId={selectedSurvey.survey_id}
-                            onRuleGenerated={handleAIRuleGenerated}
-                          />
-                        </div>
-                      )}
-
-                      {/* AI Suggestions Section */}
-                      {selectedSurvey && (
-                        <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-purple-200 dark:border-purple-800">
-                          <div className="flex items-center mb-4">
-                            <span className="text-2xl mr-2">💡</span>
-                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">AI Suggestions</h3>
-                          </div>
-                          <AISuggestedRules 
-                            surveyId={selectedSurvey.survey_id}
-                            onRulesAdded={handleAISuggestedRulesAdded}
-                          />
-                        </div>
-                      )}
-
-                      {/* Manual Rule Editor */}
-                      <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <h3 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white">Create Rule Manually</h3>
-                        <RuleEditor
-                          koboToolData={koboToolData}
-                          onSave={handleSaveRule}
-                          onCancel={handleCancelEdit}
-                          editingRule={currentlyEditing}
-                        />
-                      </div>
-                      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                        <h3 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white">Saved Rules</h3>
-                        {isLoadingRules ? (
-                          <div className="flex items-center justify-center py-4">
-                            <Spinner />
-                          </div>
-                        ) : (
-                          <StagedRulesList
-                            rules={stagedRules}
-                            onEdit={handleEditRule}
-                            onDelete={handleDeleteRule}
-                            canEdit={canEditSurvey}
-                          />
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {isLoadingRules ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Spinner />
-                    </div>
-                  ) : stagedRules.length > 0 ? (
-                    <div className="space-y-2">
-                      {stagedRules.map((rule) => (
-                        <div key={rule.id} className="px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">{rule.description}</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{rule.issue_message}</p>
-                              {rule.roster_name && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Context: {rule.roster_name}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">No validation rules configured for this survey.</p>
-                  )}
-                </div>
-              )}
-            </section>
+            {/* Custom checks */}
+            {selectedSurvey && (
+              <CustomChecks
+                key={selectedSurvey.survey_id}
+                surveyId={selectedSurvey.survey_id}
+                rules={stagedRules}
+                isLoading={isLoadingRules}
+                canEdit={canEditSurvey}
+                koboToolData={koboToolData}
+                onSave={handleSaveCustomCheck}
+                onDelete={handleDeleteRule}
+                onAddMany={handleAISuggestedRulesAdded}
+                startComposing={isEditing}
+              />
+            )}
           </div>
         ) : null}
-          </main>
-        </div>
-      </div>
-    </div>
+    </SettingsLayout>
   );
 };
 

@@ -7,16 +7,6 @@ import {
   LintReport,
 } from '../../services/lintApi';
 import { Spinner } from '../Spinner';
-import InfoTip from '../ui/InfoTip';
-import { FieldHelp } from '../../constants/coreIdentifiers';
-
-const FORM_CHECK_HELP: FieldHelp = {
-  title: 'Check this form for best practices',
-  text:
-    'Reads the form itself for things that will silently disable quality checks or ' +
-    'let avoidable field errors through. This is not the ODK XLSForm compiler: a form ' +
-    'that deploys can still fail these.',
-};
 
 interface FormLintPanelProps {
   surveyId?: string | null;
@@ -234,10 +224,14 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
   return (
     <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
-          Check this form for best practices
-          <InfoTip help={FORM_CHECK_HELP} />
-        </h2>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
+            Check this form for best practices
+          </h2>
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+            Finds form issues that would switch off quality checks or let errors through.
+          </p>
+        </div>
         <button
           type="button"
           onClick={runCheck}

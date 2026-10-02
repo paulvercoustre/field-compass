@@ -116,7 +116,7 @@ def sweep_stalled_qualitative_checks() -> int:
             .update(
                 {
                     SubmissionCurrent.llm_check_status: "failed",
-                    SubmissionCurrent.llm_last_error: "timeout: The AI check did not finish.",
+                    SubmissionCurrent.llm_last_error: "timeout: The AI review did not finish.",
                     SubmissionCurrent.llm_checked_at: now,
                 },
                 synchronize_session=False,
