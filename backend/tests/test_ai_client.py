@@ -240,11 +240,40 @@ class TestSteppingDown:
 
 class TestReplies:
     def test_reply_not_matching_the_schema(self):
-        endpoint = FakeEndpoint(_reply('{"answer": 42}'))
+        """Wrong twice -- once as asked, once with the shape in the prompt -- fails."""
+        endpoint = FakeEndpoint(_reply('{"answer": 42}'), _reply('{"answer": 43}'))
         with pytest.raises(AIError) as raised:
             _call(endpoint)
         assert raised.value.category == BAD_RESPONSE
         assert "answer" in raised.value.message
+        assert len(endpoint.requests) == 2
+
+    def test_ignored_response_format_is_learned(self):
+        """Anthropic's compatibility layer accepts response_format and ignores it."""
+        endpoint = FakeEndpoint(
+            _reply("Sure, the connection works!", 100, 20),
+            _reply('{"answer": "yes"}', 300, 25),
+            _reply('{"answer": "again"}'),
+        )
+        calls = []
+        data, provider = _call(endpoint, record=calls.append)
+
+        assert data == {"answer": "yes"}
+        assert provider.capabilities.structured_output == PROMPT_ONLY
+        retry = endpoint.requests[1]
+        assert "response_format" not in retry
+        assert json.dumps(SCHEMA) in retry["messages"][0]["content"]
+        # Both calls were billed.
+        assert (calls[0].input_tokens, calls[0].output_tokens) == (400, 45)
+
+        _call(endpoint, provider)  # remembered: no wasted first attempt
+        assert "response_format" not in endpoint.requests[2]
+
+    def test_a_reply_cut_off_by_the_limit_is_not_retried(self):
+        endpoint = FakeEndpoint(_reply('{"answ', finish_reason="length"))
+        with pytest.raises(AIError):
+            _call(endpoint)
+        assert len(endpoint.requests) == 1
 
     def test_check_schema_replaces_the_request_schema_for_validation(self):
         endpoint = FakeEndpoint(_reply('{"answer": 42}'))

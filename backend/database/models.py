@@ -208,7 +208,7 @@ class AIConnection(Base):
         UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
     )
     label = Column(String(120), nullable=False)
-    # openai | azure | openrouter | mistral | groq | self_hosted | custom
+    # openai | azure | anthropic | openrouter | mistral | groq | self_hosted | custom
     preset = Column(String(32), nullable=False, default="custom")
     base_url = Column(Text, nullable=False)
     api_key_encrypted = Column(Text, nullable=True)  # NULL for keyless self-hosted servers

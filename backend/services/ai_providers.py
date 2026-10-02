@@ -47,10 +47,13 @@ _HEALTH_MESSAGES = {
 
 # Large enough for a reasoning model to think before a two-field answer.
 _TEST_MAX_OUTPUT = 1000
+# The prompt does not spell this shape out, so only an endpoint that honours
+# the requested response format -- or a retry with the shape in the prompt --
+# produces it. That way the test learns what real checks will need.
 _TEST_SCHEMA = {
     "type": "object",
-    "properties": {"ok": {"type": "boolean"}},
-    "required": ["ok"],
+    "properties": {"connection": {"type": "string", "enum": ["working"]}},
+    "required": ["connection"],
     "additionalProperties": False,
 }
 
@@ -187,8 +190,8 @@ def run_connection_test(connection: AIConnection, client: AIClient | None = None
         (client or AIClient(timeout=60)).complete_json(
             provider,
             name="connection_test",
-            system="You are checking that this connection works. Reply with JSON only.",
-            user='Reply with {"ok": true}.',
+            system="You are checking that this connection works.",
+            user="Confirm that the connection is working, in the required format.",
             schema=_TEST_SCHEMA,
             max_output=_TEST_MAX_OUTPUT,
         )

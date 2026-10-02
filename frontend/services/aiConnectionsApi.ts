@@ -5,7 +5,7 @@
 
 import { API_BASE_URL } from './apiBase';
 
-export type AIPreset = 'openai' | 'azure' | 'openrouter' | 'mistral' | 'groq' | 'self_hosted' | 'custom';
+export type AIPreset = 'openai' | 'azure' | 'anthropic' | 'openrouter' | 'mistral' | 'groq' | 'self_hosted' | 'custom';
 export type AIConnectionStatus = 'untested' | 'ok' | 'failing';
 
 /** What anyone with access to a survey sees about its provider. */
@@ -53,6 +53,12 @@ export const AI_PRESETS: Record<AIPreset, { name: string; baseUrl: string; model
     baseUrl: 'https://YOUR-RESOURCE.openai.azure.com/openai/v1/',
     modelHint: 'your deployment name',
     note: 'Replace YOUR-RESOURCE with your Azure OpenAI resource name. The model is the deployment name.',
+  },
+  anthropic: {
+    name: 'Anthropic (Claude)',
+    baseUrl: 'https://api.anthropic.com/v1/',
+    modelHint: 'claude-haiku-4-5',
+    note: "Uses Anthropic's OpenAI-compatible endpoint with a Claude API key. Use a Claude model name.",
   },
   openrouter: { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', modelHint: 'openai/gpt-4o-mini' },
   mistral: { name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', modelHint: 'mistral-small-latest' },

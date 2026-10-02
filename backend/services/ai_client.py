@@ -152,6 +152,12 @@ def _first_json_object(text: str) -> Any:
     raise AIError(BAD_RESPONSE, "The AI reply was not valid JSON.")
 
 
+def _add(total: int | None, more: int | None) -> int | None:
+    if more is None:
+        return total
+    return (total or 0) + more
+
+
 def safety_identifier(end_user: str) -> str:
     """A stable, non-reversible stand-in for a user id, as OpenAI recommends."""
     return hashlib.sha256(f"field-compass:{end_user}".encode()).hexdigest()[:32]
@@ -208,43 +214,55 @@ class AIClient:
         input_tokens = output_tokens = cached_tokens = reasoning_tokens = None
         outcome = "ok"
         started = time.time()
+        format_retried = False
         try:
-            for attempt in range(self._MAX_STEP_DOWNS + 1):
-                request = self._request(
-                    provider, capabilities, name, system, user, schema, max_output
+            while True:
+                response = self._send(
+                    client,
+                    provider,
+                    capabilities,
+                    end_user,
+                    (name, system, user, schema, max_output),
                 )
-                if end_user and (provider.base_url or DEFAULT_BASE_URL).startswith(
-                    DEFAULT_BASE_URL
-                ):
-                    # OpenAI's field; other endpoints may reject an unknown one.
-                    request["extra_body"] = {"safety_identifier": safety_identifier(end_user)}
+                # Summed over a format retry: both calls were billed.
+                usage = getattr(response, "usage", None)
+                input_tokens = _add(input_tokens, getattr(usage, "prompt_tokens", None))
+                output_tokens = _add(output_tokens, getattr(usage, "completion_tokens", None))
+                cached_tokens = _add(
+                    cached_tokens,
+                    getattr(getattr(usage, "prompt_tokens_details", None), "cached_tokens", None),
+                )
+                reasoning_tokens = _add(
+                    reasoning_tokens,
+                    getattr(
+                        getattr(usage, "completion_tokens_details", None), "reasoning_tokens", None
+                    ),
+                )
                 try:
-                    response = client.chat.completions.create(**request)
-                    break
-                # Endpoints reject an unknown parameter with 400 or 422.
-                except (openai.BadRequestError, openai.UnprocessableEntityError) as exc:
-                    if attempt < self._MAX_STEP_DOWNS and capabilities.step_down(str(exc)):
-                        logger.info(
-                            "AI endpoint %s rejected a request detail for %s; now %s",
-                            provider.base_url or "openai",
-                            provider.model,
-                            capabilities,
-                        )
-                        continue
-                    raise
-
-            usage = getattr(response, "usage", None)
-            input_tokens = getattr(usage, "prompt_tokens", None)
-            output_tokens = getattr(usage, "completion_tokens", None)
-            cached_tokens = getattr(
-                getattr(usage, "prompt_tokens_details", None), "cached_tokens", None
-            )
-            reasoning_tokens = getattr(
-                getattr(usage, "completion_tokens_details", None), "reasoning_tokens", None
-            )
-            data = self._parse(response)
-            self._validate(data, check_schema or schema)
-            return data
+                    data = self._parse(response)
+                    self._validate(data, check_schema or schema)
+                    return data
+                except AIError as error:
+                    # Some endpoints accept response_format and ignore it
+                    # (Anthropic's compatibility layer does), so a reply in the
+                    # wrong shape is the only sign. Retry once with the shape
+                    # written into the prompt, and keep doing so. A reply cut
+                    # off by the output limit is a different problem.
+                    if (
+                        error.category != BAD_RESPONSE
+                        or format_retried
+                        or capabilities.structured_output == PROMPT_ONLY
+                        or getattr(response.choices[0], "finish_reason", None) == "length"
+                    ):
+                        raise
+                    format_retried = True
+                    capabilities.structured_output = PROMPT_ONLY
+                    logger.info(
+                        "AI endpoint %s ignored the response format for %s; describing it "
+                        "in the prompt instead",
+                        provider.base_url or "openai",
+                        provider.model,
+                    )
         except Exception as exc:
             error = classify(exc)
             outcome = error.category
@@ -276,6 +294,35 @@ class AIClient:
                     )
                 except Exception:
                     logger.exception("Could not record AI usage")
+
+    def _send(
+        self,
+        client: Any,
+        provider: ResolvedProvider,
+        capabilities: Capabilities,
+        end_user: str | None,
+        request_args: tuple,
+    ) -> Any:
+        """One completion, stepping the profile down when the endpoint rejects a detail."""
+        for attempt in range(self._MAX_STEP_DOWNS + 1):
+            request = self._request(provider, capabilities, *request_args)
+            if end_user and (provider.base_url or DEFAULT_BASE_URL).startswith(DEFAULT_BASE_URL):
+                # OpenAI's field; other endpoints may reject an unknown one.
+                request["extra_body"] = {"safety_identifier": safety_identifier(end_user)}
+            try:
+                return client.chat.completions.create(**request)
+            # Endpoints reject an unknown parameter with 400 or 422.
+            except (openai.BadRequestError, openai.UnprocessableEntityError) as exc:
+                if attempt < self._MAX_STEP_DOWNS and capabilities.step_down(str(exc)):
+                    logger.info(
+                        "AI endpoint %s rejected a request detail for %s; now %s",
+                        provider.base_url or "openai",
+                        provider.model,
+                        capabilities,
+                    )
+                    continue
+                raise
+        raise AssertionError("unreachable")  # the last attempt returns or raises
 
     def _request(
         self,

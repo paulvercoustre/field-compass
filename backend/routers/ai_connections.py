@@ -40,7 +40,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-Preset = Literal["openai", "azure", "openrouter", "mistral", "groq", "self_hosted", "custom"]
+Preset = Literal[
+    "openai", "azure", "anthropic", "openrouter", "mistral", "groq", "self_hosted", "custom"
+]
 
 
 class ConnectionCreate(BaseModel):
