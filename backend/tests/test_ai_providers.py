@@ -18,7 +18,7 @@ from database.models import AIConnection, AIUsage, Base, SubmissionCurrent, Surv
 from services import ai_endpoints, ai_providers, qualitative_worker_runtime
 from services.ai_client import CallUsage, Capabilities, ResolvedProvider
 from services.ai_endpoints import EndpointRejected, validate_base_url
-from services.ai_errors import AUTH, BAD_REQUEST, AIError
+from services.ai_errors import AUTH, BAD_REQUEST, RATE_LIMITED, AIError
 from services.ai_providers import (
     CHECKS,
     FAILING,
@@ -363,6 +363,11 @@ class _FailingTest(_PassingTest):
         raise AIError(AUTH, "Incorrect API key provided: [key hidden].")
 
 
+class _RateLimitedTest(_PassingTest):
+    def complete_json(self, provider, **_):
+        raise AIError(RATE_LIMITED, "Rate limit reached.")
+
+
 @pytest.fixture
 def client(monkeypatch):
     from main import app
@@ -419,6 +424,22 @@ class TestConnectionsApi:
             "category": AUTH,
             "error": "Incorrect API key provided: [key hidden].",
         }
+
+    def test_a_temporary_test_failure_does_not_pause(self, client, monkeypatch):
+        """A rate limit during the test would otherwise stop every check."""
+        created = _create(client)
+        assert created["status"] == "ok"
+
+        monkeypatch.setattr(ai_providers, "AIClient", _RateLimitedTest)
+        response = client.post(f"/api/ai/connections/{created['connection_id']}/test")
+        body = response.json()
+        assert body["test"]["ok"] is False
+        assert body["status"] == "ok"  # not paused
+        assert body["last_error"].startswith("rate_limited: ")
+
+        # A new provider whose first test hits an outage is saved untested.
+        monkeypatch.setattr(ai_providers, "AIClient", _RateLimitedTest)
+        assert _create(client, label="Second")["status"] == "untested"
 
     def test_private_address_is_refused_before_saving(self, client, monkeypatch):
         monkeypatch.setattr(ai_endpoints.socket, "getaddrinfo", _resolver("169.254.169.254"))

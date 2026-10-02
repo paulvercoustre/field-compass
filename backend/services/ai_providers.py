@@ -45,6 +45,11 @@ _HEALTH_MESSAGES = {
     PROVIDER_QUOTA: "The AI provider account is out of credit.",
 }
 
+# Test failures that will recur on every call, so the connection is paused.
+# Temporary ones (rate_limited, unavailable, timeout) and an unusable reply
+# leave its status as it was.
+_PAUSING_TEST_FAILURES = frozenset({AUTH, PROVIDER_QUOTA, BAD_REQUEST, NOT_CONFIGURED})
+
 # Large enough for a reasoning model to think before a two-field answer.
 _TEST_MAX_OUTPUT = 1000
 # The prompt does not spell this shape out, so only an endpoint that honours
@@ -196,7 +201,11 @@ def run_connection_test(connection: AIConnection, client: AIClient | None = None
             max_output=_TEST_MAX_OUTPUT,
         )
     except AIError as error:
-        connection.status = FAILING
+        # Pause only for what will keep failing. A rate limit, timeout or
+        # outage during a test says nothing lasting about the connection, and
+        # pausing on it would stop every check until someone tested again.
+        if error.category in _PAUSING_TEST_FAILURES:
+            connection.status = FAILING
         connection.last_error = str(error)[:1000]
         return {"ok": False, "category": error.category, "error": error.message}
 

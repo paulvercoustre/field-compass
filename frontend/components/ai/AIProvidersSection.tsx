@@ -156,6 +156,12 @@ const AIProvidersSection: React.FC = () => {
                         {describeAIError(connection.last_error)} AI checks on its surveys are paused until it passes a test.
                       </p>
                     )}
+                    {connection.status !== 'failing' && connection.last_error && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Last test didn't complete: {describeAIError(connection.last_error)} Checks are not paused; test
+                        again later.
+                      </p>
+                    )}
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {connection.surveys.length
                         ? `Used by: ${connection.surveys.map((s) => s.survey_name).join(', ')}`

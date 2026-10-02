@@ -74,28 +74,47 @@ def _day_start(now: datetime | None = None) -> datetime:
     return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def checks_used(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
-    """Checks this survey spent on the operator's key since the month began."""
+def _spent_submissions(db: Session, survey_id: UUID, now: datetime | None = None):
+    """Submissions with a check this month that cost credit on the operator's key."""
     return (
-        db.query(func.count(AIUsage.usage_id))
+        db.query(AIUsage.submission_id)
         .filter(
             AIUsage.survey_id == survey_id,
             AIUsage.feature == QUALITATIVE_CHECK,
+            # Checks always name their submission; without this a NULL would
+            # make the NOT IN below match nothing at all.
+            AIUsage.submission_id.isnot(None),
             AIUsage.connection_id.is_(None),
             AIUsage.outcome.in_(_SPENT),
             AIUsage.created_at >= month_start(now),
         )
-        .scalar()
+        .distinct()
     )
 
 
-def checks_in_flight(db: Session, survey_id: UUID) -> int:
-    """Checks queued or running: already promised, not yet counted."""
+def checks_used(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
+    """
+    Submissions this survey had AI-checked on the operator's key this month.
+
+    Counted per submission, not per call: a check retried after a billed but
+    unusable reply is still one checked submission.
+    """
+    return _spent_submissions(db, survey_id, now).count()
+
+
+def checks_in_flight(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
+    """
+    Checks queued or running that are not already counted as used.
+
+    A submission retrying after a billed reply is both pending and spent;
+    it holds one allowance slot, not two.
+    """
     return (
         db.query(func.count(SubmissionCurrent._id))
         .filter(
             SubmissionCurrent.survey_id == survey_id,
             SubmissionCurrent.llm_check_status.in_(("pending", "running")),
+            ~SubmissionCurrent._id.in_(_spent_submissions(db, survey_id, now)),
         )
         .scalar()
     )
@@ -105,7 +124,7 @@ def checks_remaining(db: Session, survey_id: UUID, now: datetime | None = None) 
     """How many more checks this survey may queue on the operator's key this month."""
     if not allowance_enabled():
         return 0
-    used = checks_used(db, survey_id, now) + checks_in_flight(db, survey_id)
+    used = checks_used(db, survey_id, now) + checks_in_flight(db, survey_id, now)
     return max(0, checks_per_survey_month() - used)
 
 

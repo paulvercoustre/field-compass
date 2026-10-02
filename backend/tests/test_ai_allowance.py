@@ -18,6 +18,7 @@ from etl.pipeline import ETLPipeline
 from services import ai_allowance
 from services.ai_allowance import (
     NOT_RUN_ALLOWANCE,
+    checks_in_flight,
     checks_remaining,
     checks_used,
     month_start,
@@ -81,20 +82,20 @@ class TestChecksUsed:
         test_db.add(connection)
         test_db.commit()
 
-        _usage(test_db, sid)  # counted
-        _usage(test_db, sid, outcome="bad_response")  # billed, counted
-        _usage(test_db, sid, outcome="unavailable")  # never reached the provider
-        _usage(test_db, sid, outcome="auth")  # rejected, nothing spent
-        _usage(test_db, sid, when=datetime(2026, 9, 30, 23, 59))  # last month
+        _usage(test_db, sid, submission_id=1)  # counted
+        _usage(test_db, sid, submission_id=2, outcome="bad_response")  # billed, counted
+        _usage(test_db, sid, submission_id=3, outcome="unavailable")  # never reached it
+        _usage(test_db, sid, submission_id=4, outcome="auth")  # rejected, nothing spent
+        _usage(test_db, sid, submission_id=5, when=datetime(2026, 9, 30, 23, 59))  # last month
         _usage(test_db, sid, feature=RULE_GENERATION)  # not a check
-        _usage(test_db, sid, connection_id=connection.connection_id)  # their own key
+        _usage(test_db, sid, submission_id=6, connection_id=connection.connection_id)  # own key
 
         assert checks_used(test_db, sid, NOW) == 2
 
     def test_queued_checks_are_reserved(self, test_db, test_survey_config, monkeypatch):
         monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "5")
         sid = test_survey_config.survey_id
-        _usage(test_db, sid)
+        _usage(test_db, sid, submission_id=99)
         for n, status in enumerate(("pending", "running", "success")):
             test_db.add(
                 SubmissionCurrent(
@@ -111,6 +112,29 @@ class TestChecksUsed:
 
         # 5 - 1 spent - 2 queued or running
         assert checks_remaining(test_db, sid, NOW) == 2
+
+    def test_a_retried_check_holds_one_slot(self, test_db, test_survey_config, monkeypatch):
+        """Billed, unusable reply, back to pending for a retry: still one submission."""
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "5")
+        sid = test_survey_config.survey_id
+        test_db.add(
+            SubmissionCurrent(
+                _id=7,
+                survey_id=sid,
+                _uuid="retrying",
+                _submission_time=NOW,
+                end=NOW,
+                submission_data={},
+                llm_check_status="pending",
+            )
+        )
+        test_db.commit()
+        _usage(test_db, sid, submission_id=7, outcome="bad_response")
+        _usage(test_db, sid, submission_id=7, outcome="bad_response")  # a second retry
+
+        assert checks_used(test_db, sid, NOW) == 1
+        assert checks_in_flight(test_db, sid, NOW) == 0
+        assert checks_remaining(test_db, sid, NOW) == 4
 
     def test_allowance_off_or_no_operator_key(self, test_db, test_survey_config, monkeypatch):
         sid = test_survey_config.survey_id
@@ -229,8 +253,8 @@ class TestPull:
         test_db.query(SubmissionCurrent).filter(
             SubmissionCurrent.llm_check_status == "pending"
         ).update({SubmissionCurrent.llm_check_status: "success"})
-        for _ in range(3):
-            _usage(test_db, ai_survey.survey_id, when=datetime.utcnow())
+        for n in range(3):
+            _usage(test_db, ai_survey.survey_id, when=datetime.utcnow(), submission_id=5000 + n)
         monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "10")
 
         stats = _pull(test_db, ai_survey, 5)
@@ -329,8 +353,8 @@ class TestHttp:
         survey_id = _api_survey(client)
         db = TestingSessionLocal()
         now = datetime.utcnow()
-        _usage(db, UUID(survey_id), when=now, input_tokens=500, output_tokens=300)
-        _usage(db, UUID(survey_id), when=now, outcome="timeout")
+        _usage(db, UUID(survey_id), when=now, input_tokens=500, output_tokens=300, submission_id=1)
+        _usage(db, UUID(survey_id), when=now, outcome="timeout", submission_id=1)
         _usage(
             db,
             UUID(survey_id),
