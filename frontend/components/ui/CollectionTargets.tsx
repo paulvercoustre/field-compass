@@ -310,7 +310,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
 
       {mode === 'total' && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             Total interviews planned
           </label>
           <input
@@ -319,7 +319,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
             value={totalTarget ?? ''}
             onChange={(e) => onTotalTargetChange(parseTarget(e.target.value))}
             placeholder="e.g. 500"
-            className="w-48 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-48 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
       )}
@@ -327,7 +327,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
       {mode === 'by_variable' && (
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Group by
             </label>
             {strataVariables.length > 0 ? (
@@ -339,7 +339,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                   // nothing under a new one.
                   onTargetsByValueChange({});
                 }}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">-- Select a question --</option>
                 {strataVariables.map((item) => (
@@ -374,14 +374,14 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                       value={plannedTotal}
                       onChange={(e) => setPlannedTotal(e.target.value)}
                       placeholder="e.g. 500"
-                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={distributeEvenly}
                     disabled={!parseTarget(plannedTotal)}
-                    className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                    className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                   >
                     Divide evenly
                   </button>
@@ -400,14 +400,14 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                       value={perGroup}
                       onChange={(e) => setPerGroup(e.target.value)}
                       placeholder="e.g. 40"
-                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-36 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={applyPerGroup}
                     disabled={!parseTarget(perGroup)}
-                    className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium"
+                    className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                   >
                     Apply to every group
                   </button>
@@ -423,10 +423,10 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                 <table className="min-w-full">
                   <thead className="bg-gray-100 dark:bg-gray-900">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
                         Group
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
                         Target interviews
                       </th>
                     </tr>
@@ -456,7 +456,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                             value={targetsByValue[choice.value] ?? ''}
                             onChange={(e) => setOneTarget(choice.value, e.target.value)}
                             placeholder="—"
-                            className="w-28 px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="w-28 px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </td>
                       </tr>

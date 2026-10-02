@@ -1,3 +1,77 @@
+@import '@fontsource-variable/inter';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+    --fc-chart-axis: theme('colors.gray.200');
+    --fc-chart-tick: theme('colors.gray.500');
+    --fc-chart-grid: theme('colors.gray.100');
+    --fc-chart-cursor: rgb(0 0 0 / 0.03);
+    --fc-chart-tooltip-bg: #ffffff;
+    --fc-chart-tooltip-border: theme('colors.gray.200');
+    --fc-chart-tooltip-text: theme('colors.gray.900');
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fc-chart-axis: theme('colors.gray.800');
+      --fc-chart-tick: theme('colors.gray.400');
+      --fc-chart-grid: theme('colors.gray.800');
+      --fc-chart-cursor: rgb(255 255 255 / 0.04);
+      --fc-chart-tooltip-bg: theme('colors.gray.900');
+      --fc-chart-tooltip-border: theme('colors.gray.700');
+      --fc-chart-tooltip-text: theme('colors.gray.100');
+    }
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100;
+    /* Inter alternates: open 4, 6 and 9, and a tailed lowercase l, so
+       submission IDs and codes like "Il1" read unambiguously. */
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv05';
+  }
+
+  ::selection {
+    @apply bg-indigo-500/20;
+  }
+
+  /* One visible focus style for keyboard users everywhere. Mouse clicks do
+     not trigger :focus-visible, so this does not add rings to clicks. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-white dark:ring-indigo-400 dark:ring-offset-gray-900;
+  }
+
+  /* Thin, quiet scrollbars in the scrolling panes. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.gray.300') transparent;
+  }
+  @media (prefers-color-scheme: dark) {
+    * {
+      scrollbar-color: theme('colors.gray.700') transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Numbers that line up in columns and do not jitter as they change. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

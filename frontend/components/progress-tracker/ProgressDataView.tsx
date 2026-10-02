@@ -89,34 +89,34 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
         if (activeSubTab === 'overall') {
             return (
                 <table className="min-w-full">
-                    <thead className="bg-gray-200 dark:bg-gray-900">
+                    <thead className="bg-gray-50 dark:bg-gray-900">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Interviews Conducted</th>
                             {hasTargets ? (
                                 <>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Target Interviews</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Progress (%)</th>
                                 </>
                             ) : (
                                 <>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Days Collecting</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Per Day</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Days Collecting</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Per Day</th>
                                 </>
                             )}
                         </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-gray-850">
+                    <tbody className="bg-white dark:bg-gray-950">
                         <tr>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{data.overall.conducted}</td>
+                            <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{data.overall.conducted}</td>
                             {hasTargets ? (
                                 <>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.target)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={data.overall.progress} /></td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.target)}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap"><ProgressBar percentage={data.overall.progress} /></td>
                                 </>
                             ) : (
                                 <>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{data.overall.days_active}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.submissions_per_day)}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{data.overall.days_active}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.submissions_per_day)}</td>
                                 </>
                             )}
                         </tr>
@@ -132,23 +132,23 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
             
             return (
                 <table className="min-w-full">
-                    <thead className="bg-gray-200 dark:bg-gray-900">
+                    <thead className="bg-gray-50 dark:bg-gray-900">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">{columnName}</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">{hasTargets ? 'Target Interviews' : 'Share of Total'}</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{columnName}</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Interviews Conducted</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{hasTargets ? 'Target Interviews' : 'Share of Total'}</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Progress (%)</th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-gray-850">
+                    <tbody className="bg-white dark:bg-gray-950">
                         {columnData.map(row => {
                             const displayLabel = resolveLabel(columnName, row.value);
                             return (
                                 <tr key={row.value}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{displayLabel}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{row.conducted}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{hasTargets ? numberOrDash(row.target) : `${numberOrDash(row.share)}%`}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular font-medium text-gray-900 dark:text-white">{displayLabel}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{row.conducted}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{hasTargets ? numberOrDash(row.target) : `${numberOrDash(row.share)}%`}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                                 </tr>
                             );
                         })}
@@ -170,23 +170,23 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
                         placeholder={filterPlaceholder}
-                        className="w-full px-4 py-2 mb-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="m-3 block h-8 w-[calc(100%-1.5rem)] max-w-sm px-3 text-13 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
-                    <div className="overflow-x-auto rounded-lg shadow-md">
+                    <div className="overflow-x-auto border-t border-gray-200 dark:border-gray-800">
                         <table className="min-w-full">
-                            <thead className="bg-gray-200 dark:bg-gray-900">
+                            <thead className="bg-gray-50 dark:bg-gray-900">
                                 <tr>
                                     {columnNames.map(colName => (
-                                        <th key={colName} className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">
+                                        <th key={colName} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
                                             {colName}
                                         </th>
                                     ))}
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Target Interviews</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Interviews Conducted</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Progress (%)</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Target Interviews</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Interviews Conducted</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Progress (%)</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white dark:bg-gray-850">
+                            <tbody className="bg-white dark:bg-gray-950">
                                 {filteredDetailedData.map((row, index) => {
                                     const rowKey = Object.values(row.values || {}).join('-') + `-${index}`;
                                     return (
@@ -195,14 +195,14 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                                                 const rawValue = row.values?.[colName];
                                                 const displayLabel = resolveLabel(colName, rawValue);
                                                 return (
-                                                    <td key={colName} className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                    <td key={colName} className="px-6 py-3 whitespace-nowrap text-13 tabular font-medium text-gray-900 dark:text-white">
                                                         {displayLabel}
                                                     </td>
                                                 );
                                             })}
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center">{numberOrDash(row.target)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 text-center">{row.conducted}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
+                                            <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300 text-center">{numberOrDash(row.target)}</td>
+                                            <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300 text-center">{row.conducted}</td>
+                                            <td className="px-6 py-3 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                                         </tr>
                                     );
                                 })}
@@ -218,27 +218,19 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
 
     return (
         <div>
-            <div className="flex items-center justify-between gap-2 mb-4">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Data Collection Progress</h3>
-                {approvedOnly && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/40 bg-indigo-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-100">
-                        Approved surveys only
-                    </span>
-                )}
-            </div>
             {/*
               Said once for the whole view, not once per card. Repeating it on
               every table turns a useful prompt into noise, and this is a
               legitimate configuration rather than something broken.
             */}
             {!hasTargets && (
-                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                <p className="mb-4 max-w-3xl text-13 text-gray-600 dark:text-gray-400">
                     No collection targets set for this survey, so the figures below describe what
                     has been collected rather than progress towards a plan. Add targets in survey
                     settings to track completion.
                 </p>
             )}
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="mb-4 inline-flex flex-wrap gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
                 <SubTabButton<ProgressSubTab> tabId="overall" activeTab={activeSubTab} onClick={setActiveSubTab}>
                     Overall
                 </SubTabButton>
@@ -264,7 +256,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                     </SubTabButton>
                 )}
             </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-card dark:border-gray-800 dark:bg-gray-950">
                 {renderContent()}
             </div>
         </div>

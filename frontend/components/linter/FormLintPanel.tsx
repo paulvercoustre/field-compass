@@ -106,7 +106,7 @@ const FindingCard: React.FC<{
           type="button"
           onClick={onAdopt}
           disabled={adopting}
-          className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+          className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50"
         >
           {adopting ? 'Adding…' : 'Add as quality check'}
         </button>
@@ -232,9 +232,9 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
   const total = report ? (report.counts.error || 0) + (report.counts.warning || 0) + (report.counts.info || 0) : 0;
 
   return (
-    <section className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700 space-y-4">
+    <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
           Check this form for best practices
           <InfoTip help={FORM_CHECK_HELP} />
         </h2>
@@ -245,7 +245,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
           className={
             report
               ? 'px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md disabled:opacity-50'
-              : 'px-3 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50'
+              : 'px-3 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50'
           }
         >
           {isChecking ? 'Checking…' : report ? 'Check again' : 'Check form'}

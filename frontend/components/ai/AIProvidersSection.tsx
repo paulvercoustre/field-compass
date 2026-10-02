@@ -109,7 +109,7 @@ const AIProvidersSection: React.FC = () => {
     connections.find((c) => c.surveys.some((s) => s.survey_id === surveyId));
 
   return (
-    <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI providers</h2>
@@ -121,7 +121,7 @@ const AIProvidersSection: React.FC = () => {
         <button
           type="button"
           onClick={() => setEditing('new')}
-          className="flex-shrink-0 px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+          className="flex-shrink-0 px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500"
         >
           Add a provider
         </button>
@@ -254,14 +254,14 @@ const AIProvidersSection: React.FC = () => {
 
       {/* Delete confirmation: same dialog style as deleting a survey */}
       {deleting && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[2px] flex items-center justify-center z-50">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-ai-provider-title"
-            className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700"
+            className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in"
           >
-            <h2 id="delete-ai-provider-title" className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 id="delete-ai-provider-title" className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
               Delete AI provider
             </h2>
             <p className="text-gray-700 dark:text-gray-300 mb-4">
@@ -276,7 +276,7 @@ const AIProvidersSection: React.FC = () => {
               Its stored key is deleted and cannot be recovered.
             </p>
             {deleteError && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
+              <div className="p-3 text-13 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
                 <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>
               </div>
             )}
@@ -284,7 +284,7 @@ const AIProvidersSection: React.FC = () => {
               <button
                 onClick={() => setDeleting(null)}
                 disabled={isDeleting}
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-sm font-medium"
+                className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
               >
                 Cancel
               </button>

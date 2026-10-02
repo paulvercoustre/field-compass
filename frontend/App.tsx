@@ -11,6 +11,8 @@ import SurveySettingsPage from './pages/SurveySettingsPage';
 import UserSettingsPage from './pages/UserSettingsPage';
 import LoginPage from './pages/LoginPage';
 import Sidebar from './components/Sidebar';
+import { Spinner } from './components/Spinner';
+import { ChartIcon, ListIcon, SettingsIcon, TargetIcon, UsersIcon } from './components/ui/icons';
 
 type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'qualityOverview' | 'createSurvey' | 'settings' | 'userSettings';
 
@@ -45,8 +47,8 @@ const RequiresSurvey: React.FC<{ view: View; children: React.ReactNode }> = ({ v
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">No survey selected</p>
-        <p className="text-gray-500 text-sm">
+        <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">No survey selected</p>
+        <p className="text-gray-500 dark:text-gray-400 text-13">
           Please select a survey from the sidebar to view its settings.
         </p>
       </div>
@@ -59,9 +61,12 @@ const SurveyNameInHeader: React.FC = () => {
   const { selectedSurvey } = useSurvey();
   if (!selectedSurvey) return null;
   return (
-    <h2 className="text-base font-semibold text-gray-900 dark:text-white truncate max-w-[200px] sm:max-w-xs">
-      {selectedSurvey.survey_name}
-    </h2>
+    <div className="hidden min-w-0 flex-shrink-0 items-center gap-4 sm:flex">
+      <h2 className="max-w-[160px] truncate text-sm font-semibold tracking-tight text-gray-900 dark:text-white sm:max-w-[260px]">
+        {selectedSurvey.survey_name}
+      </h2>
+      <span className="h-5 w-px bg-gray-200 dark:bg-gray-800" aria-hidden="true" />
+    </div>
   );
 };
 
@@ -77,6 +82,9 @@ const AppContent: React.FC = () => {
   
   const [dashboardFilters, setDashboardFilters] = useState<FilterState>({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    // On a phone-width screen an open sidebar covers most of the page, so
+    // start collapsed there whatever was saved; it is one tap to open.
+    if (window.matchMedia('(max-width: 767px)').matches) return false;
     const saved = localStorage.getItem('sidebarOpen');
     return saved !== null ? saved === 'true' : true;
   });
@@ -112,11 +120,8 @@ const AppContent: React.FC = () => {
   // Show loading state while checking auth
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
+      <div className="flex items-center justify-center h-screen bg-white dark:bg-gray-950">
+        <Spinner />
       </div>
     );
   }
@@ -126,21 +131,30 @@ const AppContent: React.FC = () => {
     return <LoginPage onLoginSuccess={() => setView('dashboard')} />;
   }
 
-  const NavButton: React.FC<{ currentView: View; targetView: View; onClick: () => void; children: React.ReactNode }> = ({
+  const NavButton: React.FC<{ currentView: View; targetView: View; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }> = ({
     currentView,
     targetView,
     onClick,
+    icon,
     children,
   }) => {
     const isActive = currentView === targetView;
-    const classes = `px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-      isActive
-        ? 'bg-indigo-600 text-white'
-        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-    }`;
+    // The underline sits on the header's bottom border, as in a tab strip.
     return (
-      <button onClick={onClick} className={classes}>
-        {children}
+      <button
+        onClick={onClick}
+        aria-current={isActive ? 'page' : undefined}
+        className={`group relative flex h-full flex-shrink-0 items-center px-1 text-13 font-medium transition-colors ${
+          isActive
+            ? 'text-gray-900 dark:text-white'
+            : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+        }`}
+      >
+        <span className="flex items-center gap-2 rounded-md px-2 py-1.5 group-hover:bg-gray-100 dark:group-hover:bg-gray-800/70">
+          <span className={isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300'}>{icon}</span>
+          {children}
+        </span>
+        {isActive && <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gray-900 dark:bg-white" aria-hidden="true" />}
       </button>
     );
   };
@@ -182,7 +196,7 @@ const AppContent: React.FC = () => {
 
   return (
     <SurveyProvider>
-      <div className="flex h-full font-sans text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900">
+      <div className="flex h-full font-sans text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-950">
         <Sidebar 
           onAddSurvey={handleAddSurvey} 
           onSurveySelect={handleSurveySelect}
@@ -195,24 +209,24 @@ const AppContent: React.FC = () => {
         />
         
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 min-h-16 py-3 sm:py-0 sm:h-16 px-4">
+          <header className="flex-shrink-0 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+            <div className="flex h-12 items-stretch gap-4 px-4">
               <SurveyNameInHeader />
-              <nav className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
-                <NavButton currentView={view} targetView="dashboard" onClick={() => { setDashboardFilters({}); setView('dashboard'); }}>
+              <nav aria-label="Survey views" className="-mb-px flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto">
+                <NavButton currentView={view} targetView="dashboard" icon={<ListIcon />} onClick={() => { setDashboardFilters({}); setView('dashboard'); }}>
                   Submissions
                 </NavButton>
-                <NavButton currentView={view} targetView="qualityOverview" onClick={() => setView('qualityOverview')}>
-                  Data Quality
+                <NavButton currentView={view} targetView="qualityOverview" icon={<ChartIcon />} onClick={() => setView('qualityOverview')}>
+                  Data quality
                 </NavButton>
-                <NavButton currentView={view} targetView="dataCollectionProgress" onClick={() => setView('dataCollectionProgress')}>
-                  Data Collection Progress
+                <NavButton currentView={view} targetView="dataCollectionProgress" icon={<TargetIcon />} onClick={() => setView('dataCollectionProgress')}>
+                  Progress
                 </NavButton>
-                <NavButton currentView={view} targetView="enumeratorPerformance" onClick={() => setView('enumeratorPerformance')}>
-                  Field Team
+                <NavButton currentView={view} targetView="enumeratorPerformance" icon={<UsersIcon />} onClick={() => setView('enumeratorPerformance')}>
+                  Field team
                 </NavButton>
-                <NavButton currentView={view} targetView="settings" onClick={() => setView('settings')}>
-                  Survey Settings
+                <NavButton currentView={view} targetView="settings" icon={<SettingsIcon />} onClick={() => setView('settings')}>
+                  Settings
                 </NavButton>
               </nav>
             </div>

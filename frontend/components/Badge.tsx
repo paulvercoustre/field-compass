@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { QAStatus } from '../types';
 
@@ -7,21 +6,33 @@ interface BadgeProps {
   size?: 'sm' | 'lg';
 }
 
+type Tone = 'green' | 'red' | 'amber' | 'blue' | 'gray';
+
+// One soft tint per status, with a dot in the full hue. The dot carries the
+// colour, so the text can stay dark enough to read.
+const tones: Record<Tone, { pill: string; dot: string }> = {
+  green: { pill: 'bg-emerald-50 text-emerald-800 ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20', dot: 'bg-emerald-500' },
+  red: { pill: 'bg-rose-50 text-rose-800 ring-rose-600/15 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-400/20', dot: 'bg-rose-500' },
+  amber: { pill: 'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20', dot: 'bg-amber-500' },
+  blue: { pill: 'bg-sky-50 text-sky-800 ring-sky-600/15 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-400/20', dot: 'bg-sky-500' },
+  gray: { pill: 'bg-gray-50 text-gray-700 ring-gray-500/15 dark:bg-gray-500/10 dark:text-gray-300 dark:ring-gray-400/20', dot: 'bg-gray-400' },
+};
+
 // Extended status map to handle both new and old status values
-const statusStyles: Record<string, string> = {
-  [QAStatus.PENDING_APPROVAL]: 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200',
-  [QAStatus.FLAGGED]: 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200',
-  [QAStatus.APPROVED]: 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200',
-  [QAStatus.REJECTED]: 'bg-orange-100 dark:bg-orange-800 text-orange-800 dark:text-orange-200',
+const statusTone: Record<string, Tone> = {
+  [QAStatus.PENDING_APPROVAL]: 'blue',
+  [QAStatus.FLAGGED]: 'red',
+  [QAStatus.APPROVED]: 'green',
+  [QAStatus.REJECTED]: 'red',
   // Kobo validation status values
-  'Approved': 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200',
-  'Not Approved': 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200',
-  'On Hold': 'bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200',
-  'Not Reviewed': 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
+  'Approved': 'green',
+  'Not Approved': 'red',
+  'On Hold': 'amber',
+  'Not Reviewed': 'gray',
   // Backward compatibility with old status values
-  'HFC_FLAGGED': 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200',
-  'PENDING_QA': 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200',
-  'PENDING_RE_QA': 'bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200',
+  'HFC_FLAGGED': 'red',
+  'PENDING_QA': 'blue',
+  'PENDING_RE_QA': 'amber',
 };
 
 const statusText: Record<string, string> = {
@@ -40,25 +51,30 @@ const statusText: Record<string, string> = {
   'PENDING_RE_QA': 'Re-QA Pending',
 };
 
+/** The dot alone, for places where a full pill would be too loud. */
+export const statusDotClass = (status: string): string => tones[statusTone[status] ?? 'gray'].dot;
+
 export const Badge: React.FC<BadgeProps> = ({ status, size = 'sm' }) => {
-  const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm';
-  const style = statusStyles[status] || 'bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200';
+  const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs gap-1.5' : 'px-2.5 py-1 text-13 gap-2';
+  const tone = tones[statusTone[status] ?? 'gray'];
   const text = statusText[status] || status;
   return (
-    <span className={`inline-flex items-center font-semibold rounded-full ${sizeClasses} ${style}`}>
+    <span className={`inline-flex flex-shrink-0 items-center whitespace-nowrap font-medium rounded-full ring-1 ring-inset ${sizeClasses} ${tone.pill}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden="true" />
       {text}
     </span>
   );
 };
 
-export const EditIcon: React.FC = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" />
+export const EditIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4 mr-1' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
     </svg>
 );
 
-export const AlertIcon: React.FC = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+export const AlertIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4 mr-1' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+        <path d="M12 9v4M12 17h.01" />
     </svg>
 );

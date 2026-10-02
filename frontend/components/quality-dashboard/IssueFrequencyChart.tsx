@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { IssueFrequency } from '../../types';
+import { axisProps, tooltipProps, CHART_ACCENT } from '../charts/chartTheme';
 
 interface IssueFrequencyChartProps {
   data: IssueFrequency[];
@@ -22,20 +23,19 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
     affected: item.affected_submissions,
   }));
 
-  const barColor = '#6366f1'; // indigo-500
-  const barHoverColor = '#4f46e5'; // indigo-600
+  const barColor = CHART_ACCENT;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-          Issue Frequency
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+          Issue frequency
         </h3>
         <div className="flex items-center gap-2">
           <select
             value={displayLimit}
             onChange={(e) => setDisplayLimit(e.target.value === 'all' ? 'all' : parseInt(e.target.value) as DisplayLimit)}
-            className="text-sm bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-700 dark:text-gray-300"
+            className="h-7 text-xs font-medium bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs pl-2.5 pr-7 py-0 text-gray-700 dark:text-gray-200"
           >
             <option value={5}>Top 5</option>
             <option value={10}>Top 10</option>
@@ -46,7 +46,7 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
       </div>
       
       {data.length === 0 ? (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+        <div className="text-center py-8 text-13 text-gray-500 dark:text-gray-400">
           No issues found
         </div>
       ) : (
@@ -56,24 +56,18 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
               <BarChart
                 data={chartData}
                 layout="vertical"
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                margin={{ top: 0, right: 16, left: 8, bottom: 0 }}
               >
-                <XAxis type="number" stroke="#9ca3af" fontSize={12} />
+                <XAxis type="number" {...axisProps} allowDecimals={false} />
                 <YAxis 
                   type="category" 
                   dataKey="name" 
-                  width={150} 
-                  stroke="#9ca3af" 
-                  fontSize={12}
-                  tick={{ fill: '#9ca3af' }}
+                  width={170} 
+                  {...axisProps}
+                  tick={{ fill: 'var(--fc-chart-tick)', fontSize: 12 }}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
-                    borderRadius: '0.5rem',
-                    color: '#f3f4f6',
-                  }}
+                  {...tooltipProps}
                   formatter={(value: number, name: string, props: any) => {
                     if (name === 'count') {
                       return [`${value} occurrences (${props.payload.percentage}%)`, 'Count'];
@@ -85,6 +79,7 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
                 <Bar 
                   dataKey="count" 
                   radius={[0, 4, 4, 0]}
+                  barSize={18}
                   cursor={onIssueClick ? 'pointer' : 'default'}
                   onClick={(data) => onIssueClick && onIssueClick(data.name)}
                 >

@@ -4,6 +4,8 @@ import { Submission, QualityIssue } from '../types';
 import SubmissionDataViewer from './SubmissionDataViewer';
 import { Spinner } from './Spinner';
 import { Badge, EditIcon, AlertIcon } from './Badge';
+import Banner from './ui/Banner';
+import { ExternalLinkIcon } from './ui/icons';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, SurveyConfig, getValidationRules, ValidationRule } from '../services/progressApi';
 import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
@@ -240,8 +242,9 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
   if (!submission) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
-        <p>Select a submission from the queue to view details.</p>
+      <div className="flex flex-col items-center justify-center h-full gap-1 text-center">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">No submission selected</p>
+        <p className="text-13 text-gray-500 dark:text-gray-400">Choose one from the queue to see its answers and checks.</p>
       </div>
     );
   }
@@ -479,63 +482,61 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-900 min-w-0">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Submission <span className="font-mono">#{_id}</span></h2>
-        
-        {/* Inline metadata badges */}
-        <div className="flex items-center gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
-          {has_edit_history && (
-            <span className="flex items-center gap-1">
-              <EditIcon />
-              Edited
-            </span>
-          )}
-          {data_quality_issues.length > 0 && (
-            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-              <AlertIcon />
-              {data_quality_issues.length} issue{data_quality_issues.length > 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
+    <div className="flex flex-col h-full bg-white dark:bg-gray-950 min-w-0">
+      <div className="px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+          <div className="min-w-0">
+            <h2 className="tabular text-lg font-semibold tracking-tight text-gray-900 dark:text-white">
+              <span className="font-normal text-gray-400 dark:text-gray-500">Submission</span> #{_id}
+            </h2>
 
-        
-        {/* Action row */}
-        <div className="flex items-center gap-2 mt-3">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-            Actions:
-          </span>
-          
-          {/* Edit in Kobo button - compact */}
-          {isLoadingKoboUrl ? (
-            <div className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
-              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span>Loading...</span>
-            </div>
-          ) : koboEditUrl ? (
-            <a
-              href={koboEditUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-              Edit in Kobo
-            </a>
-          ) : null}
-          
-          {/* Validation dropdown */}
-          <ValidationStatusDropdown 
-            currentStatus={kobo_validation_status}
-            onChange={handleValidationStatusChange}
-            isUpdating={isUpdatingValidation}
-            disabled={isUpdatingValidation}
-          />
+            {/* Inline metadata badges */}
+            {(has_edit_history || data_quality_issues.length > 0) && (
+              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-13 text-gray-500 dark:text-gray-400">
+                {data_quality_issues.length > 0 && (
+                  <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+                    <AlertIcon className="w-3.5 h-3.5" />
+                    {data_quality_issues.length} issue{data_quality_issues.length > 1 ? 's' : ''}
+                  </span>
+                )}
+                {has_edit_history && (
+                  <span className="flex items-center gap-1.5">
+                    <EditIcon className="w-3.5 h-3.5" />
+                    Edited
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Action row */}
+          <div className="flex items-center gap-2">
+            {/* Edit in Kobo button - compact */}
+            {isLoadingKoboUrl ? (
+              <span className="inline-flex h-7 items-center gap-1.5 px-2.5 text-xs font-medium text-gray-400 dark:text-gray-500">
+                <Spinner size="sm" className="text-current" />
+                Loading…
+              </span>
+            ) : koboEditUrl ? (
+              <a
+                href={koboEditUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-7 items-center gap-1.5 px-2.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-xs hover:bg-gray-50 dark:text-gray-200 dark:bg-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 transition-colors"
+              >
+                <ExternalLinkIcon className="w-3.5 h-3.5" />
+                Edit in Kobo
+              </a>
+            ) : null}
+
+            {/* Validation dropdown */}
+            <ValidationStatusDropdown 
+              currentStatus={kobo_validation_status}
+              onChange={handleValidationStatusChange}
+              isUpdating={isUpdatingValidation}
+              disabled={isUpdatingValidation}
+            />
+          </div>
         </div>
 
         {/* Success/Error messages */}
@@ -549,25 +550,23 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
         {/* Quality issues warning */}
         {data_quality_issues.length > 0 && (
           kobo_validation_status === 'Approved' ? (
-            <div className="mt-2 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded flex items-center gap-1.5">
-              <AlertIcon className="w-3.5 h-3.5" />
+            <Banner tone="warning" className="mt-3">
               This submission has {data_quality_issues.length} quality issue{data_quality_issues.length > 1 ? 's' : ''} but is marked as approved
-            </div>
+            </Banner>
           ) : !kobo_validation_status && (
-            <div className="mt-2 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded flex items-center gap-1.5">
-              <AlertIcon className="w-3.5 h-3.5" />
+            <Banner tone="warning" className="mt-3">
               Review {data_quality_issues.length} quality issue{data_quality_issues.length > 1 ? 's' : ''} below before validation
-            </div>
+            </Banner>
           )
         )}
       </div>
 
-      <div className="flex-1 p-4 overflow-y-auto min-w-0">
+      <div className="flex-1 px-6 py-5 overflow-y-auto min-w-0">
         {/* Metadata Panel */}
         {metadata && (
           <div className="mb-6">
-            <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Submission Overview</h3>
-            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+            <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Submission Overview</h3>
+            <div className="p-4 bg-gray-50/70 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Enumerator - Always show if field is configured */}
               {metadata.enumeratorField && (
@@ -676,7 +675,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                       type="button"
                       onClick={handleSaveReviewerNotes}
                       disabled={isSavingReviewerNotes}
-                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {isSavingReviewerNotes ? 'Saving...' : 'Save notes'}
                     </button>
@@ -694,12 +693,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
         {/* General Quality Checks Section - Collapsed when all passed, full list when any failed */}
         <div className="mb-6">
             <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">General Quality Checks</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">General Quality Checks</h3>
                 {enabledGeneralChecks.length > 0 && (
-                    <span className={`text-sm font-medium ${
+                    <span className={`tabular text-xs font-medium ${
                         allGeneralPassed
-                            ? 'text-green-700 dark:text-green-400'
-                            : 'text-orange-700 dark:text-orange-400'
+                            ? 'text-gray-500 dark:text-gray-400'
+                            : 'text-amber-800 dark:text-amber-300'
                     }`}>
                         {`${generalPassedCount}/${enabledGeneralChecks.length} tests passed`}
                     </span>
@@ -738,10 +737,10 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                             return (
                                 <div
                                     key={check.id}
-                                    className={`p-4 rounded-md border ${
+                                    className={`px-4 py-3 rounded-lg border ${
                                         passed
-                                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/50'
-                                            : 'bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50'
+                                            ? 'bg-white dark:bg-gray-900/60 border-gray-200 dark:border-gray-800'
+                                            : 'bg-amber-50/60 dark:bg-amber-500/[0.06] border-amber-200 dark:border-amber-500/25'
                                     }`}
                                 >
                                     <div className="flex items-start justify-between">
@@ -752,15 +751,15 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                                     onClick={() => toggleGeneralCheckExpansion(check.id)}
                                                     className={`flex-shrink-0 p-1 rounded transition-colors ${
                                                         passed
-                                                            ? 'hover:bg-green-100 dark:hover:bg-green-900/40'
-                                                            : 'hover:bg-orange-100 dark:hover:bg-orange-900/40'
+                                                            ? 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                                                            : 'hover:bg-amber-100 dark:hover:bg-amber-900/40'
                                                     }`}
                                                     aria-label={isExpanded ? 'Collapse' : 'Expand'}
                                                 >
                                                     <svg
                                                         className={`w-4 h-4 transition-transform ${
                                                             isExpanded ? 'rotate-180' : ''
-                                                        } ${passed ? 'text-green-700 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}
+                                                        } ${passed ? 'text-gray-400' : 'text-amber-700 dark:text-amber-400'}`}
                                                         fill="none"
                                                         stroke="currentColor"
                                                         viewBox="0 0 24 24"
@@ -769,7 +768,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                                     </svg>
                                                 </button>
                                                 <h4 className={`font-semibold text-sm ${
-                                                    passed ? 'text-green-800 dark:text-green-300' : 'text-orange-800 dark:text-orange-300'
+                                                    passed ? 'text-gray-800 dark:text-gray-200' : 'text-amber-900 dark:text-amber-200'
                                                 }`}>
                                                     {check.label}
                                                 </h4>
@@ -778,17 +777,17 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                         <div className="flex items-center gap-2 ml-4">
                                             {passed ? (
                                                 <>
-                                                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                     </svg>
-                                                    <span className="text-sm font-medium text-green-700 dark:text-green-400">Passed</span>
+                                                    <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Passed</span>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                     </svg>
-                                                    <span className="text-sm font-medium text-red-700 dark:text-red-400">Flagged</span>
+                                                    <span className="text-xs font-medium text-red-700 dark:text-red-400">Flagged</span>
                                                 </>
                                             )}
                                         </div>
@@ -797,7 +796,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                     {shouldShowDetails && (
                                         <div className="mt-3 space-y-2">
                                             {!passed && issue && (
-                                                <p className="text-sm text-orange-700 dark:text-orange-400">{issue.message}</p>
+                                                <p className="text-sm text-amber-800 dark:text-amber-300">{issue.message}</p>
                                             )}
                                             {!passed && issue ? (
                                                 <>
@@ -843,12 +842,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
         {validationRules.length > 0 && (
             <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Custom Quality Checks</h3>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Custom Quality Checks</h3>
                     {!isLoadingRules && (
-                        <span className={`text-sm font-medium ${
+                        <span className={`tabular text-xs font-medium ${
                             allPassed
-                                ? 'text-green-700 dark:text-green-400'
-                                : 'text-orange-700 dark:text-orange-400'
+                                ? 'text-gray-500 dark:text-gray-400'
+                                : 'text-amber-800 dark:text-amber-300'
                         }`}>
                             {passedCount}/{validationRules.length} tests passed
                         </span>
@@ -890,10 +889,10 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                             return (
                                 <div
                                     key={rule.rule_id}
-                                    className={`p-4 rounded-md border ${
+                                    className={`px-4 py-3 rounded-lg border ${
                                         passed
-                                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/50'
-                                            : 'bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50'
+                                            ? 'bg-white dark:bg-gray-900/60 border-gray-200 dark:border-gray-800'
+                                            : 'bg-amber-50/60 dark:bg-amber-500/[0.06] border-amber-200 dark:border-amber-500/25'
                                     }`}
                                 >
                                     <div className="flex items-start justify-between">
@@ -903,15 +902,15 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                                     onClick={() => toggleRuleExpansion(rule.rule_id)}
                                                     className={`flex-shrink-0 p-1 rounded transition-colors ${
                                                         passed
-                                                            ? 'hover:bg-green-100 dark:hover:bg-green-900/40'
-                                                            : 'hover:bg-orange-100 dark:hover:bg-orange-900/40'
+                                                            ? 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                                                            : 'hover:bg-amber-100 dark:hover:bg-amber-900/40'
                                                     }`}
                                                     aria-label={isExpanded ? 'Collapse' : 'Expand'}
                                                 >
                                                     <svg
                                                         className={`w-4 h-4 transition-transform ${
                                                             isExpanded ? 'rotate-180' : ''
-                                                        } ${passed ? 'text-green-700 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}
+                                                        } ${passed ? 'text-gray-400' : 'text-amber-700 dark:text-amber-400'}`}
                                                         fill="none"
                                                         stroke="currentColor"
                                                         viewBox="0 0 24 24"
@@ -922,7 +921,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                                 <h4 className={`font-semibold text-sm ${
                                                     passed
                                                         ? 'text-green-800 dark:text-green-300'
-                                                        : 'text-orange-800 dark:text-orange-300'
+                                                        : 'text-amber-900 dark:text-amber-200'
                                                 }`}>
                                                     {rule.rule_name || ruleName}
                                                 </h4>
@@ -931,17 +930,17 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                         <div className="flex items-center gap-2 ml-4">
                                             {passed ? (
                                                 <>
-                                                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                     </svg>
-                                                    <span className="text-sm font-medium text-green-700 dark:text-green-400">Passed</span>
+                                                    <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Passed</span>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                     </svg>
-                                                    <span className="text-sm font-medium text-red-700 dark:text-red-400">Flagged</span>
+                                                    <span className="text-xs font-medium text-red-700 dark:text-red-400">Flagged</span>
                                                 </>
                                             )}
                                         </div>
@@ -949,7 +948,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                     
                                     {/* Show issue message if failed */}
                                     {!passed && issue && (
-                                        <p className="text-sm mt-3 text-orange-700 dark:text-orange-400">
+                                        <p className="text-sm mt-3 text-amber-800 dark:text-amber-300">
                                             {issue.message || rule.rule_data.issue}
                                         </p>
                                     )}
@@ -1005,7 +1004,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
           }[aiCheck.tone];
           return (
         <div className="mb-6">
-          <h3 className="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Qualitative Quality Checks</h3>
+          <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Qualitative Quality Checks</h3>
           <div className="p-4 rounded-md border bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700">
             <div className="flex flex-wrap items-center gap-2 mb-3" role="status">
               {aiCheck.tone === 'busy' && (
@@ -1104,7 +1103,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
             return (
                 <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3">
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Outlier Checks</h3>
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Outlier Checks</h3>
                         <button
                             type="button"
                             onClick={() => setShowOutlierDetails(!showOutlierDetails)}
@@ -1146,30 +1145,30 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                             return (
                                 <div
                                     key={`${issue.check}-${index}`}
-                                    className="p-4 rounded-md border bg-orange-50 dark:bg-orange-900/50 border-orange-200 dark:border-orange-700/50"
+                                    className="px-4 py-3 rounded-lg border bg-amber-50/60 dark:bg-amber-500/[0.06] border-amber-200 dark:border-amber-500/25"
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2">
-                                                <svg className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg className="w-5 h-5 text-amber-600 dark:text-amber-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                                 </svg>
-                                                <h4 className="font-semibold text-sm text-orange-800 dark:text-orange-300">
+                                                <h4 className="font-semibold text-sm text-amber-900 dark:text-amber-200">
                                                     {`Outlier: ${questionLabel || variableName || issue.field}`}
                                                 </h4>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 ml-4">
-                                            <svg className="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-5 h-5 text-amber-600 dark:text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                             </svg>
-                                            <span className="text-sm font-medium text-orange-700 dark:text-orange-400">Outlier Detected</span>
+                                            <span className="text-sm font-medium text-amber-800 dark:text-amber-300">Outlier Detected</span>
                                         </div>
                                     </div>
 
                                     {/* Statistical context for outliers */}
                                     <div className="mt-3 space-y-2">
-                                        <div className="pl-3 border-l-2 border-orange-300 dark:border-orange-600 space-y-2">
+                                        <div className="pl-3 border-l-2 border-amber-300 dark:border-amber-600 space-y-2">
                                             {questionLabel && (
                                                 <div className="text-sm">
                                                     <span className="font-medium text-gray-700 dark:text-gray-300">
@@ -1234,14 +1233,14 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                                                 <>
                                                                     <div className="h-full flex-shrink-0 bg-gray-300 dark:bg-gray-600" style={{ width: rangePx }} />
                                                                     <div
-                                                                        className={`h-full flex-shrink-0 ${isExtreme ? 'bg-red-500 dark:bg-red-600' : 'bg-orange-400 dark:bg-orange-500'}`}
+                                                                        className={`h-full flex-shrink-0 ${isExtreme ? 'bg-red-500 dark:bg-red-600' : 'bg-amber-400 dark:bg-amber-500'}`}
                                                                         style={{ width: overflowPx }}
                                                                     />
                                                                 </>
                                                             ) : (
                                                                 <>
                                                                     <div
-                                                                        className={`h-full flex-shrink-0 ${isExtreme ? 'bg-red-500 dark:bg-red-600' : 'bg-orange-400 dark:bg-orange-500'}`}
+                                                                        className={`h-full flex-shrink-0 ${isExtreme ? 'bg-red-500 dark:bg-red-600' : 'bg-amber-400 dark:bg-amber-500'}`}
                                                                         style={{ width: overflowPx }}
                                                                     />
                                                                     <div className="h-full flex-shrink-0 bg-gray-300 dark:bg-gray-600" style={{ width: rangePx }} />

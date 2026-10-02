@@ -79,14 +79,14 @@ const AIProviderDialog: React.FC<AIProviderDialogProps> = ({ connection, onClose
   const canSave = Boolean(baseUrl.trim() && checkModel.trim() && (!needsKey || apiKey.trim()));
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="ai-provider-dialog-title"
-        className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full border border-gray-200 dark:border-gray-700 max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-lg w-full border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in max-h-[90vh] overflow-y-auto"
       >
-        <h2 id="ai-provider-dialog-title" className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+        <h2 id="ai-provider-dialog-title" className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-1">
           {target ? 'Edit AI provider' : 'Add an AI provider'}
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
@@ -187,7 +187,7 @@ const AIProviderDialog: React.FC<AIProviderDialogProps> = ({ connection, onClose
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+            className="px-4 py-2 text-sm font-medium bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800"
           >
             {saved ? 'Close' : 'Cancel'}
           </button>
@@ -195,7 +195,7 @@ const AIProviderDialog: React.FC<AIProviderDialogProps> = ({ connection, onClose
             type="button"
             onClick={handleSave}
             disabled={isSaving || !canSave}
-            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-indigo-300 dark:disabled:bg-indigo-800 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? 'Saving and testing…' : 'Save and test'}
           </button>

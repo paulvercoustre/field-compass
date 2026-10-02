@@ -107,9 +107,9 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700 w-full flex flex-col">
+    <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800 w-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
           {showBottom ? 'Bottom 5' : 'Top 5'} Performers
         </h3>
         <button
