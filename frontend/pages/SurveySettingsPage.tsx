@@ -14,6 +14,7 @@ import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import InfoTip from '../components/ui/InfoTip';
+import SurveyAIUsage from '../components/ai/SurveyAIUsage';
 import { CORE_IDENTIFIER_HELP } from '../constants/coreIdentifiers';
 import { getKoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
@@ -2376,6 +2377,7 @@ const SurveySettingsPage: React.FC = () => {
                 )}
               </div>
               <div className="space-y-4">
+                {selectedSurvey && canEditSurvey && <SurveyAIUsage surveyId={selectedSurvey.survey_id} />}
                 <div className="flex items-start">
                   <div className="flex h-5 items-center">
                     <input

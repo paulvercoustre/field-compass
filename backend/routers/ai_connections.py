@@ -15,11 +15,20 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import AIConnection, SurveyConfig, User
+from database.models import AIConnection, AIUsage, SurveyConfig, User
+from services.ai_allowance import (
+    allowance_enabled,
+    checks_in_flight,
+    checks_per_survey_month,
+    checks_used,
+    month_start,
+    next_month_start,
+)
 from services.ai_endpoints import EndpointRejected, validate_base_url
-from services.ai_providers import UNTESTED, run_connection_test
+from services.ai_providers import UNTESTED, run_connection_test, survey_connection
 from services.auth import encrypt_api_key, get_current_active_user
 from services.database import get_db
 from services.permissions import require_survey_access
@@ -258,3 +267,67 @@ async def set_survey_connection(
         f"AI connection {connection.connection_id}" if connection else "the operator key",
     )
     return {"ai_connection": connection_summary(connection) if connection else None}
+
+
+@router.get("/surveys/{survey_id}/ai-usage")
+async def survey_ai_usage(
+    survey_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    This month's AI calls for a survey, and its free allowance when it uses
+    the operator's key. Token counts are as reported by the provider; no cost
+    is computed, since prices differ by provider and change.
+    """
+    try:
+        survey_uuid = UUID(survey_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid survey_id format: {survey_id}")
+    survey = require_survey_access(db, current_user, survey_uuid, min_level="editor")
+
+    since = month_start()
+    rows = (
+        db.query(
+            AIUsage.feature,
+            AIUsage.outcome,
+            func.count(AIUsage.usage_id),
+            func.coalesce(func.sum(AIUsage.input_tokens), 0),
+            func.coalesce(func.sum(AIUsage.output_tokens), 0),
+        )
+        .filter(AIUsage.survey_id == survey_uuid, AIUsage.created_at >= since)
+        .group_by(AIUsage.feature, AIUsage.outcome)
+        .all()
+    )
+    by_feature: dict[str, dict] = {}
+    for feature, outcome, calls, input_tokens, output_tokens in rows:
+        entry = by_feature.setdefault(
+            feature,
+            {"feature": feature, "calls": 0, "failed": 0, "input_tokens": 0, "output_tokens": 0},
+        )
+        entry["calls"] += calls
+        entry["input_tokens"] += int(input_tokens)
+        entry["output_tokens"] += int(output_tokens)
+        if outcome != "ok":
+            entry["failed"] += calls
+
+    connection = survey_connection(db, survey)
+    allowance = None
+    if connection is None:
+        used = checks_used(db, survey_uuid)
+        in_flight = checks_in_flight(db, survey_uuid)
+        limit = checks_per_survey_month() if allowance_enabled() else 0
+        allowance = {
+            "limit": limit,
+            "used": used,
+            "in_flight": in_flight,
+            "remaining": max(0, limit - used - in_flight),
+        }
+
+    return {
+        "month": since.strftime("%Y-%m"),
+        "resets_at": next_month_start().isoformat() + "Z",
+        "provider": connection_summary(connection) if connection else None,
+        "allowance": allowance,
+        "by_feature": sorted(by_feature.values(), key=lambda entry: entry["feature"]),
+    }

@@ -242,6 +242,10 @@ class AIUsage(Base):
         ForeignKey("ai_connections.connection_id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Who asked, for user-triggered calls (rule writing); NULL for background checks.
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 

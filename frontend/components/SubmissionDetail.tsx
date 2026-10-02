@@ -87,6 +87,10 @@ const describeAiCheck = (
       ? { tone: 'ok', title: 'Checked.' }
       : { tone: 'ok', title: 'Checked — no problems found in the selected answers.' };
   }
+  if (status === 'not_run_allowance') {
+    // Stored as "allowance: This survey has used its free AI checks for October. ..."
+    return { tone: 'warn', title: providerMessage ?? 'Not checked: this survey has used its free AI checks for this month.' };
+  }
   if (status === 'failed') {
     const reasons: Record<string, string> = {
       auth: "Couldn't check: the AI provider rejected the key.",

@@ -580,6 +580,8 @@ export interface ETLStats {
   validation_reasons?: Record<string, number>;  // Breakdown of why submissions were validated
   llm_queued?: number;
   llm_skipped?: number;
+  llm_not_run_allowance?: number;  // AI checks held back: free allowance used for the month
+  llm_paused?: number;  // AI checks not sent: the survey's own provider is paused
   hfc_flagged: number;
   errors: number;
   duration_seconds: number;

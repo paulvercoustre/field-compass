@@ -351,24 +351,36 @@ to users as "AI checks are temporarily unavailable".
 
 ## 8. UI design
 
-### 8.1 Survey Settings › AI provider
+### 8.1 Account Settings › AI providers
 
-A new card at the top of the Qualitative Checks section:
+Providers are managed in one place, Account Settings, not per survey. Each
+provider shows its status, the reason when it is not working, and the last
+four characters of its key, with **Surveys**, **Test**, **Edit** and
+**Delete**:
 
 ```
-AI provider
-(•) Field Compass free allowance      143 of 200 checks used in October
-( ) Your own provider                  [ WFP Azure — East Africa ▾ ]  ✓ Connected
-                                       [ + Add a provider ]  [ Test ]
-
-What is sent: the answers to the questions you select below, with their
-question labels. Sent to: <provider name> (<base URL host>).
+AI providers                                              [ Add a provider ]
+Test OpenAI  [Not working]
+OpenAI · api.openai.com · gpt-4o-mini · key ••••2222
+The provider rejected the key. AI checks on its surveys are paused until it
+passes a test.
+Used by: RFS Market Assessment
+[ Surveys ] [ Test ] [ Edit ] [ Delete ]
+  ┌ Surveys that use Test OpenAI ─────────────────────────────┐
+  │ [x] RFS Market Assessment                                  │
+  │ [ ] MCBP Market Assessment - LLA   (uses WFP Azure)        │
+  │ For these surveys, the answers to the questions selected   │
+  │ for AI checks are sent, with their question labels, to     │
+  │ Test OpenAI (api.openai.com).                              │
+  └────────────────────────────────────────────────────────────┘
 ```
 
-Only the survey owner can change the selection. Editors and viewers see the
-current provider and its status.
+**Surveys** lists the surveys the user owns; ticking one moves it onto this
+provider, unticking puts it back on the allowance. **Delete** uses the same
+in-app confirmation dialog as deleting a survey and names the surveys that
+go back to the allowance.
 
-### 8.2 Add / edit a provider (dialog; also in Account Settings)
+### 8.2 Add / edit a provider (dialog)
 
 Fields: Provider (preset list) → Base URL (pre-filled, editable for Azure,
 self-hosted and custom) → API key (write-only; shows `••••abcd` once saved) →
@@ -377,7 +389,8 @@ Model for checks → Model for rule writing (optional) → **Save and test**.
 The test result is shown in place: "Connected · structured output supported ·
 replied in 1.2 s", or the plain-language error and what to check. Saving
 with a failing test is allowed (an endpoint may be down briefly), with the
-status shown as failing.
+status shown as failing; saving again edits that provider rather than
+adding a second one.
 
 ### 8.3 Submission detail — AI section
 
@@ -409,10 +422,13 @@ allowance when on the operator key.
 
 ### 8.6 Usage
 
-The AI provider card links to a small usage view for the current month:
-calls and tokens by feature, and failures by category. Tokens are shown as
-reported by the provider; no cost is computed, since prices differ by
-provider and change.
+Survey Settings › Qualitative Quality Checks opens with "AI use in
+<month>" (owners and editors): on the allowance, "143 of 200 checks used
+(12 in progress). Resets 1 November." with a bar that turns amber when used
+up; on the owner's provider, "Runs on <provider>, so there is no Field
+Compass limit". Below, calls, failures and tokens in / out by feature.
+Tokens are as reported by the provider; no cost is computed, since prices
+differ by provider and change.
 
 ## 9. Security
 
@@ -457,13 +473,19 @@ Configured by the operator; proposed defaults:
 | Variable | Default | Meaning |
 |---|---|---|
 | `AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH` | 200 | Qualitative checks per survey per calendar month (UTC) on the operator key |
-| `AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY` | 30 | Rule generations + suggestions per user per day on the operator key (replaces the per-IP 20/hour limit for these endpoints) |
+| `AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY` | 30 | Rule generations + suggestions per user per day on the operator key. The per-IP 20/hour limit stays as abuse protection |
 | `AI_ALLOWANCE_ENABLED` | `true` if `OPENAI_API_KEY` is set | With it off, AI features require a connection |
 
-Counting reads `ai_usage` (`connection_id IS NULL`). When a pull would exceed
+Counting reads `ai_usage` (`connection_id IS NULL`), and only calls that
+cost credit: `ok` and `bad_response`. A timeout or a rejected key spent
+nothing. Checks already queued or running are reserved against the
+allowance, so one large pull cannot overshoot it. When a pull would exceed
 the allowance, the first submissions in pull order are queued up to the
-limit and the rest are marked `not_run_allowance`. A survey with its own
-connection has no Field Compass limit; its provider's limits apply.
+limit and the rest are marked `not_run_allowance`; a later pull queues them
+once there is allowance again. Rule requests record the user
+(`ai_usage.user_id`, revision `0004`) and are refused with 429 once the
+daily limit is reached. A survey with its own connection has no Field
+Compass limit; its provider's limits apply.
 
 ## 11. Delivery plan
 
@@ -476,6 +498,17 @@ Each phase is shippable on its own, in this order.
 | **2. Bring your own provider** | `ai_connections`, `survey_configs.ai_connection_id`, endpoints (§6.3), connection test, URL validation, circuit breaker, Settings card and dialog | The core of option C |
 | **3. Allowance** | Allowance counting and enforcement, `not_run_allowance`, usage view, pull summary copy | Turns the operator cost into a configured ceiling |
 | **4. Rule builder review step** | F-24 B | Independent; can move earlier |
+
+**Status:** phases 0–3 are implemented on `claude/ai-provider-overhaul`.
+
+**Direction after phase 3.** Per-user keys stay, but as the option for
+advanced users rather than the main answer to cost. Most target users (field
+teams at agencies and NGOs) have no personal API key, and organisations buy
+AI centrally, often as Azure OpenAI run by IT. The next step is providers
+owned by an **organisation**, configured once by an admin, which needs an
+organisation concept in Field Compass first; large organisations can already
+self-host with their own `OPENAI_API_KEY` and `OPENAI_BASE_URL`. Users who
+bring their own key should use a dedicated key with a spending limit.
 
 ## 12. Testing
 
@@ -505,10 +538,12 @@ Each phase is shippable on its own, in this order.
 - Submissions already marked `success` by a swallowed failure cannot be told
   apart from real successes: no usage was recorded and the error only went to
   the logs. Phase 0 therefore adds an owner-only **Re-run AI checks** button
-  on the AI provider card, which clears `llm_rules_hash` for the survey so
-  the next pull re-queues every submission. Release notes point operators to
-  it for surveys that had AI checks on while the key was failing.
-- The per-IP rate limit on the rule endpoints stays until phase 3 replaces it.
+  in Survey Settings › Qualitative Quality Checks, which clears
+  `llm_rules_hash` for the survey so the next pull re-queues every
+  submission. Release notes point operators to it for surveys that had AI
+  checks on while the key was failing.
+- The per-IP rate limit on the rule endpoints stays alongside the per-user
+  allowance, as protection against abuse.
 
 ## 14. Open questions
 

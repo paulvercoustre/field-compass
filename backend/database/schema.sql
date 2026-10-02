@@ -237,6 +237,7 @@ CREATE TABLE ai_usage (
     output_tokens INTEGER,
     outcome VARCHAR(32) NOT NULL,
     connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -259,6 +260,7 @@ CREATE INDEX idx_survey_access_survey ON survey_access(survey_id);
 -- AI usage: the monthly allowance count per survey
 CREATE INDEX idx_ai_usage_survey_created ON ai_usage(survey_id, created_at);
 CREATE INDEX idx_ai_connections_owner ON ai_connections(owner_user_id);
+CREATE INDEX idx_ai_usage_user_created ON ai_usage(user_id, created_at);
 
 -- Survey configs indexes
 CREATE INDEX idx_survey_configs_name ON survey_configs(survey_name);

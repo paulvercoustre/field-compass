@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database.models import SurveyConfig, User
+from services.ai_allowance import rule_requests_per_user_day, rule_requests_remaining
 from services.ai_client import ResolvedProvider
 from services.ai_errors import AIError
 from services.ai_providers import RULES, resolve_provider
@@ -55,8 +56,13 @@ class GeneratedRule(BaseModel):
     roster_name: str | None = None
 
 
-def _provider_for(db: Session, survey_config: SurveyConfig) -> ResolvedProvider | None:
-    """The survey's own AI provider, None for the operator key, or an HTTP error."""
+def _provider_for(db: Session, survey_config: SurveyConfig, user: User) -> ResolvedProvider | None:
+    """
+    The survey's own AI provider, None for the operator key, or an HTTP error.
+
+    On the operator key, rule writing is limited per user per day; with the
+    survey's own provider there is no Field Compass limit.
+    """
     try:
         provider = resolve_provider(db, survey_config, RULES)
     except AIError as error:
@@ -65,6 +71,14 @@ def _provider_for(db: Session, survey_config: SurveyConfig) -> ResolvedProvider 
         raise HTTPException(
             status_code=503,
             detail="AI service is not available. Please configure OPENAI_API_KEY in the environment.",
+        )
+    if provider is None and rule_requests_remaining(db, user.user_id) <= 0:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"You've used today's {rule_requests_per_user_day()} free AI rule requests. "
+                "They reset tomorrow, or add your own AI provider in Account Settings."
+            ),
         )
     return provider
 
@@ -110,7 +124,7 @@ async def generate_rule_from_natural_language(
             detail=f"Survey configuration not found for survey_id: {payload.survey_id}",
         )
 
-    provider = _provider_for(db, survey_config)
+    provider = _provider_for(db, survey_config, current_user)
 
     # Extract variables from config
     kobo_variables = _extract_variables_from_config(survey_config)
@@ -157,7 +171,9 @@ async def generate_rule_from_natural_language(
             kobo_variables=kobo_variables,
             existing_rules=existing_rules_context,
             survey_context=survey_context,
-            record=usage_recorder(db, survey_uuid, RULE_GENERATION, provider=provider),
+            record=usage_recorder(
+                db, survey_uuid, RULE_GENERATION, provider=provider, user_id=current_user.user_id
+            ),
             provider=provider,
         )
 
@@ -217,7 +233,7 @@ async def suggest_validation_rules(
             detail=f"Survey configuration not found for survey_id: {payload.survey_id}",
         )
 
-    provider = _provider_for(db, survey_config)
+    provider = _provider_for(db, survey_config, current_user)
 
     # Extract variables, global parameters, and special values from config
     config_data = survey_config.config_data
@@ -259,7 +275,9 @@ async def suggest_validation_rules(
             global_parameters=global_parameters,
             special_values=special_values,
             existing_rules=existing_rules_context,
-            record=usage_recorder(db, survey_uuid, RULE_SUGGESTION, provider=provider),
+            record=usage_recorder(
+                db, survey_uuid, RULE_SUGGESTION, provider=provider, user_id=current_user.user_id
+            ),
             provider=provider,
         )
 

@@ -19,6 +19,7 @@ def usage_recorder(
     feature: str,
     submission_id: int | None = None,
     provider: ResolvedProvider | None = None,
+    user_id: UUID | None = None,
 ) -> UsageRecorder:
     """
     A recorder for AIClient that writes to ``db`` and commits.
@@ -40,6 +41,7 @@ def usage_recorder(
                     output_tokens=output_tokens,
                     outcome=outcome,
                     connection_id=provider.connection_id if provider else None,
+                    user_id=user_id,
                 )
             )
             note_outcome(db, provider, outcome)

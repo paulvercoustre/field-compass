@@ -117,3 +117,22 @@ export const describeAIError = (stored: string | null | undefined): string => {
   };
   return reasons[category] ?? (message || stored || 'The provider is not responding.');
 };
+
+export interface SurveyAIUsage {
+  month: string; // "2026-10"
+  resets_at: string;
+  /** The survey's own provider; null when it uses the Field Compass allowance. */
+  provider: AIConnectionSummary | null;
+  allowance: { limit: number; used: number; in_flight: number; remaining: number } | null;
+  by_feature: Array<{
+    feature: 'qualitative_check' | 'rule_generation' | 'rule_suggestion';
+    calls: number;
+    failed: number;
+    input_tokens: number;
+    output_tokens: number;
+  }>;
+}
+
+/** This month's AI use for a survey (editors and owners). */
+export const getSurveyAIUsage = (surveyId: string) =>
+  request<SurveyAIUsage>(`/api/surveys/${surveyId}/ai-usage`);

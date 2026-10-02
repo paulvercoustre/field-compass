@@ -16,6 +16,7 @@ from etl.audit_processor import download_and_process_audit
 from etl.data_merger import merge_submission, parse_kobo_submission
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
+from services.ai_allowance import NOT_RUN_ALLOWANCE, checks_remaining, not_run_message
 from services.ai_providers import paused_error, survey_connection
 from services.ai_service import AIService
 from services.qualitative_worker import run_qualitative_check_task
@@ -119,6 +120,7 @@ class ETLPipeline:
             "llm_queued": 0,
             "llm_skipped": 0,
             "llm_paused": 0,
+            "llm_not_run_allowance": 0,
             "errors": 0,
             "start_time": datetime.utcnow(),
         }
@@ -151,6 +153,11 @@ class ETLPipeline:
             # Set when the survey's own provider is paused: checks are marked
             # failed with its error rather than queued to fail again.
             llm_paused_error = paused_error(self.db, survey_config)
+            # On the operator's key, how many checks this pull may still queue;
+            # None when the survey has its own provider (no Field Compass limit).
+            llm_allowance_left = (
+                None if connection else checks_remaining(self.db, survey_config.survey_id)
+            )
 
             # Get Kobo API token for audit downloads
             kobo_token = self.kobo_api_token
@@ -313,6 +320,15 @@ class ETLPipeline:
                         submission.llm_last_error = llm_paused_error
                         submission.llm_checked_at = datetime.utcnow()
                         stats["llm_paused"] += 1
+                    elif (
+                        llm_needs_check
+                        and llm_allowance_left is not None
+                        and llm_allowance_left <= 0
+                    ):
+                        submission.llm_check_status = NOT_RUN_ALLOWANCE
+                        submission.llm_last_error = not_run_message()
+                        submission.llm_checked_at = datetime.utcnow()
+                        stats["llm_not_run_allowance"] += 1
                     elif llm_needs_check:
                         dedupe_key = f"{submission.survey_id}:{submission._id}:{llm_rules_hash}:{current_llm_input_hash}"
                         task_id = hashlib.sha256(dedupe_key.encode("utf-8")).hexdigest()
@@ -338,6 +354,8 @@ class ETLPipeline:
                             submission.llm_input_hash = current_llm_input_hash
                             submission.llm_model_used = qual_check_model
                             stats["llm_queued"] += 1
+                            if llm_allowance_left is not None:
+                                llm_allowance_left -= 1
                         except Exception as queue_error:
                             logger.error(
                                 "Failed to enqueue qualitative check for submission %s: %s",
