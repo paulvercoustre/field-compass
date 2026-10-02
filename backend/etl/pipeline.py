@@ -16,7 +16,12 @@ from etl.audit_processor import download_and_process_audit
 from etl.data_merger import merge_submission, parse_kobo_submission
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
-from services.ai_allowance import NOT_RUN_ALLOWANCE, checks_remaining, not_run_message
+from services.ai_allowance import (
+    NOT_RUN_ALLOWANCE,
+    checks_remaining,
+    counted_submission_ids,
+    not_run_message,
+)
 from services.ai_providers import paused_error, survey_connection
 from services.ai_service import AIService
 from services.qualitative_worker import run_qualitative_check_task
@@ -157,6 +162,11 @@ class ETLPipeline:
             # None when the survey has its own provider (no Field Compass limit).
             llm_allowance_left = (
                 None if connection else checks_remaining(self.db, survey_config.survey_id)
+            )
+            # Submissions already checked this month: re-queueing one (a retry
+            # after a failure, an edited answer) uses no new allowance.
+            llm_already_counted = (
+                set() if connection else counted_submission_ids(self.db, survey_config.survey_id)
             )
 
             # Get Kobo API token for audit downloads
@@ -324,6 +334,7 @@ class ETLPipeline:
                         llm_needs_check
                         and llm_allowance_left is not None
                         and llm_allowance_left <= 0
+                        and submission._id not in llm_already_counted
                     ):
                         submission.llm_check_status = NOT_RUN_ALLOWANCE
                         submission.llm_last_error = not_run_message()
@@ -354,7 +365,10 @@ class ETLPipeline:
                             submission.llm_input_hash = current_llm_input_hash
                             submission.llm_model_used = qual_check_model
                             stats["llm_queued"] += 1
-                            if llm_allowance_left is not None:
+                            if (
+                                llm_allowance_left is not None
+                                and submission._id not in llm_already_counted
+                            ):
                                 llm_allowance_left -= 1
                         except Exception as queue_error:
                             logger.error(

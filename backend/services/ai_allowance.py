@@ -92,6 +92,11 @@ def _spent_submissions(db: Session, survey_id: UUID, now: datetime | None = None
     )
 
 
+def counted_submission_ids(db: Session, survey_id: UUID, now: datetime | None = None) -> set[int]:
+    """Submissions already counted this month: checking one again is free."""
+    return {submission_id for (submission_id,) in _spent_submissions(db, survey_id, now)}
+
+
 def checks_used(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
     """
     Submissions this survey had AI-checked on the operator's key this month.

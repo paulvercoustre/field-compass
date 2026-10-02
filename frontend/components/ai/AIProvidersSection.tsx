@@ -158,8 +158,12 @@ const AIProvidersSection: React.FC = () => {
                     )}
                     {connection.status !== 'failing' && connection.last_error && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Last test didn't complete: {describeAIError(connection.last_error)} Checks are not paused; test
-                        again later.
+                        {/* A rejected key or no credit on a provider that is not yet paused
+                            comes from recent checks; anything else from a test that hit a
+                            temporary problem. */}
+                        {['auth', 'provider_quota'].includes(connection.last_error.split(': ')[0])
+                          ? `Recent AI calls failed: ${describeAIError(connection.last_error)} Checks pause if it keeps happening.`
+                          : `Last test didn't complete: ${describeAIError(connection.last_error)} Checks are not paused; test again later.`}
                       </p>
                     )}
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

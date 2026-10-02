@@ -260,6 +260,28 @@ class TestPull:
         stats = _pull(test_db, ai_survey, 5)
         assert (stats["llm_queued"], stats["llm_not_run_allowance"]) == (2, 0)
 
+    def test_rechecking_a_counted_submission_uses_no_new_allowance(
+        self, test_db, ai_survey, monkeypatch
+    ):
+        """A failed check retried at the cap must not take a new submission's place."""
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "2")
+        _pull(test_db, ai_survey, 2)  # both queued: the cap is reached
+
+        # One finished; the other was billed, then failed for good.
+        first, second = test_db.query(SubmissionCurrent).order_by(SubmissionCurrent._id).all()
+        first.llm_check_status, second.llm_check_status = "success", "failed"
+        test_db.commit()
+        for sub in (first, second):
+            _usage(test_db, ai_survey.survey_id, when=datetime.utcnow(), submission_id=sub._id)
+
+        # Next pull: the failed one is retried although the cap is used up,
+        # and a third, new submission is held.
+        stats = _pull(test_db, ai_survey, 3)
+        assert (stats["llm_queued"], stats["llm_not_run_allowance"]) == (1, 1)
+        test_db.expire_all()
+        assert test_db.get(SubmissionCurrent, second._id).llm_check_status == "pending"
+        assert test_db.get(SubmissionCurrent, 5002).llm_check_status == NOT_RUN_ALLOWANCE
+
     def test_own_provider_has_no_field_compass_limit(self, test_db, ai_survey, monkeypatch):
         monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "0")
         owner = User(
