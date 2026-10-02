@@ -296,9 +296,8 @@ class TestHttp:
     def test_rule_requests_stop_at_the_daily_limit(self, client, monkeypatch):
         from uuid import UUID
 
-        from tests.test_api_endpoints import TEST_USER_ID, TestingSessionLocal
-
         from services.ai_service import ai_service
+        from tests.test_api_endpoints import TEST_USER_ID, TestingSessionLocal
 
         monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY", "1")
         # The shared service read OPENAI_API_KEY at import; CI has none.
