@@ -39,7 +39,7 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
   const rest = availableVariables.filter((name) => !suggested.includes(name));
 
   return (
-    <div>
+    <div className="field-cell">
       <FieldLabel hint={helpKey ? CORE_IDENTIFIER_HINTS[helpKey] : undefined}>{label}</FieldLabel>
 
       {readOnly ? (

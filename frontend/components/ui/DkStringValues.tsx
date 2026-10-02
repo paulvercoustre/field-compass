@@ -75,141 +75,151 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
     onChange(values.filter((existing) => existing !== value));
   };
 
-  return (
-    <div>
-      <FieldLabel hint={CORE_IDENTIFIER_HINTS.dk_string_value}>Don't know — answer options</FieldLabel>
-
-      {readOnly ? null : (
-        <>
-          {optionsByName.size > 0 ? (
-            <select
-              value=""
-              onChange={(e) => {
-                add(e.target.value);
-                e.target.value = '';
-              }}
-              className="w-full mb-2 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">-- Add another answer option --</option>
-              {found.length > 0 ? (
-                <>
-                  <optgroup label="Suggested">
-                    {found.map((option) => {
-                      const added = chosen.has(option.toLowerCase());
-                      return (
-                        <option key={option} value={option} disabled={added}>
-                          {describe(option)}
-                          {added ? ' (added)' : ''}
-                        </option>
-                      );
-                    })}
-                  </optgroup>
-                  <optgroup label="All answer options">
-                    {remaining.map((option) => (
-                      <option key={option} value={option}>
-                        {describe(option)}
-                      </option>
-                    ))}
-                  </optgroup>
-                </>
-              ) : (
-                remaining.map((option) => (
-                  <option key={option} value={option}>
-                    {describe(option)}
-                  </option>
-                ))
-              )}
-            </select>
-          ) : (
-            // No form read yet. Typing is still allowed, for the same reason
-            // the identifier pickers allow it.
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    add(typed);
-                    setTyped('');
-                  }
-                }}
-                placeholder="Enter answer option"
-                className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  add(typed);
-                  setTyped('');
-                }}
-                disabled={!typed.trim()}
-                className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Add
-              </button>
-            </div>
-          )}
-        </>
-      )}
-
-      {values.length > 0 ? (
-        <div className="flex flex-wrap gap-2 mb-2">
-          {values.map((value) => (
-            <span
-              key={value}
-              title={describe(value)}
-              className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200 rounded-md text-sm"
-            >
-              {value}
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => remove(value)}
-                  aria-label={`Remove ${value}`}
-                  className="text-indigo-600 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-white"
+  // Three children, matching the field-grid rows: label, control, extras.
+  // Read-only has no control, so the chosen values take its place.
+  const chosenValues = (
+          values.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {values.map((value) => (
+                <span
+                  key={value}
+                  title={describe(value)}
+                  className="inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20 rounded-md text-sm"
                 >
-                  ×
-                </button>
-              )}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-gray-500 mb-2">
-          {readOnly ? '—' : 'None set — don\'t-know rates will count the numeric code only.'}
-        </p>
-      )}
-
-      {readOnly ? null : (
-        <>
-          {suggestions.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="text-xs text-gray-500 dark:text-gray-400">In your form:</span>
-              {suggestions.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => onChange([...values, ...suggestions])}
-                  className="px-2 py-1 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-500"
-                >
-                  + Add all {suggestions.length}
-                </button>
-              )}
-              {suggestions.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => add(option)}
-                  className="px-2 py-1 text-sm border border-dashed border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
-                >
-                  + {describe(option)}
-                </button>
+                  {value}
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => remove(value)}
+                      aria-label={`Remove ${value}`}
+                      className="text-indigo-600 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-white"
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
               ))}
             </div>
-          )}
-        </>
-      )}
+          ) : (
+            <p className="text-sm text-gray-500 mb-2">
+              {readOnly ? '—' : 'None set — don\'t-know rates will count the numeric code only.'}
+            </p>
+          )
+  );
+
+  return (
+    <div className="field-cell">
+      <FieldLabel hint={CORE_IDENTIFIER_HINTS.dk_string_value}>Don't know — answer options</FieldLabel>
+
+      <div>
+        {readOnly ? null : (
+          <>
+            {optionsByName.size > 0 ? (
+              <select
+                value=""
+                onChange={(e) => {
+                  add(e.target.value);
+                  e.target.value = '';
+                }}
+                className="w-full mb-2 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">-- Add another answer option --</option>
+                {found.length > 0 ? (
+                  <>
+                    <optgroup label="Suggested">
+                      {found.map((option) => {
+                        const added = chosen.has(option.toLowerCase());
+                        return (
+                          <option key={option} value={option} disabled={added}>
+                            {describe(option)}
+                            {added ? ' (added)' : ''}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                    <optgroup label="All answer options">
+                      {remaining.map((option) => (
+                        <option key={option} value={option}>
+                          {describe(option)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </>
+                ) : (
+                  remaining.map((option) => (
+                    <option key={option} value={option}>
+                      {describe(option)}
+                    </option>
+                  ))
+                )}
+              </select>
+            ) : (
+              // No form read yet. Typing is still allowed, for the same reason
+              // the identifier pickers allow it.
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      add(typed);
+                      setTyped('');
+                    }
+                  }}
+                  placeholder="Enter answer option"
+                  className="min-w-0 flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    add(typed);
+                    setTyped('');
+                  }}
+                  disabled={!typed.trim()}
+                  className="flex-shrink-0 px-3 py-2 text-sm font-medium bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        {readOnly && chosenValues}
+      </div>
+
+      <div>
+        {!readOnly && chosenValues}
+        {readOnly ? null : (
+          <>
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">In your form:</span>
+                {suggestions.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onChange([...values, ...suggestions])}
+                    className="px-2 py-1 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-500"
+                  >
+                    + Add all {suggestions.length}
+                  </button>
+                )}
+                {suggestions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => add(option)}
+                    className="px-2 py-1 text-sm border border-dashed border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                  >
+                    + {describe(option)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };

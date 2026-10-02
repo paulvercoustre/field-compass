@@ -1522,7 +1522,7 @@ const SurveySettingsPage: React.FC = () => {
             {/* Core Identifiers */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Core identifiers</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="field-grid">
                 <VariableDropdown
                   value={coreIdentifiers.enumerator}
                   onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value })}
@@ -1539,7 +1539,7 @@ const SurveySettingsPage: React.FC = () => {
                   availableVariables={availableVariables}
                   readOnly={!canEditSurvey}
                 />
-                <div>
+                <div className="field-cell">
                   <FieldLabel hint={CORE_IDENTIFIER_HINTS.dk_value}>Don't know — numeric code</FieldLabel>
                   {canEditSurvey ? (
                     <input
