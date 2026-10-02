@@ -91,7 +91,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
     return (
       <div className="h-full flex items-center justify-center p-8">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <h2 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
             No Survey Selected
           </h2>
           <p className="text-gray-500 dark:text-gray-400">
@@ -136,7 +136,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
             <Spinner />
           </div>
         ) : error && !isRunningETL ? (
-          <div className="p-4 text-center text-13 text-red-600 dark:text-red-400">{error}</div>
+          <div className="p-4 text-center text-sm text-red-600 dark:text-red-400">{error}</div>
         ) : unavailable.length > 0 ? (
           // The survey has no enumerator configured. Every chart below groups
           // by enumerator, so rendering them would show a single synthetic

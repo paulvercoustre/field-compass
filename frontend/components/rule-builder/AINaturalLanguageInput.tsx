@@ -159,7 +159,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
       {generatedRule && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md space-y-3">
           <div className="flex items-start justify-between">
-            <h4 className="font-semibold text-blue-900 dark:text-blue-100">Generated Rule</h4>
+            <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">Generated Rule</h4>
             <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 rounded">
               AI Generated
             </span>

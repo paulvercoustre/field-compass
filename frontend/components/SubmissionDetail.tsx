@@ -244,7 +244,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     return (
       <div className="flex flex-col items-center justify-center h-full gap-1 text-center">
         <p className="text-sm font-medium text-gray-900 dark:text-white">No submission selected</p>
-        <p className="text-13 text-gray-500 dark:text-gray-400">Choose one from the queue to see its answers and checks.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Choose one from the queue to see its answers and checks.</p>
       </div>
     );
   }
@@ -492,7 +492,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
             {/* Inline metadata badges */}
             {(has_edit_history || data_quality_issues.length > 0) && (
-              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-13 text-gray-500 dark:text-gray-400">
+              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-sm text-gray-500 dark:text-gray-400">
                 {data_quality_issues.length > 0 && (
                   <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
                     <AlertIcon className="w-3.5 h-3.5" />

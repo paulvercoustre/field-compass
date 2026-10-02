@@ -58,7 +58,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   const inputClass =
     'block w-full h-10 px-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xs text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15 transition-shadow';
-  const labelClass = 'block text-13 font-medium text-gray-700 dark:text-gray-300 mb-1.5';
+  const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5';
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center px-4 py-10">
@@ -88,7 +88,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_32px_-12px_rgb(0_0_0/0.12)] dark:border-gray-800 dark:bg-gray-900/80 dark:shadow-none sm:p-7">
           {/* Error message */}
           {error && (
-            <div role="alert" className="mb-5 rounded-lg bg-red-50 px-3 py-2 text-13 text-red-800 ring-1 ring-inset ring-red-600/15 dark:bg-red-500/10 dark:text-red-200 dark:ring-red-400/20">
+            <div role="alert" className="mb-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 ring-1 ring-inset ring-red-600/15 dark:bg-red-500/10 dark:text-red-200 dark:ring-red-400/20">
               {error}
             </div>
           )}
@@ -198,7 +198,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-13 text-gray-500 dark:text-gray-400">
+        <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
           {isLogin ? 'New to Field Compass?' : 'Already have an account?'}{' '}
           <button
             type="button"

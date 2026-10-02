@@ -90,7 +90,7 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
                 <button type="button" onClick={selectNone} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">None</button>
               </div>
               {allIssueTypes.map((issue, index) => (
-                <label key={issue} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-13">
+                <label key={issue} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-sm">
                   <input
                     type="checkbox"
                     checked={selectedIssues.includes(issue)}
@@ -110,11 +110,11 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
       </div>
       
       {data.length === 0 ? (
-        <div className="text-center py-8 text-13 text-gray-500 dark:text-gray-400">
+        <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
           No data available
         </div>
       ) : selectedIssues.length === 0 ? (
-        <div className="text-center py-8 text-13 text-gray-500 dark:text-gray-400">
+        <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
           Select indicators from the dropdown to display
         </div>
       ) : (

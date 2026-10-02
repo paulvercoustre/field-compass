@@ -12,7 +12,6 @@ import UserSettingsPage from './pages/UserSettingsPage';
 import LoginPage from './pages/LoginPage';
 import Sidebar from './components/Sidebar';
 import { Spinner } from './components/Spinner';
-import { ChartIcon, ListIcon, SettingsIcon, TargetIcon, UsersIcon } from './components/ui/icons';
 import SetupChecklist from './components/onboarding/SetupChecklist';
 
 type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'qualityOverview' | 'createSurvey' | 'settings' | 'userSettings';
@@ -71,7 +70,7 @@ const RequiresSurvey: React.FC<{ view: View; onAddSurvey: () => void; children: 
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
         <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">No survey selected</p>
-        <p className="text-gray-500 dark:text-gray-400 text-13">
+        <p className="text-gray-500 dark:text-gray-400 text-sm">
           Choose a survey from the list on the left.
         </p>
       </div>
@@ -154,11 +153,10 @@ const AppContent: React.FC = () => {
     return <LoginPage onLoginSuccess={() => setView('dashboard')} />;
   }
 
-  const NavButton: React.FC<{ currentView: View; targetView: View; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }> = ({
+  const NavButton: React.FC<{ currentView: View; targetView: View; onClick: () => void; children: React.ReactNode }> = ({
     currentView,
     targetView,
     onClick,
-    icon,
     children,
   }) => {
     const isActive = currentView === targetView;
@@ -167,14 +165,13 @@ const AppContent: React.FC = () => {
       <button
         onClick={onClick}
         aria-current={isActive ? 'page' : undefined}
-        className={`group relative flex h-full flex-shrink-0 items-center px-1 text-13 font-medium transition-colors ${
+        className={`group relative flex h-full flex-shrink-0 items-center px-1 text-sm font-medium transition-colors ${
           isActive
             ? 'text-gray-900 dark:text-white'
             : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
         }`}
       >
-        <span className="flex items-center gap-2 rounded-md px-2 py-1.5 group-hover:bg-gray-100 dark:group-hover:bg-gray-800/70">
-          <span className={isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300'}>{icon}</span>
+        <span className="rounded-md px-2.5 py-1.5 group-hover:bg-gray-100 dark:group-hover:bg-gray-800/70">
           {children}
         </span>
         {isActive && <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gray-900 dark:bg-white" aria-hidden="true" />}
@@ -219,7 +216,7 @@ const AppContent: React.FC = () => {
 
   return (
     <SurveyProvider>
-      <div className="flex h-full font-sans text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-950">
+      <div className="flex h-full font-sans text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-950">
         <Sidebar 
           onAddSurvey={handleAddSurvey} 
           onSurveySelect={handleSurveySelect}
@@ -236,19 +233,19 @@ const AppContent: React.FC = () => {
             <div className="flex h-12 items-stretch gap-4 px-4">
               <SurveyNameInHeader />
               <nav aria-label="Survey views" className="-mb-px flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto">
-                <NavButton currentView={view} targetView="dashboard" icon={<ListIcon />} onClick={() => { setDashboardFilters({}); setView('dashboard'); }}>
+                <NavButton currentView={view} targetView="dashboard" onClick={() => { setDashboardFilters({}); setView('dashboard'); }}>
                   Submissions
                 </NavButton>
-                <NavButton currentView={view} targetView="qualityOverview" icon={<ChartIcon />} onClick={() => setView('qualityOverview')}>
+                <NavButton currentView={view} targetView="qualityOverview" onClick={() => setView('qualityOverview')}>
                   Data quality
                 </NavButton>
-                <NavButton currentView={view} targetView="dataCollectionProgress" icon={<TargetIcon />} onClick={() => setView('dataCollectionProgress')}>
+                <NavButton currentView={view} targetView="dataCollectionProgress" onClick={() => setView('dataCollectionProgress')}>
                   Progress
                 </NavButton>
-                <NavButton currentView={view} targetView="enumeratorPerformance" icon={<UsersIcon />} onClick={() => setView('enumeratorPerformance')}>
+                <NavButton currentView={view} targetView="enumeratorPerformance" onClick={() => setView('enumeratorPerformance')}>
                   Field team
                 </NavButton>
-                <NavButton currentView={view} targetView="settings" icon={<SettingsIcon />} onClick={() => setView('settings')}>
+                <NavButton currentView={view} targetView="settings" onClick={() => setView('settings')}>
                   Settings
                 </NavButton>
               </nav>

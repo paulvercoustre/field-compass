@@ -80,7 +80,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full min-w-[200px] min-h-[2.25rem] pl-2.5 pr-8 py-1.5 text-left bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white text-13 hover:border-gray-400 dark:hover:border-gray-600 transition-colors ${
+          className={`w-full min-w-[200px] min-h-[2.25rem] pl-2.5 pr-8 py-1.5 text-left bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white text-sm hover:border-gray-400 dark:hover:border-gray-600 transition-colors ${
             isOpen ? 'ring-2 ring-indigo-500 border-indigo-500' : ''
           }`}
         >
@@ -133,7 +133,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search..."
-                  className="w-full px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white text-13 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md text-gray-900 dark:text-white text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   onClick={(e) => e.stopPropagation()}
                 />
               </div>
@@ -147,7 +147,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                 filteredOptions.map(option => (
                   <label
                     key={option.value}
-                    className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-13"
+                    className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-sm"
                   >
                     <input
                       type="checkbox"
@@ -282,14 +282,14 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             aria-expanded={isExpanded}
-            className="flex h-7 items-center gap-1.5 px-2 text-13 font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+            className="flex h-7 items-center gap-1.5 px-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
           >
             <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 5h18M6 12h12M10 19h4" />
             </svg>
             <span>Filters</span>
             {activeFilterCount > 0 && (
-              <span className="tabular min-w-[1.25rem] bg-indigo-600 text-white text-[11px] leading-5 px-1.5 rounded-full text-center">
+              <span className="tabular min-w-[1.25rem] bg-indigo-600 text-white text-xs leading-5 px-1.5 rounded-full text-center">
                 {activeFilterCount}
               </span>
             )}

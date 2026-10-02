@@ -10,7 +10,7 @@ interface MetricCardProps {
 
 const MetricCard: React.FC<MetricCardProps> = ({ label, value, subtitle }) => (
   <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-card dark:border-gray-800 dark:bg-gray-900">
-    <span className="text-13 text-gray-500 dark:text-gray-400">
+    <span className="text-sm text-gray-500 dark:text-gray-400">
       {label}
     </span>
     <div className="mt-2">

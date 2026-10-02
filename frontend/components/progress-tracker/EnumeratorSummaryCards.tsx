@@ -47,7 +47,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
       {/* Total Enumerators */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-13 text-gray-500 dark:text-gray-400">Enumerators</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">Enumerators</div>
         <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
           {totalEnumerators}
         </div>
@@ -56,7 +56,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
       
       {/* Total Submissions */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-13 text-gray-500 dark:text-gray-400">Submissions</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">Submissions</div>
         <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
           {totalSubmissions}
         </div>
@@ -67,7 +67,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
       
       {/* Team Validation Rate */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-13 text-gray-500 dark:text-gray-400">Team Validated</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">Team Validated</div>
         <div className="tabular text-2xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-400 mt-2">
           {teamAvgValidated}%
         </div>
@@ -76,7 +76,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
       
       {/* Avg Issues per Submission */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-13 text-gray-500 dark:text-gray-400">Avg Issues</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">Avg Issues</div>
         <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
           {teamAvgIssuesPerSubmission}
         </div>
@@ -85,7 +85,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
       
       {/* Best Performer */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-13 text-gray-500 dark:text-gray-400">Top Performer</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">Top Performer</div>
         <div className="text-lg font-semibold tracking-tight text-amber-600 dark:text-amber-400 mt-1 truncate" title={bestPerformer?.id}>
           {bestPerformer ? bestPerformer.id : 'N/A'}
         </div>
@@ -96,7 +96,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
       
       {/* Needs Attention */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-13 text-gray-500 dark:text-gray-400">Need Attention</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">Need Attention</div>
         <div className={`tabular text-2xl font-semibold tracking-tight mt-1 ${
           enumeratorsNeedingAttention > 0 
             ? 'text-amber-600 dark:text-amber-400' 

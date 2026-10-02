@@ -48,7 +48,7 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({
       id={id}
       role="alert"
       aria-live="polite"
-      className={`px-3 py-2 text-13 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg text-red-900 dark:text-red-200 flex items-center justify-between animate-fade-in ${className}`}
+      className={`px-3 py-2 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg text-red-900 dark:text-red-200 flex items-center justify-between animate-fade-in ${className}`}
     >
       <span>{errorText}</span>
       {onDismiss && (

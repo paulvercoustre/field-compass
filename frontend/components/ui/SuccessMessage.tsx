@@ -42,7 +42,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = ({
     <div
       role="status"
       aria-live="polite"
-      className={`px-3 py-2 text-13 bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-inset ring-emerald-600/15 dark:ring-emerald-400/20 rounded-lg text-emerald-900 dark:text-emerald-200 flex items-center justify-between animate-fade-in ${className}`}
+      className={`px-3 py-2 text-sm bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-inset ring-emerald-600/15 dark:ring-emerald-400/20 rounded-lg text-emerald-900 dark:text-emerald-200 flex items-center justify-between animate-fade-in ${className}`}
     >
       <span>{message}</span>
       {onDismiss && (

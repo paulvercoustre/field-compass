@@ -243,26 +243,26 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onEnumeratorClick ? 'cursor-pointer' : ''}`}
                 onClick={() => onEnumeratorClick?.(row.id)}
               >
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular font-medium text-gray-900 dark:text-white">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
                   {row.id}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.needsReview}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.validated}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.total}
                   {getComparisonBadge(row.total, teamAverages.total, true)}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
                   <span className={`px-2 py-1 rounded-md text-xs font-medium ${getValidatedColor(row.percentValidated)}`}>
                     {row.percentValidated}
                   </span>
                   {getComparisonBadge(parseFloat(row.percentValidated), teamAverages.validatedPercent, true)}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
                   <span className={`px-2 py-1 rounded-md text-xs font-medium ${getNeedsReviewColor(row.percentNeedsReview)}`}>
                     {row.percentNeedsReview}
                   </span>
@@ -293,20 +293,20 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onEnumeratorClick ? 'cursor-pointer' : ''}`}
                 onClick={() => onEnumeratorClick?.(row.id)}
               >
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular font-medium text-gray-900 dark:text-white">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
                   {row.id}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.avgActiveTime}
                   {getComparisonBadge(row.avgActiveTime, teamAverages.activeTime, true)}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.avgTotalTime}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.avgDkRate}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-13 tabular">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
                   <span className={`px-2 py-1 rounded-md text-xs font-medium ${getIssuesColor(row.avgIssuesPerSurvey)}`}>
                     {row.avgIssuesPerSurvey.toFixed(2)}
                   </span>

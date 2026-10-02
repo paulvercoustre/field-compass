@@ -107,16 +107,16 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                     </thead>
                     <tbody className="bg-white dark:bg-gray-950">
                         <tr>
-                            <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{data.overall.conducted}</td>
+                            <td className="px-6 py-3 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">{data.overall.conducted}</td>
                             {hasTargets ? (
                                 <>
-                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.target)}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.target)}</td>
                                     <td className="px-6 py-3 whitespace-nowrap"><ProgressBar percentage={data.overall.progress} /></td>
                                 </>
                             ) : (
                                 <>
-                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{data.overall.days_active}</td>
-                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.submissions_per_day)}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">{data.overall.days_active}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">{numberOrDash(data.overall.submissions_per_day)}</td>
                                 </>
                             )}
                         </tr>
@@ -145,9 +145,9 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                             const displayLabel = resolveLabel(columnName, row.value);
                             return (
                                 <tr key={row.value}>
-                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular font-medium text-gray-900 dark:text-white">{displayLabel}</td>
-                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{row.conducted}</td>
-                                    <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300">{hasTargets ? numberOrDash(row.target) : `${numberOrDash(row.share)}%`}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">{displayLabel}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">{row.conducted}</td>
+                                    <td className="px-6 py-3 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">{hasTargets ? numberOrDash(row.target) : `${numberOrDash(row.share)}%`}</td>
                                     <td className="px-6 py-3 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                                 </tr>
                             );
@@ -170,7 +170,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
                         placeholder={filterPlaceholder}
-                        className="m-3 block h-8 w-[calc(100%-1.5rem)] max-w-sm px-3 text-13 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="m-3 block h-8 w-[calc(100%-1.5rem)] max-w-sm px-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                     <div className="overflow-x-auto border-t border-gray-200 dark:border-gray-800">
                         <table className="min-w-full">
@@ -195,13 +195,13 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                                                 const rawValue = row.values?.[colName];
                                                 const displayLabel = resolveLabel(colName, rawValue);
                                                 return (
-                                                    <td key={colName} className="px-6 py-3 whitespace-nowrap text-13 tabular font-medium text-gray-900 dark:text-white">
+                                                    <td key={colName} className="px-6 py-3 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
                                                         {displayLabel}
                                                     </td>
                                                 );
                                             })}
-                                            <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300 text-center">{numberOrDash(row.target)}</td>
-                                            <td className="px-6 py-3 whitespace-nowrap text-13 tabular text-gray-700 dark:text-gray-300 text-center">{row.conducted}</td>
+                                            <td className="px-6 py-3 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300 text-center">{numberOrDash(row.target)}</td>
+                                            <td className="px-6 py-3 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300 text-center">{row.conducted}</td>
                                             <td className="px-6 py-3 whitespace-nowrap"><ProgressBar percentage={row.progress} /></td>
                                         </tr>
                                     );
@@ -224,7 +224,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
               legitimate configuration rather than something broken.
             */}
             {!hasTargets && (
-                <p className="mb-4 max-w-3xl text-13 text-gray-600 dark:text-gray-400">
+                <p className="mb-4 max-w-3xl text-sm text-gray-600 dark:text-gray-400">
                     No collection targets set for this survey, so the figures below describe what
                     has been collected rather than progress towards a plan. Add targets in survey
                     settings to track completion.

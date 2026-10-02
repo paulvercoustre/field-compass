@@ -1094,7 +1094,7 @@ const SurveySettingsPage: React.FC = () => {
                 />
               </div>
               {deleteError && (
-                <div className="p-3 text-13 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
+                <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
                   <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>
                 </div>
               )}
@@ -1131,7 +1131,7 @@ const SurveySettingsPage: React.FC = () => {
                     key={item.id}
                     onClick={() => setActiveTab(item.id)}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`w-full text-left px-3 py-1.5 rounded-md text-13 font-medium transition-colors ${
+                    className={`w-full text-left px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       isActive
                         ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
                         : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900 hover:text-gray-900 dark:hover:text-white'
@@ -1648,7 +1648,7 @@ const SurveySettingsPage: React.FC = () => {
             {/* Delete Survey Section */}
             {canDeleteSurvey && (
               <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900/50 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete Survey</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-2">Delete Survey</h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   Permanently delete this survey and all associated data. This action cannot be undone.
                 </p>
@@ -2051,7 +2051,7 @@ const SurveySettingsPage: React.FC = () => {
 
                 {/* Survey Duration Limits */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                  <h3 className="text-md font-medium text-gray-900 dark:text-white mb-3">Survey Duration Limits</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Survey Duration Limits</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -2514,7 +2514,7 @@ const SurveySettingsPage: React.FC = () => {
                         <div className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-indigo-200 dark:border-indigo-800">
                           <div className="flex items-center mb-4">
                             <span className="text-2xl mr-2">✨</span>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Rule Builder</h3>
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">AI Rule Builder</h3>
                             <span className="ml-2 text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full">
                               Beta
                             </span>
@@ -2534,7 +2534,7 @@ const SurveySettingsPage: React.FC = () => {
                         <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-purple-200 dark:border-purple-800">
                           <div className="flex items-center mb-4">
                             <span className="text-2xl mr-2">💡</span>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Suggestions</h3>
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">AI Suggestions</h3>
                           </div>
                           <AISuggestedRules 
                             surveyId={selectedSurvey.survey_id}
@@ -2545,7 +2545,7 @@ const SurveySettingsPage: React.FC = () => {
 
                       {/* Manual Rule Editor */}
                       <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Create Rule Manually</h3>
+                        <h3 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white">Create Rule Manually</h3>
                         <RuleEditor
                           koboToolData={koboToolData}
                           onSave={handleSaveRule}
@@ -2554,7 +2554,7 @@ const SurveySettingsPage: React.FC = () => {
                         />
                       </div>
                       <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                        <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Saved Rules</h3>
+                        <h3 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white">Saved Rules</h3>
                         {isLoadingRules ? (
                           <div className="flex items-center justify-center py-4">
                             <Spinner />
@@ -2580,13 +2580,13 @@ const SurveySettingsPage: React.FC = () => {
                   ) : stagedRules.length > 0 ? (
                     <div className="space-y-2">
                       {stagedRules.map((rule) => (
-                        <div key={rule.id} className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                        <div key={rule.id} className="px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
                           <div className="flex justify-between items-start">
                             <div>
-                              <p className="font-semibold text-gray-900 dark:text-white">{rule.description}</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{rule.issue_message}</p>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">{rule.description}</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{rule.issue_message}</p>
                               {rule.roster_name && (
-                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Context: {rule.roster_name}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Context: {rule.roster_name}</p>
                               )}
                             </div>
                           </div>
@@ -2594,7 +2594,7 @@ const SurveySettingsPage: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-sm">No validation rules configured for this survey.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No validation rules configured for this survey.</p>
                   )}
                 </div>
               )}

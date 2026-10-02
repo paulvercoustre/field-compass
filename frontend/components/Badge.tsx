@@ -55,7 +55,7 @@ const statusText: Record<string, string> = {
 export const statusDotClass = (status: string): string => tones[statusTone[status] ?? 'gray'].dot;
 
 export const Badge: React.FC<BadgeProps> = ({ status, size = 'sm' }) => {
-  const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs gap-1.5' : 'px-2.5 py-1 text-13 gap-2';
+  const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs gap-1.5' : 'px-2.5 py-1 text-sm gap-2';
   const tone = tones[statusTone[status] ?? 'gray'];
   const text = statusText[status] || status;
   return (

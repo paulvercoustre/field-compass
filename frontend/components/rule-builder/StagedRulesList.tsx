@@ -11,18 +11,18 @@ interface StagedRulesListProps {
 
 const StagedRulesList: React.FC<StagedRulesListProps> = ({ rules, onEdit, onDelete, canEdit = true }) => {
   if (rules.length === 0) {
-    return <p className="text-gray-500 text-center py-4">No rules have been added yet.</p>;
+    return <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No rules have been added yet.</p>;
   }
 
   return (
     <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
       {rules.map(rule => (
-        <div key={rule.id} className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+        <div key={rule.id} className="px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
           <div className="flex justify-between items-start">
-            <div>
-              <p className="font-semibold text-gray-900 dark:text-white">{rule.description}</p>
-              <p className="text-sm font-mono text-gray-600 dark:text-gray-400">{rule.issue_message}</p>
-              {rule.roster_name && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Context: {rule.roster_name}</p>}
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{rule.description}</p>
+              <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">{rule.issue_message}</p>
+              {rule.roster_name && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Context: {rule.roster_name}</p>}
             </div>
             {canEdit && (
               <div className="flex space-x-2 flex-shrink-0 ml-2">

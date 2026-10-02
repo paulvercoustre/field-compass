@@ -15,7 +15,7 @@ interface StatusCardProps {
 const StatusCard: React.FC<StatusCardProps> = ({ label, count, percentage, dotClass, onClick }) => {
   const body = (
     <>
-      <span className="flex items-center gap-2 text-13 text-gray-500 dark:text-gray-400">
+      <span className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
         {dotClass && <span className={`h-2 w-2 rounded-full ${dotClass}`} aria-hidden="true" />}
         {label}
       </span>
@@ -24,7 +24,7 @@ const StatusCard: React.FC<StatusCardProps> = ({ label, count, percentage, dotCl
           {count.toLocaleString()}
         </span>
         {percentage !== undefined && (
-          <span className="tabular text-13 text-gray-500 dark:text-gray-400">
+          <span className="tabular text-sm text-gray-500 dark:text-gray-400">
             {percentage.toFixed(1)}%
           </span>
         )}

@@ -72,7 +72,7 @@ const ValidationStatusDropdown: React.FC<ValidationStatusDropdownProps> = ({
                   currentStatus === option.value
                     ? 'opacity-50 cursor-not-allowed'
                     : ''
-                } group flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-13 text-gray-700 dark:text-gray-200`}
+                } group flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-gray-700 dark:text-gray-200`}
               >
                 {option.value ? (
                   <span className={`h-2 w-2 rounded-full ${statusDotClass(option.value)}`} aria-hidden="true" />

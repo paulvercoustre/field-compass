@@ -130,7 +130,7 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
         <p>{error}</p>
         <button 
           onClick={handleRefresh}
-          className="mt-1 text-13 font-medium underline underline-offset-2 hover:no-underline"
+          className="mt-1 text-sm font-medium underline underline-offset-2 hover:no-underline"
         >
           Try again
         </button>
@@ -154,7 +154,7 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
                 value={datePreset}
                 onChange={(e) => handleDatePresetChange(e.target.value)}
                 aria-label="Date range"
-                className="h-8 text-13 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs pl-2.5 pr-8 py-0 text-gray-700 dark:text-gray-200"
+                className="h-8 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs pl-2.5 pr-8 py-0 text-gray-700 dark:text-gray-200"
               >
                 <option value="all">All time</option>
                 <option value="last7">Last 7 days</option>

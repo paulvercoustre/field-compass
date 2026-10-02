@@ -35,7 +35,7 @@ const SubmissionList: React.FC<SubmissionListProps> = ({ submissions, onSelect, 
                     ))}
                 </ul>
             ) : (
-                <div className="flex items-center justify-center h-full p-4 text-center text-13 text-gray-500 dark:text-gray-400">
+                <div className="flex items-center justify-center h-full p-4 text-center text-sm text-gray-500 dark:text-gray-400">
                     <p>No submissions found.</p>
                 </div>
             )}

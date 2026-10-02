@@ -20,7 +20,7 @@ interface ProgressBarProps {
 const ProgressBar: React.FC<ProgressBarProps> = ({ percentage }) => {
   if (percentage === null || percentage === undefined || Number.isNaN(percentage)) {
     return (
-      <span className="text-13 text-gray-400 dark:text-gray-500" title="No target set">
+      <span className="text-sm text-gray-400 dark:text-gray-500" title="No target set">
         —
       </span>
     );

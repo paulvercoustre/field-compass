@@ -40,10 +40,6 @@ export default {
           950: '#0c0c0e',
         },
       },
-      fontSize: {
-        // The step between 12 px and 14 px that dense tool UIs live at.
-        '13': ['0.8125rem', { lineHeight: '1.25rem' }],
-      },
       boxShadow: {
         xs: '0 1px 2px 0 rgb(0 0 0 / 0.04)',
         card: '0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.03)',

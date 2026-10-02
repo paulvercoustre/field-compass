@@ -171,13 +171,13 @@ const UserSettingsPage: React.FC = () => {
             </div>
 
             {profileError && (
-              <div className="p-3 text-13 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg">
+              <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg">
                 <p className="text-sm text-red-600 dark:text-red-400">{profileError}</p>
               </div>
             )}
 
             {profileSuccess && (
-              <div className="p-3 text-13 bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-inset ring-emerald-600/15 dark:ring-emerald-400/20 rounded-lg">
+              <div className="p-3 text-sm bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-inset ring-emerald-600/15 dark:ring-emerald-400/20 rounded-lg">
                 <p className="text-sm text-green-600 dark:text-green-400">{profileSuccess}</p>
               </div>
             )}
@@ -275,13 +275,13 @@ const UserSettingsPage: React.FC = () => {
             </div>
 
             {passwordError && (
-              <div className="p-3 text-13 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg">
+              <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg">
                 <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
               </div>
             )}
 
             {passwordSuccess && (
-              <div className="p-3 text-13 bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-inset ring-emerald-600/15 dark:ring-emerald-400/20 rounded-lg">
+              <div className="p-3 text-sm bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-inset ring-emerald-600/15 dark:ring-emerald-400/20 rounded-lg">
                 <p className="text-sm text-green-600 dark:text-green-400">{passwordSuccess}</p>
               </div>
             )}
@@ -298,7 +298,7 @@ const UserSettingsPage: React.FC = () => {
 
         {/* Delete Account Section */}
         <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900/50 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete Account</h2>
+          <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-2">Delete Account</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Permanently delete your account and all associated data. This action cannot be undone.
           </p>
@@ -325,7 +325,7 @@ const UserSettingsPage: React.FC = () => {
                 This action cannot be undone. This will permanently delete your account and all associated data.
               </p>
               {deleteError && (
-                <div className="p-3 text-13 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
+                <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
                   <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>
                 </div>
               )}

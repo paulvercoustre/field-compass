@@ -28,7 +28,7 @@ const PermissionBadge: React.FC<{ permission?: string }> = ({ permission }) => {
     : 'bg-gray-100 text-gray-600 ring-gray-500/15 dark:bg-gray-700/50 dark:text-gray-300 dark:ring-gray-400/20';
   
   return (
-    <span className={`ml-auto flex-shrink-0 rounded px-1.5 py-px text-[10px] font-medium ring-1 ring-inset ${colors}`}>
+    <span className={`ml-auto flex-shrink-0 rounded px-1.5 py-px text-xs font-medium ring-1 ring-inset ${colors}`}>
       {permission === 'editor' ? 'Editor' : 'Viewer'}
     </span>
   );
@@ -76,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const iconButtonClass = "inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-200/70 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white transition-colors";
-  const rowClass = "flex w-full items-center gap-2.5 rounded-md text-13 transition-colors";
+  const rowClass = "flex w-full items-center gap-2.5 rounded-md text-sm transition-colors";
   const initial = (user?.username?.charAt(0) || user?.email?.charAt(0) || '?').toUpperCase();
 
   return (
@@ -133,14 +133,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       {isOpen && (
         <div className="flex-1 overflow-y-auto min-h-0">
           {isLoading ? (
-            <div className="px-5 py-4 text-13 text-gray-500 dark:text-gray-400">Loading…</div>
+            <div className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Loading…</div>
           ) : (
             <div className="px-2.5 pb-3 pt-4">
-              <div className="px-2 pb-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+              <div className="px-2 pb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
                 Surveys
               </div>
               {surveys.length === 0 ? (
-                <div className="px-2 py-1.5 text-13 text-gray-500 dark:text-gray-400">
+                <div className="px-2 py-1.5 text-sm text-gray-500 dark:text-gray-400">
                   No surveys yet.
                 </div>
               ) : (
@@ -152,7 +152,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         key={survey.survey_id}
                         onClick={() => handleSurveyClick(survey.survey_id)}
                         aria-current={isSelected ? 'true' : undefined}
-                        className={`w-full text-left px-2 py-1.5 rounded-md text-13 transition-colors ${
+                        className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
                           isSelected
                             ? 'bg-white text-gray-900 shadow-xs ring-1 ring-gray-200 dark:bg-gray-800 dark:text-white dark:ring-gray-700'
                             : 'text-gray-600 hover:bg-gray-200/60 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800/70 dark:hover:text-white'
@@ -162,11 +162,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                           <span className="font-medium truncate">{survey.survey_name}</span>
                           <PermissionBadge permission={survey.permission} />
                         </div>
-                        {survey.kobo_asset_id && (
-                          <div className="mt-px truncate font-mono text-[11px] text-gray-400 dark:text-gray-500">
-                            {survey.kobo_asset_id}
-                          </div>
-                        )}
                       </button>
                     );
                   })}
@@ -189,7 +184,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <div className="px-2.5 pb-2 pt-1.5">
-                <div className="truncate text-13 font-medium text-gray-900 dark:text-white">{user.username || 'Account'}</div>
+                <div className="truncate text-sm font-medium text-gray-900 dark:text-white">{user.username || 'Account'}</div>
                 <div className="truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
               </div>
               <div className="my-1 h-px bg-gray-100 dark:bg-gray-800" />
@@ -223,7 +218,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => setIsUserMenuOpen(prev => !prev)}
             aria-haspopup="menu"
             aria-expanded={isUserMenuOpen}
-            className={`flex items-center rounded-md text-13 transition-colors ${
+            className={`flex items-center rounded-md text-sm transition-colors ${
               isUserSettingsActive || isUserMenuOpen ? 'bg-gray-200/60 dark:bg-gray-800' : 'hover:bg-gray-200/60 dark:hover:bg-gray-800'
             } ${isOpen ? 'w-full gap-2.5 px-2 py-1.5' : 'p-1'}`}
             title={user.email}

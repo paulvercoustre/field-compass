@@ -112,7 +112,7 @@ const AIProvidersSection: React.FC = () => {
     <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI providers</h2>
+          <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">AI providers</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Use your own OpenAI-compatible account for AI checks and rule writing on surveys you own. Surveys without
             one use the Field Compass AI allowance. Keys are stored encrypted and never shown again.
@@ -276,7 +276,7 @@ const AIProvidersSection: React.FC = () => {
               Its stored key is deleted and cannot be recovered.
             </p>
             {deleteError && (
-              <div className="p-3 text-13 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
+              <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
                 <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>
               </div>
             )}

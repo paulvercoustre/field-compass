@@ -26,7 +26,7 @@ export const CardHeader: React.FC<CardHeaderProps> = ({ title, description, acti
   <div className={`flex items-start justify-between gap-4 ${className}`}>
     <div className="min-w-0">
       <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
-      {description && <p className="mt-0.5 text-13 text-gray-500 dark:text-gray-400">{description}</p>}
+      {description && <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{description}</p>}
     </div>
     {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
   </div>
@@ -34,5 +34,5 @@ export const CardHeader: React.FC<CardHeaderProps> = ({ title, description, acti
 
 /** A small heading over a group of cards. */
 export const SectionLabel: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = 'mb-3' }) => (
-  <h3 className={`text-13 font-medium text-gray-500 dark:text-gray-400 ${className}`}>{children}</h3>
+  <h3 className={`text-sm font-medium text-gray-500 dark:text-gray-400 ${className}`}>{children}</h3>
 );

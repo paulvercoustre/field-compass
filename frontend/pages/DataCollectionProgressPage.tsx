@@ -83,7 +83,7 @@ const DataCollectionProgressPage: React.FC = () => {
         title="Progress"
         actions={
           <>
-            <label className="flex items-center gap-2.5 text-13 text-gray-700 dark:text-gray-300">
+            <label className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-gray-300">
               <button
                 type="button"
                 role="switch"
@@ -130,7 +130,7 @@ const DataCollectionProgressPage: React.FC = () => {
             <Spinner />
           </div>
         ) : error && !isRunningETL ? (
-          <div className="p-4 text-center text-13 text-red-600 dark:text-red-400">{error}</div>
+          <div className="p-4 text-center text-sm text-red-600 dark:text-red-400">{error}</div>
         ) : (
           <div className="mx-auto max-w-screen-2xl">
             {progressData && (

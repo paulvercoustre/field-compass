@@ -71,7 +71,7 @@ const SubmissionStatusChart: React.FC<SubmissionStatusChartProps> = ({ data }) =
                 <button type="button" onClick={selectNone} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">None</button>
               </div>
               {STATUS_OPTIONS.map(opt => (
-                <label key={opt.key} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-13">
+                <label key={opt.key} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-sm">
                   <input
                     type="checkbox"
                     checked={selectedKeys.includes(opt.key)}
@@ -87,11 +87,11 @@ const SubmissionStatusChart: React.FC<SubmissionStatusChartProps> = ({ data }) =
       </div>
       
       {data.length === 0 ? (
-        <div className="text-center py-8 text-13 text-gray-500 dark:text-gray-400">
+        <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
           No data available
         </div>
       ) : selectedKeys.length === 0 ? (
-        <div className="text-center py-8 text-13 text-gray-500 dark:text-gray-400">
+        <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
           Select indicators from the dropdown to display
         </div>
       ) : (

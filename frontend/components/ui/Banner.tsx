@@ -35,7 +35,7 @@ const Banner: React.FC<BannerProps> = ({ tone = 'info', children, className = ''
   <div
     id={id}
     role={tone === 'error' ? 'alert' : 'status'}
-    className={`flex items-start gap-2.5 rounded-lg px-3 py-2 text-13 ring-1 ring-inset animate-fade-in ${tones[tone].box} ${className}`}
+    className={`flex items-start gap-2.5 rounded-lg px-3 py-2 text-sm ring-1 ring-inset animate-fade-in ${tones[tone].box} ${className}`}
   >
     <svg className="mt-0.5 h-4 w-4 flex-shrink-0 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {tones[tone].icon}

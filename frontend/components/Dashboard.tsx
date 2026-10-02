@@ -306,7 +306,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
               <Spinner />
             </div>
           ) : error && !isRunningETL ? (
-            <div className="p-4 text-center text-13 text-red-600 dark:text-red-400">{error}</div>
+            <div className="p-4 text-center text-sm text-red-600 dark:text-red-400">{error}</div>
           ) : (
             <div className="flex-1 min-h-0 overflow-hidden">
               <SubmissionList

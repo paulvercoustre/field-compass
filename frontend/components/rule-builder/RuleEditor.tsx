@@ -204,7 +204,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
       </FormField>
 
       <div>
-        <h4 className="text-md font-semibold text-gray-800 dark:text-gray-200 mb-2">Condition (defines the error)</h4>
+        <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Condition (defines the error)</h4>
         {errors.context && (
           <ErrorMessage error={errors.context} className="mb-2" />
         )}
