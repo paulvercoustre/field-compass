@@ -137,9 +137,6 @@ const RuleBuilder: React.FC = () => {
                         Beta
                       </span>
                     </div>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                      Describe your rule in plain English, and AI will convert it to a validation rule.
-                    </p>
                     <AINaturalLanguageInput 
                       surveyId={selectedSurvey.survey_id}
                       onRuleGenerated={handleAIRuleGenerated}

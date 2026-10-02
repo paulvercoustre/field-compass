@@ -24,8 +24,10 @@ export interface CollectionTargetsProps {
   mode: SamplingMode | null;
   /**
    * Called with the new mode. The caller is expected to discard the settings
-   * belonging to the mode being left -- see `discardedByModeChange` below for
-   * what that means and why.
+   * belonging to the mode being left: per-answer targets belong to a question
+   * the new mode does not use, and an uploaded file describes groupings that
+   * are not being read. Keeping them produced configs claiming to be `total`
+   * while still carrying a 69-row frame, which nobody can reason about.
    */
   onModeChange: (mode: SamplingMode) => void;
 
@@ -42,12 +44,6 @@ export interface CollectionTargetsProps {
   /** e.g. "label::English (en)" -- which translation to show for choices. */
   labelColumnChoices?: string;
   editable: boolean;
-  /**
-   * What switching away from the current mode would throw away, if anything.
-   * Shown next to the choices so the cost is visible before the click, not
-   * discovered after the save.
-   */
-  pendingDiscard?: string | null;
   /**
    * The file upload UI for `uploaded` mode, supplied by the page.
    *
@@ -81,36 +77,6 @@ const MODE_OPTIONS: Array<{ value: SamplingMode; label: string; hint: string }> 
     hint: 'A spreadsheet with one row per group. Use this for more than one grouping question.',
   },
 ];
-
-/**
- * What a mode currently holds, so the UI can say what changing it will cost.
- *
- * A mode's settings mean nothing under another mode -- per-answer targets
- * belong to a question the new mode does not use, and an uploaded file
- * describes groupings that are not being read. Leaving them behind produced a
- * config claiming to be `total` while still carrying a 69-row frame, which is
- * a config nobody can reason about and which the next reader has to guess at.
- */
-export const discardedByModeChange = (
-  from: SamplingMode | null,
-  frame: {
-    total_target?: number | null;
-    variable?: string | null;
-    targets_by_value?: Record<string, number> | null;
-    frame_data?: Record<string, any>[] | null;
-  }
-): string | null => {
-  if (from === 'total' && frame.total_target) {
-    return 'the total you entered';
-  }
-  if (from === 'by_variable' && (frame.variable || Object.keys(frame.targets_by_value || {}).length)) {
-    return 'the per-answer targets';
-  }
-  if (from === 'uploaded' && frame.frame_data?.length) {
-    return `the uploaded file (${frame.frame_data.length} rows)`;
-  }
-  return null;
-};
 
 /**
  * Total interviews an uploaded file plans for.
@@ -158,7 +124,6 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
   koboToolData,
   labelColumnChoices,
   editable,
-  pendingDiscard,
   uploadedSlot,
 }) => {
   const [plannedTotal, setPlannedTotal] = React.useState<string>('');
@@ -272,14 +237,12 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
   return (
     <div className="space-y-4">
       <fieldset>
-        <legend className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
-          How are your collection targets set?
-        </legend>
+        <legend className="sr-only">How are your collection targets set?</legend>
         <div className="space-y-2">
           {MODE_OPTIONS.map((option) => (
             <label
               key={option.value}
-              className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500"
+              className="flex items-start gap-3 p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg cursor-pointer transition-colors hover:border-gray-300 dark:hover:border-gray-700 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/40 dark:has-[:checked]:border-indigo-400 dark:has-[:checked]:bg-indigo-500/5"
             >
               <input
                 type="radio"
@@ -293,7 +256,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                 <span className="block text-sm font-medium text-gray-900 dark:text-white">
                   {option.label}
                 </span>
-                <span className="block text-xs text-gray-600 dark:text-gray-400">
+                <span className="block text-xs text-gray-500 dark:text-gray-400">
                   {option.hint}
                 </span>
               </span>
@@ -301,12 +264,6 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
           ))}
         </div>
       </fieldset>
-
-      {pendingDiscard && (
-        <p className="text-sm text-amber-700 dark:text-amber-400">
-          Changing this discards {pendingDiscard}. Nothing is lost until you save.
-        </p>
-      )}
 
       {mode === 'total' && (
         <div>
@@ -360,9 +317,6 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
           {variable && choices.length > 0 && (
             <>
               <div className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md space-y-3">
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  Fill the table from a number, then edit any group that differs.
-                </p>
                 <div className="flex flex-wrap items-end gap-2">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-400 mb-1">
@@ -474,10 +428,6 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                   </tfoot>
                 </table>
               </div>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                A group left blank has no target. It still appears on the progress page with
-                its count, just without a percentage.
-              </p>
             </>
           )}
         </div>

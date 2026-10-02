@@ -114,8 +114,7 @@ const AIProvidersSection: React.FC = () => {
         <div>
           <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">AI providers</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Use your own OpenAI-compatible account for AI checks and rule writing on surveys you own. Surveys without
-            one use the Field Compass AI allowance. Keys are stored encrypted and never shown again.
+            Your own OpenAI-compatible account.
           </p>
         </div>
         <button

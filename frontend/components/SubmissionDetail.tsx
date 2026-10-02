@@ -662,15 +662,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                   <textarea
                     value={reviewerNotes}
                     onChange={(e) => setReviewerNotes(e.target.value)}
-                    placeholder="Add reviewer notes for this submission..."
+                    placeholder="Add a note for other reviewers…"
                     rows={3}
-                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full rounded-md border border-gray-300 dark:border-gray-700 shadow-xs bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     disabled={isSavingReviewerNotes}
                   />
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Notes are saved to this submission and visible to reviewers with access.
-                    </p>
+                  <div className="flex items-center justify-end gap-3">
                     <button
                       type="button"
                       onClick={handleSaveReviewerNotes}

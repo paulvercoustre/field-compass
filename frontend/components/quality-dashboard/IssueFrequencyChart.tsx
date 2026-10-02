@@ -94,11 +94,6 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
               </BarChart>
             </ResponsiveContainer>
           </div>
-          {onIssueClick && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-              Click on a bar to filter submissions by that issue type
-            </p>
-          )}
         </>
       )}
     </div>

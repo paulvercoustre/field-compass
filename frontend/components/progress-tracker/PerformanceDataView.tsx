@@ -370,8 +370,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
       </div>
       
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-        Click column headers to sort. Click a row to view enumerator submissions.
-        <span className="ml-2">↑↓ arrows show comparison to team average (±5% threshold)</span>
+        ↑↓ compared with the team average (±5%)
       </p>
     </div>
   );

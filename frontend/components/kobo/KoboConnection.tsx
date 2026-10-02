@@ -293,9 +293,6 @@ const KoboConnection: React.FC = () => {
             </p>
           </div>
         )}
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-          Not sure? Look at the address bar when you're in Kobo.
-        </p>
       </fieldset>
 
       <ol className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
@@ -325,7 +322,7 @@ const KoboConnection: React.FC = () => {
           <span className="flex-shrink-0 font-semibold text-gray-900 dark:text-white">b.</span>
           <div className="flex-1 min-w-0">
             <label htmlFor="kobo-api-key" className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
-              Paste it here — we'll check it with Kobo straight away
+              Paste it here
             </label>
             <div className="flex flex-wrap gap-2">
               <input
@@ -366,8 +363,7 @@ const KoboConnection: React.FC = () => {
               )}
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Stored encrypted. Field Compass only uses it to read your projects and submissions and to save review
-              statuses back to Kobo.
+              Stored encrypted.
             </p>
           </div>
         </li>

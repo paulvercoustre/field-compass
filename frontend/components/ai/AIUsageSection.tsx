@@ -32,8 +32,7 @@ const AIUsageSection: React.FC = () => {
     <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
       <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">AI use{monthName && ` in ${monthName}`}</h2>
       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-4">
-        On the surveys you own. Each survey without its own provider gets a free monthly allowance of AI checks
-        {resets && `, renewed on ${resets}`}. Tokens are as reported by the provider.
+        On surveys you own. The free allowance{resets && ` renews on ${resets}`}.
       </p>
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

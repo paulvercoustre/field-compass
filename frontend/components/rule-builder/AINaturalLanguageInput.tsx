@@ -109,11 +109,8 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
           onKeyDown={handleKeyPress}
           placeholder="Example: Flag if respondent age is greater than 100"
           disabled={isGenerating}
-          className="w-full h-24 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full h-24 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         />
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Press Cmd/Ctrl+Enter to generate, or click the button below
-        </p>
       </div>
 
       <div>
@@ -208,7 +205,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
             <button
               onClick={handleReject}
               disabled={isGenerating}
-              className="flex-1 px-4 py-2 font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ✗ Reject
             </button>

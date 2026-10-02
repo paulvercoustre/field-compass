@@ -1,6 +1,6 @@
 import React from 'react';
-import InfoTip from './InfoTip';
-import { CORE_IDENTIFIER_HELP } from '../../constants/coreIdentifiers';
+import FieldLabel from './FieldLabel';
+import { CORE_IDENTIFIER_HINTS } from '../../constants/coreIdentifiers';
 import { suggestIdentifiers } from '../../utils/identifierSuggestions';
 
 interface VariableDropdownProps {
@@ -9,7 +9,7 @@ interface VariableDropdownProps {
   label: string;
   /** Questions in the loaded form. Empty until a form has been read. */
   availableVariables: string[];
-  /** Key into CORE_IDENTIFIER_HELP, and the identifier suggestions are keyed on. */
+  /** Key into CORE_IDENTIFIER_HINTS, and the identifier suggestions are keyed on. */
   helpKey?: string;
   /** Settings shows saved config as text until the user clicks Edit. */
   readOnly?: boolean;
@@ -40,10 +40,7 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-        {label}
-        {helpKey && CORE_IDENTIFIER_HELP[helpKey] && <InfoTip help={CORE_IDENTIFIER_HELP[helpKey]} />}
-      </label>
+      <FieldLabel hint={helpKey ? CORE_IDENTIFIER_HINTS[helpKey] : undefined}>{label}</FieldLabel>
 
       {readOnly ? (
         <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">

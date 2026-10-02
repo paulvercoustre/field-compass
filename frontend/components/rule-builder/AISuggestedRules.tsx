@@ -87,11 +87,6 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          AI will analyze your form and suggest relevant validation rules
-        </p>
-      </div>
 
       {suggestions.length === 0 ? (
         <button
@@ -201,20 +196,6 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
         </div>
       )}
 
-      {suggestions.length === 0 && !isLoading && (
-        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-600 dark:text-gray-400">
-            💡 <strong>Tip:</strong> AI suggestions are based on your survey's structure and include:
-          </p>
-          <ul className="mt-2 text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
-            <li>Range validation for numeric fields</li>
-            <li>Required field checks</li>
-            <li>Duration anomaly detection</li>
-            <li>Date validity checks</li>
-            <li>Logical consistency rules</li>
-          </ul>
-        </div>
-      )}
     </div>
   );
 };

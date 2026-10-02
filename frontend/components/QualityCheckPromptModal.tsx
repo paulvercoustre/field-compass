@@ -20,7 +20,7 @@ const QualityCheckPromptModal: React.FC<QualityCheckPromptModalProps> = ({
       >
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
-            Configure Data Quality Checks
+            Set up quality checks
           </h3>
           <button 
             onClick={onConfigureLater} 
@@ -32,13 +32,13 @@ const QualityCheckPromptModal: React.FC<QualityCheckPromptModalProps> = ({
         </div>
         
         <p className="text-gray-700 dark:text-gray-300 mb-6">
-          Your survey has been created successfully! Would you like to configure data quality checks now, or set them up later?
+          Survey created. Set up its quality checks now?
         </p>
         
         <div className="flex gap-3 justify-end">
           <button
             onClick={onConfigureLater}
-            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            className="h-8 px-3 text-sm font-medium bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 transition-colors"
           >
             Later
           </button>

@@ -225,9 +225,8 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
             */}
             {!hasTargets && (
                 <p className="mb-4 max-w-3xl text-sm text-gray-600 dark:text-gray-400">
-                    No collection targets set for this survey, so the figures below describe what
-                    has been collected rather than progress towards a plan. Add targets in survey
-                    settings to track completion.
+                    No collection targets set, so these figures show what has been collected.
+                    Add targets in survey settings to track completion.
                 </p>
             )}
             <div className="mb-4 inline-flex flex-wrap gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import InfoTip from './InfoTip';
-import { CORE_IDENTIFIER_HELP } from '../../constants/coreIdentifiers';
+import FieldLabel from './FieldLabel';
+import { CORE_IDENTIFIER_HINTS } from '../../constants/coreIdentifiers';
 import { useDkSuggestions, choiceLabel } from '../../utils/dkSuggestions';
 
 interface DkStringValuesProps {
@@ -77,10 +77,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-        Don't know — answer options
-        <InfoTip help={CORE_IDENTIFIER_HELP.dk_string_value} />
-      </label>
+      <FieldLabel hint={CORE_IDENTIFIER_HINTS.dk_string_value}>Don't know — answer options</FieldLabel>
 
       {readOnly ? null : (
         <>

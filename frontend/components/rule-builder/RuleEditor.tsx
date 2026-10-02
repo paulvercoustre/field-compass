@@ -191,7 +191,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
         htmlFor="rule-issue"
         required
         error={errors.issueMessage}
-        helpText="This message will appear in the quality log when this rule is triggered"
+        helpText="Shown on each submission this rule flags."
       >
         <input
           type="text"
@@ -204,7 +204,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
       </FormField>
 
       <div>
-        <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Condition (defines the error)</h4>
+        <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Condition</h4>
         {errors.context && (
           <ErrorMessage error={errors.context} className="mb-2" />
         )}
@@ -263,7 +263,7 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
             onClick={onCancel} 
             className="px-4 py-2 font-bold text-white bg-gray-600 rounded-md hover:bg-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
           >
-            Cancel Edit
+            Cancel edit
           </button>
         )}
       </div>
