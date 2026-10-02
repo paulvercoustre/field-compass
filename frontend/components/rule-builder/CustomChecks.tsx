@@ -114,8 +114,9 @@ const CustomChecks: React.FC<CustomChecksProps> = ({
     try {
       await onSave(rule, null);
       closePanel();
-    } catch {
+    } catch (err) {
       // The page reports the error; keep the composer open with the user's input.
+      throw err;
     }
   };
 

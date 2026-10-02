@@ -948,6 +948,7 @@ const SurveySettingsPage: React.FC = () => {
       await loadValidationRules(); // Refresh from server
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add the suggested checks');
+      throw err;
     }
   }, [selectedSurvey]);
 
