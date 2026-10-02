@@ -138,6 +138,9 @@ const KoboConnection: React.FC = () => {
     setError(null);
     setTestMessage(null);
     setJustConnected(false);
+    // Restore the saved server selection when changing the connection
+    setServer(savedPreset ? savedPreset.id : 'other');
+    setOtherServer(savedPreset ? '' : savedHost);
   };
 
   // --- Connected -----------------------------------------------------------
@@ -352,6 +355,9 @@ const KoboConnection: React.FC = () => {
                     setIsEditing(false);
                     setApiKey('');
                     setError(null);
+                    // Restore the saved server selection when cancelling
+                    setServer(savedPreset ? savedPreset.id : 'other');
+                    setOtherServer(savedPreset ? '' : savedHost);
                   }}
                   className={secondaryButton}
                 >

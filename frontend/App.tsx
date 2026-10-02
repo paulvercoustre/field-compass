@@ -35,7 +35,7 @@ const RequiresSurvey: React.FC<{ view: View; onAddSurvey: () => void; children: 
   onAddSurvey,
   children,
 }) => {
-  const { selectedSurvey, surveys, isLoading } = useSurvey();
+  const { selectedSurvey, surveys, isLoading, error } = useSurvey();
 
   if (!SURVEY_SCOPED_VIEWS.includes(view) || selectedSurvey) {
     return <>{children}</>;
@@ -45,6 +45,18 @@ const RequiresSurvey: React.FC<{ view: View; onAddSurvey: () => void; children: 
   // the first load would be a claim about a question not yet answered.
   if (isLoading) {
     return null;
+  }
+
+  // If there was an error loading surveys, show the error instead of onboarding
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-red-600 dark:text-red-400 text-lg mb-2">Failed to load surveys</p>
+          <p className="text-gray-500 text-sm">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   // No surveys at all: a new user. Show what to do, in order, rather than
