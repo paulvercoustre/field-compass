@@ -143,7 +143,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
             Generating...
           </span>
         ) : (
-          '✨ Generate Rule with AI'
+          'Fill in with AI'
         )}
       </button>
 
@@ -200,14 +200,14 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
               disabled={isGenerating}
               className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isGenerating ? 'Saving...' : '✓ Accept & Add to Editor'}
+              {isGenerating ? 'Saving...' : 'Add check'}
             </button>
             <button
               onClick={handleReject}
               disabled={isGenerating}
               className="flex-1 px-4 py-2 font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ✗ Reject
+              Discard
             </button>
           </div>
         </div>

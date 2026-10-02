@@ -1,201 +1,157 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StagedRule } from '../../types';
 import { getSuggestedRules } from '../../services/aiApi';
 import { generateUUID } from '../../utils/uuid';
 import ErrorMessage from '../ui/ErrorMessage';
-import SuccessMessage from '../ui/SuccessMessage';
+import { Spinner } from '../Spinner';
+import { describeConditions } from './conditionText';
 
 interface AISuggestedRulesProps {
   surveyId: string;
-  onRulesAdded: (rules: StagedRule[]) => void;
+  onRulesAdded: (rules: StagedRule[]) => void | Promise<void>;
+  /** Fetch suggestions as soon as this mounts, rather than waiting for a click. */
+  autoStart?: boolean;
+  /** Shows a Cancel button that closes the list. */
+  onClose?: () => void;
 }
+
+const describeError = (message: string): string => {
+  if (message.includes('Not authenticated')) {
+    return 'Your session has expired. Refresh the page and sign in again.';
+  }
+  if (message.includes('AI service is not available')) {
+    return 'AI is not set up for this survey. Add a provider in Account settings → AI integration.';
+  }
+  return message;
+};
 
 const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
   surveyId,
   onRulesAdded,
+  autoStart = false,
+  onClose,
 }) => {
-  const [suggestions, setSuggestions] = useState<Array<Omit<StagedRule, 'id'>>>([]);
+  const [suggestions, setSuggestions] = useState<Array<Omit<StagedRule, 'id'>> | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [addedCount, setAddedCount] = useState<number>(0);
-  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleGetSuggestions = async () => {
     setIsLoading(true);
     setError(null);
-    setSuggestions([]);
+    setSuggestions(null);
     setSelectedIds(new Set());
-    setAddedCount(0);
-    setShowSuccess(false);
 
     try {
       const suggestedRules = await getSuggestedRules(surveyId);
       setSuggestions(suggestedRules);
-      
       setSelectedIds(new Set(suggestedRules.map((_, idx) => idx)));
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to get suggestions';
-      // Check for specific error types and provide better messages
-      if (errorMessage.includes('Not authenticated')) {
-        setError('Authentication error. Please try refreshing the page and logging in again.');
-      } else if (errorMessage.includes('AI service is not available')) {
-        setError('AI service is not configured. Please contact your administrator to set up the OpenAI API key.');
-      } else {
-        setError(errorMessage);
-      }
+      setError(describeError(err instanceof Error ? err.message : 'Could not get suggestions'));
     } finally {
       setIsLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (autoStart) handleGetSuggestions();
+    // Runs once on open; a new survey remounts the component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggleSelection = (index: number) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(index)) {
-      newSelected.delete(index);
-    } else {
-      newSelected.add(index);
-    }
-    setSelectedIds(newSelected);
+    const next = new Set(selectedIds);
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
+    setSelectedIds(next);
   };
 
-  const handleAddSelected = () => {
+  const handleAddSelected = async () => {
+    if (!suggestions) return;
     const selectedRules = suggestions
       .filter((_, idx) => selectedIds.has(idx))
-      .map(rule => ({
-        ...rule,
-        id: generateUUID(),
-      }));
+      .map((rule) => ({ ...rule, id: generateUUID() }));
+    if (selectedRules.length === 0) return;
 
-    if (selectedRules.length > 0) {
-      onRulesAdded(selectedRules);
-      setAddedCount(selectedRules.length);
-      setShowSuccess(true);
-      setSuggestions([]);
+    setIsAdding(true);
+    try {
+      await onRulesAdded(selectedRules);
+      setSuggestions(null);
       setSelectedIds(new Set());
-      
-      setTimeout(() => setShowSuccess(false), 3000);
+      onClose?.();
+    } finally {
+      setIsAdding(false);
     }
   };
 
-  const handleClear = () => {
-    setSuggestions([]);
-    setSelectedIds(new Set());
-    setError(null);
-    setShowSuccess(false);
-  };
+  const secondaryButton =
+    'h-8 rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 shadow-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800';
 
   return (
-    <div className="space-y-4">
-
-      {suggestions.length === 0 ? (
-        <button
-          onClick={handleGetSuggestions}
-          disabled={isLoading}
-          className="w-full px-4 py-2 font-bold text-white bg-purple-600 rounded-md hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900"
-        >
-          {isLoading ? (
-            <span className="flex items-center justify-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Analyzing form...
-            </span>
-          ) : (
-            '💡 Analyze Form & Suggest Rules'
-          )}
+    <div className="space-y-3">
+      {!autoStart && suggestions === null && !isLoading && (
+        <button type="button" onClick={handleGetSuggestions} className={secondaryButton}>
+          Suggest checks from my form
         </button>
-      ) : (
-        <div className="flex space-x-2">
-          <button
-            onClick={handleAddSelected}
-            disabled={selectedIds.size === 0}
-            className="flex-1 px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-          >
-            Add Selected ({selectedIds.size})
-          </button>
-          <button
-            onClick={handleClear}
-            className="px-4 py-2 font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-          >
-            Clear
-          </button>
+      )}
+
+      {isLoading && (
+        <div className="flex items-center gap-2 py-2 text-sm text-gray-500 dark:text-gray-400">
+          <Spinner size="sm" />
+          Reading your form…
         </div>
       )}
 
-      {error && <ErrorMessage error={error} />}
+      {error && <ErrorMessage error={error} autoHide={false} />}
 
-      {showSuccess && (
-        <SuccessMessage message={`${addedCount} rule${addedCount !== 1 ? 's' : ''} added to editor!`} />
+      {suggestions && suggestions.length === 0 && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">No suggestions for this form.</p>
       )}
 
-      {suggestions.length > 0 && (
-        <div className="space-y-2 max-h-[500px] overflow-y-auto">
-          <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-            {suggestions.length} suggestions found. Select rules to add:
-          </p>
-          
+      {suggestions && suggestions.length > 0 && (
+        <ul className="max-h-96 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
           {suggestions.map((suggestion, index) => (
-            <div
-              key={index}
-              className={`p-3 border rounded-md cursor-pointer transition-all ${
-                selectedIds.has(index)
-                  ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700'
-                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-purple-200 dark:hover:border-purple-800'
-              }`}
-              onClick={() => toggleSelection(index)}
-            >
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0 pt-0.5">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(index)}
-                    onChange={() => toggleSelection(index)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                  />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {suggestion.description}
-                    </p>
-                    <span className="ml-2 flex-shrink-0 text-xs px-2 py-1 bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-200 rounded">
-                      AI
-                    </span>
-                  </div>
-                  
-                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                    {suggestion.issue_message}
-                  </p>
-
-                  <div className="mt-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 p-2 rounded border border-gray-200 dark:border-gray-700">
-                    {suggestion.conditions.map((condition, condIdx) => {
-                      if ('joiner' in condition) {
-                        return (
-                          <span key={condIdx} className="text-purple-600 dark:text-purple-400 font-bold mx-1">
-                            {condition.joiner === '&' ? 'AND' : 'OR'}
-                          </span>
-                        );
-                      }
-                      return (
-                        <span key={condIdx}>
-                          <span className="text-blue-600 dark:text-blue-400">{condition.variable}</span>
-                          <span className="text-gray-500 dark:text-gray-400"> {condition.operator} </span>
-                          <span className="text-green-600 dark:text-green-400">{condition.value}</span>
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <li key={index}>
+              <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-900">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(index)}
+                  onChange={() => toggleSelection(index)}
+                  className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-gray-900 dark:text-white">{suggestion.description}</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">{suggestion.issue_message}</span>
+                  <code className="mt-1 block truncate font-mono text-xs text-gray-600 dark:text-gray-300">
+                    {describeConditions(suggestion.conditions)}
+                  </code>
+                </span>
+              </label>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
+      {(onClose || (suggestions && suggestions.length > 0)) && (
+        <div className="flex items-center justify-end gap-2">
+          {onClose && (
+            <button type="button" onClick={onClose} className={secondaryButton}>
+              Cancel
+            </button>
+          )}
+          {suggestions && suggestions.length > 0 && (
+            <button
+              type="button"
+              onClick={handleAddSelected}
+              disabled={selectedIds.size === 0 || isAdding}
+              className="h-8 rounded-md bg-indigo-600 px-3 text-sm font-medium text-white shadow-xs hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isAdding ? 'Adding…' : `Add ${selectedIds.size} ${selectedIds.size === 1 ? 'check' : 'checks'}`}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };

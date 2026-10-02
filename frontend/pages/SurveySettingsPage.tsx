@@ -6,10 +6,7 @@ import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
 import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
 import { StagedRule, SamplingMode } from '../types';
-import RuleEditor from '../components/rule-builder/RuleEditor';
-import StagedRulesList from '../components/rule-builder/StagedRulesList';
-import AINaturalLanguageInput from '../components/rule-builder/AINaturalLanguageInput';
-import AISuggestedRules from '../components/rule-builder/AISuggestedRules';
+import CustomChecks from '../components/rule-builder/CustomChecks';
 import { Spinner } from '../components/Spinner';
 import SettingsLayout from '../components/ui/SettingsLayout';
 import ErrorMessage from '../components/ui/ErrorMessage';
@@ -30,7 +27,8 @@ const SurveySettingsPage: React.FC = () => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false); // Used for Custom Quality Checks only
+  // Opens the custom-check composer on arrival, after a survey is created
+  const [isEditing, setIsEditing] = useState(false);
   const [isEditingOutlier, setIsEditingOutlier] = useState(false);
   const [isEditingLLM, setIsEditingLLM] = useState(false);
   const [isSavingOutlier, setIsSavingOutlier] = useState(false);
@@ -65,7 +63,6 @@ const SurveySettingsPage: React.FC = () => {
   // Validation rules state
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
   const [stagedRules, setStagedRules] = useState<StagedRule[]>([]);
-  const [currentlyEditing, setCurrentlyEditing] = useState<StagedRule | null>(null);
   const [isLoadingRules, setIsLoadingRules] = useState(false);
 
   // Kobo tool state
@@ -899,40 +896,29 @@ const SurveySettingsPage: React.FC = () => {
     setDeleteError(null);
   };
 
-  const handleSaveRule = useCallback(async (rule: Omit<StagedRule, 'id'>) => {
+  const handleSaveCustomCheck = useCallback(async (rule: Omit<StagedRule, 'id'>, ruleId: string | null) => {
     if (!selectedSurvey) return;
 
     try {
       const dbRule = stagedRuleToDbFormat({ ...rule, id: '' });
-      
-      if (currentlyEditing) {
-        // Update existing rule
-        await updateValidationRule(selectedSurvey.survey_id, currentlyEditing.id, {
+      if (ruleId) {
+        await updateValidationRule(selectedSurvey.survey_id, ruleId, {
           rule_name: rule.description,
           rule_data: dbRule,
         });
       } else {
-        // Create new rule
         await createValidationRule(selectedSurvey.survey_id, {
           rule_name: rule.description,
           rule_data: dbRule,
           is_active: true,
         });
       }
-      
-      setCurrentlyEditing(null);
       await loadValidationRules(); // Refresh from server
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save validation rule');
+      setError(err instanceof Error ? err.message : 'Failed to save the check');
+      throw err; // Lets the form stay open with what the user entered
     }
-  }, [currentlyEditing, selectedSurvey]);
-
-  const handleEditRule = useCallback((ruleId: string) => {
-    const ruleToEdit = stagedRules.find(r => r.id === ruleId);
-    if (ruleToEdit) {
-      setCurrentlyEditing(ruleToEdit);
-    }
-  }, [stagedRules]);
+  }, [selectedSurvey]);
 
   const handleDeleteRule = useCallback(async (ruleId: string) => {
     if (!selectedSurvey) return;
@@ -940,47 +926,11 @@ const SurveySettingsPage: React.FC = () => {
     try {
       await deleteValidationRule(selectedSurvey.survey_id, ruleId);
       setStagedRules(rules => rules.filter(r => r.id !== ruleId));
-      if (currentlyEditing?.id === ruleId) {
-        setCurrentlyEditing(null);
-      }
       await loadValidationRules(); // Refresh from server
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete validation rule');
+      setError(err instanceof Error ? err.message : 'Failed to delete the check');
     }
-  }, [currentlyEditing, selectedSurvey]);
-
-  const handleCancelEdit = useCallback(() => {
-    setCurrentlyEditing(null);
-  }, []);
-
-  const handleAIRuleGenerated = useCallback(async (rule: StagedRule) => {
-    if (!selectedSurvey) {
-      throw new Error('No survey selected');
-    }
-
-    // Clear any currently editing rule
-    if (currentlyEditing) {
-      setCurrentlyEditing(null);
-    }
-
-    try {
-      const dbRule = stagedRuleToDbFormat({ ...rule, id: '' });
-      
-      // Create new rule
-      await createValidationRule(selectedSurvey.survey_id, {
-        rule_name: rule.description,
-        rule_data: dbRule,
-        is_active: true,
-      });
-      
-      // Refresh the rules list from server
-      await loadValidationRules();
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save validation rule';
-      setError(errorMessage);
-      throw new Error(errorMessage); // Re-throw so the AI component can catch it
-    }
-  }, [currentlyEditing, selectedSurvey]);
+  }, [selectedSurvey]);
 
   const handleAISuggestedRulesAdded = useCallback(async (rules: StagedRule[]) => {
     // Save all suggested rules to the database
@@ -996,9 +946,8 @@ const SurveySettingsPage: React.FC = () => {
         });
       }
       await loadValidationRules(); // Refresh from server
-      setSuccess(`${rules.length} rule${rules.length !== 1 ? 's' : ''} added successfully!`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save suggested rules');
+      setError(err instanceof Error ? err.message : 'Failed to add the suggested checks');
     }
   }, [selectedSurvey]);
 
@@ -2401,123 +2350,21 @@ const SurveySettingsPage: React.FC = () => {
               </div>
             </section>
 
-            {/* Custom Quality Checks */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Custom checks</h2>
-                {canEditSurvey && (
-                  isEditing ? (
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
-                    >
-                      Done
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                    >
-                      Edit
-                    </button>
-                  )
-                )}
-              </div>
-              {isEditing ? (
-                <div className="space-y-6">
-                  {!koboToolData ? (
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Please ensure Kobo tool is loaded first to create validation rules.
-                    </p>
-                  ) : (
-                    <>
-                      {/* AI Rule Builder Section */}
-                      {selectedSurvey && (
-                        <div className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-indigo-200 dark:border-indigo-800">
-                          <div className="flex items-center mb-4">
-                            <span className="text-2xl mr-2">✨</span>
-                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Write a rule with AI</h3>
-                            <span className="ml-2 text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full">
-                              Beta
-                            </span>
-                          </div>
-                          <AINaturalLanguageInput 
-                            surveyId={selectedSurvey.survey_id}
-                            onRuleGenerated={handleAIRuleGenerated}
-                          />
-                        </div>
-                      )}
-
-                      {/* AI Suggestions Section */}
-                      {selectedSurvey && (
-                        <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-850 dark:to-gray-900 rounded-lg border-2 border-purple-200 dark:border-purple-800">
-                          <div className="flex items-center mb-4">
-                            <span className="text-2xl mr-2">💡</span>
-                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">AI suggestions</h3>
-                          </div>
-                          <AISuggestedRules 
-                            surveyId={selectedSurvey.survey_id}
-                            onRulesAdded={handleAISuggestedRulesAdded}
-                          />
-                        </div>
-                      )}
-
-                      {/* Manual Rule Editor */}
-                      <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <h3 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white">Create a rule</h3>
-                        <RuleEditor
-                          koboToolData={koboToolData}
-                          onSave={handleSaveRule}
-                          onCancel={handleCancelEdit}
-                          editingRule={currentlyEditing}
-                        />
-                      </div>
-                      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                        <h3 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white">Saved rules</h3>
-                        {isLoadingRules ? (
-                          <div className="flex items-center justify-center py-4">
-                            <Spinner />
-                          </div>
-                        ) : (
-                          <StagedRulesList
-                            rules={stagedRules}
-                            onEdit={handleEditRule}
-                            onDelete={handleDeleteRule}
-                            canEdit={canEditSurvey}
-                          />
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {isLoadingRules ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Spinner />
-                    </div>
-                  ) : stagedRules.length > 0 ? (
-                    <div className="space-y-2">
-                      {stagedRules.map((rule) => (
-                        <div key={rule.id} className="px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">{rule.description}</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{rule.issue_message}</p>
-                              {rule.roster_name && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Context: {rule.roster_name}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">No validation rules configured for this survey.</p>
-                  )}
-                </div>
-              )}
-            </section>
+            {/* Custom checks */}
+            {selectedSurvey && (
+              <CustomChecks
+                key={selectedSurvey.survey_id}
+                surveyId={selectedSurvey.survey_id}
+                rules={stagedRules}
+                isLoading={isLoadingRules}
+                canEdit={canEditSurvey}
+                koboToolData={koboToolData}
+                onSave={handleSaveCustomCheck}
+                onDelete={handleDeleteRule}
+                onAddMany={handleAISuggestedRulesAdded}
+                startComposing={isEditing}
+              />
+            )}
           </div>
         ) : null}
     </SettingsLayout>
