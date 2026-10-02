@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from database.models import AIConnection, AIUsage, Base, SubmissionCurrent, SurveyConfig, User
 from services import ai_endpoints, ai_providers, qualitative_worker_runtime
-from services.ai_client import Capabilities, ResolvedProvider
+from services.ai_client import CallUsage, Capabilities, ResolvedProvider
 from services.ai_endpoints import EndpointRejected, validate_base_url
 from services.ai_errors import AUTH, BAD_REQUEST, AIError
 from services.ai_providers import (
@@ -253,7 +253,7 @@ class TestNoteOutcome:
         record = usage_recorder(
             test_db, survey.survey_id, QUALITATIVE_CHECK, provider=self._provider(connection)
         )
-        record("m", "ok", 10, 5)
+        record(CallUsage("m", "ok", 10, 5))
 
         row = test_db.query(AIUsage).one()
         assert row.connection_id == connection.connection_id
@@ -306,6 +306,7 @@ class TestWorkerUsesTheSurveysProvider:
 
             def check_qualitative_responses(self, **kwargs):
                 seen["provider"] = kwargs["provider"]
+                seen["end_user"] = kwargs["end_user"]
                 return []
 
         monkeypatch.setattr(qualitative_worker_runtime, "AIService", FakeAIService)
@@ -321,13 +322,15 @@ class TestWorkerUsesTheSurveysProvider:
             test_db.expire_all()
             return result, test_db.query(SubmissionCurrent).one()
 
-        return SimpleNamespace(connection=connection, seen=seen, run=run)
+        return SimpleNamespace(connection=connection, owner=owner, seen=seen, run=run)
 
     def test_checks_go_to_the_survey_provider(self, setup):
         result, stored = setup.run()
         assert result["status"] == "success"
         assert setup.seen["provider"].connection_id == setup.connection.connection_id
         assert stored.llm_model_used == "gpt-4o-mini"
+        # Checks are attributed to the survey's owner.
+        assert setup.seen["end_user"] == str(setup.owner.user_id)
 
     def test_paused_provider_is_not_called(self, setup, test_db):
         setup.connection.status = FAILING

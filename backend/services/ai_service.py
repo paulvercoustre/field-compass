@@ -64,6 +64,7 @@ class AIService:
         survey_context: dict[str, Any] | None = None,
         record: UsageRecorder | None = None,
         provider: ResolvedProvider | None = None,
+        end_user: str | None = None,
     ) -> dict[str, Any]:
         """
         Generate a validation rule from natural language description.
@@ -259,6 +260,7 @@ Generate a validation rule matching the exact JSON schema."""
                 schema=rule_schema,
                 max_output=self.rule_gen_max_completion_tokens,
                 record=record,
+                end_user=end_user,
             )
         except AIError as error:
             raise ValueError(rule_error_message(error)) from error
@@ -275,6 +277,7 @@ Generate a validation rule matching the exact JSON schema."""
         existing_rules: list[dict[str, str]] | None = None,
         record: UsageRecorder | None = None,
         provider: ResolvedProvider | None = None,
+        end_user: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Suggest validation rules based on Kobo form structure.
@@ -480,6 +483,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
                     "required": ["rules"],
                 },
                 record=record,
+                end_user=end_user,
             )
         except AIError as error:
             raise ValueError(rule_error_message(error)) from error
@@ -541,6 +545,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         check_types: list[str],
         record: UsageRecorder | None = None,
         provider: ResolvedProvider | None = None,
+        end_user: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Check qualitative text responses for quality issues using a cheap model.
@@ -641,6 +646,7 @@ Remember: {describe_dk_strings(dk_string)} and {dk_numeric} are valid "Don't Kno
                 schema=response_schema,
                 max_output=self.qual_check_max_completion_tokens,
                 record=record,
+                end_user=end_user,
             )
         except AIError as error:
             logger.warning("Qualitative check failed (%s)", error)

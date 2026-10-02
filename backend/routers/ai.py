@@ -172,9 +172,15 @@ async def generate_rule_from_natural_language(
             existing_rules=existing_rules_context,
             survey_context=survey_context,
             record=usage_recorder(
-                db, survey_uuid, RULE_GENERATION, provider=provider, user_id=current_user.user_id
+                db,
+                survey_uuid,
+                RULE_GENERATION,
+                provider=provider,
+                user_id=current_user.user_id,
+                billed_user_id=survey_config.user_id,
             ),
             provider=provider,
+            end_user=str(current_user.user_id),
         )
 
         logger.info(
@@ -276,9 +282,15 @@ async def suggest_validation_rules(
             special_values=special_values,
             existing_rules=existing_rules_context,
             record=usage_recorder(
-                db, survey_uuid, RULE_SUGGESTION, provider=provider, user_id=current_user.user_id
+                db,
+                survey_uuid,
+                RULE_SUGGESTION,
+                provider=provider,
+                user_id=current_user.user_id,
+                billed_user_id=survey_config.user_id,
             ),
             provider=provider,
+            end_user=str(current_user.user_id),
         )
 
         logger.info(

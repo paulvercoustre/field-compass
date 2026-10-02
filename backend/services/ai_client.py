@@ -24,6 +24,7 @@ See docs/specs/ai-provider-overhaul.md, section 6.1.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -53,8 +54,21 @@ DEFAULT_BASE_URL = "https://api.openai.com/v1"
 MAX_COMPLETION_TOKENS = "max_completion_tokens"
 MAX_TOKENS = "max_tokens"
 
-# Called once per call: (model, outcome, input_tokens, output_tokens).
-UsageRecorder = Callable[[str, str, int | None, int | None], None]
+
+@dataclass(frozen=True)
+class CallUsage:
+    """What one call used, as the provider reported it. Token counts may be None."""
+
+    model: str
+    outcome: str  # "ok" or an AIError category
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cached_input_tokens: int | None = None  # part of input_tokens, billed lower
+    reasoning_tokens: int | None = None  # part of output_tokens, billed as output
+
+
+# Called once per call, successful or not.
+UsageRecorder = Callable[[CallUsage], None]
 
 
 @dataclass
@@ -138,6 +152,11 @@ def _first_json_object(text: str) -> Any:
     raise AIError(BAD_RESPONSE, "The AI reply was not valid JSON.")
 
 
+def safety_identifier(end_user: str) -> str:
+    """A stable, non-reversible stand-in for a user id, as OpenAI recommends."""
+    return hashlib.sha256(f"field-compass:{end_user}".encode()).hexdigest()[:32]
+
+
 class AIClient:
     """Sends schema-shaped requests to OpenAI-compatible endpoints."""
 
@@ -167,6 +186,7 @@ class AIClient:
         max_output: int,
         check_schema: dict[str, Any] | None = None,
         record: UsageRecorder | None = None,
+        end_user: str | None = None,
     ) -> dict[str, Any]:
         """
         Ask for a JSON object matching ``schema``; return it or raise AIError.
@@ -174,6 +194,8 @@ class AIClient:
         ``check_schema`` validates the reply instead of ``schema`` -- for
         callers that would rather drop a bad item than the whole reply.
         ``record`` is told about every call, successful or not.
+        ``end_user`` is who the call is for, sent hashed to OpenAI's own API
+        so its abuse monitoring can single out one user rather than the key.
         """
         client = self._client_factory(
             api_key=provider.api_key,
@@ -183,7 +205,7 @@ class AIClient:
             http_client=openai.DefaultHttpxClient(follow_redirects=False),
         )
         capabilities = provider.capabilities
-        input_tokens = output_tokens = None
+        input_tokens = output_tokens = cached_tokens = reasoning_tokens = None
         outcome = "ok"
         started = time.time()
         try:
@@ -191,6 +213,11 @@ class AIClient:
                 request = self._request(
                     provider, capabilities, name, system, user, schema, max_output
                 )
+                if end_user and (provider.base_url or DEFAULT_BASE_URL).startswith(
+                    DEFAULT_BASE_URL
+                ):
+                    # OpenAI's field; other endpoints may reject an unknown one.
+                    request["extra_body"] = {"safety_identifier": safety_identifier(end_user)}
                 try:
                     response = client.chat.completions.create(**request)
                     break
@@ -209,6 +236,12 @@ class AIClient:
             usage = getattr(response, "usage", None)
             input_tokens = getattr(usage, "prompt_tokens", None)
             output_tokens = getattr(usage, "completion_tokens", None)
+            cached_tokens = getattr(
+                getattr(usage, "prompt_tokens_details", None), "cached_tokens", None
+            )
+            reasoning_tokens = getattr(
+                getattr(usage, "completion_tokens_details", None), "reasoning_tokens", None
+            )
             data = self._parse(response)
             self._validate(data, check_schema or schema)
             return data
@@ -231,7 +264,16 @@ class AIClient:
             )
             if record is not None:
                 try:
-                    record(provider.model, outcome, input_tokens, output_tokens)
+                    record(
+                        CallUsage(
+                            model=provider.model,
+                            outcome=outcome,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            cached_input_tokens=cached_tokens,
+                            reasoning_tokens=reasoning_tokens,
+                        )
+                    )
                 except Exception:
                     logger.exception("Could not record AI usage")
 

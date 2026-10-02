@@ -7,12 +7,13 @@ replies or errors, standing in for endpoints that differ in what they accept.
 
 import json
 from types import SimpleNamespace
+from uuid import uuid4
 
 import httpx
 import openai
 import pytest
 
-from database.models import AIUsage
+from database.models import AIUsage, User
 from services import ai_client
 from services.ai_client import (
     JSON_OBJECT,
@@ -20,9 +21,11 @@ from services.ai_client import (
     MAX_TOKENS,
     PROMPT_ONLY,
     AIClient,
+    CallUsage,
     Capabilities,
     ResolvedProvider,
     operator_provider,
+    safety_identifier,
 )
 from services.ai_errors import AUTH, BAD_REQUEST, BAD_RESPONSE, NOT_CONFIGURED, AIError
 from services.ai_usage import QUALITATIVE_CHECK, usage_recorder
@@ -36,14 +39,26 @@ SCHEMA = {
 _REQUEST = httpx.Request("POST", "https://llm.example/v1/chat/completions")
 
 
-def _reply(content, prompt_tokens=120, completion_tokens=30, finish_reason="stop"):
+def _reply(
+    content,
+    prompt_tokens=120,
+    completion_tokens=30,
+    finish_reason="stop",
+    cached_tokens=None,
+    reasoning_tokens=None,
+):
     return SimpleNamespace(
         choices=[
             SimpleNamespace(
                 message=SimpleNamespace(content=content, refusal=None), finish_reason=finish_reason
             )
         ],
-        usage=SimpleNamespace(prompt_tokens=prompt_tokens, completion_tokens=completion_tokens),
+        usage=SimpleNamespace(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            prompt_tokens_details=SimpleNamespace(cached_tokens=cached_tokens),
+            completion_tokens_details=SimpleNamespace(reasoning_tokens=reasoning_tokens),
+        ),
     )
 
 
@@ -256,8 +271,9 @@ class TestReplies:
 class TestUsage:
     def test_success_records_tokens(self):
         calls = []
-        _call(FakeEndpoint(_reply('{"answer": "yes"}', 120, 30)), record=lambda *a: calls.append(a))
-        assert calls == [("some-model", "ok", 120, 30)]
+        reply = _reply('{"answer": "yes"}', 120, 30, cached_tokens=100, reasoning_tokens=20)
+        _call(FakeEndpoint(reply), record=calls.append)
+        assert calls == [CallUsage("some-model", "ok", 120, 30, 100, 20)]
 
     def test_failure_records_the_category(self):
         calls = []
@@ -265,8 +281,8 @@ class TestUsage:
             _rejected("Incorrect API key", status=401, cls=openai.AuthenticationError)
         )
         with pytest.raises(AIError):
-            _call(endpoint, record=lambda *a: calls.append(a))
-        assert calls == [("some-model", AUTH, None, None)]
+            _call(endpoint, record=calls.append)
+        assert calls == [CallUsage("some-model", AUTH)]
 
     def test_a_broken_recorder_does_not_lose_the_answer(self):
         def broken(*_):
@@ -287,6 +303,43 @@ class TestUsage:
             "ok",
         )
         assert (row.input_tokens, row.output_tokens) == (120, 30)
+        assert row.cost_usd_micros is None  # "some-model" has no price
+
+    def test_recorder_bills_the_owner_and_prices_the_call(self, test_db, test_survey_config):
+        owner = User(user_id=uuid4(), email="o@example.invalid", username="o", password_hash="x")
+        test_db.add(owner)
+        test_db.commit()
+        record = usage_recorder(
+            test_db, test_survey_config.survey_id, QUALITATIVE_CHECK, billed_user_id=owner.user_id
+        )
+        provider = ResolvedProvider(api_key="sk-test", model="gpt-5-mini")
+        reply = _reply('{"answer": "yes"}', 1300, 600, cached_tokens=300, reasoning_tokens=450)
+        _call(FakeEndpoint(reply), provider, record=record)
+
+        row = test_db.query(AIUsage).one()
+        assert row.billed_user_id == owner.user_id
+        assert (row.cached_input_tokens, row.reasoning_tokens) == (300, 450)
+        # 1000 x 0.25 + 300 x 0.025 + 600 x 2.00 micro-dollars
+        assert row.cost_usd_micros == 1458
+
+
+class TestEndUser:
+    def test_sent_hashed_to_openai(self):
+        endpoint = FakeEndpoint(_reply('{"answer": "yes"}'))
+        _call(endpoint, end_user="2f6d1c0e-user")
+
+        sent = endpoint.requests[0]["extra_body"]["safety_identifier"]
+        assert sent == safety_identifier("2f6d1c0e-user")
+        assert "2f6d1c0e-user" not in sent and len(sent) == 32
+
+    def test_not_sent_to_other_endpoints(self):
+        """Another endpoint may reject a field it does not know."""
+        provider = ResolvedProvider(
+            api_key="k", model="m", base_url="https://ours.openai.azure.com/v1"
+        )
+        endpoint = FakeEndpoint(_reply('{"answer": "yes"}'))
+        _call(endpoint, provider, end_user="2f6d1c0e-user")
+        assert "extra_body" not in endpoint.requests[0]
 
 
 class TestOperatorProvider:

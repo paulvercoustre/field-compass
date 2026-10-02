@@ -6,7 +6,17 @@ These models map to the PostgreSQL schema defined in schema.sql.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -246,6 +256,16 @@ class AIUsage(Base):
     user_id = Column(
         UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
     )
+    # The account the call counts against: the survey's owner when it was made.
+    # Recorded, not derived later, because a survey can change hands.
+    billed_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    cached_input_tokens = Column(Integer, nullable=True)  # part of input, billed lower
+    reasoning_tokens = Column(Integer, nullable=True)  # part of output, billed as output
+    # List-price cost when the call was made, in millionths of a dollar; NULL
+    # when the model is not in the price table.
+    cost_usd_micros = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 

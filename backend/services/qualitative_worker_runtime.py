@@ -165,9 +165,15 @@ def run_qualitative_check_job(
                     dk_string=engine.dk_string_value,
                     check_types=engine.llm_check_types,
                     record=usage_recorder(
-                        db, survey_id, QUALITATIVE_CHECK, submission_id, provider=provider
+                        db,
+                        survey_id,
+                        QUALITATIVE_CHECK,
+                        submission_id,
+                        provider=provider,
+                        billed_user_id=survey_config.user_id,
                     ),
                     provider=provider,
+                    end_user=str(survey_config.user_id) if survey_config.user_id else None,
                 )
             except AIError as error:
                 if error.retryable and not final_attempt:

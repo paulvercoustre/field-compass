@@ -497,9 +497,10 @@ Each phase is shippable on its own, in this order.
 | **1. Provider layer** | `AIClient`, capability profile, schema validation for every mode, `ai_usage` table, `OPENAI_BASE_URL` for the operator key | Behaviour unchanged for users; removes the `gpt-5` name checks |
 | **2. Bring your own provider** | `ai_connections`, `survey_configs.ai_connection_id`, endpoints (§6.3), connection test, URL validation, circuit breaker, Settings card and dialog | The core of option C |
 | **3. Allowance** | Allowance counting and enforcement, `not_run_allowance`, usage view, pull summary copy | Turns the operator cost into a configured ceiling |
+| **3b. Billing groundwork** | Each `ai_usage` row records the account it counts against (`billed_user_id`: the survey's owner at the time), cached-input and reasoning tokens, and its list-price cost in micro-dollars from `services/ai_prices.json` (overridable with `AI_PRICES_FILE`; unpriced models record no cost). OpenAI's own API also receives a hashed `safety_identifier` per user. Revision `0005` | Lets a paid plan bill from day one of its data; no payments yet |
 | **4. Rule builder review step** | F-24 B | Independent; can move earlier |
 
-**Status:** phases 0–3 are implemented on `claude/ai-provider-overhaul`.
+**Status:** phases 0–3 and 3b are implemented on `claude/ai-provider-overhaul`.
 
 **Direction after phase 3.** Per-user keys stay, but as the option for
 advanced users rather than the main answer to cost. Most target users (field
@@ -509,6 +510,16 @@ owned by an **organisation**, configured once by an admin, which needs an
 organisation concept in Field Compass first; large organisations can already
 self-host with their own `OPENAI_API_KEY` and `OPENAI_BASE_URL`. Users who
 bring their own key should use a dedicated key with a spending limit.
+
+**A paid option later** builds on 3b rather than on per-user OpenAI keys (a
+key cannot enforce a per-user limit; OpenAI budgets are per project): plans
+give an account a monthly number of AI checks, a credit ledger records
+grants, purchases and use (`ai_usage` is the use side), Stripe sells credit
+packs or a subscription, and the existing allowance checks read the plan's
+limit instead of the server setting. Sell checks, not tokens, and cap output
+per check so its cost stays predictable. Measured on 2026-10-02: one check
+with `gpt-5-mini` was 531 tokens in and 343 out, 256 of them reasoning,
+about $0.0008 at the table's prices.
 
 ## 12. Testing
 
