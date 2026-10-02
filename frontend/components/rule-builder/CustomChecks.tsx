@@ -6,6 +6,7 @@ import AISuggestedRules from './AISuggestedRules';
 import ErrorMessage from '../ui/ErrorMessage';
 import { Spinner } from '../Spinner';
 import { describeConditions } from './conditionText';
+import { SparkleIcon } from '../ui/icons';
 
 interface CustomChecksProps {
   surveyId: string;
@@ -24,12 +25,6 @@ interface CustomChecksProps {
 
 type Panel = 'none' | 'compose' | 'suggest';
 
-const SparkleIcon: React.FC = () => (
-  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
-    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
-  </svg>
-);
 
 const describeAiError = (message: string): string => {
   if (message.includes('Not authenticated')) {
@@ -151,7 +146,8 @@ const CustomChecks: React.FC<CustomChecksProps> = ({
         </div>
         {canEdit && panel === 'none' && (
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => openPanel('suggest')} disabled={!canCompose} className={ghostButton}>
+            <button type="button" onClick={() => openPanel('suggest')} disabled={!canCompose} className={`${ghostButton} gap-1.5`}>
+              <SparkleIcon className="h-3.5 w-3.5" />
               Suggest from form
             </button>
             <button type="button" onClick={() => openPanel('compose')} disabled={!canCompose} className={secondaryButton}>
@@ -180,7 +176,7 @@ const CustomChecks: React.FC<CustomChecksProps> = ({
               className="h-9 min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-xs placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
             />
             <button type="button" onClick={handleFillWithAI} disabled={!prompt.trim() || isGenerating} className={`${secondaryButton} h-9 justify-center`}>
-              {isGenerating ? <Spinner size="sm" className="text-current" /> : <SparkleIcon />}
+              {isGenerating ? <Spinner size="sm" className="text-current" /> : <SparkleIcon className="h-3.5 w-3.5" />}
               {isGenerating ? 'Writing…' : 'Fill in with AI'}
             </button>
           </div>

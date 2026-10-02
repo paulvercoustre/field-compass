@@ -12,6 +12,7 @@ import SettingsLayout from '../components/ui/SettingsLayout';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import FieldLabel from '../components/ui/FieldLabel';
+import { SparkleIcon } from '../components/ui/icons';
 import { CORE_IDENTIFIER_HINTS } from '../constants/coreIdentifiers';
 import { getKoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
@@ -824,7 +825,7 @@ const SurveySettingsPage: React.FC = () => {
     setError(null);
     try {
       await persistSurveyConfig();
-      setSuccess('Qualitative quality checks updated');
+      setSuccess('AI review settings saved');
       setIsEditingLLM(false);
       await loadSurveyConfig();
     } catch (err) {
@@ -841,9 +842,9 @@ const SurveySettingsPage: React.FC = () => {
     setError(null);
     try {
       const count = await rerunAiChecks(selectedSurvey.survey_id);
-      setSuccess(`AI checks will run again for ${count} submissions on the next pull.`);
+      setSuccess(`${count} submissions will be reviewed again on the next pull.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reset AI checks');
+      setError(err instanceof Error ? err.message : 'Could not schedule the review');
     } finally {
       setIsRerunningAI(false);
     }
@@ -2235,10 +2236,10 @@ const SurveySettingsPage: React.FC = () => {
               </div>
             </section>
 
-            {/* Qualitative Quality Checks */}
+            {/* AI review of open-text answers */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">AI checks on open-text answers</h2>
+                <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white"><SparkleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />AI review</h2>
                 {canEditSurvey && !isEditingLLM && (
                   <button
                     onClick={() => setIsEditingLLM(true)}
@@ -2266,20 +2267,20 @@ const SurveySettingsPage: React.FC = () => {
                   </div>
                   <div className="ml-3">
                     <label className="text-sm font-medium text-gray-900 dark:text-white">
-                      Check open-text answers with AI
+                      Flag weak open-text answers
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Re-runs only when an answer or a rule changes.
+                      Unreadable, off-topic or too vague answers to the questions you pick. Uses AI allowance.
                     </p>
                   </div>
                 </div>
 
                 {qualityChecks.flag_llm_qualitative && (
                   <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                    <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Text Fields to Analyze</h3>
+                    <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Questions to review</h3>
                     {textVariables.length === 0 ? (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        No text fields found. Upload Kobo tool metadata with text questions to enable field selection.
+                        This form has no open-text questions.
                       </p>
                     ) : (
                       <div className="max-h-48 overflow-y-auto space-y-1">
@@ -2311,9 +2312,6 @@ const SurveySettingsPage: React.FC = () => {
                         ))}
                       </div>
                     )}
-                    <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                      Enabled checks: content quality, relevance, and completeness.
-                    </div>
                   </div>
                 )}
                 {canEditSurvey && !isEditingLLM && qualityChecks.flag_llm_qualitative && (
@@ -2323,10 +2321,10 @@ const SurveySettingsPage: React.FC = () => {
                       disabled={isRerunningAI}
                       className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md disabled:opacity-50"
                     >
-                      {isRerunningAI ? 'Resetting…' : 'Re-run AI checks'}
+                      {isRerunningAI ? 'Scheduling…' : 'Review all answers again'}
                     </button>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Checks every submission again on the next pull, including ones already checked. Uses AI credit.
+                      On the next pull, including answers already reviewed. Uses AI allowance.
                     </p>
                   </div>
                 )}

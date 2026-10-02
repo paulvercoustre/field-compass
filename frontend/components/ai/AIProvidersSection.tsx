@@ -152,7 +152,7 @@ const AIProvidersSection: React.FC = () => {
                     </p>
                     {connection.status === 'failing' && (
                       <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                        {describeAIError(connection.last_error)} AI checks on its surveys are paused until it passes a test.
+                        {describeAIError(connection.last_error)} AI review on its surveys is paused until it passes a test.
                       </p>
                     )}
                     {connection.status !== 'failing' && connection.last_error && (
@@ -232,7 +232,7 @@ const AIProvidersSection: React.FC = () => {
                       </div>
                     )}
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      For these surveys, the answers to the questions selected for AI checks are sent, with their
+                      For these surveys, the answers to the questions selected for AI review are sent, with their
                       question labels, to {connection.label} ({connection.host}).
                     </p>
                   </fieldset>

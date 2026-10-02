@@ -155,6 +155,6 @@ def not_run_message(now: datetime | None = None) -> str:
     """Stored as llm_last_error for a check the allowance did not cover."""
     month = month_start(now).strftime("%B")
     return (
-        f"allowance: This survey has used its free AI checks for {month}. They resume next "
+        f"allowance: This survey has used its free AI review allowance for {month}. It resumes next "
         "month, or straight away with your own AI provider."
     )

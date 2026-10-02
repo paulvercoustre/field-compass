@@ -60,7 +60,7 @@ const AIUsageSection: React.FC = () => {
               <tr>
                 <th className="font-medium py-2 pr-3">Survey</th>
                 <th className="font-medium py-2 pr-3">Runs on</th>
-                <th className="font-medium py-2 pr-3">AI checks</th>
+                <th className="font-medium py-2 pr-3">AI review</th>
                 <th className="font-medium py-2 pr-3 text-right">Rules written</th>
                 <th className="font-medium py-2 pr-3 text-right">Failed</th>
                 <th className="font-medium py-2 text-right">Tokens in / out</th>
@@ -95,7 +95,7 @@ const AIUsageSection: React.FC = () => {
                             aria-valuemin={0}
                             aria-valuemax={allowance.limit}
                             aria-valuenow={spent}
-                            aria-label={`Free AI checks used this month on ${survey.survey_name}`}
+                            aria-label={`Free AI reviews used this month on ${survey.survey_name}`}
                           >
                             <div
                               className={`h-1.5 rounded-full ${allowance.remaining === 0 ? 'bg-amber-500' : 'bg-indigo-500'}`}

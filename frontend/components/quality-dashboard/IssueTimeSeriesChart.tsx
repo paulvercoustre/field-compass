@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { IssueTimeSeriesPoint, IssueFrequency } from '../../types';
+import { issueName } from '../../utils/issueNames';
 import { axisProps, gridProps, tooltipProps, SERIES_COLORS } from '../charts/chartTheme';
 
 interface IssueTimeSeriesChartProps {
@@ -101,7 +102,7 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
                     className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{ backgroundColor: COLORS[index % COLORS.length] }}
                   />
-                  <span className="text-gray-700 dark:text-gray-300 truncate">{issue}</span>
+                  <span className="text-gray-700 dark:text-gray-300 truncate">{issueName(issue)}</span>
                 </label>
               ))}
             </div>
@@ -145,7 +146,7 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
                   key={issue}
                   type="monotone" 
                   dataKey={issue}
-                  name={issue}
+                  name={issueName(issue)}
                   stroke={COLORS[allIssueTypes.indexOf(issue) % COLORS.length]} 
                   strokeWidth={2}
                   dot={false}

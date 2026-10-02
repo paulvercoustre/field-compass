@@ -95,3 +95,11 @@ export const ExternalLinkIcon: React.FC<IconProps> = (p) => (
 export const PencilIcon: React.FC<IconProps> = (p) => (
   <Icon {...p}><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></Icon>
 );
+
+/** The one mark for anything AI does or decides, so it is recognisable everywhere. */
+export const SparkleIcon: React.FC<IconProps> = (p) => (
+  <Icon {...p}>
+    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+  </Icon>
+);

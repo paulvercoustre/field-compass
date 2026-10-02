@@ -90,7 +90,7 @@ const AIProviderDialog: React.FC<AIProviderDialogProps> = ({ connection, onClose
           {target ? 'Edit AI provider' : 'Add an AI provider'}
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Any OpenAI-compatible service. AI checks on surveys that use it are billed to this account.
+          Any OpenAI-compatible service. AI review and rule writing on surveys that use it are billed to this account.
         </p>
 
         <div className="space-y-4">

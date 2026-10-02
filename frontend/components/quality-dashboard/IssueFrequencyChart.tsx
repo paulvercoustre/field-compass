@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { IssueFrequency } from '../../types';
+import { issueName } from '../../utils/issueNames';
 import { axisProps, tooltipProps, CHART_ACCENT } from '../charts/chartTheme';
 
 interface IssueFrequencyChartProps {
@@ -17,7 +18,8 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
   
   // Prepare data for horizontal bar chart
   const chartData = displayData.map(item => ({
-    name: item.check,
+    check: item.check,
+    name: issueName(item.check),
     count: item.count,
     percentage: item.percentage,
     affected: item.affected_submissions,
@@ -62,7 +64,7 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
                 <YAxis 
                   type="category" 
                   dataKey="name" 
-                  width={170} 
+                  width={240} 
                   {...axisProps}
                   tick={{ fill: 'var(--fc-chart-tick)', fontSize: 12 }}
                 />
@@ -74,14 +76,14 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
                     }
                     return [value, name];
                   }}
-                  labelFormatter={(label) => `Issue: ${label}`}
+                  labelFormatter={(label) => label}
                 />
                 <Bar 
                   dataKey="count" 
                   radius={[0, 4, 4, 0]}
                   barSize={18}
                   cursor={onIssueClick ? 'pointer' : 'default'}
-                  onClick={(data) => onIssueClick && onIssueClick(data.name)}
+                  onClick={(data: any) => onIssueClick && onIssueClick(data.check ?? data.payload?.check)}
                 >
                   {chartData.map((entry, index) => (
                     <Cell 

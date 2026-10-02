@@ -52,7 +52,7 @@ const AINaturalLanguageInput: React.FC<AINaturalLanguageInputProps> = ({
       if (errorMessage.includes('Not authenticated')) {
         setError('Authentication error. Please try refreshing the page and logging in again.');
       } else if (errorMessage.includes('AI service is not available')) {
-        setError('AI service is not configured. Please contact your administrator to set up the OpenAI API key.');
+        setError('AI is not set up for this survey. Add a provider in Account settings → AI integration.');
       } else {
         setError(errorMessage);
       }
