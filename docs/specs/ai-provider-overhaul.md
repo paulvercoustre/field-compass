@@ -273,7 +273,7 @@ demand.
 | `DELETE` | `/api/ai/connections/{id}` | Detaches it from every survey first |
 | `POST` | `/api/ai/connections/{id}/test` | Re-run the test |
 | `PUT` | `/api/surveys/{id}/ai-connection` | Owner attaches one of their connections, or `null` for the allowance |
-| `GET` | `/api/surveys/{id}/ai-usage` | Calls and tokens this month by feature; allowance used and remaining when on the operator key. Editors and owners |
+| `GET` | `/api/ai/usage` | For each survey the user owns: provider, allowance used and remaining, and calls and tokens this month by feature; plus today's free rule requests |
 
 `/api/ai/generate-rule` and `/api/ai/suggest-rules` keep their contracts and
 resolve the provider from the survey.
@@ -422,11 +422,11 @@ allowance when on the operator key.
 
 ### 8.6 Usage
 
-Survey Settings › Qualitative Quality Checks opens with "AI use in
-<month>" (owners and editors): on the allowance, "143 of 200 checks used
-(12 in progress). Resets 1 November." with a bar that turns amber when used
-up; on the owner's provider, "Runs on <provider>, so there is no Field
-Compass limit". Below, calls, failures and tokens in / out by feature.
+Account Settings › **AI use in <month>**, below AI providers: today's free
+AI rule requests ("1 of 30"), then one row per survey the user owns: what it
+runs on (the allowance or a provider), AI checks ("143 of 200" with a bar
+that turns amber when used up, or a count and "no Field Compass limit"),
+rules written, failures, and tokens in / out. Served by `GET /api/ai/usage`.
 Tokens are as reported by the provider; no cost is computed, since prices
 differ by provider and change.
 

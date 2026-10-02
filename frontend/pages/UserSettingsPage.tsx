@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth, User } from '../contexts/AuthContext';
 import AIProvidersSection from '../components/ai/AIProvidersSection';
+import AIUsageSection from '../components/ai/AIUsageSection';
 
 const UserSettingsPage: React.FC = () => {
   const {
@@ -401,6 +402,8 @@ const UserSettingsPage: React.FC = () => {
         </section>
 
         <AIProvidersSection />
+
+        <AIUsageSection />
 
         {/* Change Password Section */}
         <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">

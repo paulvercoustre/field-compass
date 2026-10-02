@@ -118,21 +118,29 @@ export const describeAIError = (stored: string | null | undefined): string => {
   return reasons[category] ?? (message || stored || 'The provider is not responding.');
 };
 
-export interface SurveyAIUsage {
+export interface AIFeatureUsage {
+  feature: 'qualitative_check' | 'rule_generation' | 'rule_suggestion';
+  calls: number;
+  failed: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface AccountAIUsage {
   month: string; // "2026-10"
   resets_at: string;
-  /** The survey's own provider; null when it uses the Field Compass allowance. */
-  provider: AIConnectionSummary | null;
-  allowance: { limit: number; used: number; in_flight: number; remaining: number } | null;
-  by_feature: Array<{
-    feature: 'qualitative_check' | 'rule_generation' | 'rule_suggestion';
-    calls: number;
-    failed: number;
-    input_tokens: number;
-    output_tokens: number;
+  /** Free AI rule requests on the Field Compass key, today. */
+  rule_requests_today: { limit: number; used: number; remaining: number };
+  /** Every survey the user owns. */
+  surveys: Array<{
+    survey_id: string;
+    survey_name: string;
+    /** Its own provider; null when it uses the Field Compass allowance. */
+    provider: AIConnectionSummary | null;
+    allowance: { limit: number; used: number; in_flight: number; remaining: number } | null;
+    by_feature: AIFeatureUsage[];
   }>;
 }
 
-/** This month's AI use for a survey (editors and owners). */
-export const getSurveyAIUsage = (surveyId: string) =>
-  request<SurveyAIUsage>(`/api/surveys/${surveyId}/ai-usage`);
+/** This month's AI use across the surveys the current user owns. */
+export const getAccountAIUsage = () => request<AccountAIUsage>('/api/ai/usage');

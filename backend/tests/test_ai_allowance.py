@@ -319,26 +319,54 @@ class TestHttp:
         assert response.status_code == 429
         assert "free AI rule requests" in response.json()["detail"]
 
-    def test_usage_this_month(self, client, monkeypatch):
+    def test_account_usage_this_month(self, client, monkeypatch):
         from uuid import UUID
 
-        from tests.test_api_endpoints import TestingSessionLocal
+        from tests.test_api_endpoints import TEST_USER_ID, TestingSessionLocal
 
         monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "200")
+        monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY", "30")
         survey_id = _api_survey(client)
         db = TestingSessionLocal()
         now = datetime.utcnow()
         _usage(db, UUID(survey_id), when=now, input_tokens=500, output_tokens=300)
         _usage(db, UUID(survey_id), when=now, outcome="timeout")
-        _usage(db, UUID(survey_id), when=now, feature=RULE_SUGGESTION, input_tokens=4000)
+        _usage(
+            db,
+            UUID(survey_id),
+            when=now,
+            feature=RULE_SUGGESTION,
+            input_tokens=4000,
+            user_id=TEST_USER_ID,
+        )
         db.close()
 
-        body = client.get(f"/api/surveys/{survey_id}/ai-usage").json()
+        body = client.get("/api/ai/usage").json()
         assert body["month"] == now.strftime("%Y-%m")
-        assert body["provider"] is None
-        assert body["allowance"] == {"limit": 200, "used": 1, "in_flight": 0, "remaining": 199}
-        checks = next(f for f in body["by_feature"] if f["feature"] == QUALITATIVE_CHECK)
+        assert body["rule_requests_today"] == {"limit": 30, "used": 1, "remaining": 29}
+        (survey,) = body["surveys"]
+        assert survey["survey_id"] == survey_id
+        assert survey["provider"] is None
+        assert survey["allowance"] == {"limit": 200, "used": 1, "in_flight": 0, "remaining": 199}
+        checks = next(f for f in survey["by_feature"] if f["feature"] == QUALITATIVE_CHECK)
         assert (checks["calls"], checks["failed"], checks["input_tokens"]) == (2, 1, 500)
+
+    def test_only_the_users_own_surveys(self, client):
+        from tests.test_api_endpoints import TestingSessionLocal
+
+        db = TestingSessionLocal()
+        stranger = User(user_id=uuid4(), email="s@example.invalid", username="s", password_hash="x")
+        db.add(stranger)
+        db.commit()
+        db.add(
+            SurveyConfig(
+                survey_id=uuid4(), survey_name="Theirs", config_data={}, user_id=stranger.user_id
+            )
+        )
+        db.commit()
+        db.close()
+
+        assert client.get("/api/ai/usage").json()["surveys"] == []
 
 
 def test_not_run_message_names_the_month():
