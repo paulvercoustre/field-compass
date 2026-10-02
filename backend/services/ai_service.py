@@ -3,17 +3,28 @@ AI Service for OpenAI integration
 Provides rule generation and suggestion functionality using OpenAI GPT models.
 """
 
-import json
 import logging
 import os
-import time
 from typing import Any
 
-from openai import OpenAI, OpenAIError
-
 from etl.dk_utils import describe_dk_strings
+from services.ai_client import AIClient, ResolvedProvider, UsageRecorder, operator_provider
+from services.ai_errors import AUTH, BAD_RESPONSE, NOT_CONFIGURED, PROVIDER_QUOTA, AIError
 
 logger = logging.getLogger(__name__)
+
+
+def rule_error_message(error: AIError) -> str:
+    """What the rule builder shows when the AI call behind it fails."""
+    if error.category == AUTH:
+        return "The AI provider rejected the key. Ask the administrator to check it."
+    if error.category == PROVIDER_QUOTA:
+        return "The AI provider account is out of credit."
+    if error.category == NOT_CONFIGURED:
+        return "AI features are not set up on this server."
+    if error.category == BAD_RESPONSE:
+        return "AI generated an invalid response. Please try again."
+    return f"AI service error: {error.message}"
 
 
 class AIService:
@@ -26,9 +37,6 @@ class AIService:
             logger.warning(
                 "OPENAI_API_KEY not set in environment. AI features will be unavailable."
             )
-            self.client = None
-        else:
-            self.client = OpenAI(api_key=self.api_key)
 
         base_model = os.getenv("OPENAI_MODEL", "gpt-5-mini")
         self.rule_gen_model = os.getenv("OPENAI_RULE_GEN_MODEL", base_model)
@@ -42,10 +50,11 @@ class AIService:
         )
         self.temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.2"))
         self.timeout = 120  # seconds - GPT-5 models with reasoning can take longer
+        self.ai = AIClient(timeout=self.timeout, temperature=self.temperature)
 
     def is_available(self) -> bool:
         """Check if AI service is available (API key configured)."""
-        return self.client is not None
+        return bool(self.api_key)
 
     def generate_rule_from_text(
         self,
@@ -53,6 +62,9 @@ class AIService:
         kobo_variables: list[dict[str, Any]],
         existing_rules: list[dict[str, str]] | None = None,
         survey_context: dict[str, Any] | None = None,
+        record: UsageRecorder | None = None,
+        provider: ResolvedProvider | None = None,
+        end_user: str | None = None,
     ) -> dict[str, Any]:
         """
         Generate a validation rule from natural language description.
@@ -76,7 +88,7 @@ class AIService:
         Raises:
             ValueError: If AI service is not available or generation fails
         """
-        if not self.is_available():
+        if provider is None and not self.is_available():
             raise ValueError("AI service is not available. Please configure OPENAI_API_KEY.")
 
         # Build variable context for the prompt
@@ -240,68 +252,22 @@ Generate a validation rule matching the exact JSON schema."""
         }
 
         try:
-            logger.info(f"Generating rule with OpenAI model {self.rule_gen_model}")
-            start_time = time.time()
+            rule_data = self.ai.complete_json(
+                provider or operator_provider(self.rule_gen_model),
+                name="validation_rule",
+                system=system_prompt,
+                user=user_prompt,
+                schema=rule_schema,
+                max_output=self.rule_gen_max_completion_tokens,
+                record=record,
+                end_user=end_user,
+            )
+        except AIError as error:
+            raise ValueError(rule_error_message(error)) from error
 
-            # Build API call parameters
-            api_params = {
-                "model": self.rule_gen_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "max_completion_tokens": self.rule_gen_max_completion_tokens,
-                "timeout": self.timeout,
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "validation_rule",
-                        "strict": True,
-                        "schema": rule_schema,
-                    },
-                },
-            }
-
-            # Only add temperature for models that support it (GPT-5 models use default of 1)
-            if not self.rule_gen_model.startswith("gpt-5"):
-                api_params["temperature"] = self.temperature
-
-            response = self.client.chat.completions.create(**api_params)
-
-            elapsed = time.time() - start_time
-            logger.info(f"OpenAI API call completed in {elapsed:.2f}s")
-
-            # Check for refusals
-            if (
-                hasattr(response.choices[0].message, "refusal")
-                and response.choices[0].message.refusal
-            ):
-                logger.warning(
-                    f"Model refused to generate rule: {response.choices[0].message.refusal}"
-                )
-                raise ValueError(
-                    f"AI refused to generate rule: {response.choices[0].message.refusal}"
-                )
-
-            # Extract and parse response
-            content = response.choices[0].message.content
-            rule_data = json.loads(content)
-
-            # Validate structure (structured outputs should guarantee this, but double-check)
-            self._validate_rule_structure(rule_data)
-
-            logger.info(f"Successfully generated rule: {rule_data.get('description')}")
-            return rule_data
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse OpenAI response as JSON: {e}")
-            raise ValueError("AI generated invalid response. Please try again.")
-        except OpenAIError as e:
-            logger.error(f"OpenAI API error: {e}")
-            raise ValueError(f"AI service error: {str(e)}")
-        except Exception as e:
-            logger.error(f"Unexpected error in rule generation: {e}", exc_info=True)
-            raise ValueError("Failed to generate rule. Please try again.")
+        self._validate_rule_structure(rule_data)
+        logger.info(f"Successfully generated rule: {rule_data.get('description')}")
+        return rule_data
 
     def suggest_rules(
         self,
@@ -309,6 +275,9 @@ Generate a validation rule matching the exact JSON schema."""
         global_parameters: dict[str, Any] | None = None,
         special_values: dict[str, Any] | None = None,
         existing_rules: list[dict[str, str]] | None = None,
+        record: UsageRecorder | None = None,
+        provider: ResolvedProvider | None = None,
+        end_user: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Suggest validation rules based on Kobo form structure.
@@ -325,7 +294,7 @@ Generate a validation rule matching the exact JSON schema."""
         Raises:
             ValueError: If AI service is not available or generation fails
         """
-        if not self.is_available():
+        if provider is None and not self.is_available():
             raise ValueError("AI service is not available. Please configure OPENAI_API_KEY.")
 
         # Build variable context
@@ -500,82 +469,35 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         }
 
         try:
-            logger.info(f"Generating rule suggestions with OpenAI model {self.rule_gen_model}")
-            start_time = time.time()
-
-            # Build API call parameters
-            api_params = {
-                "model": self.rule_gen_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "max_completion_tokens": self.rule_gen_max_completion_tokens
-                * 2,  # More tokens for multiple rules
-                "timeout": self.timeout,
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "suggested_rules",
-                        "strict": True,
-                        "schema": suggestions_schema,
-                    },
+            parsed = self.ai.complete_json(
+                provider or operator_provider(self.rule_gen_model),
+                name="suggested_rules",
+                system=system_prompt,
+                user=user_prompt,
+                schema=suggestions_schema,
+                max_output=self.rule_gen_max_completion_tokens * 2,  # several rules
+                # Only the envelope: a bad rule is dropped below, not the reply.
+                check_schema={
+                    "type": "object",
+                    "properties": {"rules": {"type": "array", "items": {"type": "object"}}},
+                    "required": ["rules"],
                 },
-            }
+                record=record,
+                end_user=end_user,
+            )
+        except AIError as error:
+            raise ValueError(rule_error_message(error)) from error
 
-            # Only add temperature for models that support it (GPT-5 models use default of 1)
-            if not self.rule_gen_model.startswith("gpt-5"):
-                api_params["temperature"] = self.temperature
+        validated_rules = []
+        for rule in parsed["rules"]:
+            try:
+                self._validate_rule_structure(rule)
+                validated_rules.append(rule)
+            except Exception as e:
+                logger.warning(f"Skipping invalid suggested rule: {e}")
 
-            response = self.client.chat.completions.create(**api_params)
-
-            elapsed = time.time() - start_time
-            logger.info(f"OpenAI API call completed in {elapsed:.2f}s")
-
-            # Check for refusals
-            if (
-                hasattr(response.choices[0].message, "refusal")
-                and response.choices[0].message.refusal
-            ):
-                logger.warning(
-                    f"Model refused to generate suggestions: {response.choices[0].message.refusal}"
-                )
-                raise ValueError(
-                    f"AI refused to generate suggestions: {response.choices[0].message.refusal}"
-                )
-
-            # Extract and parse response
-            content = response.choices[0].message.content
-            parsed = json.loads(content)
-
-            # Extract rules array from the structured response
-            if isinstance(parsed, dict) and "rules" in parsed:
-                rules_list = parsed["rules"]
-            else:
-                raise ValueError("Response doesn't contain a 'rules' array")
-
-            # Validate each rule (structured outputs should guarantee this, but double-check)
-            validated_rules = []
-            for rule in rules_list:
-                try:
-                    self._validate_rule_structure(rule)
-                    validated_rules.append(rule)
-                except Exception as e:
-                    logger.warning(f"Skipping invalid suggested rule: {e}")
-                    continue
-
-            logger.info(f"Successfully generated {len(validated_rules)} rule suggestions")
-            return validated_rules
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse OpenAI response as JSON: {e}")
-            raise ValueError("AI generated invalid response. Please try again.")
-        except OpenAIError as e:
-            logger.error(f"OpenAI API error: {e}")
-            raise ValueError(f"AI service error: {str(e)}")
-        except Exception as e:
-            logger.error(f"Unexpected error in rule suggestions: {e}", exc_info=True)
-            raise ValueError("Failed to generate suggestions. Please try again.")
+        logger.info(f"Successfully generated {len(validated_rules)} rule suggestions")
+        return validated_rules
 
     def _format_variables_context(self, kobo_variables: list[dict[str, Any]]) -> str:
         """Format Kobo variables into a readable context string for the prompt."""
@@ -621,15 +543,23 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         dk_numeric: int,
         dk_string: str | list[str] | None,
         check_types: list[str],
+        record: UsageRecorder | None = None,
+        provider: ResolvedProvider | None = None,
+        end_user: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Check qualitative text responses for quality issues using a cheap model.
 
         Returns:
             List of issues with keys: field, value, check_type, message, reasoning
+
+        Raises:
+            AIError: when the call fails or the reply is unusable. An empty
+                list always means "checked, nothing found" -- never "could
+                not check".
         """
-        if not self.is_available():
-            return []
+        if provider is None and not self.is_available():
+            raise AIError(NOT_CONFIGURED, "No AI provider is configured (OPENAI_API_KEY).")
 
         if not field_values:
             return []
@@ -679,7 +609,7 @@ Examples of responses to NOT flag (meaning is clear):
 - Listing 6 items when asked for 3-5 (over-complete is acceptable)
 
 Return only clear issues. If no clear issue exists, return an empty list.
-Remember: "{dk_string}" and {dk_numeric} are valid "Don't Know" values."""
+Remember: {describe_dk_strings(dk_string)} and {dk_numeric} are valid "Don't Know" values."""
 
         response_schema = {
             "type": "object",
@@ -708,42 +638,20 @@ Remember: "{dk_string}" and {dk_numeric} are valid "Don't Know" values."""
         }
 
         try:
-            logger.info(f"Running qualitative checks with OpenAI model {self.qual_check_model}")
-            start_time = time.time()
-            api_params = {
-                "model": self.qual_check_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "max_completion_tokens": self.qual_check_max_completion_tokens,
-                "timeout": self.timeout,
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "qualitative_check_results",
-                        "strict": True,
-                        "schema": response_schema,
-                    },
-                },
-            }
-            if not self.qual_check_model.startswith("gpt-5"):
-                api_params["temperature"] = self.temperature
-
-            response = self.client.chat.completions.create(**api_params)
-            elapsed = time.time() - start_time
-            logger.info(f"Qualitative LLM check completed in {elapsed:.2f}s")
-
-            content = response.choices[0].message.content
-            parsed = json.loads(content)
-            issues = parsed.get("issues", [])
-            return [issue for issue in issues if issue.get("check_type") in selected_types]
-        except OpenAIError as e:
-            logger.error(f"OpenAI API error in qualitative checks: {e}")
-            return []
-        except Exception as e:
-            logger.error(f"Unexpected error in qualitative checks: {e}")
-            return []
+            parsed = self.ai.complete_json(
+                provider or operator_provider(self.qual_check_model),
+                name="qualitative_check_results",
+                system=system_prompt,
+                user=user_prompt,
+                schema=response_schema,
+                max_output=self.qual_check_max_completion_tokens,
+                record=record,
+                end_user=end_user,
+            )
+        except AIError as error:
+            logger.warning("Qualitative check failed (%s)", error)
+            raise
+        return [issue for issue in parsed["issues"] if issue.get("check_type") in selected_types]
 
     def _validate_rule_structure(self, rule: dict[str, Any]) -> None:
         """

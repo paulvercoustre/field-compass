@@ -17,6 +17,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from routers import (
     ai,
+    ai_connections,
     etl,
     kobo,
     lint,
@@ -123,6 +124,7 @@ app.include_router(surveys.router, prefix="/api", tags=["surveys"])
 app.include_router(validation_rules.router, prefix="/api", tags=["validation-rules"])
 app.include_router(quality.router, prefix="/api", tags=["quality"])
 app.include_router(ai.router, prefix="/api", tags=["ai"])
+app.include_router(ai_connections.router, prefix="/api", tags=["ai"])
 app.include_router(kobo.router, prefix="/api", tags=["kobo"])
 app.include_router(lint.router, prefix="/api", tags=["lint"])
 

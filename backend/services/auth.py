@@ -5,6 +5,7 @@ Handles JWT tokens, password hashing, and Kobo API key encryption.
 
 import base64
 import hashlib
+import logging
 import os
 from datetime import datetime, timedelta
 
@@ -42,6 +43,13 @@ else:
     # This ensures consistent encryption even if no ENCRYPTION_KEY is set
     key_bytes = hashlib.sha256(SECRET_KEY.encode()).digest()
     FERNET_KEY = base64.urlsafe_b64encode(key_bytes)
+    if os.getenv("ENVIRONMENT", "development").lower() != "development":
+        # Stored Kobo and AI provider keys are then tied to the JWT secret:
+        # rotating it would make every one of them unreadable.
+        logging.getLogger(__name__).error(
+            "ENCRYPTION_KEY is not set: stored API keys are encrypted with a key derived "
+            "from JWT_SECRET_KEY, and rotating that secret will make them unreadable."
+        )
 
 # =============================================================================
 # Security instances

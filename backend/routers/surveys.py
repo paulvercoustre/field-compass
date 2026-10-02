@@ -13,6 +13,8 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from database.models import SubmissionCurrent, SurveyConfig, User, ValidationRule
+from routers.ai_connections import connection_summary
+from services.ai_providers import survey_connection
 from services.auth import get_current_active_user
 from services.database import get_db
 from services.permissions import (
@@ -27,6 +29,11 @@ from services.permissions import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _ai_connection_summary(db: Session, survey: SurveyConfig) -> dict | None:
+    connection = survey_connection(db, survey)
+    return connection_summary(connection) if connection else None
 
 
 # =============================================================================
@@ -118,6 +125,8 @@ async def get_survey(
         "permission": permission,
         "owner_id": str(survey.user_id) if survey.user_id else None,
         "is_owner": survey.user_id == current_user.user_id,
+        # Which AI provider the survey uses; null is the operator's key.
+        "ai_connection": _ai_connection_summary(db, survey),
         "created_at": survey.created_at.isoformat() if survey.created_at else None,
         "updated_at": survey.updated_at.isoformat() if survey.updated_at else None,
     }
@@ -300,6 +309,40 @@ async def delete_survey(
 # =============================================================================
 # Survey Sharing Endpoints
 # =============================================================================
+
+
+@router.post("/surveys/{survey_id}/ai-checks/rerun")
+async def rerun_ai_checks(
+    survey_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Make the next pull run every submission's AI check again.
+
+    A pull re-queues a check when the stored rules hash no longer matches, so
+    clearing it is enough. For checks recorded as successful while the AI
+    provider was in fact failing -- which they were, until failures were
+    stored as such -- and for any time the owner wants a fresh pass.
+    Requires owner access: re-running spends AI credit.
+    """
+    try:
+        survey_uuid = UUID(survey_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
+        )
+
+    require_survey_access(db, current_user, survey_uuid, min_level="owner")
+
+    count = (
+        db.query(SubmissionCurrent)
+        .filter(SubmissionCurrent.survey_id == survey_uuid)
+        .update({SubmissionCurrent.llm_rules_hash: None}, synchronize_session=False)
+    )
+    db.commit()
+    logger.info("AI checks reset for %s submissions of survey %s", count, survey_uuid)
+    return {"submissions": count}
 
 
 @router.get("/surveys/{survey_id}/access")

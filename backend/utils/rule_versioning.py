@@ -128,6 +128,11 @@ def should_enqueue_llm_check(
     if status == "failed":
         return True, "retry_failed"
 
+    # Not run for lack of free allowance: try again; the pull decides
+    # whether there is allowance now.
+    if status == "not_run_allowance":
+        return True, "allowance_retry"
+
     if status in {"pending", "running"}:
         return False, "already_in_progress"
 
