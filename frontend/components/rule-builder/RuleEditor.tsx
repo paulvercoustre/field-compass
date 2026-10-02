@@ -162,6 +162,9 @@ const RuleEditor: React.FC<RuleEditorProps> = ({ koboToolData, onSave, onCancel,
     setIsSaving(true);
     try {
       await onSave({ description, issue_message: issueMessage, conditions, roster_name: ruleRosterName });
+    } catch {
+      // The caller reports the failure; keep what was typed so it can be retried.
+      return;
     } finally {
       setIsSaving(false);
     }

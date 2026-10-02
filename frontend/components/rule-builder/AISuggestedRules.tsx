@@ -80,6 +80,8 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
       setSuggestions(null);
       setSelectedIds(new Set());
       onClose?.();
+    } catch {
+      // The caller reports the failure; keep the list and its ticks for a retry.
     } finally {
       setIsAdding(false);
     }
