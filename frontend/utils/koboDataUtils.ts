@@ -11,11 +11,14 @@ export const reconstructKoboToolData = (
 ): KoboToolData => {
   // Keep every stored row — including audit/start/today — so a later save does
   // not strip the fields the linter and duration checks need. The picker map
-  // still only includes answerable types.
+  // includes answerable types plus the start/end/today metadata, which the
+  // interview date, start and end time identifiers are auto-filled from.
   const pickerTypes = ['select_one', 'select_multiple', 'integer', 'decimal', 'calculate', 'text', 'date', 'datetime'];
+  // Matched exactly: as a prefix, `end` would also take end_group/end_repeat.
+  const metadataTypes = ['start', 'end', 'today'];
   const pickerRows = survey.filter(q => {
     const qType = q.type || '';
-    return pickerTypes.some(t => qType.startsWith(t));
+    return metadataTypes.includes(qType) || pickerTypes.some(t => qType.startsWith(t));
   });
 
   const labelCol = labelColumnSurvey || 'label::English (en)';
