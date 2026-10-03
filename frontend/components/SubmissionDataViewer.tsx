@@ -1,13 +1,36 @@
 
 import React, { useState } from 'react';
-import { KoboQuestion } from '../types';
+import { KoboQuestion, QualityIssue } from '../types';
 import { SurveyConfig } from '../services/progressApi';
+import { AudioAnswer } from '../services/transcriptionApi';
 import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
+import { Player, RecordingDetails, RecordingStatus } from './transcription/AudioAnswers';
+
+/** The submission's recorded answers, shown in place of their file names. */
+export interface Recordings {
+  koboId: number;
+  answers: AudioAnswer[];
+  sendToKobo: boolean;
+  /** The submission's findings; those about a recording show under it. */
+  issues: QualityIssue[];
+}
 
 interface SubmissionDataViewerProps {
   data: Record<string, any>;
   surveyConfig: SurveyConfig | null;
+  recordings?: Recordings | null;
 }
+
+// The recorded answer to a question: matched on its group path ("voice/story"),
+// then on its name.
+const findRecording = (recordings: Recordings | null | undefined, question: KoboQuestion): AudioAnswer | undefined => {
+  if (!recordings) return undefined;
+  const path = question.group_path ? `${question.group_path.replace(/^\/+|\/+$/g, '')}/${question.name}` : question.name;
+  return (
+    recordings.answers.find((answer) => answer.question_path === path) ??
+    recordings.answers.find((answer) => answer.question_path.split('/').pop() === question.name)
+  );
+};
 
 // Humanize a snake_case or camelCase string into title case
 const humanize = (str: string): string =>
@@ -71,6 +94,38 @@ const QuestionRow: React.FC<QuestionRowProps> = ({ question, value, surveyConfig
     </div>
   );
 };
+
+interface RecordingRowProps {
+  label: string;
+  answer: AudioAnswer;
+  recordings: Recordings;
+  isEven: boolean;
+}
+
+// An audio question: the player in place of the file name, and its
+// transcript across the full width underneath.
+const RecordingRow: React.FC<RecordingRowProps> = ({ label, answer, recordings, isEven }) => (
+  <div
+    className={`grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-2.5 ${
+      isEven ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900/20'
+    }`}
+  >
+    <span className="flex items-start gap-1.5 text-sm text-gray-500 dark:text-gray-400 break-words leading-snug">
+      <svg className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-indigo-500 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="9" y="2" width="6" height="12" rx="3" />
+        <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" />
+      </svg>
+      {label}
+    </span>
+    <div className="min-w-0">
+      <RecordingStatus answer={answer} sendToKobo={recordings.sendToKobo} />
+      <Player koboId={recordings.koboId} answer={answer} />
+    </div>
+    <div className="col-span-2 empty:hidden">
+      <RecordingDetails answer={answer} sendToKobo={recordings.sendToKobo} issues={recordings.issues} />
+    </div>
+  </div>
+);
 
 interface SectionCardProps {
   title: string;
@@ -166,7 +221,7 @@ const RosterSection: React.FC<RosterSectionProps> = ({
   );
 };
 
-const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surveyConfig }) => {
+const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surveyConfig, recordings }) => {
   const survey = surveyConfig?.config_data.kobo_tool?.survey ?? [];
 
   // Separate top-level and roster questions
@@ -190,15 +245,15 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surve
         {nonMeta.length > 0 && (
           <SectionCard title="Submission Data">
             <GridHeader />
-            {nonMeta.map(([key, val], idx) => (
-              <QuestionRow
-                key={key}
-                question={{ name: key, type: 'text', roster_name: null }}
-                value={val}
-                surveyConfig={null}
-                isEven={idx % 2 === 0}
-              />
-            ))}
+            {nonMeta.map(([key, val], idx) => {
+              const question = { name: key, type: 'text', roster_name: null };
+              const recording = findRecording(recordings, question);
+              return recording && recordings ? (
+                <RecordingRow key={key} label={key} answer={recording} recordings={recordings} isEven={idx % 2 === 0} />
+              ) : (
+                <QuestionRow key={key} question={question} value={val} surveyConfig={null} isEven={idx % 2 === 0} />
+              );
+            })}
           </SectionCard>
         )}
         {metadataEntries.length > 0 && (
@@ -215,6 +270,18 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surve
         <SectionCard title="Survey Responses">
           <GridHeader />
           {topLevelQuestions.map((q: KoboQuestion, idx: number) => {
+            const recording = q.type === 'audio' ? findRecording(recordings, q) : undefined;
+            if (recording && recordings) {
+              return (
+                <RecordingRow
+                  key={q.name}
+                  label={getQuestionLabel(q.name, surveyConfig)}
+                  answer={recording}
+                  recordings={recordings}
+                  isEven={idx % 2 === 0}
+                />
+              );
+            }
             const value = lookupValue(data, q.name);
             return (
               <QuestionRow

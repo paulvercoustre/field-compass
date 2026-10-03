@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from database.models import AudioTranscript, SubmissionCurrent, SurveyConfig, User
 from etl.audio import (
+    SOURCE_KOBO,
     answer_filename,
     audio_questions,
     find_attachment,
@@ -87,11 +88,19 @@ def _counts(db: Session, survey_id: UUID) -> dict[str, Any]:
         .group_by(AudioTranscript.status)
         .all()
     )
+    # Kobo's own transcripts (typed or made there) were never ours to send;
+    # ours corrected in Kobo still count as "corrected in Kobo".
+    kobos_own = (AudioTranscript.source == SOURCE_KOBO) & (AudioTranscript.kobo_status == "sent")
     kobo = dict(
         db.query(AudioTranscript.kobo_status, func.count())
-        .filter(AudioTranscript.survey_id == survey_id)
+        .filter(AudioTranscript.survey_id == survey_id, ~kobos_own)
         .group_by(AudioTranscript.kobo_status)
         .all()
+    )
+    from_kobo = (
+        db.query(func.count(AudioTranscript.transcript_id))
+        .filter(AudioTranscript.survey_id == survey_id, kobos_own)
+        .scalar()
     )
     no_speech = (
         db.query(func.count(AudioTranscript.transcript_id))
@@ -121,6 +130,7 @@ def _counts(db: Session, survey_id: UUID) -> dict[str, Any]:
         + status.get("skipped", 0)
         + status.get("cancelled", 0),
         "no_speech": no_speech or 0,
+        "from_kobo": from_kobo or 0,
         "kobo": {
             "sent": kobo.get("sent", 0),
             "edited_in_kobo": kobo.get("edited_in_kobo", 0),
@@ -320,6 +330,19 @@ async def estimate_transcription(
     """
     survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     recordings = _recording_count(db, survey)
+    # Recordings with a transcript in Kobo are never transcribed here.
+    in_kobo = (
+        db.query(func.count(AudioTranscript.transcript_id))
+        .filter(
+            AudioTranscript.survey_id == survey.survey_id,
+            AudioTranscript.source == SOURCE_KOBO,
+            AudioTranscript.question_path.in_(
+                [q.path for q in selected_questions(survey.config_data)]
+            ),
+        )
+        .scalar()
+        or 0
+    )
     done = (
         db.query(func.count(AudioTranscript.transcript_id))
         .filter(
@@ -331,13 +354,16 @@ async def estimate_transcription(
     )
     known_seconds = (
         db.query(func.coalesce(func.sum(AudioTranscript.audio_seconds), 0))
-        .filter(AudioTranscript.survey_id == survey.survey_id)
+        .filter(
+            AudioTranscript.survey_id == survey.survey_id,
+            AudioTranscript.source != SOURCE_KOBO,
+        )
         .scalar()
     )
     remaining = max(0.0, minutes_per_survey_month() * 60 - seconds_used(db, survey.survey_id))
     return {
         "mode": mode,
-        "recordings": recordings if mode == "all" else max(0, recordings - done),
+        "recordings": max(0, recordings - in_kobo) if mode == "all" else max(0, recordings - done),
         "known_minutes": round(float(known_seconds or 0) / 60, 1) if mode == "all" else None,
         "remaining_minutes": round(remaining / 60, 1),
     }
@@ -368,6 +394,7 @@ async def transcribe_now(
         db.query(AudioTranscript).filter(
             AudioTranscript.survey_id == survey.survey_id,
             AudioTranscript.status.notin_(("pending", "running")),
+            AudioTranscript.source != SOURCE_KOBO,
         ).update({AudioTranscript.input_hash: None}, synchronize_session=False)
 
     queuer = TranscriptionQueuer(db, survey, run_id=run.run_id, user_id=current_user.user_id)
@@ -416,6 +443,7 @@ async def send_transcripts_to_kobo(
         .filter(
             AudioTranscript.survey_id == survey.survey_id,
             AudioTranscript.status == "success",
+            AudioTranscript.source != SOURCE_KOBO,
             AudioTranscript.kobo_status.in_(("not_sent", "failed")),
         )
         .all()
@@ -481,6 +509,8 @@ async def get_submission_transcripts(
                 "transcript": None
                 if row is None
                 else {
+                    # "kobo": the transcript Kobo shows, typed or made there.
+                    "source": row.source,
                     "status": row.status,
                     "skip_reason": row.skip_reason,
                     "text": row.text,

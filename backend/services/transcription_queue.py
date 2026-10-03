@@ -4,6 +4,10 @@ Deciding, per submission, which recordings to transcribe, and sending jobs.
 A recording is transcribed once: a later pull with the same attachment does
 nothing. It is tried again when it failed for a reason that can pass (not a
 bad file), was held back by the allowance, or was stopped.
+
+A recording that already has a transcript in Kobo is never transcribed: the
+pull stores Kobo's transcript instead (source "kobo"), for every audio
+question, whether or not the survey transcribes it.
 """
 
 from __future__ import annotations
@@ -19,8 +23,13 @@ from sqlalchemy.orm import Session
 
 from database.models import AIUsage, AudioTranscript, SubmissionCurrent, SurveyConfig
 from etl.audio import (
+    SOURCE_ELEVENLABS,
+    SOURCE_KOBO,
+    KoboTranscript,
     answer_filename,
+    audio_questions,
     find_attachment,
+    kobo_transcript,
     selected_questions,
     transcript_input_hash,
     transcription_settings,
@@ -29,6 +38,7 @@ from services.ai_errors import AUTH, NOT_CONFIGURED, PROVIDER_QUOTA
 from services.ai_usage import TRANSCRIPTION
 from services.transcription_allowance import seconds_remaining
 from services.transcription_keys import client_for, resolve_transcription_key
+from services.transcription_languages import normalize_language
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +109,9 @@ class TranscriptionQueuer:
         self.user_id = user_id
         self.settings = transcription_settings(survey_config.config_data)
         self.questions = selected_questions(survey_config.config_data, self.settings)
+        # Every audio question can have a transcript in Kobo (Kobo's
+        # supplement does not address repeat instances, so not those).
+        self.audio = [q for q in audio_questions(survey_config.config_data) if not q.in_repeat]
         # The owner's own ElevenLabs key, or Field Compass's within the allowance.
         key = resolve_transcription_key(db, survey_config)
         client = client_for(key)
@@ -129,9 +142,83 @@ class TranscriptionQueuer:
             return category not in _FINAL_CATEGORIES
         return False
 
+    def _take_from_kobo(
+        self,
+        existing: dict[str, AudioTranscript],
+        submission: SubmissionCurrent,
+        question,
+        found: KoboTranscript | None,
+    ) -> bool:
+        """
+        Keep the stored transcript in step with Kobo's: store Kobo's when it
+        has one that is not ours, and forget Kobo's once it is gone there.
+        Updates ``existing``; returns whether anything changed. Does not commit.
+        """
+        row = existing.get(question.path)
+        if found is None:
+            if row is not None and row.source == SOURCE_KOBO:
+                # Removed in Kobo: transcribed here again, if the survey does.
+                self.db.delete(row)
+                del existing[question.path]
+                return True
+            return False
+        if row is not None and row.source == SOURCE_KOBO:
+            if row.text == found.text and row.kobo_language == found.language_code:
+                return False
+        elif row is not None:
+            if row.status == "running" or (row.text or "").strip() == found.text:
+                return False  # ours as sent to Kobo, or settled on the next pull
+            if row.kobo_version_uuid and row.kobo_status not in ("sent", "edited_in_kobo"):
+                # A newer one of ours is on its way to Kobo (or not sent);
+                # sending checks first that nobody corrected ours there.
+                return False
+        else:
+            row = AudioTranscript(
+                survey_id=self.survey.survey_id,
+                submission_id=submission._id,
+                question_path=question.path,
+            )
+            self.db.add(row)
+            existing[question.path] = row
+
+        # Kobo's stands: typed there, Kobo's own, or ours corrected there.
+        corrected = row.source != SOURCE_KOBO and row.kobo_version_uuid is not None
+        data = submission.submission_data or {}
+        filename = answer_filename(data, question)
+        attachment = find_attachment(data, question, filename) if filename else None
+        row.source = SOURCE_KOBO
+        row.status = "success"
+        row.skip_reason = None
+        row.last_error = None
+        row.text = found.text
+        row.segments = None
+        row.language_code = normalize_language(found.language_code) or found.language_code
+        row.language_probability = None
+        row.model = None
+        row.input_hash = transcript_input_hash(
+            question.path, attachment.uid if attachment else filename
+        )
+        row.attachment_uid = attachment.uid if attachment else None
+        row.attachment_url = attachment.url if attachment else None
+        row.attachment_filename = attachment.filename if attachment else filename
+        row.finished_at = datetime.utcnow()
+        # Not work of any run: a job still queued for it finds it done.
+        row.run_id = None
+        row.job_id = None
+        row.kobo_run_id = None
+        row.kobo_status = "edited_in_kobo" if corrected else "sent"
+        row.kobo_language = found.language_code
+        row.kobo_last_error = None
+        self.stats["transcripts_from_kobo"] += 1
+        return True
+
     def consider(self, submission: SubmissionCurrent) -> list[AudioTranscript]:
-        """Create or refresh this submission's transcript rows. Does not commit."""
-        if not self.questions:
+        """
+        Create or refresh this submission's transcript rows: Kobo's
+        transcripts first, then the recordings left to transcribe. Returns
+        the rows to queue. Does not commit.
+        """
+        if not self.audio:
             return []
         data = submission.submission_data or {}
         existing = {
@@ -141,17 +228,27 @@ class TranscriptionQueuer:
                 AudioTranscript.submission_id == submission._id,
             )
         }
+        changed = [
+            self._take_from_kobo(existing, submission, question, kobo_transcript(data, question))
+            for question in self.audio
+        ]
+        if any(changed):
+            self.db.flush()
+            self._refresh_checks(submission)
+
         touched: list[AudioTranscript] = []
         now = datetime.utcnow()
         for question in self.questions:
             filename = answer_filename(data, question)
             if filename is None:
                 continue  # not answered
+            row = existing.get(question.path)
+            if row is not None and row.source == SOURCE_KOBO:
+                continue  # Kobo has its transcript: never transcribed here
             attachment = find_attachment(data, question, filename)
             input_hash = transcript_input_hash(
                 question.path, attachment.uid if attachment else filename
             )
-            row = existing.get(question.path)
             if row is None:
                 row = AudioTranscript(
                     survey_id=self.survey.survey_id,
@@ -163,6 +260,7 @@ class TranscriptionQueuer:
             elif not self._needs(row, input_hash):
                 continue
 
+            row.source = SOURCE_ELEVENLABS
             row.input_hash = input_hash
             row.attachment_uid = attachment.uid if attachment else None
             row.attachment_url = attachment.url if attachment else None
@@ -189,6 +287,12 @@ class TranscriptionQueuer:
             else:
                 self.stats["transcripts_queued"] += 1
         return touched
+
+    def _refresh_checks(self, submission: SubmissionCurrent) -> None:
+        """The built-in transcript checks, on the transcripts just taken from Kobo."""
+        from services.transcription_runtime import refresh_transcript_issues
+
+        refresh_transcript_issues(self.db, self.survey, submission)
 
     def queue(self, rows: list[AudioTranscript]) -> None:
         """Note jobs to send for rows left pending. Call after a flush, before commit."""

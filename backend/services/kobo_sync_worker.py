@@ -1,8 +1,9 @@
 """
 Background task: send one transcript to Kobo as the question's transcript.
 
-Never overwrites a correction made in Kobo: once we have sent a version, a
-newer transcript is only sent if the version Kobo shows is still ours. After
+Never overwrites a transcript made in Kobo: nothing is sent when Kobo already
+shows a transcript of its own, and once we have sent a version, a newer one
+is only sent if the version Kobo shows is still ours. After
 three permission failures in a row (or a server without the supplement API),
 sending pauses for the survey and its owner is told; saving the transcription
 settings again resumes it. See docs/specs/audio-transcription.md, section 5.
@@ -23,11 +24,12 @@ from services.database import SessionLocal
 from services.job_queue import celery_app
 from services.kobo_supplement import (
     KOBO_PERMISSION,
+    NOT_FOUND,
     UNSUPPORTED,
     KoboSupplementError,
     ensure_transcription_feature,
     read_supplement,
-    selected_manual_version,
+    selected_transcript,
     send_transcript,
 )
 from services.runs import finish_if_done, notify_pause
@@ -165,10 +167,17 @@ def run_kobo_send_job(payload: dict[str, Any], final_attempt: bool = True) -> di
             )
 
         try:
-            if row.kobo_version_uuid:
-                current = selected_manual_version(
+            try:
+                current = selected_transcript(
                     read_supplement(fetcher, survey.kobo_asset_id, root), row.question_path
                 )
+            except KoboSupplementError as error:
+                # Nothing filed for this submission yet, or a server without
+                # the supplement API (found out when enabling the feature).
+                if row.kobo_version_uuid or error.category != NOT_FOUND:
+                    raise
+                current = None
+            if row.kobo_version_uuid:
                 if current is None or str(current.get("_uuid")) != row.kobo_version_uuid:
                     # Someone corrected (or removed) it in Kobo: theirs stands.
                     return done("edited_in_kobo")
@@ -178,6 +187,10 @@ def run_kobo_send_job(payload: dict[str, Any], final_attempt: bool = True) -> di
                     and current_data.get("language") == language
                 ):
                     return done("sent")
+            elif current is not None and (current.get("_data") or {}).get("value"):
+                # Kobo got a transcript of its own since the pull: it stands,
+                # and the next pull shows it.
+                return done("edited_in_kobo")
             ensure_transcription_feature(fetcher, survey.kobo_asset_id, row.question_path, language)
             version = send_transcript(
                 fetcher, survey.kobo_asset_id, root, row.question_path, language, row.text or ""

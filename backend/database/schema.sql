@@ -300,6 +300,7 @@ CREATE TABLE audio_transcripts (
     attachment_url TEXT,
     attachment_filename VARCHAR(255),
     input_hash VARCHAR(64),
+    source VARCHAR(16) NOT NULL DEFAULT 'elevenlabs',
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
     skip_reason VARCHAR(32),
     text TEXT,
@@ -328,6 +329,7 @@ CREATE TABLE audio_transcripts (
 );
 
 COMMENT ON TABLE audio_transcripts IS 'Transcripts of audio answers (ElevenLabs), and whether each was sent to Kobo';
+COMMENT ON COLUMN audio_transcripts.source IS 'elevenlabs (transcribed by Field Compass) | kobo (the transcript Kobo shows, read on pull; never transcribed again)';
 COMMENT ON COLUMN audio_transcripts.status IS 'pending | running | success | failed | skipped | not_run_allowance | cancelled';
 COMMENT ON COLUMN audio_transcripts.kobo_status IS 'not_sent | pending | sent | failed | unsupported | edited_in_kobo';
 

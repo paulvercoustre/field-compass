@@ -31,6 +31,8 @@ from services.ai_errors import short_message
 logger = logging.getLogger(__name__)
 
 MANUAL_TRANSCRIPTION = "manual_transcription"
+# Kobo's own transcription (Google). Kobo shows whichever was accepted last.
+TRANSCRIPTION_ACTIONS = (MANUAL_TRANSCRIPTION, "automatic_google_transcription")
 
 # Kobo's supplement schema version (SUBSEQUENCES_SCHEMA_VERSION in kpi). A
 # setting, so a schema bump on Kobo's side does not need a release here.
@@ -200,6 +202,33 @@ def selected_manual_version(
     if not candidates:
         return None
     return max(candidates, key=lambda v: str(v.get("_dateCreated") or ""))
+
+
+def selected_transcript(supplement: dict[str, Any], question_xpath: str) -> dict[str, Any] | None:
+    """
+    The transcript version Kobo shows for a question: the one accepted last,
+    typed (or sent by us) or made by Kobo's automatic transcription. A
+    deletion is a version too, with no value.
+    """
+    question = supplement.get(question_xpath) if isinstance(supplement, dict) else None
+    if not isinstance(question, dict):
+        return None
+    accepted: list[tuple[str, dict[str, Any]]] = []
+    for action in TRANSCRIPTION_ACTIONS:
+        data = question.get(action)
+        versions = data.get("_versions") if isinstance(data, dict) else None
+        for version in versions if isinstance(versions, list) else []:
+            if not isinstance(version, dict):
+                continue
+            # A typed transcript is accepted when it is created.
+            when = version.get("_dateAccepted") or (
+                version.get("_dateCreated") if action == MANUAL_TRANSCRIPTION else None
+            )
+            if when:
+                accepted.append((str(when), version))
+    if not accepted:
+        return None
+    return max(accepted, key=lambda item: item[0])[1]
 
 
 def send_transcript(

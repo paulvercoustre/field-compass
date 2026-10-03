@@ -232,6 +232,156 @@ class TestQueueing:
         assert rows[0].status == "failed" and rows[0].last_error.startswith("not_configured")
 
 
+def _in_kobo(submission, db, value="Il a plu fort", language="fr"):
+    """Kobo now shows a transcript for the story, as its data API sends it."""
+    data = dict(submission.submission_data)
+    if value is None:
+        data.pop("_supplementalDetails", None)
+    else:
+        data["_supplementalDetails"] = {
+            "interview/story": {"transcript": {"value": value, "languageCode": language}}
+        }
+    submission.submission_data = data
+    db.commit()
+
+
+class TestTranscriptsFromKobo:
+    def test_a_transcript_in_kobo_is_kept_and_not_transcribed(self, test_db, survey, env):
+        submission = _submission(test_db, survey)
+        _in_kobo(submission, test_db)
+        queuer, rows = _queue(test_db, survey, submission)
+        assert rows == [] and queuer._to_send == []
+        assert queuer.stats["transcripts_from_kobo"] == 1
+        row = test_db.query(AudioTranscript).one()
+        assert (row.source, row.status, row.text) == ("kobo", "success", "Il a plu fort")
+        assert row.language_code == "fra" and row.kobo_language == "fr"
+        assert row.kobo_status == "sent" and row.run_id is None
+        # The next pull changes nothing.
+        queuer, rows = _queue(test_db, survey, submission)
+        assert rows == [] and queuer.stats["transcripts_from_kobo"] == 0
+
+    def test_read_for_questions_this_survey_does_not_transcribe(self, test_db, survey, env):
+        survey.config_data = {
+            **survey.config_data,
+            "audio_transcription": {**survey.config_data["audio_transcription"], "enabled": False},
+        }
+        test_db.commit()
+        submission = _submission(test_db, survey)
+        _in_kobo(submission, test_db)
+        _queue(test_db, survey, submission)
+        assert test_db.query(AudioTranscript).one().source == "kobo"
+
+    def test_one_waiting_for_review_in_kobo_is_transcribed_here(self, test_db, survey, env):
+        submission = _submission(test_db, survey)
+        submission.submission_data = {
+            **submission.submission_data,
+            "_supplementalDetails": {
+                "interview/story": {"transcript": {"languageCode": "fr", "pendingReview": True}}
+            },
+        }
+        test_db.commit()
+        _, rows = _queue(test_db, survey, submission)
+        assert [(r.source, r.status) for r in rows] == [("elevenlabs", "pending")]
+
+    def test_ours_sent_to_kobo_stays_ours(self, test_db, survey, env):
+        submission = _submission(test_db, survey)
+        _, rows = _queue(test_db, survey, submission)
+        rows[0].status, rows[0].text = "success", "Il a plu"
+        rows[0].kobo_status, rows[0].kobo_version_uuid = "sent", "v-ours"
+        test_db.commit()
+        _in_kobo(submission, test_db, value="Il a plu")
+        _queue(test_db, survey, submission)
+        row = test_db.query(AudioTranscript).one()
+        assert (row.source, row.kobo_status) == ("elevenlabs", "sent")
+
+    def test_ours_corrected_in_kobo_shows_the_correction(self, test_db, survey, env):
+        submission = _submission(test_db, survey)
+        _, rows = _queue(test_db, survey, submission)
+        rows[0].status, rows[0].text = "success", "Il a plu"
+        rows[0].kobo_status, rows[0].kobo_version_uuid = "sent", "v-ours"
+        test_db.commit()
+        _in_kobo(submission, test_db, value="Il a beaucoup plu")
+        _queue(test_db, survey, submission)
+        row = test_db.query(AudioTranscript).one()
+        assert (row.source, row.text, row.kobo_status) == (
+            "kobo",
+            "Il a beaucoup plu",
+            "edited_in_kobo",
+        )
+
+    def test_a_newer_one_of_ours_on_its_way_to_kobo_is_left_alone(self, test_db, survey, env):
+        submission = _submission(test_db, survey)
+        _, rows = _queue(test_db, survey, submission)
+        # Transcribed again; Kobo still shows our first version.
+        rows[0].status, rows[0].text = "success", "Il a plu, encore"
+        rows[0].kobo_status, rows[0].kobo_version_uuid = "pending", "v-ours"
+        test_db.commit()
+        _in_kobo(submission, test_db, value="Il a plu")
+        _queue(test_db, survey, submission)
+        assert test_db.query(AudioTranscript).one().source == "elevenlabs"
+
+    def test_a_queued_transcription_is_dropped_when_kobo_has_one(self, test_db, survey, env):
+        submission = _submission(test_db, survey)
+        _, rows = _queue(test_db, survey, submission)
+        queued = test_db.query(AudioTranscript).one()
+        job = {"transcript_id": queued.transcript_id, "input_hash": queued.input_hash}
+        _in_kobo(submission, test_db)
+        _queue(test_db, survey, submission)
+        result = runtime.run_transcription_job(job, job_id="job-1")
+        assert result["status"] == "stale" and _FakeClient.calls == []
+        test_db.expire_all()
+        assert test_db.query(AudioTranscript).one().source == "kobo"
+
+    def test_transcribe_all_again_leaves_kobos_alone(self, test_db, survey, env):
+        submission = _submission(test_db, survey)
+        _in_kobo(submission, test_db)
+        _queue(test_db, survey, submission)
+        row = test_db.query(AudioTranscript).one()
+        row.input_hash = None  # what "Transcribe all again" does to the others
+        test_db.commit()
+        _, rows = _queue(test_db, survey, submission)
+        assert rows == []
+
+    def test_removed_in_kobo_is_transcribed_here_again(self, test_db, survey, env):
+        submission = _submission(test_db, survey)
+        _in_kobo(submission, test_db)
+        _queue(test_db, survey, submission)
+        _in_kobo(submission, test_db, value=None)
+        _, rows = _queue(test_db, survey, submission)
+        assert [(r.source, r.status) for r in rows] == [("elevenlabs", "pending")]
+        assert test_db.query(AudioTranscript).count() == 1
+
+    def test_counted_apart_from_ours(self, test_db, survey, env):
+        from routers.transcription import _counts
+
+        theirs = _submission(test_db, survey, _id=1)
+        _in_kobo(theirs, test_db)
+        _queue(test_db, survey, theirs)
+        corrected = _submission(test_db, survey, _id=2)
+        _, rows = _queue(test_db, survey, corrected)
+        rows[0].status, rows[0].text = "success", "Il a plu"
+        rows[0].kobo_status, rows[0].kobo_version_uuid = "sent", "v-ours"
+        test_db.commit()
+        _in_kobo(corrected, test_db, value="Il a beaucoup plu")
+        _queue(test_db, survey, corrected)
+        counts = _counts(test_db, survey.survey_id)
+        assert counts["from_kobo"] == 1
+        assert counts["kobo"]["sent"] == 0 and counts["kobo"]["edited_in_kobo"] == 1
+
+    def test_kobos_transcript_is_what_the_built_in_checks_read(self, test_db, survey, env):
+        submission = _submission(test_db, survey)
+        _, rows = _queue(test_db, survey, submission)
+        rows[0].status, rows[0].text, rows[0].audio_seconds = "success", "", 30
+        test_db.commit()
+        runtime.refresh_transcript_issues(test_db, survey, submission)
+        test_db.commit()
+        assert [i["check"] for i in submission.data_quality_issues] == ["audio_no_speech"]
+        _in_kobo(submission, test_db, value="Nous avons tout perdu")
+        _queue(test_db, survey, submission)
+        test_db.refresh(submission)
+        assert submission.data_quality_issues == []
+
+
 class TestTranscriptionJob:
     def test_success_stores_the_transcript_and_counts_the_minutes(self, test_db, survey, env):
         submission = _submission(test_db, survey)
@@ -464,17 +614,18 @@ class TestSendToKobo:
         assert _send(test_db, row)["status"] == "sent"
         methods = [(m, e.split("/")[-2]) for m, e, _ in kobo.calls]
         assert methods == [
+            ("GET", "supplement"),
             ("GET", "advanced-features"),
             ("POST", "advanced-features"),
             ("PATCH", "supplement"),
         ]
-        post = kobo.calls[1][2]
+        post = kobo.calls[2][2]
         assert post == {
             "question_xpath": "interview/story",
             "action": "manual_transcription",
             "params": [{"language": "fr"}],
         }
-        patch = kobo.calls[2]
+        patch = kobo.calls[3]
         assert "/data/root-1/supplement/" in patch[1]
         assert patch[2] == {
             "_version": "20250820",
@@ -528,6 +679,21 @@ class TestSendToKobo:
         row = _transcribed(test_db, survey, kobo_version_uuid="v-ours")
         assert _send(test_db, row)["status"] == "edited_in_kobo"
         assert not any(m == "PATCH" for m, _, _ in kobo.calls)
+
+    def test_a_transcript_kobo_already_has_is_never_overwritten(self, test_db, survey, kobo):
+        googles = {
+            "_uuid": "v-google",
+            "_dateCreated": "2026-10-04T09:00:00Z",
+            "_dateAccepted": "2026-10-04T09:05:00Z",
+            "_data": {"language": "fr", "value": "Il a plu fort", "status": "complete"},
+        }
+        kobo.replies[("GET", "/supplement/")] = _kobo_response(
+            200,
+            {"interview/story": {"automatic_google_transcription": {"_versions": [googles]}}},
+        )
+        row = _transcribed(test_db, survey)
+        assert _send(test_db, row)["status"] == "edited_in_kobo"
+        assert not any(m in ("POST", "PATCH") for m, _, _ in kobo.calls)
 
     def test_three_permission_failures_pause_sending(self, test_db, survey, kobo, owner):
         kobo.replies[("GET", "advanced-features")] = _kobo_response(403, {"detail": "no"})

@@ -504,7 +504,11 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
         {!editing && settings.enabled && (
           <div className="ml-7 space-y-3 border-t border-gray-100 pt-4 dark:border-gray-800">
             <p className="text-sm text-gray-700 dark:text-gray-300">
-              {counts.success.toLocaleString()} {counts.success === 1 ? 'recording' : 'recordings'} transcribed
+              {(() => {
+                const transcribed = counts.success - counts.from_kobo;
+                return `${transcribed.toLocaleString()} ${transcribed === 1 ? 'recording' : 'recordings'} transcribed`;
+              })()}
+              {counts.from_kobo > 0 && <> · {counts.from_kobo.toLocaleString()} already transcribed in Kobo</>}
               {counts.in_progress > 0 && <> · {counts.in_progress} in progress</>}
               {counts.failed > 0 && (
                 <>
@@ -528,7 +532,8 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
               {ownKey
                 ? `This month: ${overview.key.own_minutes ?? 0} minutes on \u201c${overview.key.label}\u201d.`
                 : `This month: ${allowance.used_minutes} of ${allowance.limit_minutes} included minutes used.`}{' '}
-              Recordings longer than {allowance.max_recording_minutes} minutes are skipped.
+              Recordings longer than {allowance.max_recording_minutes} minutes are skipped, and those
+              that already have a transcript in Kobo keep it.
             </p>
 
             {settings.send_to_kobo && (

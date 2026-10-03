@@ -14,6 +14,30 @@ from database.models import SubmissionCurrent, SubmissionHistory
 
 logger = logging.getLogger(__name__)
 
+# Kobo's processing results for a submission (transcripts, translations). They
+# change without the submission being edited, so they are refreshed on every
+# pull and never count as an edit.
+SUPPLEMENT_KEY = "_supplementalDetails"
+
+
+def _without_supplement(data: dict[str, Any] | None) -> dict[str, Any]:
+    return {key: value for key, value in (data or {}).items() if key != SUPPLEMENT_KEY}
+
+
+def _refresh_supplement(existing: SubmissionCurrent, new_data: dict[str, Any]) -> bool:
+    """Take Kobo's current processing results; returns whether they changed."""
+    old = (existing.submission_data or {}).get(SUPPLEMENT_KEY)
+    new = new_data.get(SUPPLEMENT_KEY)
+    if old == new:
+        return False
+    data = dict(existing.submission_data or {})
+    if new is None:
+        data.pop(SUPPLEMENT_KEY, None)
+    else:
+        data[SUPPLEMENT_KEY] = new
+    existing.submission_data = data
+    return True
+
 
 def calculate_json_diff(old_data: dict[str, Any], new_data: dict[str, Any]) -> list[dict[str, Any]]:
     """
@@ -275,7 +299,9 @@ def merge_submission(
         if is_edited:
             # Calculate diff before updating (always calculate for edited submissions)
             old_data = existing.submission_data
-            data_delta = calculate_json_diff(old_data, new_data)
+            data_delta = calculate_json_diff(
+                _without_supplement(old_data), _without_supplement(new_data)
+            )
 
             # Use deprecated_id from parsed data, or fall back to existing UUID
             deprecated_uuid = existing._uuid
@@ -345,6 +371,9 @@ def merge_submission(
                     existing.kobo_edit_url = kobo_edit_url
                     metadata_changed = True
 
+                if _refresh_supplement(existing, new_data):
+                    metadata_changed = True
+
                 # Don't set is_edited=True since no data changed
                 # Don't update updated_at since this is not a real change
                 if metadata_changed:
@@ -389,6 +418,9 @@ def merge_submission(
 
             if existing.kobo_edit_url != kobo_edit_url:
                 existing.kobo_edit_url = kobo_edit_url
+                metadata_changed = True
+
+            if _refresh_supplement(existing, new_data):
                 metadata_changed = True
 
             # Only update updated_at if something actually changed
