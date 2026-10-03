@@ -13,6 +13,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from database.models import User
+from services import app_events
 from services.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     KoboApiKeyUpdate,
@@ -83,6 +84,13 @@ async def register(request: Request, user_data: UserCreate, db: Session = Depend
     )
 
     db.add(user)
+    db.flush()
+    app_events.record(
+        db,
+        app_events.SIGNUP,
+        user=user,
+        details=app_events.clean_signup_source(user_data.signup_source),
+    )
     db.commit()
     db.refresh(user)
 
@@ -117,6 +125,7 @@ async def login(
 
     # Update last login timestamp
     user.last_login_at = datetime.utcnow()
+    app_events.record(db, app_events.LOGIN, user=user)
     db.commit()
 
     # Create access token
@@ -152,6 +161,7 @@ async def login_json(request: Request, credentials: UserLogin, db: Session = Dep
 
     # Update last login timestamp
     user.last_login_at = datetime.utcnow()
+    app_events.record(db, app_events.LOGIN, user=user)
     db.commit()
 
     # Create access token
@@ -218,6 +228,7 @@ async def delete_current_user(
     All associated surveys will have their user_id set to NULL (orphaned).
     """
     logger.info(f"User account deleted: {current_user.email}")
+    app_events.record(db, app_events.ACCOUNT_DELETED)
     db.delete(current_user)
     db.commit()
     return None
@@ -247,6 +258,7 @@ async def set_kobo_api_key(
     # Encrypt and store the API key
     current_user.kobo_api_token_encrypted = encrypt_api_key(api_key_data.kobo_api_token.strip())
     current_user.updated_at = datetime.utcnow()
+    app_events.record(db, app_events.KOBO_CONNECTED, user=current_user)
     db.commit()
     db.refresh(current_user)
 
@@ -386,6 +398,7 @@ async def set_kobo_connection(
     current_user.kobo_api_url = api_url
     current_user.kobo_api_token_encrypted = encrypt_api_key(api_token)
     current_user.updated_at = datetime.utcnow()
+    app_events.record(db, app_events.KOBO_CONNECTED, user=current_user, details={"server": api_url})
     db.commit()
     db.refresh(current_user)
 

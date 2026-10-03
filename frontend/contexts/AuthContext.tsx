@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 
 import { API_BASE_URL } from '../services/apiBase';
 import { forgetSurveyId } from '../utils/selectedSurveyStorage';
+import { readSignupSource } from '../utils/signupSource';
 
 // User type
 export interface User {
@@ -13,6 +14,8 @@ export interface User {
   kobo_api_url: string;
   is_active: boolean;
   is_admin: boolean;
+  /** Listed in USAGE_ADMIN_EMAILS on the server: sees Account Settings › App usage. */
+  can_view_usage?: boolean;
   created_at: string;
   last_login_at: string | null;
 }
@@ -199,6 +202,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         username,
         password,
         full_name: fullName,
+        signup_source: readSignupSource(),
       }),
     });
 

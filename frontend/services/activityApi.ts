@@ -104,7 +104,7 @@ export class ApiError extends Error {
   }
 }
 
-const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+export const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
   const body = await response.json().catch(() => ({ detail: response.statusText }));
   if (!response.ok) {

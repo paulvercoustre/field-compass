@@ -17,5 +17,6 @@
   Strict-Transport-Security: max-age=31536000
   # Mirrors the site block in deploy/caddy/Caddyfile. 'unsafe-inline' for
   # styles only: the dashboard illustration sets bar heights via style
-  # attributes. Google Fonts is the one third-party origin.
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+  # attributes. Google Fonts and Cloudflare Web Analytics (the beacon script
+  # and where it reports) are the only third-party origins.
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
