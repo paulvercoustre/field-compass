@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database.models import User
+from services.app_events import can_view_usage, mark_active
 from services.database import get_db
 
 load_dotenv()
@@ -80,6 +81,8 @@ class UserCreate(BaseModel):
     username: str
     password: str
     full_name: str | None = None
+    # Campaign tags the marketing site passed along (utm_source, ref...)
+    signup_source: dict[str, str] | None = None
 
 
 class UserLogin(BaseModel):
@@ -96,6 +99,7 @@ class UserResponse(BaseModel):
     kobo_api_url: str
     is_active: bool
     is_admin: bool
+    can_view_usage: bool = False
     created_at: datetime
     last_login_at: datetime | None
 
@@ -265,6 +269,9 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
 
+    if user.is_active:
+        mark_active(db, user)
+
     return user
 
 
@@ -331,6 +338,7 @@ def user_to_response(user: User) -> dict:
         "kobo_api_url": user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2",
         "is_active": user.is_active,
         "is_admin": user.is_admin,
+        "can_view_usage": can_view_usage(user),
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
     }

@@ -17,6 +17,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from routers import (
     activity,
+    admin,
     ai,
     ai_connections,
     etl,
@@ -131,6 +132,7 @@ app.include_router(kobo.router, prefix="/api", tags=["kobo"])
 app.include_router(lint.router, prefix="/api", tags=["lint"])
 app.include_router(activity.router, prefix="/api", tags=["activity"])
 app.include_router(transcription.router, prefix="/api", tags=["transcription"])
+app.include_router(admin.router, prefix="/api", tags=["admin"])
 
 
 @app.get("/")

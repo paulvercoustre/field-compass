@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from database.models import SubmissionCurrent, SurveyConfig, User, ValidationRule
 from routers.ai_connections import connection_summary
+from services import app_events
 from services.ai_providers import survey_connection
 from services.auth import get_current_active_user
 from services.database import get_db
@@ -164,6 +165,8 @@ async def create_survey(
     )
 
     db.add(survey)
+    db.flush()
+    app_events.record(db, app_events.SURVEY_CREATED, user=current_user, survey_id=survey.survey_id)
     db.commit()
     db.refresh(survey)
 
@@ -299,6 +302,7 @@ async def delete_survey(
 
         # Step 3: Delete the survey (shared_access will cascade delete)
         db.delete(survey)
+        app_events.record(db, app_events.SURVEY_DELETED, user=current_user, survey_id=survey_uuid)
         db.commit()
 
         logger.info(f"User {current_user.email} deleted survey {survey_id} ({survey_name})")
@@ -422,6 +426,14 @@ async def share_survey(
         permission_level=share_request.permission_level,
         granted_by=current_user.user_id,
     )
+    app_events.record(
+        db,
+        app_events.SURVEY_SHARED,
+        user=current_user,
+        survey_id=survey_uuid,
+        details={"permission_level": share_request.permission_level},
+    )
+    db.commit()
 
     logger.info(
         f"User {current_user.email} shared survey {survey_id} with {share_request.email} as {share_request.permission_level}"

@@ -4,8 +4,9 @@ import KoboConnection from '../components/kobo/KoboConnection';
 import AIIntegrationTab from '../components/ai/AIIntegrationTab';
 import NotificationSettings from '../components/activity/NotificationSettings';
 import SettingsLayout, { SettingsNavItem } from '../components/ui/SettingsLayout';
+import UsageTab from '../components/admin/UsageTab';
 
-type AccountTab = 'profile' | 'kobo' | 'ai' | 'notifications';
+type AccountTab = 'profile' | 'kobo' | 'ai' | 'notifications' | 'usage';
 
 const NAV_ITEMS: SettingsNavItem<AccountTab>[] = [
   { id: 'profile', label: 'Profile' },
@@ -13,6 +14,9 @@ const NAV_ITEMS: SettingsNavItem<AccountTab>[] = [
   { id: 'ai', label: 'AI integration' },
   { id: 'notifications', label: 'Notifications' },
 ];
+
+// The people running the instance also see how it is used.
+const USAGE_NAV_ITEMS: SettingsNavItem<AccountTab>[] = [...NAV_ITEMS, { id: 'usage', label: 'App usage' }];
 
 interface UserSettingsPageProps {
   /** A tab asked for by a link elsewhere in the app. */
@@ -143,7 +147,12 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
   }
 
   return (
-    <SettingsLayout title="Account settings" items={NAV_ITEMS} active={activeTab} onSelect={setActiveTab}>
+    <SettingsLayout
+      title="Account settings"
+      items={user.can_view_usage ? USAGE_NAV_ITEMS : NAV_ITEMS}
+      active={activeTab}
+      onSelect={setActiveTab}
+    >
       <div className="space-y-6">
         {activeTab === 'profile' && (
           <>
@@ -360,6 +369,8 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
         )}
 
         {activeTab === 'notifications' && <NotificationSettings />}
+
+        {activeTab === 'usage' && user.can_view_usage && <UsageTab />}
       </div>
 
       {/* Delete Account Confirmation Modal */}

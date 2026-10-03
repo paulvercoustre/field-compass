@@ -30,7 +30,8 @@ CREATE TABLE users (
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    last_login_at TIMESTAMP WITH TIME ZONE
+    last_login_at TIMESTAMP WITH TIME ZONE,
+    last_seen_at TIMESTAMP WITH TIME ZONE
 );
 
 COMMENT ON TABLE users IS 'User accounts with authentication and Kobo API credentials';
@@ -43,6 +44,7 @@ COMMENT ON COLUMN users.kobo_api_url IS 'Kobo API base URL (defaults to kf.kobot
 COMMENT ON COLUMN users.is_active IS 'Whether user account is active';
 COMMENT ON COLUMN users.is_admin IS 'Whether user has admin privileges';
 COMMENT ON COLUMN users.last_login_at IS 'Timestamp of last successful login';
+COMMENT ON COLUMN users.last_seen_at IS 'Last authenticated request; updated at most once a day';
 
 CREATE TABLE ai_connections (
     connection_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -352,6 +354,22 @@ CREATE TABLE notifications (
 COMMENT ON TABLE notifications IS 'In-app notifications: a run finished or failed, or work paused for a reason someone must fix';
 
 -- ============================================================================
+-- Table: app_events
+-- ============================================================================
+
+CREATE TABLE app_events (
+    event_id BIGSERIAL PRIMARY KEY,
+    kind VARCHAR(32) NOT NULL,
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    survey_id UUID,
+    details JSONB,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE app_events IS 'What people did in the app (signup, login, active_day, kobo_connected, survey_created...), for the admin usage figures';
+COMMENT ON COLUMN app_events.survey_id IS 'No foreign key on purpose: the event outlives a deleted survey';
+
+-- ============================================================================
 -- Indexes for Performance
 -- ============================================================================
 
@@ -409,6 +427,7 @@ CREATE INDEX idx_audio_transcripts_kobo_run ON audio_transcripts(kobo_run_id, ko
 CREATE INDEX idx_audio_transcripts_submission ON audio_transcripts(survey_id, submission_id);
 CREATE INDEX idx_notifications_user ON notifications(user_id, created_at);
 CREATE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
+CREATE INDEX idx_app_events_kind_created ON app_events(kind, created_at);
 -- Composite index for common triage queue queries
 CREATE INDEX idx_submissions_triage ON submissions_current(qa_status, survey_id)
     WHERE qa_status IN ('FLAGGED', 'PENDING_RE_QA');

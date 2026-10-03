@@ -47,6 +47,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login_at = Column(DateTime(timezone=True), nullable=True)
+    # Last authenticated request; moves at most once a day (services/app_events.py)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     owned_surveys = relationship(
@@ -459,3 +461,27 @@ class Notification(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     read_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class AppEvent(Base):
+    """
+    One thing someone did in the app -- signed up, logged in, used it on a
+    day, connected Kobo, added a survey -- for the admin usage figures.
+
+    Rows outlive what they describe: user_id and survey_id are plain columns
+    set to NULL (users) or kept (surveys) when those go, so deleting an
+    account or a survey does not rewrite past figures.
+    """
+
+    __tablename__ = "app_events"
+
+    event_id = Column(Integer, primary_key=True, autoincrement=True)
+    kind = Column(String(32), nullable=False)
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    survey_id = Column(UUID(as_uuid=True), nullable=True)  # no FK: kept after a delete
+    details = Column(JSONB, nullable=True)  # e.g. signup source {"utm_source": ...}
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (Index("idx_app_events_kind_created", "kind", "created_at"),)
