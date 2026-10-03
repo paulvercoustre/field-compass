@@ -318,6 +318,21 @@ class SurveyFormResponse(BaseModel):
     choice_lists: dict[str, list[FormChoice]] = {}
 
 
+class KoboProject(BaseModel):
+    """One survey project in the user's Kobo account, for the project picker."""
+
+    uid: str
+    name: str
+    # "deployed", "draft" (never deployed) or "archived".
+    status: str
+    submission_count: int | None = None
+    owner_username: str | None = None
+    date_modified: str | None = None
+    # A Field Compass survey the user can already see that reads this project,
+    # so picking it twice is a visible choice rather than an accident.
+    existing_survey_name: str | None = None
+
+
 class UnavailableCapability(BaseModel):
     """A feature that cannot work under the current survey configuration."""
 

@@ -17,9 +17,10 @@ from database.models import User
 from etl.kobo_fetcher import KoboFetcher
 from forms import load_form_schema
 from linter.questions import enclosing_relevants
-from models import SurveyFormResponse
+from models import KoboProject, SurveyFormResponse
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
+from services.permissions import get_accessible_surveys
 from services.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,78 @@ ASSET_UID_PATTERN = re.compile(r"^a[A-Za-z0-9]{6,40}$")
 # Rows that are not answerable questions. Callers here are populating pickers,
 # not rendering the form, so structural markers and notes are noise.
 NON_QUESTION_TYPES = frozenset({"begin_group", "end_group", "begin_repeat", "end_repeat", "note"})
+
+# Order of the picker's groups: projects collecting data first.
+PROJECT_STATUS_ORDER = {"deployed": 0, "draft": 1, "archived": 2}
+
+
+def _project_status(asset: dict) -> str:
+    """Kobo's own deployment status, derived from older fields when it is absent."""
+    status = asset.get("deployment_status")
+    if status in PROJECT_STATUS_ORDER:
+        return status
+    if not asset.get("has_deployment"):
+        return "draft"
+    return "deployed" if asset.get("deployment__active") else "archived"
+
+
+@router.get("/kobo/assets", response_model=list[KoboProject])
+@limiter.limit("30/minute")
+async def list_kobo_projects(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    The survey projects in the user's Kobo account, for picking one by name.
+
+    Saves the user finding the project in Kobo and copying its link across.
+    """
+    kobo_token = get_user_kobo_token(current_user)
+    if not kobo_token:
+        raise HTTPException(
+            status_code=400,
+            detail="Add your Kobo API key in your account settings to see your Kobo projects.",
+        )
+
+    api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+    try:
+        assets = KoboFetcher(api_token=kobo_token, api_url=api_url).list_survey_assets()
+    except Exception as exc:
+        logger.warning("Kobo project list failed for user %s: %s", current_user.user_id, exc)
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        if status in (401, 403):
+            detail = (
+                "Kobo did not accept your API key. Check it in your account settings, "
+                "or paste a project link instead."
+            )
+        else:
+            detail = "Could not load your projects from Kobo. Try again, or paste a project link instead."
+        raise HTTPException(status_code=502, detail=detail)
+
+    existing = {
+        survey.kobo_asset_id: survey.survey_name
+        for survey in get_accessible_surveys(db, current_user)
+        if survey.kobo_asset_id
+    }
+
+    projects = [
+        KoboProject(
+            uid=asset["uid"],
+            name=asset.get("name") or asset["uid"],
+            status=_project_status(asset),
+            submission_count=asset.get("deployment__submission_count"),
+            owner_username=asset.get("owner__username"),
+            date_modified=asset.get("date_modified"),
+            existing_survey_name=existing.get(asset["uid"]),
+        )
+        for asset in assets
+        if ASSET_UID_PATTERN.match(asset.get("uid") or "")
+    ]
+    # Newest first within each group: two passes, as the sort is stable.
+    projects.sort(key=lambda project: project.date_modified or "", reverse=True)
+    projects.sort(key=lambda project: PROJECT_STATUS_ORDER[project.status])
+    return projects
 
 
 @router.get("/kobo/assets/{asset_uid}/form", response_model=SurveyFormResponse)
