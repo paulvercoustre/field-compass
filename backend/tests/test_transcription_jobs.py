@@ -335,7 +335,11 @@ class TestTranscriptionJob:
         assert test_db.query(AudioTranscript).one().kobo_status == "pending"
         assert len(env["kobo_tasks"].sent) == 1
 
-    def test_waiting_ai_review_starts_once_the_transcript_is_in(self, test_db, survey, env):
+    def test_waiting_ai_review_starts_once_the_transcript_is_in(
+        self, test_db, survey, env, monkeypatch
+    ):
+        # The review runs on the included usage, which needs the operator's key.
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-operator")
         survey.config_data = {
             **survey.config_data,
             "quality_checks": {
