@@ -16,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from routers import (
+    activity,
     ai,
     ai_connections,
     etl,
@@ -25,6 +26,7 @@ from routers import (
     quality,
     submissions,
     surveys,
+    transcription,
     users,
     validation_rules,
 )
@@ -127,6 +129,8 @@ app.include_router(ai.router, prefix="/api", tags=["ai"])
 app.include_router(ai_connections.router, prefix="/api", tags=["ai"])
 app.include_router(kobo.router, prefix="/api", tags=["kobo"])
 app.include_router(lint.router, prefix="/api", tags=["lint"])
+app.include_router(activity.router, prefix="/api", tags=["activity"])
+app.include_router(transcription.router, prefix="/api", tags=["transcription"])
 
 
 @app.get("/")

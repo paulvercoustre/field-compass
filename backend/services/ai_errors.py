@@ -82,6 +82,10 @@ def _short(text: object, limit: int = 300) -> str:
     return cleaned[:limit]
 
 
+# For other provider clients (transcription) storing their errors the same way.
+short_message = _short
+
+
 def classify(exc: Exception) -> AIError:
     """Map an exception from the OpenAI SDK (or any other) to an AIError."""
     if isinstance(exc, AIError):

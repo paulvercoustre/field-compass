@@ -10,10 +10,10 @@ from uuid import UUID as UUIDType
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from database.models import SubmissionCurrent, User
+from database.models import AudioTranscript, SubmissionCurrent, User
 from database.models import SubmissionHistory as SubmissionHistoryORM
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
@@ -112,6 +112,37 @@ def _get_field_value_from_jsonb(submission_data: dict[str, Any], field_name: str
     return None
 
 
+def _transcript_summaries(
+    db: Session, survey_id: UUIDType, submission_ids: list[int]
+) -> dict[int, dict[str, int]]:
+    """Per submission: how many recordings were transcribed, failed, are under way, or hold no speech."""
+    if not submission_ids:
+        return {}
+    rows = (
+        db.query(AudioTranscript.submission_id, AudioTranscript.status, AudioTranscript.text)
+        .filter(
+            AudioTranscript.survey_id == survey_id,
+            AudioTranscript.submission_id.in_(submission_ids),
+        )
+        .all()
+    )
+    out: dict[int, dict[str, int]] = {}
+    for submission_id, status, text in rows:
+        entry = out.setdefault(
+            submission_id, {"count": 0, "success": 0, "failed": 0, "in_progress": 0, "no_speech": 0}
+        )
+        entry["count"] += 1
+        if status == "success":
+            entry["success"] += 1
+            if not (text or "").strip():
+                entry["no_speech"] += 1
+        elif status == "failed":
+            entry["failed"] += 1
+        elif status in ("pending", "running"):
+            entry["in_progress"] += 1
+    return out
+
+
 @router.get("/submissions", response_model=SubmissionListResponse)
 async def get_submissions(
     qa_status: str | None = Query(
@@ -128,6 +159,14 @@ async def get_submissions(
     sampling_filters: str | None = Query(
         None,
         description="Filter by sampling variables (format: variable1=value1,value2;variable2=value3)",
+    ),
+    ai_review: str | None = Query(
+        None, pattern="^(failed|in_progress|not_run)$", description="Filter by AI review state"
+    ),
+    transcript: str | None = Query(
+        None,
+        pattern="^(any|failed|no_speech|in_progress)$",
+        description="Filter by audio transcript state",
     ),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
@@ -203,6 +242,31 @@ async def get_submissions(
                     SubmissionCurrent.kobo_validation_status.in_(validation_statuses)
                 )
 
+    if ai_review:
+        statuses = {
+            "failed": ("failed",),
+            "in_progress": ("pending", "running", "waiting"),
+            "not_run": ("not_run_allowance", "cancelled"),
+        }[ai_review]
+        query = query.filter(SubmissionCurrent.llm_check_status.in_(statuses))
+
+    if transcript:
+        transcripts = db.query(AudioTranscript.submission_id).filter(
+            AudioTranscript.survey_id == survey_uuid
+        )
+        if transcript == "failed":
+            transcripts = transcripts.filter(AudioTranscript.status == "failed")
+        elif transcript == "in_progress":
+            transcripts = transcripts.filter(AudioTranscript.status.in_(("pending", "running")))
+        elif transcript == "no_speech":
+            transcripts = transcripts.filter(
+                AudioTranscript.status == "success",
+                func.coalesce(func.trim(AudioTranscript.text), "") == "",
+            )
+        else:
+            transcripts = transcripts.filter(AudioTranscript.status == "success")
+        query = query.filter(SubmissionCurrent._id.in_(transcripts))
+
     # Get all submissions (we'll filter by JSONB fields in Python)
     # Note: This could be optimized with PostgreSQL JSONB queries, but filtering
     # in Python is more reliable for path-based field matching
@@ -266,7 +330,12 @@ async def get_submissions(
     paginated_submissions = orm_submissions[offset : offset + page_size]
 
     # Convert to Pydantic models
-    submissions = [_orm_to_pydantic_submission(sub) for sub in paginated_submissions]
+    summaries = _transcript_summaries(db, survey_uuid, [sub._id for sub in paginated_submissions])
+    submissions = []
+    for sub in paginated_submissions:
+        item = _orm_to_pydantic_submission(sub)
+        item.transcript_summary = summaries.get(sub._id)
+        submissions.append(item)
 
     return SubmissionListResponse(
         submissions=submissions,

@@ -14,13 +14,16 @@ if "/app" not in sys.path and os.path.isdir("/app"):
     sys.path.insert(0, "/app")
 
 from database.models import SubmissionCurrent, SurveyConfig
+from etl.audio import ai_audio_fields, review_data
 from etl.dk_utils import is_dk_value
 from etl.hfc_engine import HFCEngine
 from services.ai_errors import NOT_CONFIGURED, AIError
 from services.ai_providers import CHECKS, resolve_provider
+from services.ai_review_queue import transcript_views
 from services.ai_service import AIService
 from services.ai_usage import QUALITATIVE_CHECK, usage_recorder
 from services.database import SessionLocal
+from services.runs import finish_if_done
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +82,7 @@ def run_qualitative_check_job(
     ``llm_last_error = "<category>: <message>"``.
     """
     db = SessionLocal()
+    run_id = payload.get("run_id")
     try:
         survey_id = UUID(payload["survey_id"])
         submission_id = int(payload["submission_id"])
@@ -106,13 +110,16 @@ def run_qualitative_check_job(
             db.commit()
             return {"status": "missing_survey_config", "submission_id": submission_id}
 
-        # Ignore stale/old jobs.
+        # Ignore stale/old jobs, and ones stopped from the activity panel.
         if (
             submission.llm_rules_hash != requested_rules_hash
             or submission.llm_input_hash != requested_input_hash
         ):
             logger.info("Skipping stale qualitative job for submission %s", submission_id)
             return {"status": "stale_job", "submission_id": submission_id}
+        if submission.llm_check_status == "cancelled":
+            return {"status": "cancelled", "submission_id": submission_id}
+        run_id = run_id or (str(submission.llm_run_id) if submission.llm_run_id else None)
 
         submission.llm_check_status = "running"
         submission.llm_job_id = job_id
@@ -143,9 +150,15 @@ def run_qualitative_check_job(
         llm_fields = engine.llm_qualitative_fields
         question_contexts = _extract_question_contexts(survey_config.config_data, llm_fields)
 
+        # Audio answers are read from their transcripts, never as file names.
+        review_input, _ = review_data(
+            submission.submission_data,
+            ai_audio_fields(survey_config.config_data, llm_fields),
+            transcript_views(db, survey_id, submission_id),
+        )
         field_values: dict[str, str] = {}
         for field in llm_fields:
-            value, _ = engine._get_field_value(submission.submission_data, field)
+            value, _ = engine._get_field_value(review_input, field)
             if not isinstance(value, str):
                 continue
             text = value.strip()
@@ -253,4 +266,9 @@ def run_qualitative_check_job(
             db.rollback()
         raise
     finally:
+        try:
+            finish_if_done(db, run_id)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not update run %s", run_id)
         db.close()

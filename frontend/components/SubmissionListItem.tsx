@@ -26,7 +26,8 @@ const formatSubmitted = (iso: string): string => {
  * chip, so rows that need attention stand out when scanning the column.
  */
 const SubmissionListItem: React.FC<SubmissionListItemProps> = ({ submission, onSelect, isSelected }) => {
-    const { _id, _submission_time, kobo_validation_status, data_quality_issues } = submission;
+    const { _id, _submission_time, kobo_validation_status, data_quality_issues, transcript_summary } = submission;
+    const transcripts = transcript_summary;
 
     // Display validation status, default to "Not Reviewed" if null
     const displayStatus = kobo_validation_status || 'Not Reviewed';
@@ -56,6 +57,27 @@ const SubmissionListItem: React.FC<SubmissionListItemProps> = ({ submission, onS
                     <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass(displayStatus)}`} aria-hidden="true" />
                     {displayStatus}
                 </span>
+                <span className="flex flex-shrink-0 items-center gap-2">
+                {transcripts && transcripts.count > 0 && (
+                    <span
+                        className={`inline-flex items-center ${transcripts.failed > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}
+                        title={
+                            transcripts.failed > 0
+                                ? `${transcripts.failed} recording${transcripts.failed === 1 ? '' : 's'} couldn't be transcribed`
+                                : transcripts.in_progress > 0
+                                ? 'Being transcribed'
+                                : `${transcripts.success} recording${transcripts.success === 1 ? '' : 's'} transcribed`
+                        }
+                    >
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="9" y="2" width="6" height="12" rx="3" />
+                            <path d="M5 11a7 7 0 0 0 14 0M12 18v4" />
+                        </svg>
+                        <span className="sr-only">
+                            {transcripts.failed > 0 ? 'Transcription failed' : 'Has recordings transcribed'}
+                        </span>
+                    </span>
+                )}
                 {issueCount > 0 && (
                     <span className="tabular inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/25">
                         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -65,6 +87,7 @@ const SubmissionListItem: React.FC<SubmissionListItemProps> = ({ submission, onS
                         {issueCount} {issueCount === 1 ? 'issue' : 'issues'}
                     </span>
                 )}
+                </span>
             </div>
         </button>
     );

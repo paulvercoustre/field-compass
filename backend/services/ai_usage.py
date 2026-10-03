@@ -12,6 +12,7 @@ from services.ai_providers import note_outcome
 QUALITATIVE_CHECK = "qualitative_check"
 RULE_GENERATION = "rule_generation"
 RULE_SUGGESTION = "rule_suggestion"
+TRANSCRIPTION = "transcription"
 
 
 def usage_recorder(

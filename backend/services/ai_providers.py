@@ -73,7 +73,7 @@ def survey_connection(db: Session, survey: SurveyConfig) -> AIConnection | None:
     if not survey.ai_connection_id:
         return None
     connection = db.get(AIConnection, survey.ai_connection_id)
-    if connection is None:
+    if connection is None or (connection.kind or "review") != "review":
         return None
     if connection.owner_user_id != survey.user_id:
         # Only the survey's owner may spend on a connection; after an

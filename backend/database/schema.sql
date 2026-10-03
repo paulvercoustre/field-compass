@@ -48,6 +48,7 @@ CREATE TABLE ai_connections (
     connection_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     owner_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     label VARCHAR(120) NOT NULL,
+    kind VARCHAR(16) NOT NULL DEFAULT 'review',
     preset VARCHAR(32) NOT NULL DEFAULT 'custom',
     base_url TEXT NOT NULL,
     api_key_encrypted TEXT,
@@ -63,7 +64,8 @@ CREATE TABLE ai_connections (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE ai_connections IS 'Users'' own OpenAI-compatible AI providers; key encrypted, never returned';
+COMMENT ON TABLE ai_connections IS 'Users'' own AI keys: OpenAI-compatible (kind review) or ElevenLabs (kind transcription); key encrypted, never returned';
+COMMENT ON COLUMN ai_connections.kind IS 'review: AI review and rule writing; transcription: audio transcription';
 
 -- ============================================================================
 -- Table: survey_configs
@@ -79,6 +81,7 @@ CREATE TABLE survey_configs (
     config_data JSONB NOT NULL,
     user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
     ai_connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
+    transcription_connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(survey_name)
@@ -90,6 +93,33 @@ COMMENT ON COLUMN survey_configs.survey_name IS 'Human-readable survey name';
 COMMENT ON COLUMN survey_configs.kobo_asset_id IS 'KoboToolbox asset ID for API integration';
 COMMENT ON COLUMN survey_configs.user_id IS 'Owner user ID, NULL for system/legacy surveys';
 COMMENT ON COLUMN survey_configs.config_data IS 'JSONB containing all survey configuration: core identifiers, sampling frame, special values, PII columns, roster configs, global parameters';
+
+-- ============================================================================
+-- Table: runs
+-- ============================================================================
+-- One pull (or re-run) and the background work it started: AI reviews,
+-- transcriptions, transcripts sent to Kobo. Progress is counted from the
+-- items that point back at their run.
+-- ============================================================================
+
+CREATE TABLE runs (
+    run_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    survey_id UUID NOT NULL REFERENCES survey_configs(survey_id) ON DELETE CASCADE,
+    kind VARCHAR(32) NOT NULL,
+    started_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'queued',
+    stage VARCHAR(16) NOT NULL DEFAULT 'queued',
+    stats JSONB,
+    error TEXT,
+    task_id VARCHAR(128),
+    stopped_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP WITH TIME ZONE,
+    finished_at TIMESTAMP WITH TIME ZONE
+);
+
+COMMENT ON TABLE runs IS 'A pull or re-run and the background work it started; drives progress and notifications';
+COMMENT ON COLUMN runs.status IS 'queued | running (fetching, checking) | background | finished | failed | stopped';
 
 -- ============================================================================
 -- Table: validation_rules
@@ -151,6 +181,7 @@ CREATE TABLE submissions_current (
     llm_started_at TIMESTAMP WITH TIME ZONE,
     llm_checked_at TIMESTAMP WITH TIME ZONE,
     llm_last_error TEXT,
+    llm_run_id UUID REFERENCES runs(run_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(_uuid)
@@ -242,11 +273,83 @@ CREATE TABLE ai_usage (
     cached_input_tokens INTEGER,
     reasoning_tokens INTEGER,
     cost_usd_micros BIGINT,
+    audio_seconds NUMERIC(10, 2),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE ai_usage IS 'One row per AI call; counted for the free allowance. No prompt or reply text.';
 COMMENT ON COLUMN ai_usage.outcome IS 'ok, or the failure category (auth, rate_limited, ...)';
+
+COMMENT ON COLUMN ai_usage.audio_seconds IS 'Transcription only: seconds of audio sent (reserved before the call, settled after)';
+
+-- ============================================================================
+-- Table: audio_transcripts
+-- ============================================================================
+-- One row per (submission, audio question) chosen for transcription. The
+-- recording itself is never stored: it is read from Kobo when needed.
+-- ============================================================================
+
+CREATE TABLE audio_transcripts (
+    transcript_id BIGSERIAL PRIMARY KEY,
+    survey_id UUID NOT NULL REFERENCES survey_configs(survey_id) ON DELETE CASCADE,
+    submission_id INTEGER NOT NULL,
+    question_path VARCHAR(255) NOT NULL,
+    attachment_uid VARCHAR(128),
+    attachment_url TEXT,
+    attachment_filename VARCHAR(255),
+    input_hash VARCHAR(64),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    skip_reason VARCHAR(32),
+    text TEXT,
+    segments JSONB,
+    language_code VARCHAR(16),
+    language_probability NUMERIC(5, 4),
+    audio_seconds NUMERIC(10, 2),
+    model VARCHAR(64),
+    last_error TEXT,
+    run_id UUID REFERENCES runs(run_id) ON DELETE SET NULL,
+    requested_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    job_id VARCHAR(128),
+    queued_at TIMESTAMP WITH TIME ZONE,
+    started_at TIMESTAMP WITH TIME ZONE,
+    finished_at TIMESTAMP WITH TIME ZONE,
+    kobo_status VARCHAR(20) NOT NULL DEFAULT 'not_sent',
+    kobo_language VARCHAR(16),
+    kobo_version_uuid VARCHAR(64),
+    kobo_attempted_at TIMESTAMP WITH TIME ZONE,
+    kobo_sent_at TIMESTAMP WITH TIME ZONE,
+    kobo_last_error TEXT,
+    kobo_run_id UUID REFERENCES runs(run_id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (survey_id, submission_id, question_path)
+);
+
+COMMENT ON TABLE audio_transcripts IS 'Transcripts of audio answers (ElevenLabs), and whether each was sent to Kobo';
+COMMENT ON COLUMN audio_transcripts.status IS 'pending | running | success | failed | skipped | not_run_allowance | cancelled';
+COMMENT ON COLUMN audio_transcripts.kobo_status IS 'not_sent | pending | sent | failed | unsupported | edited_in_kobo';
+
+-- ============================================================================
+-- Table: notifications
+-- ============================================================================
+
+CREATE TABLE notifications (
+    notification_id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    survey_id UUID REFERENCES survey_configs(survey_id) ON DELETE CASCADE,
+    run_id UUID REFERENCES runs(run_id) ON DELETE SET NULL,
+    kind VARCHAR(32) NOT NULL,
+    severity VARCHAR(16) NOT NULL DEFAULT 'info',
+    title VARCHAR(255) NOT NULL,
+    body TEXT,
+    link JSONB,
+    dedupe_key VARCHAR(128),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP WITH TIME ZONE
+);
+
+COMMENT ON TABLE notifications IS 'In-app notifications: a run finished or failed, or work paused for a reason someone must fix';
 
 -- ============================================================================
 -- Indexes for Performance
@@ -292,6 +395,20 @@ CREATE INDEX idx_submissions_quality_issues ON submissions_current USING GIN(dat
 CREATE INDEX idx_submissions_llm_status ON submissions_current(llm_check_status);
 CREATE INDEX idx_submissions_llm_hashes ON submissions_current(survey_id, llm_rules_hash, llm_input_hash);
 CREATE INDEX idx_submissions_llm_job_id ON submissions_current(llm_job_id);
+CREATE INDEX idx_submissions_llm_run ON submissions_current(llm_run_id, llm_check_status)
+    WHERE llm_run_id IS NOT NULL;
+
+-- Runs, transcripts, notifications
+-- One pull at a time per survey: a second request gets "already running".
+CREATE UNIQUE INDEX idx_runs_one_active_per_survey ON runs(survey_id)
+    WHERE status IN ('queued', 'running');
+CREATE INDEX idx_runs_survey_created ON runs(survey_id, created_at);
+CREATE INDEX idx_runs_status ON runs(status) WHERE status IN ('queued', 'running', 'background');
+CREATE INDEX idx_audio_transcripts_run ON audio_transcripts(run_id, status);
+CREATE INDEX idx_audio_transcripts_kobo_run ON audio_transcripts(kobo_run_id, kobo_status);
+CREATE INDEX idx_audio_transcripts_submission ON audio_transcripts(survey_id, submission_id);
+CREATE INDEX idx_notifications_user ON notifications(user_id, created_at);
+CREATE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 -- Composite index for common triage queue queries
 CREATE INDEX idx_submissions_triage ON submissions_current(qa_status, survey_id)
     WHERE qa_status IN ('FLAGGED', 'PENDING_RE_QA');
@@ -328,6 +445,10 @@ CREATE TRIGGER update_validation_rules_updated_at
 
 CREATE TRIGGER update_submissions_current_updated_at 
     BEFORE UPDATE ON submissions_current 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_audio_transcripts_updated_at
+    BEFORE UPDATE ON audio_transcripts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================

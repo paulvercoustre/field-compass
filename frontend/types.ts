@@ -41,12 +41,14 @@ export interface Submission {
   kobo_validation_status?: string | null;  // Kobo's validation status (Approved, Not Approved, On Hold, etc.)
   kobo_edit_url?: string | null;  // URL to view/edit this submission in KoboToolbox
   reviewer_notes?: string | null;
-  llm_check_status?: 'pending' | 'running' | 'success' | 'failed' | 'not_run_allowance' | 'skipped' | null;
+  llm_check_status?: 'pending' | 'running' | 'waiting' | 'success' | 'failed' | 'not_run_allowance' | 'cancelled' | 'skipped' | null;
   llm_job_id?: string | null;
   llm_queued_at?: string | null;
   llm_started_at?: string | null;
   llm_checked_at?: string | null;
   llm_last_error?: string | null;
+  /** Its audio transcripts, when the survey transcribes recordings. */
+  transcript_summary?: { count: number; success: number; failed: number; in_progress: number; no_speech: number } | null;
 }
 
 export interface JsonPatch {
@@ -210,6 +212,10 @@ export interface FilterState {
   validationStatuses?: string[];  // Kobo validation statuses: Approved, Not Approved, On Hold, Not Reviewed
   enumerators?: string[];
   samplingFilters?: SamplingFilter[];
+  /** AI review state: links from the activity panel use it. */
+  aiReview?: 'failed' | 'in_progress' | 'not_run';
+  /** Audio transcript state. */
+  transcript?: 'any' | 'failed' | 'no_speech' | 'in_progress';
 }
 
 // --- Quality Overview Types ---

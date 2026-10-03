@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
+import { useActivity } from '../contexts/ActivityContext';
 import { forgetSurveyId } from '../utils/selectedSurveyStorage';
 import { LogoTile } from './ui/Logo';
 import { ChevronUpDownIcon, LogoutIcon, PlusIcon, SidebarIcon, UserCogIcon } from './ui/icons';
@@ -45,6 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onToggle
 }) => {
   const { surveys, selectedSurvey, isLoading, setSelectedSurvey } = useSurvey();
+  const { isSurveyBusy } = useActivity();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -160,6 +162,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                       >
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{survey.survey_name}</span>
+                          {isSurveyBusy(survey.survey_id) && (
+                            <span className="relative flex h-2 w-2 flex-shrink-0" title="Pulling or checking" aria-label="Pulling or checking">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
+                            </span>
+                          )}
                           <PermissionBadge permission={survey.permission} />
                         </div>
                       </button>

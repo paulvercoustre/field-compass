@@ -6,13 +6,17 @@
 import { API_BASE_URL } from './apiBase';
 
 export type AIPreset = 'openai' | 'azure' | 'anthropic' | 'openrouter' | 'mistral' | 'groq' | 'self_hosted' | 'custom';
+/** What a key is for: AI review and rule writing, or audio transcription. */
+export type AIKeyKind = 'review' | 'transcription';
+export type TranscriptionPreset = 'elevenlabs';
 export type AIConnectionStatus = 'untested' | 'ok' | 'failing';
 
 /** What anyone with access to a survey sees about its provider. */
 export interface AIConnectionSummary {
   connection_id: string;
+  kind: AIKeyKind;
   label: string;
-  preset: AIPreset;
+  preset: AIPreset | TranscriptionPreset;
   host: string | null;
   check_model: string;
   status: AIConnectionStatus;
@@ -38,13 +42,39 @@ export interface AIConnection extends AIConnectionSummary {
 }
 
 export interface AIConnectionInput {
+  kind?: AIKeyKind;
   label: string;
-  preset: AIPreset;
-  base_url: string;
+  preset: AIPreset | TranscriptionPreset;
+  /** Review keys only: a transcription key always goes to ElevenLabs. */
+  base_url?: string;
   api_key?: string;
-  check_model: string;
+  check_model?: string;
   rule_model?: string | null;
 }
+
+/** What each kind of key does, in the words the AI integration page uses. */
+export const KEY_KINDS: Record<AIKeyKind, { name: string; does: string }> = {
+  review: {
+    name: 'AI review',
+    does: 'Flags weak open-text answers and transcripts, and writes custom checks.',
+  },
+  transcription: {
+    name: 'Audio transcription',
+    does: 'Turns recorded answers into text.',
+  },
+};
+
+export const TRANSCRIPTION_PRESETS: Record<TranscriptionPreset, { name: string; note: string }> = {
+  elevenlabs: {
+    name: 'ElevenLabs',
+    note: 'In ElevenLabs, create a key under Developers › API keys with the Speech to Text permission.',
+  },
+};
+
+export const providerName = (preset: string): string =>
+  (AI_PRESETS as Record<string, { name: string }>)[preset]?.name ??
+  (TRANSCRIPTION_PRESETS as Record<string, { name: string }>)[preset]?.name ??
+  preset;
 
 export const AI_PRESETS: Record<AIPreset, { name: string; baseUrl: string; modelHint: string; note?: string }> = {
   openai: { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', modelHint: 'gpt-4o-mini' },
@@ -105,11 +135,11 @@ export const testAIConnection = (id: string) =>
 export const deleteAIConnection = (id: string) =>
   request<void>(`/api/ai/connections/${id}`, { method: 'DELETE' });
 
-/** `null` puts the survey back on the Field Compass key. */
-export const setSurveyAIConnection = (surveyId: string, connectionId: string | null) =>
+/** `null` puts the survey back on included usage (Field Compass's key). */
+export const setSurveyAIConnection = (surveyId: string, connectionId: string | null, kind: AIKeyKind = 'review') =>
   request<{ ai_connection: AIConnectionSummary | null }>(`/api/surveys/${surveyId}/ai-connection`, {
     method: 'PUT',
-    body: JSON.stringify({ connection_id: connectionId }),
+    body: JSON.stringify({ connection_id: connectionId, kind }),
   });
 
 /** Plain words for a stored "<category>: <message>" error or a test result. */
@@ -118,6 +148,8 @@ export const describeAIError = (stored: string | null | undefined): string => {
   const message = rest.join(': ');
   const reasons: Record<string, string> = {
     auth: 'The provider rejected the key.',
+    unavailable: 'The provider could not be reached. Try again in a moment.',
+    timeout: 'The provider did not answer in time. Try again in a moment.',
     provider_quota: 'The provider account is out of credit.',
     not_configured: 'The stored key can no longer be read. Enter it again.',
   };
@@ -125,7 +157,7 @@ export const describeAIError = (stored: string | null | undefined): string => {
 };
 
 export interface AIFeatureUsage {
-  feature: 'qualitative_check' | 'rule_generation' | 'rule_suggestion';
+  feature: 'qualitative_check' | 'rule_generation' | 'rule_suggestion' | 'transcription';
   calls: number;
   failed: number;
   input_tokens: number;
@@ -135,7 +167,13 @@ export interface AIFeatureUsage {
 export interface AccountAIUsage {
   month: string; // "2026-10"
   resets_at: string;
-  /** Free AI rule requests on the Field Compass key, today. */
+  /** What each survey includes on Field Compass's keys; 0 or null when this server includes none. */
+  included: {
+    reviews_per_survey_month: number;
+    transcription_minutes_per_survey_month: number | null;
+    rule_requests_per_day: number;
+  };
+  /** Included AI rule requests on the Field Compass key, today. */
   rule_requests_today: { limit: number; used: number; remaining: number };
   /** Every survey the user owns. */
   surveys: Array<{
@@ -144,9 +182,37 @@ export interface AccountAIUsage {
     /** Its own provider; null when it uses the Field Compass allowance. */
     provider: AIConnectionSummary | null;
     allowance: { limit: number; used: number; in_flight: number; remaining: number } | null;
+    /** Included transcription minutes this month; null when the survey never transcribed. */
+    transcription: {
+      limit_minutes: number;
+      used_minutes: number;
+      remaining_minutes: number;
+      /** The survey's own transcription key, when it has one: no Field Compass limit. */
+      provider: AIConnectionSummary | null;
+      own_key_minutes: number;
+    } | null;
     by_feature: AIFeatureUsage[];
   }>;
 }
 
 /** This month's AI use across the surveys the current user owns. */
 export const getAccountAIUsage = () => request<AccountAIUsage>('/api/ai/usage');
+
+export type UsageMetric = 'reviews' | 'minutes';
+export type UsagePeriod = '30d' | '6m';
+
+export interface AIUsageHistory {
+  metric: UsageMetric;
+  period: UsagePeriod;
+  unit: 'day' | 'month';
+  /** `included`: on Field Compass's keys; `own`: on your own keys. */
+  buckets: Array<{ start: string; included: number; own: number }>;
+  total_included: number;
+  total_own: number;
+}
+
+/** AI use over time on the surveys you own: daily for 30 days, or monthly for 6 months. */
+export const getAIUsageHistory = (metric: UsageMetric, period: UsagePeriod, surveyId?: string) =>
+  request<AIUsageHistory>(
+    `/api/ai/usage/history?metric=${metric}&period=${period}${surveyId ? `&survey_id=${surveyId}` : ''}`
+  );

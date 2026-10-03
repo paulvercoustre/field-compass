@@ -88,6 +88,10 @@ class Submission(BaseModel):
     llm_started_at: datetime | None = Field(None, description="When qualitative checks started")
     llm_checked_at: datetime | None = Field(None, description="When qualitative checks completed")
     llm_last_error: str | None = Field(None, description="Last qualitative check error message")
+    transcript_summary: dict[str, int] | None = Field(
+        None,
+        description="Audio transcripts of this submission: count, success, failed, in_progress, no_speech",
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,

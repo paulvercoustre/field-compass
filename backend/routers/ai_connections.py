@@ -1,5 +1,10 @@
 """
-A user's own AI providers, and which one a survey uses.
+A user's own AI keys, and which one each survey uses.
+
+Two kinds: "review" keys are OpenAI-compatible providers for AI review and
+rule writing; "transcription" keys are ElevenLabs keys for audio
+transcription. A survey uses at most one of each; without one it runs on
+the operator's keys, within the included usage.
 
 A connection belongs to the user who created it: only they can see, edit,
 test, delete or attach it, and only to surveys they own. The key goes in and
@@ -9,6 +14,8 @@ See docs/specs/ai-provider-overhaul.md, sections 6.3 and 9.
 """
 
 import logging
+import os
+from datetime import datetime, timedelta
 from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -19,6 +26,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database.models import AIConnection, AIUsage, SurveyConfig, User
+from etl.audio import transcription_settings
 from services.ai_allowance import (
     allowance_enabled,
     checks_in_flight,
@@ -31,26 +39,50 @@ from services.ai_allowance import (
 )
 from services.ai_endpoints import EndpointRejected, validate_base_url
 from services.ai_providers import UNTESTED, run_connection_test, survey_connection
+from services.ai_usage import QUALITATIVE_CHECK
+from services.ai_usage import TRANSCRIPTION as TRANSCRIPTION_FEATURE
 from services.auth import encrypt_api_key, get_current_active_user
 from services.database import get_db
 from services.permissions import require_survey_access
 from services.rate_limit import limiter
+from services.transcription_allowance import minutes_per_survey_month, seconds_on_own_key
+from services.transcription_allowance import seconds_used as transcription_seconds_used
+from services.transcription_keys import (
+    ELEVENLABS,
+    REVIEW,
+    TRANSCRIPTION,
+    run_transcription_key_test,
+    survey_transcription_connection,
+)
+from services.transcription_keys import base_url as transcription_base_url
+from services.transcription_keys import model as transcription_model
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 Preset = Literal[
-    "openai", "azure", "anthropic", "openrouter", "mistral", "groq", "self_hosted", "custom"
+    "openai",
+    "azure",
+    "anthropic",
+    "openrouter",
+    "mistral",
+    "groq",
+    "self_hosted",
+    "custom",
+    "elevenlabs",
 ]
+Kind = Literal["review", "transcription"]
 
 
 class ConnectionCreate(BaseModel):
+    kind: Kind = "review"
     label: str = Field(..., min_length=1, max_length=120)
     preset: Preset = "custom"
-    base_url: str = Field(..., min_length=1, max_length=500)
+    # Review keys only: a transcription key always goes to ElevenLabs.
+    base_url: str | None = Field(None, min_length=1, max_length=500)
     api_key: str | None = Field(None, max_length=500)
-    check_model: str = Field(..., min_length=1, max_length=128)
+    check_model: str | None = Field(None, min_length=1, max_length=128)
     rule_model: str | None = Field(None, max_length=128)
 
 
@@ -66,12 +98,14 @@ class ConnectionUpdate(BaseModel):
 
 class SurveyConnectionUpdate(BaseModel):
     connection_id: UUID | None = None  # None: the operator's key
+    kind: Kind = "review"
 
 
 def connection_summary(connection: AIConnection) -> dict:
     """What anyone with access to a survey may see about its provider."""
     return {
         "connection_id": str(connection.connection_id),
+        "kind": connection.kind or REVIEW,
         "label": connection.label,
         "preset": connection.preset,
         "host": urlsplit(connection.base_url).hostname,
@@ -82,9 +116,14 @@ def connection_summary(connection: AIConnection) -> dict:
 
 
 def _connection_out(db: Session, connection: AIConnection, test: dict | None = None) -> dict:
+    column = (
+        SurveyConfig.transcription_connection_id
+        if connection.kind == TRANSCRIPTION
+        else SurveyConfig.ai_connection_id
+    )
     surveys = (
         db.query(SurveyConfig.survey_id, SurveyConfig.survey_name)
-        .filter(SurveyConfig.ai_connection_id == connection.connection_id)
+        .filter(column == connection.connection_id)
         .all()
     )
     out = {
@@ -114,6 +153,13 @@ def _owned_connection(db: Session, user: User, connection_id: str) -> AIConnecti
     if connection is None or connection.owner_user_id != user.user_id:
         raise HTTPException(status_code=404, detail="AI provider not found")
     return connection
+
+
+def _test(connection: AIConnection) -> dict:
+    """Check a key the way its kind is checked."""
+    if connection.kind == TRANSCRIPTION:
+        return run_transcription_key_test(connection)
+    return run_connection_test(connection)
 
 
 def _checked_url(url: str) -> str:
@@ -153,9 +199,41 @@ async def create_connection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Save a provider and test it. A failing test still saves it, marked failing."""
+    """
+    Save a key and test it. A review provider that fails its test is still
+    saved, marked failing (an endpoint can be down briefly). A transcription
+    key ElevenLabs refuses is not saved.
+    """
+    if payload.kind == TRANSCRIPTION:
+        key = (payload.api_key or "").strip()
+        if len(key) < 20:
+            raise HTTPException(
+                status_code=400,
+                detail="That's too short to be an ElevenLabs API key. Copy the whole key.",
+            )
+        connection = AIConnection(
+            owner_user_id=current_user.user_id,
+            kind=TRANSCRIPTION,
+            label=payload.label.strip(),
+            preset=ELEVENLABS,
+            base_url=transcription_base_url(),
+            check_model=transcription_model(),
+            status=UNTESTED,
+            consecutive_failures=0,
+        )
+        _set_key(connection, key)
+        test = run_transcription_key_test(connection)
+        if not test["ok"] and test.get("category") in ("auth", "bad_request"):
+            raise HTTPException(status_code=400, detail=test["error"])
+        db.add(connection)
+        db.commit()
+        return _connection_out(db, connection, test)
+
+    if not payload.base_url or not payload.check_model:
+        raise HTTPException(status_code=400, detail="Enter the provider's address and model.")
     connection = AIConnection(
         owner_user_id=current_user.user_id,
+        kind=REVIEW,
         label=payload.label.strip(),
         preset=payload.preset,
         base_url=_checked_url(payload.base_url),
@@ -184,6 +262,22 @@ async def update_connection(
     """Edit a provider. Changing where or how it connects re-runs the test."""
     connection = _owned_connection(db, current_user, connection_id)
     changes_connection = False
+
+    if connection.kind == TRANSCRIPTION:
+        # Only its name and key change: it always goes to ElevenLabs.
+        if payload.label is not None:
+            connection.label = payload.label.strip()
+        test = None
+        if payload.api_key:
+            previous = (connection.api_key_encrypted, connection.api_key_hint)
+            _set_key(connection, payload.api_key)
+            test = run_transcription_key_test(connection)
+            if not test["ok"] and test.get("category") in ("auth", "bad_request"):
+                db.rollback()
+                connection.api_key_encrypted, connection.api_key_hint = previous
+                raise HTTPException(status_code=400, detail=test["error"])
+        db.commit()
+        return _connection_out(db, connection, test)
 
     if payload.label is not None:
         connection.label = payload.label.strip()
@@ -217,9 +311,9 @@ async def test_connection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Test a provider again. A pass resumes a paused one."""
+    """Test a key again. A pass resumes a paused one."""
     connection = _owned_connection(db, current_user, connection_id)
-    test = run_connection_test(connection)
+    test = _test(connection)
     db.commit()
     return _connection_out(db, connection, test)
 
@@ -235,6 +329,9 @@ async def delete_connection(
     db.query(SurveyConfig).filter(SurveyConfig.ai_connection_id == connection.connection_id).update(
         {SurveyConfig.ai_connection_id: None}, synchronize_session=False
     )
+    db.query(SurveyConfig).filter(
+        SurveyConfig.transcription_connection_id == connection.connection_id
+    ).update({SurveyConfig.transcription_connection_id: None}, synchronize_session=False)
     db.delete(connection)
     db.commit()
 
@@ -246,7 +343,10 @@ async def set_survey_connection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Use one of the owner's providers for this survey, or the operator's key (null)."""
+    """
+    Use one of the owner's keys for this survey, or the operator's key (null):
+    a review key for AI review, or a transcription key for transcription.
+    """
     try:
         survey_uuid = UUID(survey_id)
     except ValueError:
@@ -256,6 +356,12 @@ async def set_survey_connection(
     connection = None
     if payload.connection_id is not None:
         connection = _owned_connection(db, current_user, str(payload.connection_id))
+        if (connection.kind or REVIEW) != payload.kind:
+            raise HTTPException(
+                status_code=400,
+                detail="That key is for "
+                + ("audio transcription." if connection.kind == TRANSCRIPTION else "AI review."),
+            )
         if survey.user_id != current_user.user_id:
             # An admin can reach this endpoint for any survey, but a key is
             # spent on behalf of the survey's owner, not the admin.
@@ -263,7 +369,10 @@ async def set_survey_connection(
                 status_code=403, detail="Only the survey's owner can attach their provider."
             )
 
-    survey.ai_connection_id = connection.connection_id if connection else None
+    if payload.kind == TRANSCRIPTION:
+        survey.transcription_connection_id = connection.connection_id if connection else None
+    else:
+        survey.ai_connection_id = connection.connection_id if connection else None
     db.commit()
     logger.info(
         "Survey %s now uses %s",
@@ -327,7 +436,8 @@ async def account_ai_usage(
             entry["calls"] += calls
             entry["input_tokens"] += int(input_tokens)
             entry["output_tokens"] += int(output_tokens)
-            if outcome != "ok":
+            # "reserved": a transcription under way, not a failure.
+            if outcome not in ("ok", "reserved"):
                 entry["failed"] += calls
 
     enabled = allowance_enabled()
@@ -345,12 +455,27 @@ async def account_ai_usage(
                 "in_flight": in_flight,
                 "remaining": max(0, check_limit - used - in_flight),
             }
+        transcription = None
+        own_transcription = survey_transcription_connection(db, survey)
+        transcribed = "transcription" in totals.get(survey.survey_id, {})
+        if transcribed or transcription_settings(survey.config_data).enabled:
+            used_seconds = transcription_seconds_used(db, survey.survey_id)
+            limit_minutes = minutes_per_survey_month()
+            transcription = {
+                "limit_minutes": limit_minutes,
+                "used_minutes": round(used_seconds / 60, 1),
+                "remaining_minutes": round(max(0.0, limit_minutes * 60 - used_seconds) / 60, 1),
+                # On the owner's own ElevenLabs key: no Field Compass limit.
+                "provider": connection_summary(own_transcription) if own_transcription else None,
+                "own_key_minutes": round(seconds_on_own_key(db, survey.survey_id) / 60, 1),
+            }
         out.append(
             {
                 "survey_id": str(survey.survey_id),
                 "survey_name": survey.survey_name,
                 "provider": connection_summary(connection) if connection else None,
                 "allowance": allowance,
+                "transcription": transcription,
                 "by_feature": sorted(
                     totals.get(survey.survey_id, {}).values(), key=lambda entry: entry["feature"]
                 ),
@@ -362,10 +487,105 @@ async def account_ai_usage(
     return {
         "month": since.strftime("%Y-%m"),
         "resets_at": next_month_start().isoformat() + "Z",
+        # What every survey includes on Field Compass's keys; 0 or None when
+        # this server includes none (no key of its own).
+        "included": {
+            "reviews_per_survey_month": check_limit,
+            "transcription_minutes_per_survey_month": minutes_per_survey_month()
+            if (os.getenv("ELEVENLABS_API_KEY") or "").strip()
+            else None,
+            "rule_requests_per_day": rule_limit,
+        },
         "rule_requests_today": {
             "limit": rule_limit,
             "used": rule_limit - rule_left,
             "remaining": rule_left,
         },
         "surveys": out,
+    }
+
+
+@router.get("/ai/usage/history")
+async def account_ai_usage_history(
+    metric: Literal["reviews", "minutes"] = "reviews",
+    period: Literal["30d", "6m"] = "30d",
+    survey_id: UUID | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    AI use over time on the surveys the caller owns, for the usage chart.
+
+    ``reviews``: submissions reviewed by AI; ``minutes``: minutes of audio
+    transcribed. Daily over 30 days, or monthly over 6 months, each split
+    between the included usage (Field Compass's keys) and the caller's own.
+    """
+    owned = {
+        sid
+        for (sid,) in db.query(SurveyConfig.survey_id).filter(
+            SurveyConfig.user_id == current_user.user_id
+        )
+    }
+    if survey_id is not None:
+        if survey_id not in owned:
+            raise HTTPException(status_code=404, detail="Survey not found")
+        owned = {survey_id}
+
+    now = datetime.utcnow()
+    if period == "30d":
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        starts = [today - timedelta(days=offset) for offset in range(29, -1, -1)]
+        bucket_of = lambda when: when.replace(hour=0, minute=0, second=0, microsecond=0)  # noqa: E731
+    else:
+        first = month_start(now)
+        starts = []
+        for _ in range(6):
+            starts.insert(0, first)
+            first = month_start(first - timedelta(days=1))
+        bucket_of = month_start
+    since = starts[0]
+
+    values = {start: {"included": 0.0, "own": 0.0} for start in starts}
+    if owned:
+        if metric == "reviews":
+            amount = func.count(AIUsage.usage_id)
+            feature = QUALITATIVE_CHECK
+        else:
+            amount = func.coalesce(func.sum(AIUsage.audio_seconds), 0)
+            feature = TRANSCRIPTION_FEATURE
+        rows = (
+            db.query(AIUsage.created_at, AIUsage.connection_id.isnot(None), amount)
+            .filter(
+                AIUsage.survey_id.in_(owned),
+                AIUsage.feature == feature,
+                AIUsage.outcome == "ok",
+                AIUsage.created_at >= since,
+            )
+            .group_by(AIUsage.created_at, AIUsage.connection_id.isnot(None))
+            .all()
+        )
+        for created_at, own, value in rows:
+            when = created_at.replace(tzinfo=None) if created_at.tzinfo else created_at
+            start = bucket_of(when)
+            if start in values:
+                values[start]["own" if own else "included"] += float(value or 0)
+
+    def shown(value: float) -> float:
+        return round(value / 60, 1) if metric == "minutes" else int(value)
+
+    buckets = [
+        {
+            "start": start.date().isoformat(),
+            "included": shown(values[start]["included"]),
+            "own": shown(values[start]["own"]),
+        }
+        for start in starts
+    ]
+    return {
+        "metric": metric,
+        "period": period,
+        "unit": "day" if period == "30d" else "month",
+        "buckets": buckets,
+        "total_included": round(sum(b["included"] for b in buckets), 1),
+        "total_own": round(sum(b["own"] for b in buckets), 1),
     }

@@ -12,10 +12,13 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.declarative import declarative_base
@@ -73,6 +76,13 @@ class SurveyConfig(Base):
     # Relationships
     # The survey owner's own AI provider; NULL uses the operator's key.
     ai_connection_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("ai_connections.connection_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # The owner's own ElevenLabs key for transcription; NULL uses the
+    # operator's, within the included usage.
+    transcription_connection_id = Column(
         UUID(as_uuid=True),
         ForeignKey("ai_connections.connection_id", ondelete="SET NULL"),
         nullable=True,
@@ -165,6 +175,10 @@ class SubmissionCurrent(Base):
         DateTime(timezone=True), nullable=True
     )  # Time worker completed processing
     llm_last_error = Column(Text, nullable=True)  # Last worker/API error (if any)
+    # The run (pull) that last queued this submission's AI review.
+    llm_run_id = Column(
+        UUID(as_uuid=True), ForeignKey("runs.run_id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -195,7 +209,9 @@ class SubmissionHistory(Base):
 
 class AIConnection(Base):
     """
-    A user's own AI provider: any OpenAI-compatible endpoint, key and model.
+    A user's own AI key: an OpenAI-compatible endpoint for AI review
+    (``kind="review"``), or an ElevenLabs key for transcription
+    (``kind="transcription"``).
 
     Owned by a user and attached to surveys they own. The key is encrypted
     at rest and never returned by the API (``api_key_hint`` is).
@@ -208,7 +224,10 @@ class AIConnection(Base):
         UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
     )
     label = Column(String(120), nullable=False)
-    # openai | azure | anthropic | openrouter | mistral | groq | self_hosted | custom
+    # review: AI review and rule writing (OpenAI-compatible);
+    # transcription: audio transcription (ElevenLabs).
+    kind = Column(String(16), nullable=False, default="review")
+    # openai | azure | anthropic | openrouter | mistral | groq | self_hosted | custom | elevenlabs
     preset = Column(String(32), nullable=False, default="custom")
     base_url = Column(Text, nullable=False)
     api_key_encrypted = Column(Text, nullable=True)  # NULL for keyless self-hosted servers
@@ -266,6 +285,9 @@ class AIUsage(Base):
     # List-price cost when the call was made, in millionths of a dollar; NULL
     # when the model is not in the price table.
     cost_usd_micros = Column(BigInteger, nullable=True)
+    # Transcription only: seconds of audio. Reserved before the call (outcome
+    # "reserved") so concurrent transcriptions cannot overshoot the allowance.
+    audio_seconds = Column(Numeric(10, 2), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
 
@@ -292,3 +314,148 @@ class SurveyAccess(Base):
     survey = relationship("SurveyConfig", back_populates="shared_access")
     user = relationship("User", back_populates="survey_access", foreign_keys=[user_id])
     granter = relationship("User", foreign_keys=[granted_by])
+
+
+# Run statuses. "queued" and "running" are the pull itself (one at a time per
+# survey); "background" is the AI reviews, transcriptions and Kobo sends it
+# started, which may overlap a later pull.
+RUN_ACTIVE = ("queued", "running")
+RUN_OPEN = ("queued", "running", "background")
+
+
+class Run(Base):
+    """
+    A pull, or a re-run, and the background work it started.
+
+    Progress is counted from the items that point back at it
+    (``submissions_current.llm_run_id``, ``audio_transcripts.run_id`` and
+    ``kobo_run_id``), so it never drifts from what actually happened.
+    """
+
+    __tablename__ = "runs"
+
+    run_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    survey_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("survey_configs.survey_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # pull | ai_rerun | transcription_rerun | kobo_resend
+    kind = Column(String(32), nullable=False)
+    started_by_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    # queued | running | background | finished | failed | stopped
+    status = Column(String(16), nullable=False, default="queued")
+    # queued | fetching | checking | background | done
+    stage = Column(String(16), nullable=False, default="queued")
+    stats = Column(JSONB, nullable=True)  # the pull's counts
+    error = Column(Text, nullable=True)  # why a pull failed, in words
+    task_id = Column(String(128), nullable=True)
+    stopped_by_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "idx_runs_one_active_per_survey",
+            "survey_id",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+            sqlite_where=text("status IN ('queued', 'running')"),
+        ),
+    )
+
+
+class AudioTranscript(Base):
+    """
+    The transcript of one audio answer, and whether it was sent to Kobo.
+
+    The recording is never stored here: the worker downloads it from Kobo,
+    sends it to ElevenLabs and deletes it. See docs/specs/audio-transcription.md.
+    """
+
+    __tablename__ = "audio_transcripts"
+
+    transcript_id = Column(Integer, primary_key=True, autoincrement=True)
+    survey_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("survey_configs.survey_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    submission_id = Column(Integer, nullable=False)  # Kobo _id
+    question_path = Column(String(255), nullable=False)  # e.g. interview/q_story
+    attachment_uid = Column(String(128), nullable=True)
+    attachment_url = Column(Text, nullable=True)  # Kobo download_url
+    attachment_filename = Column(String(255), nullable=True)
+    input_hash = Column(String(64), nullable=True)  # a change re-transcribes
+    # pending | running | success | failed | skipped | not_run_allowance | cancelled
+    status = Column(String(20), nullable=False, default="pending")
+    skip_reason = Column(String(32), nullable=True)  # missing_file | too_long | no_speech
+    text = Column(Text, nullable=True)
+    segments = Column(JSONB, nullable=True)  # speaker turns, when diarised
+    language_code = Column(String(16), nullable=True)  # ISO 639-3, as detected
+    language_probability = Column(Numeric(5, 4), nullable=True)
+    audio_seconds = Column(Numeric(10, 2), nullable=True)
+    model = Column(String(64), nullable=True)
+    last_error = Column(Text, nullable=True)  # "<category>: <message>"
+    run_id = Column(
+        UUID(as_uuid=True), ForeignKey("runs.run_id", ondelete="SET NULL"), nullable=True
+    )
+    # Whose Kobo token downloads the recording: the user who started the run.
+    requested_by_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    job_id = Column(String(128), nullable=True)
+    queued_at = Column(DateTime(timezone=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    # not_sent | pending | sent | failed | unsupported | edited_in_kobo
+    kobo_status = Column(String(20), nullable=False, default="not_sent")
+    kobo_language = Column(String(16), nullable=True)  # the code Kobo stored it under
+    kobo_version_uuid = Column(String(64), nullable=True)  # the version we created
+    kobo_attempted_at = Column(DateTime(timezone=True), nullable=True)
+    kobo_sent_at = Column(DateTime(timezone=True), nullable=True)
+    kobo_last_error = Column(Text, nullable=True)
+    kobo_run_id = Column(
+        UUID(as_uuid=True), ForeignKey("runs.run_id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("survey_id", "submission_id", "question_path"),
+        Index("idx_audio_transcripts_run", "run_id", "status"),
+    )
+
+
+class Notification(Base):
+    """An in-app notification: a run finished or failed, or work paused."""
+
+    __tablename__ = "notifications"
+
+    notification_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    survey_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("survey_configs.survey_id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    run_id = Column(
+        UUID(as_uuid=True), ForeignKey("runs.run_id", ondelete="SET NULL"), nullable=True
+    )
+    kind = Column(String(32), nullable=False)  # run_finished | run_failed | paused
+    severity = Column(String(16), nullable=False, default="info")  # info | warning
+    title = Column(String(255), nullable=False)
+    body = Column(Text, nullable=True)
+    link = Column(JSONB, nullable=True)  # {"view": "dashboard", "survey_id": ..., "filters": {...}}
+    # One unread notification per key: a repeated pause updates it.
+    dedupe_key = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    read_at = Column(DateTime(timezone=True), nullable=True)

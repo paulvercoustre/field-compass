@@ -27,6 +27,8 @@ const GENERAL_CHECK_NAMES: Record<string, string> = {
   duration_too_long: 'Interview too long',
   sampling_frame_mismatch: 'Group not in targets file',
   strata_value_not_in_form: 'Answer not among the question’s options',
+  audio_no_speech: 'Recording has no speech',
+  audio_language_mismatch: 'Answer in another language',
 };
 
 const humanize = (id: string): string => {

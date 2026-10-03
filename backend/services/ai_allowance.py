@@ -1,5 +1,5 @@
 """
-The free AI allowance: how much a survey may spend on the operator's key.
+Included AI usage: how much a survey may spend on the operator's key.
 
 Surveys without their own provider run AI checks on the operator's key, up
 to a monthly number of checked submissions per survey; AI rule writing on
@@ -155,6 +155,6 @@ def not_run_message(now: datetime | None = None) -> str:
     """Stored as llm_last_error for a check the allowance did not cover."""
     month = month_start(now).strftime("%B")
     return (
-        f"allowance: This survey has used its free AI review allowance for {month}. It resumes next "
-        "month, or straight away with your own AI provider."
+        f"allowance: This survey has used its included AI reviews for {month}. They resume next "
+        "month, or straight away with your own AI key."
     )

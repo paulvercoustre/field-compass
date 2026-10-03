@@ -23,8 +23,17 @@ import DkStringValues from '../components/ui/DkStringValues';
 import { readDkValues, sameDkValues } from '../utils/dkSuggestions';
 import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
+import AudioTranscriptionCard from '../components/transcription/AudioTranscriptionCard';
 
-const SurveySettingsPage: React.FC = () => {
+type SurveySettingsTab = 'settings' | 'access' | 'quality' | 'transcription';
+const SURVEY_SETTINGS_TABS: string[] = ['settings', 'access', 'quality', 'transcription'];
+
+interface SurveySettingsPageProps {
+  /** A tab asked for by a link elsewhere in the app (a notification, the activity panel). */
+  requestedTab?: { tab: string; at: number };
+}
+
+const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab }) => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,7 +55,18 @@ const SurveySettingsPage: React.FC = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'settings' | 'access' | 'quality'>('settings');
+  const [activeTab, setActiveTab] = useState<SurveySettingsTab>(() =>
+    requestedTab && SURVEY_SETTINGS_TABS.includes(requestedTab.tab)
+      ? (requestedTab.tab as SurveySettingsTab)
+      : 'settings'
+  );
+  useEffect(() => {
+    if (requestedTab && SURVEY_SETTINGS_TABS.includes(requestedTab.tab)) {
+      setActiveTab(requestedTab.tab as SurveySettingsTab);
+    }
+  }, [requestedTab]);
+  // Audio questions being transcribed: their transcripts can be AI-reviewed.
+  const [transcribed, setTranscribed] = useState<{ paths: string[]; enabled: boolean }>({ paths: [], enabled: false });
 
   // Permission-based access control
   const userPermission = selectedSurvey?.permission;
@@ -68,6 +88,12 @@ const SurveySettingsPage: React.FC = () => {
 
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
+  // A survey whose form has no audio questions has no transcription tab.
+  useEffect(() => {
+    if (activeTab === 'transcription' && koboToolData && !koboToolData.survey?.some((row) => row.type === 'audio')) {
+      setActiveTab('settings');
+    }
+  }, [activeTab, koboToolData]);
   const [koboToolFileName, setKoboToolFileName] = useState<string>('');
   const [isLoadingTool, setIsLoadingTool] = useState(false);
   const [availableVariables, setAvailableVariables] = useState<string[]>([]);
@@ -78,6 +104,20 @@ const SurveySettingsPage: React.FC = () => {
   const [numericVariables, setNumericVariables] = useState<string[]>([]);
   const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
   const [labelColumnSurvey, setLabelColumnSurvey] = useState<string>('label::English (en)');
+  // Open-text questions, plus the audio questions being transcribed: the AI
+  // review reads their transcripts.
+  const reviewableVariables = useMemo(() => {
+    if (!transcribed.enabled || !koboToolData) return textVariables;
+    const audio = (koboToolData.survey as Array<Record<string, any>>)
+      .filter((row) => row.type === 'audio' && row.name && !row.roster_name)
+      .filter((row) => transcribed.paths.includes(row.group_path ? `${row.group_path}/${row.name}` : row.name))
+      .map((row) => ({
+        name: row.name as string,
+        label: `${row[labelColumnSurvey] || row['label::English (en)'] || row.label || row.name} (transcript)`,
+        type: 'audio',
+      }));
+    return [...textVariables, ...audio];
+  }, [textVariables, transcribed, koboToolData, labelColumnSurvey]);
   const [labelColumnChoices, setLabelColumnChoices] = useState<string>('label::English (en)');
 
   // Sampling frame CSV state
@@ -319,6 +359,10 @@ const SurveySettingsPage: React.FC = () => {
     try {
       const data = await getSurveyConfig(selectedSurvey.survey_id);
       setConfig(data);
+      setTranscribed({
+        paths: data.config_data?.audio_transcription?.questions ?? [],
+        enabled: !!data.config_data?.audio_transcription?.enabled,
+      });
       setSurveyName(data.survey_name);
       setKoboAssetId(data.kobo_asset_id || '');
       
@@ -1003,10 +1047,14 @@ const SurveySettingsPage: React.FC = () => {
     { value: 6, label: 'Sun' },
   ];
 
-  const navItems = [
-    { id: 'settings' as const, label: 'General' },
-    { id: 'access' as const, label: 'Access' },
-    { id: 'quality' as const, label: 'Quality checks' },
+  // Transcription is processing, not a check: its own section, and only for
+  // forms that record audio.
+  const hasAudioQuestions = !!koboToolData?.survey?.some((row) => row.type === 'audio');
+  const navItems: Array<{ id: SurveySettingsTab; label: string }> = [
+    { id: 'settings', label: 'General' },
+    { id: 'access', label: 'Access' },
+    { id: 'quality', label: 'Quality checks' },
+    ...(hasAudioQuestions ? [{ id: 'transcription' as const, label: 'Audio transcription' }] : []),
   ];
 
   return (
@@ -2270,7 +2318,7 @@ const SurveySettingsPage: React.FC = () => {
                       Flag weak open-text answers
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Unreadable, off-topic or too vague answers to the questions you pick. Uses AI allowance.
+                      Unreadable, off-topic or too vague answers to the questions you pick. Counts toward the included usage, unless the survey has its own key.
                     </p>
                   </div>
                 </div>
@@ -2278,13 +2326,13 @@ const SurveySettingsPage: React.FC = () => {
                 {qualityChecks.flag_llm_qualitative && (
                   <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
                     <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Questions to review</h3>
-                    {textVariables.length === 0 ? (
+                    {reviewableVariables.length === 0 ? (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         This form has no open-text questions.
                       </p>
                     ) : (
                       <div className="max-h-48 overflow-y-auto space-y-1">
-                        {textVariables.map((variable) => (
+                        {reviewableVariables.map((variable) => (
                           <label key={variable.name} className="flex items-center gap-2 text-sm">
                             <input
                               type="checkbox"
@@ -2324,7 +2372,7 @@ const SurveySettingsPage: React.FC = () => {
                       {isRerunningAI ? 'Scheduling…' : 'Review all answers again'}
                     </button>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      On the next pull, including answers already reviewed. Uses AI allowance.
+                      On the next pull, including answers already reviewed. Counts toward the included usage, unless the survey has its own key.
                     </p>
                   </div>
                 )}
@@ -2365,6 +2413,14 @@ const SurveySettingsPage: React.FC = () => {
               />
             )}
           </div>
+        ) : activeTab === 'transcription' && selectedSurvey ? (
+          <AudioTranscriptionCard
+            key={`transcription-${selectedSurvey.survey_id}`}
+            surveyId={selectedSurvey.survey_id}
+            surveyName={selectedSurvey.survey_name}
+            formKey={config?.updated_at}
+            onSettingsChange={(paths, enabled) => setTranscribed({ paths, enabled })}
+          />
         ) : null}
     </SettingsLayout>
   );

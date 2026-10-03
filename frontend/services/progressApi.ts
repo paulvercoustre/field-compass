@@ -110,6 +110,14 @@ export interface SurveyConfig {
       llm_qualitative_fields?: string[];
       llm_check_types?: ('content_quality' | 'relevance' | 'completeness')[];
     };
+    /** Saved through its own endpoint; see services/transcriptionApi.ts. */
+    audio_transcription?: {
+      enabled?: boolean;
+      questions?: string[];
+      language?: string | null;
+      multiple_speakers?: boolean;
+      send_to_kobo?: boolean;
+    };
     kobo_tool?: {
       survey: any[];
       choices: any[];
@@ -580,7 +588,7 @@ export interface ETLStats {
   validation_reasons?: Record<string, number>;  // Breakdown of why submissions were validated
   llm_queued?: number;
   llm_skipped?: number;
-  llm_not_run_allowance?: number;  // AI checks held back: free allowance used for the month
+  llm_not_run_allowance?: number;  // AI checks held back: included usage used up for the month
   llm_paused?: number;  // AI checks not sent: the survey's own provider is paused
   hfc_flagged: number;
   errors: number;

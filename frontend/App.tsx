@@ -13,6 +13,9 @@ import LoginPage from './pages/LoginPage';
 import Sidebar from './components/Sidebar';
 import { Spinner } from './components/Spinner';
 import SetupChecklist from './components/onboarding/SetupChecklist';
+import { ActivityProvider, NAVIGATE_EVENT, NavigationTarget } from './contexts/ActivityContext';
+import ActivityIndicator, { ActivityPanel } from './components/activity/ActivityIndicator';
+import NotificationBell from './components/activity/NotificationBell';
 
 type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'qualityOverview' | 'createSurvey' | 'settings' | 'userSettings';
 
@@ -89,6 +92,9 @@ const AppContent: React.FC = () => {
   });
   
   const [dashboardFilters, setDashboardFilters] = useState<FilterState>({});
+  // A tab requested by a link (a notification, a problem in the activity
+  // panel); `at` makes the same tab requested twice still switch.
+  const [requestedTab, setRequestedTab] = useState<{ tab: string; at: number } | undefined>();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     // On a phone-width screen an open sidebar covers most of the page, so
     // start collapsed there whatever was saved; it is one tap to open.
@@ -120,11 +126,25 @@ const AppContent: React.FC = () => {
       setView('dashboard');
     };
 
+    // Links from notifications and the activity panel. The survey is
+    // selected by the activity context before this fires.
+    const handleNavigate = (event: Event) => {
+      const target = (event as CustomEvent<NavigationTarget>).detail;
+      if (!target) return;
+      if (target.view === 'dashboard') {
+        setDashboardFilters((target.filters as FilterState) || {});
+      }
+      if (target.tab) setRequestedTab({ tab: target.tab, at: Date.now() });
+      setView(target.view);
+    };
+
     window.addEventListener('navigateToSettings', handleNavigateToSettings);
     window.addEventListener('navigateToDashboard', handleNavigateToDashboard);
+    window.addEventListener(NAVIGATE_EVENT, handleNavigate);
     return () => {
       window.removeEventListener('navigateToSettings', handleNavigateToSettings);
       window.removeEventListener('navigateToDashboard', handleNavigateToDashboard);
+      window.removeEventListener(NAVIGATE_EVENT, handleNavigate);
     };
   }, []);
 
@@ -188,8 +208,8 @@ const AppContent: React.FC = () => {
       />
     ),
     createSurvey: <CreateSurveyPage />,
-    settings: <SurveySettingsPage />,
-    userSettings: <UserSettingsPage />,
+    settings: <SurveySettingsPage requestedTab={requestedTab} />,
+    userSettings: <UserSettingsPage requestedTab={requestedTab} />,
   };
 
   const handleAddSurvey = () => {
@@ -205,6 +225,7 @@ const AppContent: React.FC = () => {
 
   return (
     <SurveyProvider>
+      <ActivityProvider>
       <div className="flex h-full font-sans text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-950">
         <Sidebar 
           onAddSurvey={handleAddSurvey} 
@@ -237,6 +258,11 @@ const AppContent: React.FC = () => {
                   Settings
                 </NavButton>
               </nav>
+              {/* Background work and notifications, on every page. */}
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <ActivityIndicator />
+                <NotificationBell />
+              </div>
             </div>
           </header>
 
@@ -247,6 +273,8 @@ const AppContent: React.FC = () => {
           </main>
         </div>
       </div>
+      <ActivityPanel />
+      </ActivityProvider>
     </SurveyProvider>
   );
 };

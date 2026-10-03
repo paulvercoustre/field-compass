@@ -168,7 +168,7 @@ services:
     networks:
       - field-compass-network
 
-  # Celery worker for qualitative checks
+  # Celery worker: pulls, AI reviews, transcriptions and Kobo sends
   worker:
     image: ${BACKEND_IMAGE:?set BACKEND_IMAGE to the image tag for the commit being deployed - deploy/vm/deploy.sh sets this}
     container_name: field-compass-worker
@@ -200,8 +200,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_started
-    # -B runs beat inside the worker, for the stalled AI check sweep.
-    command: celery -A services.job_queue.celery_app worker --loglevel=INFO -Q qualitative_checks -B -s /tmp/celerybeat-schedule
+    # -B runs beat inside the worker, for the sweeps of stalled background work.
+    command: celery -A services.job_queue.celery_app worker --loglevel=INFO -Q pulls,qualitative_checks,transcriptions,kobo_sync --concurrency=${WORKER_CONCURRENCY:-4} -B -s /tmp/celerybeat-schedule
     networks:
       - field-compass-network
 

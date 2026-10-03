@@ -8,10 +8,46 @@ import os
 import time
 from datetime import datetime
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+# Recordings larger than this are not downloaded: an answer to one question is
+# far smaller, and the worker's disk is not a place to fill.
+MAX_ATTACHMENT_BYTES = 200 * 1024 * 1024
+
+
+class KoboFetchError(Exception):
+    """
+    Kobo could not be read. ``status`` is the HTTP status when Kobo answered.
+
+    Raised instead of returning a partial list, so a failed pull says so
+    rather than reporting "0 fetched" as a success.
+    """
+
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
+
+
+def describe_kobo_error(exc: Exception) -> str:
+    """A pull failure in words a survey owner can act on."""
+    status = getattr(exc, "status", None)
+    if status is None and isinstance(exc, requests.HTTPError) and exc.response is not None:
+        status = exc.response.status_code
+    if status in (401, 403):
+        return "Kobo rejected the API key, or this account cannot see the project's data."
+    if status == 404:
+        return "Kobo could not find this project. Check the project ID in Survey settings."
+    if status == 429:
+        return "Kobo is limiting requests right now. Try again in a few minutes."
+    if status is not None and status >= 500:
+        return "Kobo had a problem answering. Try again in a few minutes."
+    if isinstance(exc, requests.ConnectionError | requests.Timeout):
+        return "Could not reach Kobo."
+    return f"Could not read the submissions from Kobo ({exc})."
 
 
 class KoboFetcher:
@@ -137,9 +173,16 @@ class KoboFetcher:
                 # Rate limiting: be nice to the API
                 time.sleep(0.5)
 
-            except Exception as e:
+            except requests.RequestException as e:
+                # Stopping here used to return what had been read so far as if
+                # it were everything: a failed pull looked like "0 fetched".
                 logger.error(f"Error fetching submissions: {e}")
-                break
+                status = (
+                    e.response.status_code
+                    if isinstance(e, requests.HTTPError) and e.response is not None
+                    else None
+                )
+                raise KoboFetchError(str(e), status=status) from e
 
         logger.info(f"Total submissions fetched: {len(all_submissions)}")
         if effective_limit is not None:
@@ -186,6 +229,67 @@ class KoboFetcher:
         except Exception as e:
             logger.error(f"Failed to download audit log from {audit_url}: {e}")
             return False
+
+    def _same_server(self, url: str) -> bool:
+        """Only Kobo's own URLs get the API token."""
+        return urlparse(url).netloc == urlparse(self.api_url).netloc
+
+    def attachment_url(self, url: str) -> str:
+        """An attachment URL, made absolute and checked to be on this Kobo server."""
+        absolute = urljoin(self.api_url + "/", url)
+        if not self._same_server(absolute):
+            raise KoboFetchError("The recording is not on the configured Kobo server.")
+        return absolute
+
+    def download_attachment(
+        self, url: str, output_path: str, max_bytes: int = MAX_ATTACHMENT_BYTES
+    ) -> int:
+        """
+        Download a submission attachment (a recording) to ``output_path``.
+
+        Kobo redirects to its file storage; ``requests`` drops the token when
+        a redirect changes host, so it never leaves Kobo. Returns the size.
+        Raises :class:`KoboFetchError`.
+        """
+        absolute = self.attachment_url(url)
+        try:
+            with self.session.get(absolute, timeout=(10, 120), stream=True) as response:
+                if response.status_code >= 400:
+                    raise KoboFetchError(
+                        f"Kobo answered {response.status_code} for the recording.",
+                        status=response.status_code,
+                    )
+                size = 0
+                with open(output_path, "wb") as handle:
+                    for chunk in response.iter_content(chunk_size=65536):
+                        size += len(chunk)
+                        if size > max_bytes:
+                            raise KoboFetchError(
+                                "The recording is too large to transcribe.", status=413
+                            )
+                        handle.write(chunk)
+                return size
+        except requests.RequestException as exc:
+            raise KoboFetchError(f"Could not download the recording: {exc}") from exc
+
+    def open_attachment(self, url: str, range_header: str | None = None) -> requests.Response:
+        """A streaming response for a recording, for the in-app player."""
+        headers = {"Range": range_header} if range_header else None
+        response = self.session.get(
+            self.attachment_url(url), timeout=(10, 60), stream=True, headers=headers
+        )
+        if response.status_code >= 400:
+            status = response.status_code
+            response.close()
+            raise KoboFetchError(f"Kobo answered {status} for the recording.", status=status)
+        return response
+
+    def request_json(
+        self, method: str, endpoint: str, payload: dict | None = None, timeout: float = 30
+    ) -> requests.Response:
+        """One API call, no retries: the caller decides what an error means."""
+        url = f"{self.api_url}/{endpoint.lstrip('/')}"
+        return self.session.request(method, url, json=payload, timeout=timeout)
 
     def get_asset_info(self, asset_uid: str) -> dict[str, Any]:
         """

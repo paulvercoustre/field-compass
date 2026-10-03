@@ -1,8 +1,23 @@
 """Celery application setup for asynchronous background jobs."""
 
 import os
+import sys
 
 from celery import Celery
+from celery.signals import worker_process_init
+
+# Celery puts the working directory on the import path only while it loads
+# the app, then takes it off again, so a task importing a top-level backend
+# package (etl, linter, forms) fails in the worker's processes. Put it back
+# in each process once it has started.
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+@worker_process_init.connect
+def _backend_on_import_path(**_):
+    if _BACKEND_DIR not in sys.path:
+        sys.path.insert(0, _BACKEND_DIR)
+
 
 BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
 RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", BROKER_URL)
@@ -11,7 +26,12 @@ celery_app = Celery(
     "field_compass_jobs",
     broker=BROKER_URL,
     backend=RESULT_BACKEND,
-    include=["services.qualitative_worker"],
+    include=[
+        "services.qualitative_worker",
+        "services.pull_worker",
+        "services.transcription_worker",
+        "services.kobo_sync_worker",
+    ],
 )
 
 celery_app.conf.update(
@@ -29,12 +49,22 @@ celery_app.conf.update(
         "services.qualitative_worker.sweep_stalled_qualitative_checks": {
             "queue": "qualitative_checks"
         },
+        # Pulls, transcriptions and Kobo sends on their own queues, so a long
+        # recording never holds up AI reviews and the two scale separately.
+        "services.pull_worker.run_pull_task": {"queue": "pulls"},
+        "services.transcription_worker.transcribe_recording_task": {"queue": "transcriptions"},
+        "services.transcription_worker.sweep_background_work": {"queue": "transcriptions"},
+        "services.kobo_sync_worker.send_transcript_to_kobo_task": {"queue": "kobo_sync"},
     },
     # Run by the worker's embedded beat (`-B`). The sweep is an idempotent
     # UPDATE, so a second beat from a scaled-out worker only repeats it.
     beat_schedule={
         "sweep-stalled-qualitative-checks": {
             "task": "services.qualitative_worker.sweep_stalled_qualitative_checks",
+            "schedule": 300.0,
+        },
+        "sweep-background-work": {
+            "task": "services.transcription_worker.sweep_background_work",
             "schedule": 300.0,
         },
     },

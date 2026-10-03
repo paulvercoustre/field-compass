@@ -3,9 +3,11 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies
+# ffmpeg: measures recordings and converts formats Scribe does not take (AMR, 3GP)
 RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
