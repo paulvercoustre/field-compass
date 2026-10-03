@@ -77,6 +77,8 @@ export interface TranscriptionOverview {
     failed: number;
     not_run: number;
     no_speech: number;
+    /** Transcripts Kobo already had, typed or made there: never transcribed here. */
+    from_kobo: number;
     kobo: { sent: number; edited_in_kobo: number; failed: number; unsupported: number; pending: number; unsent: number };
   };
   can_edit: boolean;
@@ -106,6 +108,8 @@ export interface TranscriptSegment {
 }
 
 export interface Transcript {
+  /** "kobo": the transcript Kobo shows, typed or made there (or ours, corrected there). */
+  source: 'elevenlabs' | 'kobo';
   status: 'pending' | 'running' | 'success' | 'failed' | 'skipped' | 'not_run_allowance' | 'cancelled';
   skip_reason: 'missing_file' | 'too_long' | 'no_speech' | null;
   text: string | null;

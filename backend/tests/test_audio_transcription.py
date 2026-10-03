@@ -15,6 +15,7 @@ from etl.audio import (
     answer_filename,
     audio_questions,
     find_attachment,
+    kobo_transcript,
     review_data,
     root_uuid,
     selected_questions,
@@ -172,6 +173,30 @@ class TestAttachments:
     def test_root_uuid_drops_the_prefix(self):
         assert root_uuid(SUBMISSION) == "root-1"
         assert root_uuid({"_uuid": "plain"}) == "plain"
+
+
+class TestKoboTranscript:
+    question = audio_questions(CONFIG)[0]  # interview/story
+
+    def _data(self, transcript, key="interview/story"):
+        return {**SUBMISSION, "_supplementalDetails": {key: {"transcript": transcript}}}
+
+    def test_the_transcript_kobo_shows(self):
+        found = kobo_transcript(
+            self._data({"value": " Il a plu. ", "languageCode": "fr"}), self.question
+        )
+        assert found.text == "Il a plu." and found.language_code == "fr"
+
+    def test_keyed_by_name_on_older_servers(self):
+        found = kobo_transcript(self._data({"value": "x"}, key="story"), self.question)
+        assert found.text == "x" and found.language_code is None
+
+    def test_none_while_waiting_for_review_or_empty(self):
+        waiting = self._data({"languageCode": "fr", "pendingReview": True})
+        assert kobo_transcript(waiting, self.question) is None
+        assert kobo_transcript(self._data({"value": "  "}), self.question) is None
+        assert kobo_transcript(SUBMISSION, self.question) is None
+        assert kobo_transcript({"_supplementalDetails": {}}, self.question) is None
 
 
 class TestLanguages:

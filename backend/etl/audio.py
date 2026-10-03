@@ -18,6 +18,12 @@ from services.transcription_languages import normalize_language
 
 AUDIO_TYPE = "audio"
 
+# Where a stored transcript came from: Field Compass's own transcription, or
+# Kobo's (typed or corrected there, or Kobo's automatic one). Kobo's is never
+# transcribed again, nor sent back.
+SOURCE_ELEVENLABS = "elevenlabs"
+SOURCE_KOBO = "kobo"
+
 # Issues the transcription worker adds. Kept apart from the deterministic
 # checks and from AI findings, so each source replaces only its own.
 TRANSCRIPTION_ISSUE_SOURCE = "transcription_v1"
@@ -203,6 +209,42 @@ def _attachment(item: dict[str, Any], base: str) -> Attachment:
         filename=base,
         mimetype=item.get("mimetype"),
         deleted=bool(item.get("is_deleted")),
+    )
+
+
+@dataclass(frozen=True)
+class KoboTranscript:
+    text: str
+    language_code: str | None  # as Kobo files it, e.g. "fr"
+
+
+def kobo_transcript(
+    submission_data: dict[str, Any], question: AudioQuestion
+) -> KoboTranscript | None:
+    """
+    The transcript Kobo shows for an answer, from the submission's
+    ``_supplementalDetails``: the one accepted last there, typed by someone,
+    made by Kobo's own (Google) transcription, or sent by Field Compass.
+
+    None when there is none, or it is still waiting for someone to accept it
+    (Kobo then sends ``pendingReview`` and no value).
+    """
+    details = submission_data.get("_supplementalDetails")
+    if not isinstance(details, dict):
+        return None
+    entry = details.get(question.path)
+    if not isinstance(entry, dict):
+        entry = details.get(question.name)
+    transcript = entry.get("transcript") if isinstance(entry, dict) else None
+    if not isinstance(transcript, dict):
+        return None
+    value = transcript.get("value")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    language = transcript.get("languageCode")
+    return KoboTranscript(
+        text=value.strip(),
+        language_code=language.strip() if isinstance(language, str) and language.strip() else None,
     )
 
 

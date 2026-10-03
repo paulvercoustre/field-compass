@@ -394,6 +394,8 @@ class AudioTranscript(Base):
     attachment_url = Column(Text, nullable=True)  # Kobo download_url
     attachment_filename = Column(String(255), nullable=True)
     input_hash = Column(String(64), nullable=True)  # a change re-transcribes
+    # elevenlabs: transcribed here | kobo: Kobo's own transcript, read on pull
+    source = Column(String(16), nullable=False, default="elevenlabs", server_default="elevenlabs")
     # pending | running | success | failed | skipped | not_run_allowance | cancelled
     status = Column(String(20), nullable=False, default="pending")
     skip_reason = Column(String(32), nullable=True)  # missing_file | too_long | no_speech

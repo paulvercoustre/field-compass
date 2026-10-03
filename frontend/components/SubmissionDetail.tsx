@@ -15,7 +15,7 @@ import ValidationStatusDropdown from './ValidationStatusDropdown';
 import SuccessMessage from './ui/SuccessMessage';
 import ErrorMessage from './ui/ErrorMessage';
 import { inferSamplingMode } from '../utils/samplingMode';
-import AudioAnswers from './transcription/AudioAnswers';
+import { useSubmissionTranscripts } from './transcription/AudioAnswers';
 
 interface SubmissionDetailProps {
   submission: Submission | null;
@@ -248,6 +248,13 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
     fetchKoboEditUrl();
   }, [submission, selectedSurvey]);
+
+  // Recorded answers, shown in their place among the survey responses; re-read
+  // when a transcript or an AI review moves on.
+  const transcripts = useSubmissionTranscripts(
+    submission?._id ?? null,
+    submission ? `${submission.llm_check_status}:${submission.data_quality_issues.length}` : undefined
+  );
 
   if (!submission) {
     return (
@@ -998,13 +1005,6 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
             </div>
         )}
 
-        {/* Recorded answers: player, transcript, and whether it is in Kobo. */}
-        <AudioAnswers
-          koboId={submission._id}
-          refreshKey={`${llm_check_status}:${data_quality_issues.length}`}
-          issues={data_quality_issues}
-        />
-
         {/* AI review of open-text answers. Hidden when it is off, unless
             earlier findings are still stored. */}
         {(surveyConfig?.config_data?.quality_checks?.flag_llm_qualitative || qualitativeIssues.length > 0) && (() => {
@@ -1311,7 +1311,18 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                         <Spinner />
                     </div>
                 ) : (
-                    <SubmissionDataViewer data={submission_data} surveyConfig={surveyConfig} />
+                    <SubmissionDataViewer
+                      data={submission_data}
+                      surveyConfig={surveyConfig}
+                      recordings={
+                        transcripts && {
+                          koboId: submission._id,
+                          answers: transcripts.answers,
+                          sendToKobo: transcripts.send_to_kobo,
+                          issues: data_quality_issues,
+                        }
+                      }
+                    />
                 )}
             </div>
         </div>

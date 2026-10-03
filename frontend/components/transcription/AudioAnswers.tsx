@@ -13,12 +13,19 @@ import { issueName } from '../../utils/issueNames';
 
 type Tone = 'busy' | 'ok' | 'warn' | 'muted';
 
-/** A transcript's state in plain words; `last_error` is "<category>: <message>". */
-export const describeTranscript = (transcript: Transcript | null, transcribed: boolean): { tone: Tone; text: string } => {
+/**
+ * A transcript's state in plain words; `last_error` is "<category>: <message>".
+ * Null when there is nothing to say: a question this survey does not transcribe.
+ */
+export const describeTranscript = (transcript: Transcript | null, transcribed: boolean): { tone: Tone; text: string } | null => {
   if (!transcript) {
-    return transcribed
-      ? { tone: 'muted', text: 'Not transcribed yet: it will be on the next pull.' }
-      : { tone: 'muted', text: 'This question is not transcribed.' };
+    return transcribed ? { tone: 'muted', text: 'Not transcribed yet: it will be on the next pull.' } : null;
+  }
+  if (transcript.source === 'kobo') {
+    return {
+      tone: 'ok',
+      text: transcript.kobo_status === 'edited_in_kobo' ? 'Corrected in Kobo' : 'Transcript from Kobo',
+    };
   }
   const [category, ...rest] = (transcript.last_error ?? '').split(': ');
   const message = rest.join(': ').replace(/ \(retrying\)$/, '');
@@ -49,6 +56,7 @@ export const describeTranscript = (transcript: Transcript | null, transcribed: b
 };
 
 const koboLine = (transcript: Transcript): { tone: Tone; text: string } | null => {
+  if (transcript.source === 'kobo') return null; // it is Kobo's own
   switch (transcript.kobo_status) {
     case 'sent':
       return { tone: 'ok', text: 'In Kobo' };
@@ -86,7 +94,7 @@ const duration = (seconds: number | null) => {
 };
 
 /** Loads the recording only when asked: it is streamed from Kobo each time. */
-const Player: React.FC<{ koboId: number; answer: AudioAnswer }> = ({ koboId, answer }) => {
+export const Player: React.FC<{ koboId: number; answer: AudioAnswer }> = ({ koboId, answer }) => {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,13 +103,15 @@ const Player: React.FC<{ koboId: number; answer: AudioAnswer }> = ({ koboId, ans
     if (url) URL.revokeObjectURL(url);
   }, [url]);
 
-  if (!answer.has_recording) return null;
+  if (!answer.has_recording) {
+    return <p className="text-sm text-gray-400 dark:text-gray-500">No recording in Kobo</p>;
+  }
   if (url) {
     // eslint-disable-next-line jsx-a11y/media-has-caption
-    return <audio controls autoPlay src={url} className="mt-2 h-9 w-full max-w-md" aria-label={`Recording: ${answer.label}`} />;
+    return <audio controls autoPlay src={url} className="h-9 w-full max-w-md" aria-label={`Recording: ${answer.label}`} />;
   }
   return (
-    <div className="mt-2 flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
         onClick={async () => {
@@ -137,14 +147,14 @@ const speakerName = (speaker: string | null, speakers: string[]) =>
 
 const TranscriptText: React.FC<{ transcript: Transcript }> = ({ transcript }) => {
   if (!transcript.text?.trim()) {
-    return <p className="mt-2 text-sm italic text-gray-500 dark:text-gray-400">No speech in this recording.</p>;
+    return <p className="text-sm italic text-gray-500 dark:text-gray-400">No speech in this recording.</p>;
   }
   if (transcript.segments && transcript.segments.length > 0) {
     const speakers = transcript.segments
       .map((segment) => segment.speaker ?? '')
       .filter((speaker, index, all) => all.indexOf(speaker) === index);
     return (
-      <dl className="mt-2 space-y-1.5 text-sm">
+      <dl className="space-y-1.5 text-sm">
         {transcript.segments.map((segment, index) => (
           <div key={index} className="grid grid-cols-[5.5rem,1fr] gap-2">
             <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">{speakerName(segment.speaker, speakers)}</dt>
@@ -154,26 +164,16 @@ const TranscriptText: React.FC<{ transcript: Transcript }> = ({ transcript }) =>
       </dl>
     );
   }
-  return <p className="mt-2 whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{transcript.text}</p>;
+  return <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{transcript.text}</p>;
 };
 
-interface AudioAnswersProps {
-  koboId: number;
-  /** Re-read when the submission changes (a poll, a transcript finished). */
-  refreshKey?: string;
-  /** The submission's findings; those about a recording show under it. */
-  issues?: QualityIssue[];
-}
-
 /**
- * Submission detail › Recordings: each answered audio question with a
- * player, its transcript, and whether it is in Kobo. Hidden when the
- * submission has no audio answers.
+ * A submission's audio answers with their transcripts, re-read as background
+ * work moves on. Null until loaded, and when it could not be.
  */
-const AudioAnswers: React.FC<AudioAnswersProps> = ({ koboId, refreshKey, issues = [] }) => {
+export const useSubmissionTranscripts = (koboId: number | null, refreshKey?: string): SubmissionTranscripts | null => {
   const { version } = useActivity();
   const [data, setData] = useState<SubmissionTranscripts | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
 
   // Another submission: never show the last one's recordings meanwhile.
@@ -183,78 +183,85 @@ const AudioAnswers: React.FC<AudioAnswersProps> = ({ koboId, refreshKey, issues 
   }, [koboId]);
 
   useEffect(() => {
+    if (koboId == null) return undefined;
     let cancelled = false;
     getSubmissionTranscripts(koboId)
       .then((result) => {
         if (cancelled) return;
         setData(result);
         setLoadedFor(koboId);
-        setError(null);
       })
-      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : 'Could not load transcripts.'));
+      .catch(() => !cancelled && setData(null));
     return () => {
       cancelled = true;
     };
     // `version` changes as background work moves on.
   }, [koboId, refreshKey, version]);
 
-  if (error) return null;
-  if (!data || loadedFor !== koboId || data.answers.length === 0) return null;
+  return koboId != null && loadedFor === koboId ? data : null;
+};
 
+interface RecordingProps {
+  answer: AudioAnswer;
+  /** Whether the survey sends transcripts to Kobo. */
+  sendToKobo: boolean;
+}
+
+/** The transcript's state, e.g. "Transcribed · French · 0:42" or "Transcript from Kobo". */
+export const RecordingStatus: React.FC<RecordingProps> = ({ answer }) => {
+  const transcript = answer.transcript;
+  const state = describeTranscript(transcript, answer.transcribed);
+  if (!state) return null;
+  const details = [transcript?.language_name, duration(transcript?.audio_seconds ?? null)].filter(Boolean);
   return (
-    <div className="mb-6">
-      <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-white">
-        <svg className="h-4 w-4 text-indigo-500 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <rect x="9" y="2" width="6" height="12" rx="3" />
-          <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" />
-        </svg>
-        Recordings
-      </h3>
-      <div className="space-y-3">
-        {data.answers.map((answer) => {
-          const transcript = answer.transcript;
-          const state = describeTranscript(transcript, answer.transcribed);
-          const kobo = transcript && data.send_to_kobo ? koboLine(transcript) : null;
-          const details = [
-            transcript?.language_name,
-            duration(transcript?.audio_seconds ?? null),
-          ].filter(Boolean);
-          return (
-            <div key={answer.question_path} className="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900/60">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{answer.label}</p>
-                <p className={`flex items-center gap-1.5 text-xs ${toneClass[state.tone]}`} role="status">
-                  {state.tone === 'busy' && <Spinner size="sm" />}
-                  {state.text}
-                  {transcript?.status === 'success' && details.length > 0 && (
-                    <span className="text-gray-500 dark:text-gray-400"> · {details.join(' · ')}</span>
-                  )}
-                </p>
-              </div>
-              <Player koboId={koboId} answer={answer} />
-              {transcript?.status === 'success' && <TranscriptText transcript={transcript} />}
-              {transcript?.status !== 'success' && transcript?.text && (
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  Earlier transcript: <span className="text-gray-700 dark:text-gray-300">{transcript.text}</span>
-                </p>
-              )}
-              {issues
-                .filter((issue) => issue.field === answer.question_path && issue.check.startsWith('audio_'))
-                .map((issue) => (
-                  <p
-                    key={issue.check}
-                    className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
-                  >
-                    <span className="font-medium">{issueName(issue.check)}:</span> {issue.message}
-                  </p>
-                ))}
-              {kobo && <p className={`mt-2 text-xs ${toneClass[kobo.tone]}`}>{kobo.text}</p>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <p className={`mb-1.5 flex items-center gap-1.5 text-xs ${toneClass[state.tone]}`} role="status">
+      {state.tone === 'busy' && <Spinner size="sm" />}
+      <span>
+        {state.text}
+        {transcript?.status === 'success' && details.length > 0 && (
+          <span className="text-gray-500 dark:text-gray-400"> · {details.join(' · ')}</span>
+        )}
+      </span>
+    </p>
   );
 };
 
-export default AudioAnswers;
+/**
+ * What goes under a recorded answer: its transcript, findings about the
+ * recording, and whether the transcript is in Kobo. Null when there is none.
+ */
+export const RecordingDetails: React.FC<RecordingProps & { issues?: QualityIssue[] }> = ({
+  answer,
+  sendToKobo,
+  issues = [],
+}) => {
+  const transcript = answer.transcript;
+  const kobo = transcript && sendToKobo ? koboLine(transcript) : null;
+  const findings = issues.filter((issue) => issue.field === answer.question_path && issue.check.startsWith('audio_'));
+  const showText = transcript?.status === 'success';
+  const earlier = transcript?.status !== 'success' && transcript?.text;
+  if (!showText && !earlier && findings.length === 0 && !kobo) return null;
+  return (
+    <div className="space-y-2">
+      {showText && transcript && (
+        <div className="rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900/60">
+          <TranscriptText transcript={transcript} />
+        </div>
+      )}
+      {earlier && (
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Earlier transcript: <span className="text-gray-700 dark:text-gray-300">{transcript?.text}</span>
+        </p>
+      )}
+      {findings.map((issue) => (
+        <p
+          key={issue.check}
+          className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
+        >
+          <span className="font-medium">{issueName(issue.check)}:</span> {issue.message}
+        </p>
+      ))}
+      {kobo && <p className={`text-xs ${toneClass[kobo.tone]}`}>{kobo.text}</p>}
+    </div>
+  );
+};

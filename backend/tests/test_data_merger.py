@@ -143,6 +143,40 @@ class TestMergeSubmission:
         assert history is not None  # History record should be created
         assert history.deprecated_uuid == old_uuid  # History should contain old UUID
 
+    def test_kobo_transcripts_are_refreshed_without_an_edit(
+        self, test_db, test_survey_config, sample_kobo_submission
+    ):
+        """A transcript added in Kobo later reaches the stored data; it is not an edit."""
+        survey_id = str(test_survey_config.survey_id)
+        # An edited submission: Kobo keeps sending its deprecatedID.
+        edited = {**sample_kobo_submission, "meta": {"deprecatedID": "uuid:old"}}
+        merge_submission(test_db, parse_kobo_submission(edited), survey_id, kobo_data=edited)
+
+        with_transcript = {
+            **edited,
+            "_supplementalDetails": {"q_story": {"transcript": {"value": "Il a plu"}}},
+        }
+        submission, history, _ = merge_submission(
+            test_db, parse_kobo_submission(with_transcript), survey_id, kobo_data=with_transcript
+        )
+        assert history is None
+        assert submission.submission_data["_supplementalDetails"] == {
+            "q_story": {"transcript": {"value": "Il a plu"}}
+        }
+
+        corrected = {
+            **with_transcript,
+            "_supplementalDetails": {"q_story": {"transcript": {"value": "Il a beaucoup plu"}}},
+        }
+        submission, history, _ = merge_submission(
+            test_db, parse_kobo_submission(corrected), survey_id, kobo_data=corrected
+        )
+        assert history is None
+        assert (
+            submission.submission_data["_supplementalDetails"]["q_story"]["transcript"]["value"]
+            == "Il a beaucoup plu"
+        )
+
     def test_kobo_edit_url_construction(self, test_db, test_survey_config, sample_kobo_submission):
         """Test that Kobo edit URL is constructed correctly."""
         parsed = parse_kobo_submission(sample_kobo_submission)

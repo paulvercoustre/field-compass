@@ -13,7 +13,8 @@ Docker on a Mac, ``<host>`` is ``host.docker.internal``.
 - Kobo API v2 subset at /api/v2
     GET  /assets/  /users/me/                       (key check)
     GET  /assets/{uid}/                             (a form with audio questions)
-    GET  /assets/{uid}/data/                        (submissions with recordings)
+    GET  /assets/{uid}/data/                        (submissions with recordings, and the
+                                                     transcripts Kobo shows in _supplementalDetails)
     GET  /assets/{uid}/data/{id}/attachments/{a}/   (a short WAV tone)
     GET/POST/PATCH /assets/{uid}/advanced-features/ (Kobo's processing features)
     GET/PATCH /assets/{uid}/data/{root}/supplement/ (transcripts stored in Kobo)
@@ -84,10 +85,70 @@ SCRIPTS = {
     ],
 }
 
-# In memory: what Field Compass stored in "Kobo".
+def _root(index: int) -> str:
+    return str(uuidlib.UUID(int=0xA0D10_0000 + index))
+
+
+# In memory: transcripts in "Kobo", whether stored by Field Compass or made in
+# Kobo. Seeded: submission 9102's story was transcribed in Kobo (Google, then
+# accepted), so Field Compass must show it and not transcribe it; 9100's
+# feedback has a Kobo transcript still waiting for review, which does not count.
 FEATURES: list[dict] = []
-SUPPLEMENTS: dict[str, dict] = {}
+SUPPLEMENTS: dict[str, dict] = {
+    _root(2): {
+        "_version": "20250820",
+        "voice/story": {
+            "automatic_google_transcription": {
+                "_versions": [
+                    {
+                        "_data": {"language": "en", "value": "The water came in at night and we lost the goats and the chickens.", "status": "complete"},
+                        "_uuid": "4d0c5a43-0d64-4e43-9a35-7d1d4d3e0c11",
+                        "_dateCreated": "2026-10-02T08:00:00Z",
+                        "_dateAccepted": "2026-10-02T08:05:00Z",
+                    }
+                ]
+            }
+        },
+    },
+    _root(0): {
+        "_version": "20250820",
+        "voice/feedback": {
+            "automatic_google_transcription": {
+                "_versions": [
+                    {
+                        "_data": {"language": "fr", "value": "L'aide est arrivée tard.", "status": "complete"},
+                        "_uuid": "6f7f3b0e-55a6-4bd8-8c63-0a3b4f5d2b22",
+                        "_dateCreated": "2026-10-02T09:00:00Z",
+                    }
+                ]
+            }
+        },
+    },
+}
 UPLOADS: list[dict] = []
+
+
+def _supplemental_details(root: str) -> dict:
+    """What Kobo's data API shows per question: the transcript accepted last."""
+    details = {}
+    for xpath, actions in (SUPPLEMENTS.get(root) or {}).items():
+        if xpath == "_version":
+            continue
+        accepted, waiting = [], False
+        for action, data in actions.items():
+            if not action.endswith("transcription"):
+                continue
+            for version in data.get("_versions", []):
+                if version.get("_dateAccepted"):
+                    accepted.append(version)
+                else:
+                    waiting = True
+        if accepted:
+            chosen = max(accepted, key=lambda v: v["_dateAccepted"])["_data"]
+            details[xpath] = {"transcript": {"value": chosen.get("value"), "languageCode": chosen.get("language")}}
+        elif waiting:
+            details[xpath] = {"transcript": {"languageCode": "fr", "pendingReview": True}}
+    return details
 
 
 def _now() -> str:
@@ -115,7 +176,7 @@ def build_submissions(host: str) -> list[dict]:
     base = datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
     for index in range(6):
         sid = 9100 + index
-        uid = str(uuidlib.UUID(int=0xA0D10_0000 + index))
+        uid = _root(index)
         start = base + timedelta(hours=index * 5)
         sub = {
             "_id": sid,
@@ -148,6 +209,7 @@ def build_submissions(host: str) -> list[dict]:
                     "is_deleted": False,
                 }
             )
+        sub["_supplementalDetails"] = _supplemental_details(uid)
         subs.append(sub)
     return subs
 
@@ -227,7 +289,19 @@ class Handler(BaseHTTPRequestHandler):
         if not self._kobo_authorised():
             return self._send(401, {"detail": "Authentication credentials were not provided."})
         if path in ("/api/v2/assets/", "/api/v2/assets"):
-            return self._send(200, {"count": 1, "results": []})
+            # The project picker on "New survey" lists these.
+            project = {
+                "uid": ASSET_UID,
+                "name": "Flood Voices 2026 (synthetic)",
+                "asset_type": "survey",
+                "has_deployment": True,
+                "deployment__active": True,
+                "deployment_status": "deployed",
+                "deployment__submission_count": 6,
+                "owner__username": "audio_tester",
+                "date_modified": "2026-10-02T09:00:00Z",
+            }
+            return self._send(200, {"count": 1, "next": None, "results": [project]})
         if path.startswith("/api/v2/users/me"):
             return self._send(200, {"username": "audio_tester", "email": "audio@example.test"})
         if re.match(rf"^/api/v2/assets/{ASSET_UID}/advanced-features/?$", path):

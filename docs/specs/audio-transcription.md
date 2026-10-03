@@ -759,6 +759,33 @@ Where the build differs from the draft above, or adds to it:
   as well as the legacy `status` (e.g. `insufficient_credits`,
   `concurrent_limit_exceeded`, `insufficient_permissions`).
 
+- **Transcripts already in Kobo** (added 2026-10-04; answers open question 2).
+  Kobo's data API sends, per submission, `_supplementalDetails` with the
+  transcript Kobo shows for each question (`{"transcript": {"value",
+  "languageCode"}}`: the one accepted last, typed there, made by Kobo's own
+  Google transcription, or sent by us; one awaiting review has
+  `pendingReview` and no value). Each pull refreshes it on stored
+  submissions without counting it as an edit, and for every audio question
+  outside repeats, transcribed by the survey or not:
+  - a transcript in Kobo that is not ours is stored with
+    `audio_transcripts.source = 'kobo'` (migration `0010`) and the recording
+    is **never sent to ElevenLabs**, not by a pull, "Transcribe now" or
+    "Transcribe all again"; a queued job for it finds it done;
+  - ours as sent stays ours; ours corrected in Kobo becomes Kobo's, marked
+    `edited_in_kobo` ("Corrected in Kobo");
+  - removed in Kobo: the row goes, and the recording is transcribed here
+    again if the survey transcribes that question.
+  Kobo's transcripts feed AI review and the built-in checks like ours, cost
+  nothing, and are never sent back. Before sending, the Kobo job now also
+  reads the supplement when it has not sent a version yet, and sends nothing
+  if Kobo already shows a transcript (typed or automatic). Survey settings
+  says "N already transcribed in Kobo".
+- **Recordings in their place.** The submission panel has no separate
+  Recordings section: each audio question in Survey Responses shows its
+  state ("Transcribed · French · 0:42", "Transcript from Kobo", "Corrected in
+  Kobo"), the Listen button in place of the file name, and the transcript,
+  findings and Kobo status across the row underneath.
+
 Still to confirm before release: the ElevenLabs plan's zero retention (an
 enterprise contract for Scribe v2) and region,
 and one manual run against kf.kobotoolbox.org and eu.kobotoolbox.org (the
