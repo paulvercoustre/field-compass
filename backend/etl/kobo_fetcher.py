@@ -303,6 +303,31 @@ class KoboFetcher:
         """
         return self._make_request(f"/assets/{asset_uid}/")
 
+    def list_survey_assets(self, page_size: int = 100, max_pages: int = 10) -> list[dict[str, Any]]:
+        """
+        Every survey project the API key can see: owned and shared with it.
+
+        Kobo pages the list and points at the next page with an absolute URL.
+        That URL only gets the token while it stays on this server, and the
+        page count is capped so a very large account cannot hold a request open.
+        """
+        page = self._make_request(
+            "/assets/",
+            params={"q": "asset_type:survey", "limit": page_size, "format": "json"},
+        )
+        assets: list[dict[str, Any]] = list(page.get("results") or [])
+        pages = 1
+        while pages < max_pages:
+            next_url = page.get("next")
+            if not next_url or not self._same_server(next_url):
+                break
+            response = self.session.get(next_url, timeout=30)
+            response.raise_for_status()
+            page = response.json()
+            assets.extend(page.get("results") or [])
+            pages += 1
+        return assets
+
     def get_submission_by_uuid(self, asset_uid: str, submission_uuid: str) -> dict[str, Any] | None:
         """
         Fetch a single submission by UUID.

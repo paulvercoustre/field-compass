@@ -14,9 +14,10 @@ import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import QualityCheckPromptModal from '../components/QualityCheckPromptModal';
 import FieldLabel from '../components/ui/FieldLabel';
-import { parseKoboAssetId, looksLikeUrl, labelColumnFor } from '../utils/koboUrl';
-import { getKoboProjectForm } from '../services/api';
-import { CORE_IDENTIFIER_HINTS, KOBO_LINK_HINT } from '../constants/coreIdentifiers';
+import { parseKoboAssetId, labelColumnFor } from '../utils/koboUrl';
+import { getKoboProjectForm, KoboProject } from '../services/api';
+import { CORE_IDENTIFIER_HINTS } from '../constants/coreIdentifiers';
+import KoboProjectPicker from '../components/ui/KoboProjectPicker';
 import CollectionTargets, { totalFromFrameRows } from '../components/ui/CollectionTargets';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import { autoFillIdentifier } from '../utils/identifierSuggestions';
@@ -50,11 +51,23 @@ const CreateSurveyPage: React.FC = () => {
 
   // Form state
   const [surveyName, setSurveyName] = useState('');
-  // The user pastes the link to their project; the identifier is derived from
-  // it. Kobo's own interface never shows the term "asset ID", so asking for one
-  // asks people to know a word they have never seen.
+  // The user picks their project from a list, or pastes the link to it; the
+  // identifier is derived either way. Kobo's own interface never shows the
+  // term "asset ID", so asking for one asks people to know a word they have
+  // never seen.
   const [koboLink, setKoboLink] = useState('');
   const koboAssetId = parseKoboAssetId(koboLink);
+  // The name last filled in from a picked project. Picking another project
+  // replaces it, but never a name the user typed.
+  const autoFilledName = useRef<string | null>(null);
+
+  const handleProjectChange = (value: string, project?: KoboProject) => {
+    setKoboLink(value);
+    if (project && (!surveyName.trim() || surveyName === autoFilledName.current)) {
+      setSurveyName(project.name);
+      autoFilledName.current = project.name;
+    }
+  };
 
   const [isLoadingProjectForm, setIsLoadingProjectForm] = useState(false);
   const [projectFormError, setProjectFormError] = useState<string | null>(null);
@@ -518,6 +531,7 @@ const CreateSurveyPage: React.FC = () => {
           <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
             <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Basic information</h2>
             <div className="space-y-4">
+              <KoboProjectPicker value={koboLink} onChange={handleProjectChange} />
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Survey name *
@@ -529,28 +543,6 @@ const CreateSurveyPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   required
                 />
-              </div>
-              <div>
-                <FieldLabel hint={KOBO_LINK_HINT}>Kobo project link *</FieldLabel>
-                <input
-                  type="text"
-                  value={koboLink}
-                  onChange={(e) => setKoboLink(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="https://kf.kobotoolbox.org/#/forms/aXXXXXXXXXXXXXXXXXXXXX"
-                  required
-                />
-                {koboAssetId ? (
-                  <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                    ✓ Project ID: <span className="font-mono">{koboAssetId}</span>
-                  </p>
-                ) : koboLink.trim() ? (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                    {looksLikeUrl(koboLink)
-                      ? "That link does not contain a project ID. Open your project in Kobo and copy the address bar."
-                      : "That is not a Kobo project link or ID."}
-                  </p>
-                ) : null}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -601,7 +593,7 @@ const CreateSurveyPage: React.FC = () => {
                 </button>
                 {!koboAssetId && (
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    Add your Kobo project link above first.
+                    Choose your Kobo project above first.
                   </p>
                 )}
                 {projectFormName && (

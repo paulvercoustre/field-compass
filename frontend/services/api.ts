@@ -233,6 +233,40 @@ export const api = {
     }
   }
 };
+// --- Kobo projects ----------------------------------------------------------
+
+export interface KoboProject {
+  uid: string;
+  name: string;
+  status: 'deployed' | 'draft' | 'archived';
+  submission_count: number | null;
+  owner_username: string | null;
+  date_modified: string | null;
+  /** A Field Compass survey the user can see that already reads this project. */
+  existing_survey_name: string | null;
+}
+
+/**
+ * The survey projects in the user's Kobo account, deployed first and newest
+ * first within each status, so a survey can be created by picking one.
+ */
+export const listKoboProjects = async (): Promise<KoboProject[]> => {
+  const response = await fetch(`${API_BASE_URL}/api/kobo/assets`, { headers: createHeaders() });
+
+  if (!response.ok) {
+    let detail = 'Could not load your Kobo projects.';
+    try {
+      const body = await response.json();
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // Non-JSON error body; the default message is more useful than the raw text.
+    }
+    throw new Error(detail);
+  }
+
+  return response.json();
+};
+
 // --- Kobo project form ------------------------------------------------------
 
 export interface KoboFormQuestion {
