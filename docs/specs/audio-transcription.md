@@ -768,7 +768,7 @@ Where the build differs from the draft above, or adds to it:
   submissions without counting it as an edit, and for every audio question
   outside repeats, transcribed by the survey or not:
   - a transcript in Kobo that is not ours is stored with
-    `audio_transcripts.source = 'kobo'` (migration `0009`) and the recording
+    `audio_transcripts.source = 'kobo'` (migration `0010`) and the recording
     is **never sent to ElevenLabs**, not by a pull, "Transcribe now" or
     "Transcribe all again"; a queued job for it finds it done;
   - ours as sent stays ours; ours corrected in Kobo becomes Kobo's, marked

@@ -289,7 +289,19 @@ class Handler(BaseHTTPRequestHandler):
         if not self._kobo_authorised():
             return self._send(401, {"detail": "Authentication credentials were not provided."})
         if path in ("/api/v2/assets/", "/api/v2/assets"):
-            return self._send(200, {"count": 1, "results": []})
+            # The project picker on "New survey" lists these.
+            project = {
+                "uid": ASSET_UID,
+                "name": "Flood Voices 2026 (synthetic)",
+                "asset_type": "survey",
+                "has_deployment": True,
+                "deployment__active": True,
+                "deployment_status": "deployed",
+                "deployment__submission_count": 6,
+                "owner__username": "audio_tester",
+                "date_modified": "2026-10-02T09:00:00Z",
+            }
+            return self._send(200, {"count": 1, "next": None, "results": [project]})
         if path.startswith("/api/v2/users/me"):
             return self._send(200, {"username": "audio_tester", "email": "audio@example.test"})
         if re.match(rf"^/api/v2/assets/{ASSET_UID}/advanced-features/?$", path):

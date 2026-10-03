@@ -1,7 +1,7 @@
 """Where a transcript came from: Field Compass, or Kobo
 
-Revision ID: 0009_transcript_source
-Revises: 0008_user_transcription_keys
+Revision ID: 0010_transcript_source
+Revises: 0009_app_events
 Create Date: 2026-10-04
 
 A recording that already has a transcript in Kobo (typed or corrected there,
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0009_transcript_source"
-down_revision: str | None = "0008_user_transcription_keys"
+revision: str = "0010_transcript_source"
+down_revision: str | None = "0009_app_events"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
