@@ -363,7 +363,7 @@ class TestHttp:
             "/api/ai/generate-rule", json={"survey_id": survey_id, "prompt": "age over 100"}
         )
         assert response.status_code == 429
-        assert "free AI rule requests" in response.json()["detail"]
+        assert "included AI rule requests" in response.json()["detail"]
 
     def test_account_usage_this_month(self, client, monkeypatch):
         from uuid import UUID

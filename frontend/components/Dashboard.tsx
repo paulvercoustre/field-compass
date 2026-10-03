@@ -1,9 +1,12 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Submission, FilterState } from '../types';
 import { api } from '../services/api';
 import { useSurvey } from '../contexts/SurveyContext';
-import { triggerETL, ETLStats, getSurveyConfig, SurveyConfig } from '../services/progressApi';
+import { useActivity } from '../contexts/ActivityContext';
+import { ApiError, isOpen } from '../services/activityApi';
+import { getSurveyConfig, SurveyConfig } from '../services/progressApi';
+import RunProgress from './activity/RunProgress';
 import SubmissionList from './SubmissionList';
 import SubmissionDetail from './SubmissionDetail';
 import SubmissionFilters from './SubmissionFilters';
@@ -28,10 +31,19 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
   const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(false);
-  const [isRunningETL, setIsRunningETL] = useState<boolean>(false);
-  const [etlStats, setEtlStats] = useState<ETLStats | null>(null);
+  const [isStartingPull, setIsStartingPull] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const { startPull, latestRunFor, runs } = useActivity();
+  // Runs whose card was closed; kept for the session so a reload does not
+  // bring back a card already read.
+  const [dismissedRuns, setDismissedRuns] = useState<string[]>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('fc_dismissed_runs') || '[]');
+    } catch {
+      return [];
+    }
+  });
 
   const fetchSubmissionsAcrossPages = useCallback(
     async (filters?: FilterState): Promise<Submission[]> => {
@@ -85,14 +97,20 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     }
   }, [selectedSurvey, fetchSubmissionsAcrossPages]);
 
+  // Several reads can be in flight (a filter change, a run moving on): only
+  // the latest one may set the list, whichever answers last.
+  const filteredRequest = useRef(0);
+
   // Fetch filtered submissions
   const fetchFilteredSubmissions = useCallback(async () => {
     if (!selectedSurvey) return;
+    const request = ++filteredRequest.current;
 
     try {
       setIsLoadingSubmissions(true);
       setError(null);
       const data = await fetchSubmissionsAcrossPages(filterState);
+      if (request !== filteredRequest.current) return;
       setSubmissions(data);
 
       // Clear selected submission if it's no longer in the filtered results
@@ -110,10 +128,11 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
         return prev;
       });
     } catch (err) {
+      if (request !== filteredRequest.current) return;
       setError('Failed to fetch submissions.');
       console.error(err);
     } finally {
-      setIsLoadingSubmissions(false);
+      if (request === filteredRequest.current) setIsLoadingSubmissions(false);
     }
   }, [selectedSurvey, filterState, fetchSubmissionsAcrossPages]);
 
@@ -157,20 +176,59 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     }
   }, [selectedSurvey, filterState, fetchFilteredSubmissions]);
 
-  // Auto-refresh while any LLM qualitative checks are pending/running.
+  // This survey's latest run (a pull under way, or one just finished).
+  const run = selectedSurvey ? latestRunFor(selectedSurvey.survey_id) : null;
+  const pullBusy = !!run && (run.status === 'queued' || run.status === 'running');
+  const showRun = !!run && !dismissedRuns.includes(run.run_id);
+
+  // Re-read submissions as the survey's background work moves on, rather
+  // than on a timer: when the pull lands, and as reviews and transcripts
+  // finish. At most every few seconds.
+  const surveyRunsKey = useMemo(
+    () =>
+      runs
+        .filter((r) => r.survey_id === selectedSurvey?.survey_id)
+        .map((r) => `${r.run_id}:${r.status}:${r.ai_checks?.done}:${r.ai_checks?.failed}:${r.transcripts?.done}:${r.transcripts?.failed}:${r.kobo?.done}`)
+        .join('|'),
+    [runs, selectedSurvey?.survey_id]
+  );
+  const lastRefetch = useRef(0);
+  const pendingRefetch = useRef<number | null>(null);
+  const previousStatus = useRef<string | undefined>(undefined);
+  // The timer below fires later: it must call the fetches as they are then,
+  // with the filters then in force, not as they were when it was set.
+  const fetchFilteredRef = useRef(fetchFilteredSubmissions);
+  fetchFilteredRef.current = fetchFilteredSubmissions;
+  const fetchAllRef = useRef(fetchAllSubmissions);
+  fetchAllRef.current = fetchAllSubmissions;
   useEffect(() => {
-    if (!selectedSurvey) return;
-    const hasActiveLLMJobs = submissions.some(
-      (s) => s.llm_check_status === 'pending' || s.llm_check_status === 'running'
-    );
-    if (!hasActiveLLMJobs) return;
+    if (!selectedSurvey || !surveyRunsKey) return;
+    const landed = !!previousStatus.current && previousStatus.current !== run?.status && !pullBusy;
+    previousStatus.current = run?.status;
+    const refetch = () => {
+      lastRefetch.current = Date.now();
+      pendingRefetch.current = null;
+      if (landed) fetchAllRef.current();
+      fetchFilteredRef.current();
+    };
+    if (pendingRefetch.current) window.clearTimeout(pendingRefetch.current);
+    const wait = Math.max(0, 5000 - (Date.now() - lastRefetch.current));
+    pendingRefetch.current = window.setTimeout(refetch, landed ? 0 : wait);
+    return () => {
+      if (pendingRefetch.current) window.clearTimeout(pendingRefetch.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surveyRunsKey]);
 
-    const intervalId = window.setInterval(() => {
-      fetchFilteredSubmissions();
-    }, 8000);
-
-    return () => window.clearInterval(intervalId);
-  }, [selectedSurvey, submissions, fetchFilteredSubmissions]);
+  const dismissRun = (runId: string) => {
+    const next = [...dismissedRuns, runId].slice(-50);
+    setDismissedRuns(next);
+    try {
+      sessionStorage.setItem('fc_dismissed_runs', JSON.stringify(next));
+    } catch {
+      // Storage can be refused; the card then comes back on reload.
+    }
+  };
 
   const handleRefresh = async () => {
     if (!selectedSurvey) {
@@ -178,35 +236,22 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       return;
     }
 
-    setIsRunningETL(true);
+    setIsStartingPull(true);
     setError(null);
     setSuccess(null);
-    setEtlStats(null);
 
     try {
-      // Trigger ETL pipeline
-      const stats = await triggerETL(selectedSurvey.survey_id);
-      setEtlStats(stats);
-      
-      // Refresh submissions after ETL completes
-      await fetchAllSubmissions();
-      await fetchFilteredSubmissions();
-      
-      const checkedCount = (stats.validated || 0);
-      const skippedCount = (stats.skipped || 0);
-      const aiParts = [
-        `${stats.llm_queued || 0} started`,
-        ...(stats.llm_not_run_allowance ? [`${stats.llm_not_run_allowance} not run (free AI allowance used)`] : []),
-        ...(stats.llm_paused ? [`${stats.llm_paused} not run (your AI provider is not working)`] : []),
-      ];
-      setSuccess(
-        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}, ${stats.hfc_flagged} flagged. AI review: ${aiParts.join(', ')}.`
-      );
+      // The pull runs in the background; its card below shows how far it got.
+      await startPull(selectedSurvey.survey_id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run ETL pipeline');
-      console.error(err);
+      if (err instanceof ApiError && err.status === 409) {
+        // Already running: the card shows that pull instead.
+        setSuccess(err.message);
+      } else {
+        setError(err instanceof Error ? err.message : 'Could not start the pull.');
+      }
     } finally {
-      setIsRunningETL(false);
+      setIsStartingPull(false);
     }
   };
 
@@ -268,25 +313,37 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
         title="Submissions"
         actions={
           <>
-            {etlStats && (
-              <span className="tabular text-xs text-gray-500 dark:text-gray-400">
-                Last run took {etlStats.duration_seconds.toFixed(1)}s
-              </span>
-            )}
             <Button
               variant="primary"
               onClick={handleRefresh}
-              disabled={!selectedSurvey}
-              loading={isRunningETL}
+              disabled={!selectedSurvey || pullBusy}
+              loading={isStartingPull || pullBusy}
               icon={<RefreshIcon />}
             >
-              {isRunningETL ? 'Running ETL…' : 'Refresh from Kobo'}
+              {pullBusy ? 'Pulling…' : 'Refresh from Kobo'}
             </Button>
           </>
         }
       >
         {error && <Banner tone="error" className="mt-3">{error}</Banner>}
-        {success && <Banner tone="success" className="mt-3">{success}</Banner>}
+        {success && <Banner tone="info" className="mt-3" onDismiss={() => setSuccess(null)}>{success}</Banner>}
+        {showRun && run && (
+          <div className="relative mt-3 rounded-lg border border-gray-200 bg-white p-4 pr-10 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+            <RunProgress run={run} compact />
+            {!isOpen(run) && (
+              <button
+                type="button"
+                onClick={() => dismissRun(run.run_id)}
+                className="absolute right-2 top-2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-white"
+                aria-label="Close"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
       </PageHeader>
 
       {/* Main Content */}
@@ -305,7 +362,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
             <div className="flex items-center justify-center flex-1 min-h-0">
               <Spinner />
             </div>
-          ) : error && !isRunningETL ? (
+          ) : error ? (
             <div className="p-4 text-center text-sm text-red-600 dark:text-red-400">{error}</div>
           ) : (
             <div className="flex-1 min-h-0 overflow-hidden">

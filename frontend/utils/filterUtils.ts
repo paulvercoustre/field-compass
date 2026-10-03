@@ -120,6 +120,14 @@ export function buildFilterParams(filters: FilterState): URLSearchParams {
     }
   }
 
+  if (filters.aiReview) {
+    params.append('ai_review', filters.aiReview);
+  }
+
+  if (filters.transcript) {
+    params.append('transcript', filters.transcript);
+  }
+
   return params;
 }
 
@@ -134,7 +142,9 @@ export function hasActiveFilters(filters: FilterState): boolean {
     (filters.qaStatuses && filters.qaStatuses.length > 0) ||
     (filters.validationStatuses && filters.validationStatuses.length > 0) ||
     (filters.enumerators && filters.enumerators.length > 0) ||
-    (filters.samplingFilters && filters.samplingFilters.length > 0)
+    (filters.samplingFilters && filters.samplingFilters.length > 0) ||
+    !!filters.aiReview ||
+    !!filters.transcript
   );
 }
 

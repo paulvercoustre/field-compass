@@ -95,7 +95,7 @@ services:
     networks:
       - field-compass-network
 
-  # Celery worker for qualitative checks
+  # Celery worker: pulls, AI reviews, transcriptions and Kobo sends
   worker:
     build:
       context: ./backend
@@ -125,8 +125,8 @@ services:
         condition: service_started
     volumes:
       - ./backend:/app
-    # -B runs beat inside the worker, for the stalled AI check sweep.
-    command: celery -A services.job_queue.celery_app worker --loglevel=INFO -Q qualitative_checks -B -s /tmp/celerybeat-schedule
+    # -B runs beat inside the worker, for the sweeps of stalled background work.
+    command: celery -A services.job_queue.celery_app worker --loglevel=INFO -Q pulls,qualitative_checks,transcriptions,kobo_sync --concurrency=${WORKER_CONCURRENCY:-4} -B -s /tmp/celerybeat-schedule
     networks:
       - field-compass-network
 

@@ -19,6 +19,49 @@ interface SubmissionFiltersProps {
   isLoading: boolean;
 }
 
+const AI_REVIEW_OPTIONS = [
+  { value: 'failed', label: "Couldn't review" },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'not_run', label: 'Not run' },
+];
+
+const TRANSCRIPT_OPTIONS = [
+  { value: 'any', label: 'Has a transcript' },
+  { value: 'failed', label: 'Transcription failed' },
+  { value: 'no_speech', label: 'No speech' },
+  { value: 'in_progress', label: 'Being transcribed' },
+];
+
+/** One of a few states, or any. */
+const SingleSelect: React.FC<{
+  label: string;
+  options: Array<{ value: string; label: string }>;
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+}> = ({ label, options, value, onChange }) => {
+  const id = `filter-${label.toLowerCase().replace(/\W+/g, '-')}`;
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-xs font-medium text-gray-600 dark:text-gray-400">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value ?? ''}
+        onChange={(event) => onChange(event.target.value || undefined)}
+        className="h-8 w-full rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+      >
+        <option value="">Any</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+};
+
 // Multi-Select Dropdown Component
 interface MultiSelectDropdownProps {
   label: string;
@@ -271,6 +314,9 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
     if (activeFilters.samplingFilters) {
       count += activeFilters.samplingFilters.reduce((sum, filter) => sum + filter.values.length, 0);
     }
+    if (activeFilters.qaStatuses) count += activeFilters.qaStatuses.length;
+    if (activeFilters.aiReview) count += 1;
+    if (activeFilters.transcript) count += 1;
     return count;
   }, [activeFilters]);
 
@@ -342,6 +388,46 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
                   </span>
                 ))}
 
+                {(activeFilters.qaStatuses || []).map((status) => (
+                  <span key={`qa-${status}`} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
+                    {status === 'FLAGGED' || status === 'triage' ? 'Flagged' : status}
+                    <button
+                      onClick={() => {
+                        const rest = (activeFilters.qaStatuses || []).filter((s) => s !== status);
+                        onFiltersChange({ ...activeFilters, qaStatuses: rest.length ? rest : undefined });
+                      }}
+                      className="ml-0.5 rounded px-1 hover:bg-indigo-100 hover:text-indigo-900 dark:hover:bg-indigo-500/20 dark:hover:text-white"
+                      aria-label="Remove flagged filter"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {activeFilters.aiReview && (
+                  <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
+                    AI review: {AI_REVIEW_OPTIONS.find((o) => o.value === activeFilters.aiReview)?.label}
+                    <button
+                      onClick={() => onFiltersChange({ ...activeFilters, aiReview: undefined })}
+                      className="ml-0.5 rounded px-1 hover:bg-indigo-100 hover:text-indigo-900 dark:hover:bg-indigo-500/20 dark:hover:text-white"
+                      aria-label="Remove AI review filter"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+                {activeFilters.transcript && (
+                  <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
+                    Transcripts: {TRANSCRIPT_OPTIONS.find((o) => o.value === activeFilters.transcript)?.label}
+                    <button
+                      onClick={() => onFiltersChange({ ...activeFilters, transcript: undefined })}
+                      className="ml-0.5 rounded px-1 hover:bg-indigo-100 hover:text-indigo-900 dark:hover:bg-indigo-500/20 dark:hover:text-white"
+                      aria-label="Remove transcript filter"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+
                 {/* Sampling Filter Chips */}
                 {(activeFilters.samplingFilters || []).map((filter) =>
                   filter.values.map((value) => (
@@ -387,6 +473,26 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
                 selectedValues={activeFilters.enumerators || []}
                 onChange={(values) => handleFilterChange({ enumerators: values.length > 0 ? values : undefined })}
                 placeholder="Select enumerators..."
+              />
+            )}
+
+            {/* AI review state */}
+            {surveyConfig?.config_data?.quality_checks?.flag_llm_qualitative && (
+              <SingleSelect
+                label="AI review"
+                options={AI_REVIEW_OPTIONS}
+                value={activeFilters.aiReview}
+                onChange={(value) => handleFilterChange({ aiReview: value as FilterState['aiReview'] })}
+              />
+            )}
+
+            {/* Audio transcripts */}
+            {surveyConfig?.config_data?.audio_transcription?.enabled && (
+              <SingleSelect
+                label="Transcripts"
+                options={TRANSCRIPT_OPTIONS}
+                value={activeFilters.transcript}
+                onChange={(value) => handleFilterChange({ transcript: value as FilterState['transcript'] })}
               />
             )}
 

@@ -7,25 +7,40 @@ import logging
 from datetime import datetime
 from uuid import UUID as UUIDType
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from database.models import User
-from etl.pipeline import ETLPipeline
+from database.models import Run, User
 from models import BaseResponse
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
 from services.permissions import require_survey_access
+from services.pull_worker import execute_pull, run_pull_task
+from services.runs import RunAlreadyActive, fail_run, run_summary, start_pull
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.post("/etl/run/{survey_id}", response_model=BaseResponse)
+def _already_running(db: Session, error: RunAlreadyActive) -> JSONResponse:
+    summary = run_summary(db, error.run)
+    who = summary["started_by"]["name"] or "someone"
+    started = error.run.started_at or error.run.created_at
+    when = started.strftime("%H:%M UTC") if started else "just now"
+    return JSONResponse(
+        status_code=409,
+        content={
+            "detail": f"A pull is already running, started by {who} at {when}.",
+            "run": summary,
+        },
+    )
+
+
+@router.post("/etl/run/{survey_id}")
 async def run_etl_pipeline(
     survey_id: str,
-    background_tasks: BackgroundTasks,
     limit: int | None = Query(None, description="Maximum number of submissions to process"),
     start_date: str | None = Query(
         None, description="Only process submissions after this date (YYYY-MM-DD)"
@@ -34,79 +49,81 @@ async def run_etl_pipeline(
         False,
         description="Force revalidation of all submissions (ignores incremental optimization)",
     ),
+    wait: bool = Query(
+        False,
+        description=(
+            "Run the pull inside this request and return its counts, as this endpoint "
+            "did before pulls ran in the background. Kept for scripts for one release."
+        ),
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Trigger ETL pipeline for a survey.
+    Start a pull from KoboToolbox for a survey.
 
-    This endpoint will:
-    1. Fetch submissions from KoboToolbox
-    2. Merge submissions (with edit detection)
-    3. Run High-Frequency Checks (incrementally by default)
-    4. Update database
+    The pull runs in the background and is recorded as a run: the response is
+    ``202`` with the run, whose progress ``GET /api/runs/{run_id}`` reports
+    (fetching, checks, then the AI reviews, transcriptions and Kobo sends it
+    started). One pull at a time per survey: a second request gets ``409``
+    with the run already under way.
 
-    Parameters:
-    - limit: Cap the number of submissions processed
-    - start_date: Only process submissions after this date
-    - force_validation: If True, revalidate all fetched submissions regardless of their validation status.
-                       If False (default), use incremental validation (only new/edited/rule-changed submissions)
-
-    Authentication required. User must:
-    - Have at least 'editor' access to the survey
-    - Have a Kobo API key configured
-    - Have Kobo-level access to the form
-
-    Note: This runs synchronously. For large datasets, consider using Airflow.
+    Requires editor access to the survey and the caller's own Kobo API key.
     """
     try:
-        # Validate survey_id
-        try:
-            survey_uuid = UUIDType(survey_id)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID.",
-            )
-
-        # Check user has editor access to this survey
-        require_survey_access(db, current_user, survey_uuid, min_level="editor")
-
-        # Parse start_date if provided
-        start_datetime = None
-        if start_date:
-            try:
-                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
-            except ValueError:
-                raise HTTPException(
-                    status_code=400, detail=f"Invalid date format: {start_date}. Use YYYY-MM-DD"
-                )
-
-        # Get Kobo API credentials from user
-        kobo_api_token = get_user_kobo_token(current_user)
-        kobo_api_url = current_user.kobo_api_url
-
-        if not kobo_api_token:
-            raise HTTPException(
-                status_code=400,
-                detail="Kobo API key not configured. Please set your API key in user settings.",
-            )
-
-        # Create pipeline with user's credentials
-        pipeline = ETLPipeline(db, kobo_api_token=kobo_api_token, kobo_api_url=kobo_api_url)
-
-        # Run pipeline
-        stats = pipeline.run_pipeline(
-            survey_id=survey_id,
-            limit=limit,
-            start_date=start_datetime,
-            force_validation=force_validation,
+        survey_uuid = UUIDType(survey_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID.",
         )
 
+    survey = require_survey_access(db, current_user, survey_uuid, min_level="editor")
+
+    start_datetime = None
+    if start_date:
+        try:
+            start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid date format: {start_date}. Use YYYY-MM-DD"
+            )
+
+    if not get_user_kobo_token(current_user):
+        raise HTTPException(
+            status_code=400,
+            detail="Kobo API key not configured. Please set your API key in user settings.",
+        )
+    if not survey.kobo_asset_id:
+        raise HTTPException(
+            status_code=400,
+            detail="This survey is not linked to a Kobo project yet. Add the project in Survey settings.",
+        )
+
+    try:
+        run = start_pull(db, survey, current_user)
+    except RunAlreadyActive as error:
+        return _already_running(db, error)
+
+    options = {
+        "limit": limit,
+        "start_date": start_datetime.strftime("%Y-%m-%d") if start_datetime else None,
+        "force_validation": force_validation,
+    }
+
+    if wait:
+        stats = execute_pull(run.run_id, options)
+        db.expire_all()
+        if stats is None:
+            failed = db.query(Run).filter(Run.run_id == run.run_id).first()
+            raise HTTPException(
+                status_code=502, detail=(failed.error if failed else None) or "The pull failed."
+            )
         return BaseResponse(
             success=True,
-            message="ETL pipeline completed successfully",
+            message="Pull completed",
             data={
+                "run_id": str(run.run_id),
                 "fetched": stats["fetched"],
                 "created": stats["created"],
                 "updated": stats["updated"],
@@ -118,14 +135,33 @@ async def run_etl_pipeline(
                 "llm_skipped": stats.get("llm_skipped", 0),
                 "llm_not_run_allowance": stats.get("llm_not_run_allowance", 0),
                 "llm_paused": stats.get("llm_paused", 0),
+                "transcripts_queued": stats.get("transcripts_queued", 0),
                 "hfc_flagged": stats["hfc_flagged"],
                 "errors": stats["errors"],
                 "duration_seconds": stats.get("duration_seconds", 0),
             },
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"ETL pipeline failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"ETL pipeline failed: {str(e)}")
+    try:
+        result = run_pull_task.apply_async(
+            kwargs={"run_id": str(run.run_id), "options": options}, task_id=str(run.run_id)
+        )
+        run.task_id = result.id
+        db.commit()
+    except Exception as exc:
+        logger.error("Could not queue pull %s: %s", run.run_id, exc, exc_info=True)
+        fail_run(db, run, "The pull could not start: the background worker is unavailable.")
+        raise HTTPException(
+            status_code=503,
+            detail="The pull could not start: the background worker is unavailable. Try again shortly.",
+        )
+
+    db.refresh(run)
+    return JSONResponse(
+        status_code=202,
+        content={
+            "success": True,
+            "message": "Pull started",
+            "data": {"run_id": str(run.run_id), "run": run_summary(db, run)},
+        },
+    )

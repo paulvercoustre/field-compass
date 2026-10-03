@@ -10,5 +10,10 @@
     "gpt-4.1-mini": {"input": 0.40, "cached_input": 0.10,  "output": 1.60},
     "gpt-4o":       {"input": 2.50, "cached_input": 1.25,  "output": 10.00},
     "gpt-4o-mini":  {"input": 0.15, "cached_input": 0.075, "output": 0.60}
+  },
+  "_about_audio": "Speech-to-text, USD per hour of audio, batch. scribe_v2 checked on https://elevenlabs.io/pricing/api on 2026-10-03 ($0.22/h; entity detection and keyterm prompting cost extra and are not used).",
+  "audio_models": {
+    "scribe_v2": {"per_hour": 0.22},
+    "scribe_v1": {"per_hour": 0.22}
   }
 }

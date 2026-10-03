@@ -1,20 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth, User } from '../contexts/AuthContext';
 import KoboConnection from '../components/kobo/KoboConnection';
-import AIProvidersSection from '../components/ai/AIProvidersSection';
-import AIUsageSection from '../components/ai/AIUsageSection';
+import AIIntegrationTab from '../components/ai/AIIntegrationTab';
+import NotificationSettings from '../components/activity/NotificationSettings';
 import SettingsLayout, { SettingsNavItem } from '../components/ui/SettingsLayout';
 
-type AccountTab = 'profile' | 'kobo' | 'ai';
+type AccountTab = 'profile' | 'kobo' | 'ai' | 'notifications';
 
 const NAV_ITEMS: SettingsNavItem<AccountTab>[] = [
   { id: 'profile', label: 'Profile' },
   { id: 'kobo', label: 'Kobo connection' },
   { id: 'ai', label: 'AI integration' },
+  { id: 'notifications', label: 'Notifications' },
 ];
 
-const UserSettingsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<AccountTab>('profile');
+interface UserSettingsPageProps {
+  /** A tab asked for by a link elsewhere in the app. */
+  requestedTab?: { tab: string; at: number };
+}
+
+const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => {
+  const [activeTab, setActiveTab] = useState<AccountTab>(() =>
+    NAV_ITEMS.some((item) => item.id === requestedTab?.tab) ? (requestedTab!.tab as AccountTab) : 'profile'
+  );
+
+  useEffect(() => {
+    if (requestedTab && NAV_ITEMS.some((item) => item.id === requestedTab.tab)) {
+      setActiveTab(requestedTab.tab as AccountTab);
+    }
+  }, [requestedTab]);
   const {
     user,
     updateUser,
@@ -341,10 +355,11 @@ const UserSettingsPage: React.FC = () => {
 
         {activeTab === 'ai' && (
           <>
-            <AIProvidersSection />
-            <AIUsageSection />
+            <AIIntegrationTab />
           </>
         )}
+
+        {activeTab === 'notifications' && <NotificationSettings />}
       </div>
 
       {/* Delete Account Confirmation Modal */}

@@ -3,7 +3,6 @@ ETL Pipeline
 Main orchestrator for fetching, merging, and validating submissions.
 """
 
-import hashlib
 import logging
 from datetime import datetime
 from typing import Any
@@ -11,22 +10,21 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from database.models import SubmissionCurrent, SurveyConfig
+from database.models import Run, SubmissionCurrent, SurveyConfig
+from etl.audio import is_transcription_issue
 from etl.audit_processor import download_and_process_audit
 from etl.data_merger import merge_submission, parse_kobo_submission
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
-from services.ai_allowance import (
-    NOT_RUN_ALLOWANCE,
-    checks_remaining,
-    counted_submission_ids,
-    not_run_message,
-)
-from services.ai_providers import paused_error, survey_connection
-from services.ai_service import AIService
+from services.ai_review_queue import AIReviewQueuer
 from services.qualitative_worker import run_qualitative_check_task
+from services.transcription_queue import TranscriptionQueuer
 
 logger = logging.getLogger(__name__)
+
+# How often (in submissions) a pull reports its progress and checks whether
+# someone asked it to stop.
+_PROGRESS_EVERY = 25
 
 
 def _is_llm_qual_issue(issue: dict[str, Any]) -> bool:
@@ -35,6 +33,11 @@ def _is_llm_qual_issue(issue: dict[str, Any]) -> bool:
     return bool(
         issue.get("check", "").startswith("qual_") or metadata.get("source") == "llm_qualitative_v1"
     )
+
+
+def _is_background_issue(issue: dict[str, Any]) -> bool:
+    """Findings added after the pull (AI review, transcripts): kept when re-validating."""
+    return _is_llm_qual_issue(issue) or is_transcription_issue(issue)
 
 
 class ETLPipeline:
@@ -46,6 +49,8 @@ class ETLPipeline:
         kobo_fetcher: KoboFetcher | None = None,
         kobo_api_token: str | None = None,
         kobo_api_url: str | None = None,
+        run: Run | None = None,
+        started_by_user_id: UUID | None = None,
     ):
         """
         Initialize ETL pipeline.
@@ -60,6 +65,9 @@ class ETLPipeline:
             ValueError: If neither kobo_fetcher nor kobo_api_token is provided
         """
         self.db = db
+        # The run this pull reports to, when started from the app.
+        self.run = run
+        self.started_by_user_id = started_by_user_id
         self.kobo_api_token = kobo_api_token
         self.kobo_api_url = kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
 
@@ -126,9 +134,15 @@ class ETLPipeline:
             "llm_skipped": 0,
             "llm_paused": 0,
             "llm_not_run_allowance": 0,
+            "llm_waiting": 0,
+            "transcripts_queued": 0,
+            "transcripts_skipped": 0,
+            "transcripts_failed": 0,
+            "transcripts_paused": 0,
             "errors": 0,
             "start_time": datetime.utcnow(),
         }
+        run_id = self.run.run_id if self.run is not None else None
 
         try:
             # Step 1: Fetch submissions from Kobo
@@ -138,6 +152,7 @@ class ETLPipeline:
             )
             stats["fetched"] = len(kobo_submissions)
             logger.info(f"Fetched {stats['fetched']} submissions from Kobo")
+            self._report(stage="checking", fetched=stats["fetched"], processed=0)
 
             # Step 2: Initialize HFC engine
             hfc_engine = HFCEngine(
@@ -150,23 +165,11 @@ class ETLPipeline:
             # Compute current validation hash (do once at start of ETL run)
             current_rule_hash = hfc_engine.compute_validation_hash()
             logger.info(f"Current validation rule hash: {current_rule_hash}")
-            ai_service = AIService()
-            # The survey's own provider's model when it has one.
-            connection = survey_connection(self.db, survey_config)
-            qual_check_model = connection.check_model if connection else ai_service.qual_check_model
-            llm_rules_hash = hfc_engine.compute_llm_rules_hash(qual_check_model)
-            # Set when the survey's own provider is paused: checks are marked
-            # failed with its error rather than queued to fail again.
-            llm_paused_error = paused_error(self.db, survey_config)
-            # On the operator's key, how many checks this pull may still queue;
-            # None when the survey has its own provider (no Field Compass limit).
-            llm_allowance_left = (
-                None if connection else checks_remaining(self.db, survey_config.survey_id)
-            )
-            # Submissions already checked this month: re-queueing one (a retry
-            # after a failure, an edited answer) uses no new allowance.
-            llm_already_counted = (
-                set() if connection else counted_submission_ids(self.db, survey_config.survey_id)
+            # AI reviews and transcriptions: decided per submission, sent
+            # after each commit so a worker never sees a row before it is pending.
+            ai_reviews = AIReviewQueuer(self.db, survey_config, hfc_engine, run_id=run_id)
+            transcriptions = TranscriptionQueuer(
+                self.db, survey_config, run_id=run_id, user_id=self.started_by_user_id
             )
 
             # Get Kobo API token for audit downloads
@@ -174,7 +177,13 @@ class ETLPipeline:
 
             # Step 3: Process each submission
             logger.info("Step 2: Processing submissions...")
-            for kobo_sub in kobo_submissions:
+            for index, kobo_sub in enumerate(kobo_submissions):
+                if index and index % _PROGRESS_EVERY == 0:
+                    if self._stop_requested():
+                        logger.info("Pull %s stopped after %s submissions", run_id, index)
+                        stats["stopped_after"] = index
+                        break
+                    self._report(processed=index)
                 try:
                     # Parse submission
                     parsed = parse_kobo_submission(kobo_sub)
@@ -263,7 +272,7 @@ class ETLPipeline:
                         # Update deterministic issues while preserving existing LLM qualitative issues.
                         existing_issues = submission.data_quality_issues or []
                         preserved_llm_issues = [
-                            issue for issue in existing_issues if _is_llm_qual_issue(issue)
+                            issue for issue in existing_issues if _is_background_issue(issue)
                         ]
                         deterministic_issues = [
                             {
@@ -315,88 +324,29 @@ class ETLPipeline:
                         )
                         stats["skipped"] += 1
 
-                    # Queue asynchronous qualitative checks (independent from deterministic checks)
-                    current_llm_input_hash = hfc_engine.compute_llm_input_hash(
-                        submission.submission_data
-                    )
-                    llm_needs_check, llm_reason = hfc_engine.needs_llm_qualitative_check(
-                        submission=submission,
-                        llm_rules_hash=llm_rules_hash,
-                        llm_input_hash=current_llm_input_hash,
-                    )
+                    # Transcribe new recordings first: an AI review that reads a
+                    # transcript waits for it.
+                    transcript_rows = transcriptions.consider(submission)
+                    if transcript_rows:
+                        self.db.flush()
+                        transcriptions.queue(transcript_rows)
 
-                    if llm_needs_check and llm_paused_error:
-                        submission.llm_check_status = "failed"
-                        submission.llm_last_error = llm_paused_error
-                        submission.llm_checked_at = datetime.utcnow()
-                        stats["llm_paused"] += 1
-                    elif (
-                        llm_needs_check
-                        and llm_allowance_left is not None
-                        and llm_allowance_left <= 0
-                        and submission._id not in llm_already_counted
-                    ):
-                        submission.llm_check_status = NOT_RUN_ALLOWANCE
-                        submission.llm_last_error = not_run_message()
-                        submission.llm_checked_at = datetime.utcnow()
-                        stats["llm_not_run_allowance"] += 1
-                    elif llm_needs_check:
-                        dedupe_key = f"{submission.survey_id}:{submission._id}:{llm_rules_hash}:{current_llm_input_hash}"
-                        task_id = hashlib.sha256(dedupe_key.encode("utf-8")).hexdigest()
-                        payload = {
-                            "survey_id": str(submission.survey_id),
-                            "submission_id": submission._id,
-                            "submission_uuid": submission._uuid,
-                            "llm_rules_hash": llm_rules_hash,
-                            "llm_input_hash": current_llm_input_hash,
-                        }
-                        try:
-                            async_result = run_qualitative_check_task.apply_async(
-                                kwargs={"payload": payload},
-                                task_id=task_id,
-                            )
-                            submission.llm_check_status = "pending"
-                            submission.llm_job_id = async_result.id
-                            submission.llm_queued_at = datetime.utcnow()
-                            submission.llm_started_at = None
-                            submission.llm_checked_at = None
-                            submission.llm_last_error = None
-                            submission.llm_rules_hash = llm_rules_hash
-                            submission.llm_input_hash = current_llm_input_hash
-                            submission.llm_model_used = qual_check_model
-                            stats["llm_queued"] += 1
-                            if (
-                                llm_allowance_left is not None
-                                and submission._id not in llm_already_counted
-                            ):
-                                llm_allowance_left -= 1
-                        except Exception as queue_error:
-                            logger.error(
-                                "Failed to enqueue qualitative check for submission %s: %s",
-                                submission_uuid,
-                                queue_error,
-                                exc_info=True,
-                            )
-                            submission.llm_check_status = "failed"
-                            submission.llm_last_error = (
-                                f"unavailable: Could not queue the AI review ({queue_error})"
-                            )[:1000]
-                            submission.llm_checked_at = datetime.utcnow()
-                    else:
-                        logger.debug(
-                            "Skipping qualitative queue for submission %s: %s",
-                            submission_uuid,
-                            llm_reason,
-                        )
-                        stats["llm_skipped"] += 1
+                    # Queue the AI review (independent from deterministic checks)
+                    llm_outcome = ai_reviews.consider(submission)
+                    logger.debug("AI review for submission %s: %s", submission_uuid, llm_outcome)
 
                     self.db.commit()
+                    ai_reviews.dispatch(run_qualitative_check_task)
+                    transcriptions.dispatch()
 
                 except Exception as e:
                     logger.error(f"Error processing submission: {e}", exc_info=True)
                     stats["errors"] += 1
                     self.db.rollback()
                     continue
+
+            for key, value in {**ai_reviews.stats, **transcriptions.stats}.items():
+                stats[key] = stats.get(key, 0) + value
 
             stats["end_time"] = datetime.utcnow()
             stats["duration_seconds"] = (stats["end_time"] - stats["start_time"]).total_seconds()
@@ -410,6 +360,25 @@ class ETLPipeline:
             raise
 
         return stats
+
+    def _report(self, **values: Any) -> None:
+        """Tell the run how far the pull has got."""
+        if self.run is None:
+            return
+        from services.runs import update_stats
+
+        stage = values.pop("stage", None)
+        if stage:
+            self.run.stage = stage
+        update_stats(self.run, **values)
+        self.db.commit()
+
+    def _stop_requested(self) -> bool:
+        if self.run is None:
+            return False
+        from services.runs import stop_requested
+
+        return stop_requested(self.db, self.run.run_id)
 
     def process_single_submission(
         self, survey_id: str, kobo_submission: dict[str, Any]

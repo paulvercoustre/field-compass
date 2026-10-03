@@ -133,6 +133,14 @@ def should_enqueue_llm_check(
     if status == "not_run_allowance":
         return True, "allowance_retry"
 
+    # Stopped by someone before it ran: the next pull runs it.
+    if status == "cancelled":
+        return True, "retry_cancelled"
+
+    # Was waiting for a transcript; the caller has checked it is ready.
+    if status == "waiting":
+        return True, "transcript_ready"
+
     if status in {"pending", "running"}:
         return False, "already_in_progress"
 

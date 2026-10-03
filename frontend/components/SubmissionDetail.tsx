@@ -15,6 +15,7 @@ import ValidationStatusDropdown from './ValidationStatusDropdown';
 import SuccessMessage from './ui/SuccessMessage';
 import ErrorMessage from './ui/ErrorMessage';
 import { inferSamplingMode } from '../utils/samplingMode';
+import AudioAnswers from './transcription/AudioAnswers';
 
 interface SubmissionDetailProps {
   submission: Submission | null;
@@ -85,14 +86,21 @@ const describeAiCheck = (
       ? { tone: 'busy', title: 'Reviewing… retrying after a temporary error.', detail: providerMessage }
       : { tone: 'busy', title: 'Reviewing the selected answers…' };
   }
+  if (status === 'waiting') {
+    return { tone: 'busy', title: 'Waiting for the transcript of a recorded answer…' };
+  }
+  if (status === 'cancelled') {
+    // Stored as "cancelled: Stopped by Amina. It runs again on the next pull."
+    return { tone: 'muted', title: providerMessage ?? 'Stopped before it ran. It runs again on the next pull.' };
+  }
   if (status === 'success') {
     return hasFindings
       ? { tone: 'ok', title: 'Reviewed.' }
       : { tone: 'ok', title: 'Reviewed — nothing flagged.' };
   }
   if (status === 'not_run_allowance') {
-    // Stored as "allowance: This survey has used its free AI review allowance for October. ..."
-    return { tone: 'warn', title: providerMessage ?? 'Not reviewed: this survey has used its free AI allowance for this month.' };
+    // Stored as "allowance: This survey has used its included AI reviews for October. ..."
+    return { tone: 'warn', title: providerMessage ?? 'Not reviewed: this survey has used its included AI reviews for this month.' };
   }
   if (status === 'failed') {
     const reasons: Record<string, string> = {
@@ -989,6 +997,13 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                 )}
             </div>
         )}
+
+        {/* Recorded answers: player, transcript, and whether it is in Kobo. */}
+        <AudioAnswers
+          koboId={submission._id}
+          refreshKey={`${llm_check_status}:${data_quality_issues.length}`}
+          issues={data_quality_issues}
+        />
 
         {/* AI review of open-text answers. Hidden when it is off, unless
             earlier findings are still stored. */}

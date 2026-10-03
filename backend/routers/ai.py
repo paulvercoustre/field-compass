@@ -76,7 +76,7 @@ def _provider_for(db: Session, survey_config: SurveyConfig, user: User) -> Resol
         raise HTTPException(
             status_code=429,
             detail=(
-                f"You've used today's {rule_requests_per_user_day()} free AI rule requests. "
+                f"You've used today's {rule_requests_per_user_day()} included AI rule requests. "
                 "They reset tomorrow, or add your own AI provider in Account Settings."
             ),
         )

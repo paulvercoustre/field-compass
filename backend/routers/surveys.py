@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# config_data keys saved through their own endpoint (and validated there).
+OWN_ENDPOINT_KEYS = ("audio_transcription",)
+
 
 def _ai_connection_summary(db: Session, survey: SurveyConfig) -> dict | None:
     connection = survey_connection(db, survey)
@@ -221,7 +224,13 @@ async def update_survey(
         survey.kobo_asset_id = survey_update.kobo_asset_id
 
     if survey_update.config_data is not None:
-        survey.config_data = survey_update.config_data
+        incoming = dict(survey_update.config_data)
+        # Saved through their own endpoints: a settings page that does not
+        # know about them must not wipe them by saving the rest.
+        for key in OWN_ENDPOINT_KEYS:
+            if key not in incoming and key in (survey.config_data or {}):
+                incoming[key] = survey.config_data[key]
+        survey.config_data = incoming
 
     survey.updated_at = datetime.utcnow()
 

@@ -66,3 +66,22 @@ def cost_usd_micros(
         + output_tokens * price["output"]
     )
     return round(cost)
+
+
+@lru_cache(maxsize=1)
+def _audio_prices() -> dict[str, dict[str, float]]:
+    path = Path(os.getenv("AI_PRICES_FILE") or _DEFAULT_FILE)
+    try:
+        return json.loads(path.read_text()).get("audio_models", {})
+    except (OSError, ValueError) as exc:
+        logger.error("Could not read audio prices from %s (%s)", path, exc)
+        return {}
+
+
+def audio_cost_usd_micros(model: str, seconds: float | None) -> int | None:
+    """List-price cost of transcribing ``seconds`` of audio, or None when unpriced."""
+    price = _audio_prices().get((model or "").strip().lower())
+    if price is None or seconds is None:
+        return None
+    # USD per hour → micro-dollars per second.
+    return round(float(seconds) * price["per_hour"] * 1_000_000 / 3600)
