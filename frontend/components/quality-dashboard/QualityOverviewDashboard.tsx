@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { QualityOverviewResponse, QualityOverviewFilters } from '../../types';
-import { fetchQualityOverview, triggerETL } from '../../services/qualityApi';
+import { fetchQualityOverview } from '../../services/qualityApi';
 import StatusSummaryCards from './StatusSummaryCards';
 import QualityMetricsCards from './QualityMetricsCards';
 import IssueFrequencyChart from './IssueFrequencyChart';
@@ -8,9 +8,8 @@ import SubmissionStatusChart from './SubmissionStatusChart';
 import IssueTimeSeriesChart from './IssueTimeSeriesChart';
 import { Spinner } from '../Spinner';
 import PageHeader from '../ui/PageHeader';
-import Button from '../ui/Button';
 import Banner from '../ui/Banner';
-import { RefreshIcon } from '../ui/icons';
+import { PullButton, PullStartError, usePull } from '../activity/PullButton';
 
 interface QualityOverviewDashboardProps {
   surveyId: string;
@@ -27,14 +26,13 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<QualityOverviewFilters>({});
-  const [isRunningETL, setIsRunningETL] = useState(false);
-  const [etlMessage, setEtlMessage] = useState<string | null>(null);
 
   // Date range presets
   const [datePreset, setDatePreset] = useState<string>('all');
 
-  const loadData = async () => {
-    setLoading(true);
+  // `quiet`: re-read after a pull without swapping the page for a spinner.
+  const loadData = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const response = await fetchQualityOverview(surveyId, filters);
@@ -85,36 +83,7 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
     setFilters(prev => ({ ...prev, startDate, endDate }));
   };
 
-  const handleRefresh = async () => {
-    setIsRunningETL(true);
-    setEtlMessage(null);
-    setError(null);
-    
-    try {
-      // Run ETL pipeline to refresh data from Kobo
-      const stats = await triggerETL(surveyId);
-      
-      // Show success message with stats
-      const checkedCount = (stats.validated || 0);
-      const skippedCount = (stats.skipped || 0);
-      setEtlMessage(
-        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}, ${stats.hfc_flagged} flagged`
-      );
-      
-      // Reload the dashboard data
-      await loadData();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(`Failed to run ETL: ${err.message}`);
-      } else if (typeof err === 'string') {
-        setError(`Failed to run ETL: ${err}`);
-      } else {
-        setError('Failed to run ETL');
-      }
-    } finally {
-      setIsRunningETL(false);
-    }
-  };
+  const pull = usePull(() => loadData(true));
 
   if (loading) {
     return (
@@ -128,8 +97,8 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
     return (
       <Banner tone="error">
         <p>{error}</p>
-        <button 
-          onClick={handleRefresh}
+        <button
+          onClick={() => loadData()}
           className="mt-1 text-sm font-medium underline underline-offset-2 hover:no-underline"
         >
           Try again
@@ -161,14 +130,11 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
                 <option value="last30">Last 30 days</option>
                 <option value="last90">Last 90 days</option>
               </select>
-              <Button variant="primary" onClick={handleRefresh} loading={isRunningETL} icon={<RefreshIcon />}>
-                {isRunningETL ? 'Running ETL…' : 'Refresh from Kobo'}
-              </Button>
+              <PullButton pull={pull} />
             </>
           }
         >
-          {/* ETL success message */}
-          {etlMessage && <Banner tone="success" className="mt-3">{etlMessage}</Banner>}
+          <PullStartError pull={pull} />
         </PageHeader>
       </div>
 

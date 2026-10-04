@@ -4,17 +4,13 @@ import { Submission, FilterState } from '../types';
 import { api } from '../services/api';
 import { useSurvey } from '../contexts/SurveyContext';
 import { useActivity } from '../contexts/ActivityContext';
-import { ApiError, isOpen } from '../services/activityApi';
 import { getSurveyConfig, SurveyConfig } from '../services/progressApi';
-import RunProgress from './activity/RunProgress';
+import { PullButton, PullStartError, usePull } from './activity/PullButton';
 import SubmissionList from './SubmissionList';
 import SubmissionDetail from './SubmissionDetail';
 import SubmissionFilters from './SubmissionFilters';
 import { Spinner } from './Spinner';
 import PageHeader from './ui/PageHeader';
-import Button from './ui/Button';
-import Banner from './ui/Banner';
-import { RefreshIcon } from './ui/icons';
 
 const MAX_PAGE_SIZE = 100; // Matches backend validation limit for page_size
 
@@ -31,19 +27,11 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
   const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(false);
-  const [isStartingPull, setIsStartingPull] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const { startPull, latestRunFor, runs } = useActivity();
-  // Runs whose card was closed; kept for the session so a reload does not
-  // bring back a card already read.
-  const [dismissedRuns, setDismissedRuns] = useState<string[]>(() => {
-    try {
-      return JSON.parse(sessionStorage.getItem('fc_dismissed_runs') || '[]');
-    } catch {
-      return [];
-    }
-  });
+  const { runs } = useActivity();
+  // Progress and outcome are in the activity indicator in the top bar; the
+  // list below is re-read as the run moves on.
+  const pull = usePull();
 
   const fetchSubmissionsAcrossPages = useCallback(
     async (filters?: FilterState): Promise<Submission[]> => {
@@ -177,9 +165,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   }, [selectedSurvey, filterState, fetchFilteredSubmissions]);
 
   // This survey's latest run (a pull under way, or one just finished).
-  const run = selectedSurvey ? latestRunFor(selectedSurvey.survey_id) : null;
-  const pullBusy = !!run && (run.status === 'queued' || run.status === 'running');
-  const showRun = !!run && !dismissedRuns.includes(run.run_id);
+  const { run, pulling: pullBusy } = pull;
 
   // Re-read submissions as the survey's background work moves on, rather
   // than on a timer: when the pull lands, and as reviews and transcripts
@@ -219,41 +205,6 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [surveyRunsKey]);
-
-  const dismissRun = (runId: string) => {
-    const next = [...dismissedRuns, runId].slice(-50);
-    setDismissedRuns(next);
-    try {
-      sessionStorage.setItem('fc_dismissed_runs', JSON.stringify(next));
-    } catch {
-      // Storage can be refused; the card then comes back on reload.
-    }
-  };
-
-  const handleRefresh = async () => {
-    if (!selectedSurvey) {
-      setError('Please select a survey first');
-      return;
-    }
-
-    setIsStartingPull(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      // The pull runs in the background; its card below shows how far it got.
-      await startPull(selectedSurvey.survey_id);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // Already running: the card shows that pull instead.
-        setSuccess(err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Could not start the pull.');
-      }
-    } finally {
-      setIsStartingPull(false);
-    }
-  };
 
   const handleSelectSubmission = useCallback(async (submissionId: number) => {
     const submission = submissions.find(s => s._id === submissionId);
@@ -311,39 +262,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     <div className="flex flex-col h-full">
       <PageHeader
         title="Submissions"
-        actions={
-          <>
-            <Button
-              variant="primary"
-              onClick={handleRefresh}
-              disabled={!selectedSurvey || pullBusy}
-              loading={isStartingPull || pullBusy}
-              icon={<RefreshIcon />}
-            >
-              {pullBusy ? 'Pulling…' : 'Refresh from Kobo'}
-            </Button>
-          </>
-        }
+        actions={<PullButton pull={pull} />}
       >
-        {error && <Banner tone="error" className="mt-3">{error}</Banner>}
-        {success && <Banner tone="info" className="mt-3" onDismiss={() => setSuccess(null)}>{success}</Banner>}
-        {showRun && run && (
-          <div className="relative mt-3 rounded-lg border border-gray-200 bg-white p-4 pr-10 shadow-xs dark:border-gray-800 dark:bg-gray-900">
-            <RunProgress run={run} compact />
-            {!isOpen(run) && (
-              <button
-                type="button"
-                onClick={() => dismissRun(run.run_id)}
-                className="absolute right-2 top-2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-white"
-                aria-label="Close"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" aria-hidden="true">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        )}
+        <PullStartError pull={pull} />
       </PageHeader>
 
       {/* Main Content */}

@@ -229,6 +229,23 @@ class TestThePullTask:
         assert run.status == "failed" and "Kobo rejected the API key" in run.error
         assert db.query(Notification).one().kind == "run_failed"
 
+    def test_kobo_unreachable_says_so_in_words(self):
+        import requests
+
+        from etl.kobo_fetcher import KoboFetchError, describe_kobo_error
+
+        try:
+            try:
+                raise requests.ConnectionError(
+                    "HTTPConnectionPool(host='kobo', port=80): Max retries exceeded"
+                )
+            except requests.ConnectionError as error:
+                raise KoboFetchError(str(error)) from error
+        except KoboFetchError as exc:
+            message = describe_kobo_error(exc)
+        assert message.startswith("Could not reach Kobo.")
+        assert "HTTPConnectionPool" not in message
+
 
 def _run(db, survey, **fields):
     run = Run(survey_id=survey.survey_id, kind="pull", started_by_user_id=TEST_USER_ID, **fields)

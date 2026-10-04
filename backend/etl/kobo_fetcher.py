@@ -45,8 +45,11 @@ def describe_kobo_error(exc: Exception) -> str:
         return "Kobo is limiting requests right now. Try again in a few minutes."
     if status is not None and status >= 500:
         return "Kobo had a problem answering. Try again in a few minutes."
-    if isinstance(exc, requests.ConnectionError | requests.Timeout):
-        return "Could not reach Kobo."
+    # A fetch error wraps the requests error it came from.
+    if isinstance(exc, requests.ConnectionError | requests.Timeout) or isinstance(
+        exc.__cause__, requests.ConnectionError | requests.Timeout
+    ):
+        return "Could not reach Kobo. Check your connection, or try again in a few minutes."
     return f"Could not read the submissions from Kobo ({exc})."
 
 
