@@ -101,19 +101,27 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const [numericVariables, setNumericVariables] = useState<string[]>([]);
   const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
   const [labelColumnSurvey, setLabelColumnSurvey] = useState<string>('label::English (en)');
+  // The question text in the chosen label language, or null when the form
+  // has none beyond the variable name.
+  const questionLabel = (name: string): string | null => {
+    const row = surveyRows.find((r) => r.name === name);
+    const label = row && (row[labelColumnSurvey] || row['label::English (en)'] || row.label);
+    return label && label !== name ? String(label) : null;
+  };
   // Open-text questions, plus the audio questions being transcribed: the AI
   // review reads their transcripts.
   const reviewableVariables = useMemo(() => {
-    if (!transcribed.enabled || !koboToolData) return textVariables;
+    const text = textVariables.map((v) => ({ ...v, label: questionLabel(v.name) || v.name }));
+    if (!transcribed.enabled || !koboToolData) return text;
     const audio = (koboToolData.survey as Array<Record<string, any>>)
       .filter((row) => row.type === 'audio' && row.name && !row.roster_name)
       .filter((row) => transcribed.paths.includes(row.group_path ? `${row.group_path}/${row.name}` : row.name))
       .map((row) => ({
         name: row.name as string,
-        label: `${row[labelColumnSurvey] || row['label::English (en)'] || row.label || row.name} (transcript)`,
+        label: `${questionLabel(row.name) || row.name} (transcript)`,
         type: 'audio',
       }));
-    return [...textVariables, ...audio];
+    return [...text, ...audio];
   }, [textVariables, transcribed, koboToolData, labelColumnSurvey]);
   const [labelColumnChoices, setLabelColumnChoices] = useState<string>('label::English (en)');
 
@@ -2090,7 +2098,10 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                                     }}
                                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
                                   />
-                                  <span className="text-sm text-gray-700 dark:text-gray-300">{variable}</span>
+                                  <span className="text-sm text-gray-700 dark:text-gray-300">{questionLabel(variable) || variable}</span>
+                                  {questionLabel(variable) && (
+                                    <span className="text-xs text-gray-500">({variable})</span>
+                                  )}
                                 </label>
                               ))
                             ) : (
@@ -2107,7 +2118,8 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                                   key={variable}
                                   className="inline-block mr-2 mb-1 px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded dark:bg-indigo-900 dark:text-indigo-200"
                                 >
-                                  {variable}
+                                  {questionLabel(variable) || variable}
+                                  {questionLabel(variable) && <span className="opacity-70"> ({variable})</span>}
                                 </span>
                               ))
                             ) : (
@@ -2148,7 +2160,10 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                                     }}
                                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
                                   />
-                                  <span className="text-sm text-gray-700 dark:text-gray-300">{variable}</span>
+                                  <span className="text-sm text-gray-700 dark:text-gray-300">{questionLabel(variable) || variable}</span>
+                                  {questionLabel(variable) && (
+                                    <span className="text-xs text-gray-500">({variable})</span>
+                                  )}
                                 </label>
                               ))}
                             </div>
@@ -2160,7 +2175,8 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                                     key={variable}
                                     className="inline-block mr-2 mb-1 px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded dark:bg-amber-900 dark:text-amber-200"
                                   >
-                                    {variable} (log)
+                                    {questionLabel(variable) || variable}
+                                    {questionLabel(variable) && <span className="opacity-70"> ({variable})</span>} (log)
                                   </span>
                                 ))
                               ) : (
