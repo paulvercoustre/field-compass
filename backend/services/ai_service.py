@@ -53,6 +53,17 @@ class AIService:
         self.qual_check_max_completion_tokens = int(
             os.getenv("OPENAI_QUAL_CHECK_MAX_TOKENS", str(self.max_completion_tokens))
         )
+        # Suggestions write 5-10 rules, and a reasoning model's thinking counts
+        # against the same limit: at 2 x 2,500 tokens gpt-5 often ran out
+        # before writing any of them. A limit costs nothing until it is used.
+        self.rule_suggest_max_completion_tokens = int(
+            os.getenv("OPENAI_RULE_SUGGEST_MAX_TOKENS", "16000")
+        )
+        # Sent with rule writing on the operator key only (an endpoint that
+        # rejects it is not asked again); empty to leave the model's default.
+        self.rule_gen_reasoning_effort = (
+            os.getenv("OPENAI_RULE_GEN_REASONING_EFFORT", "low").strip() or None
+        )
         self.temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.2"))
         self.timeout = 120  # seconds - GPT-5 models with reasoning can take longer
         self.ai = AIClient(timeout=self.timeout, temperature=self.temperature)
@@ -266,8 +277,10 @@ Generate a validation rule matching the exact JSON schema."""
                 max_output=self.rule_gen_max_completion_tokens,
                 record=record,
                 end_user=end_user,
+                reasoning_effort=self._reasoning_effort(provider),
             )
         except AIError as error:
+            logger.warning("Rule generation failed: %s", error)
             raise ValueError(rule_error_message(error)) from error
 
         self._validate_rule_structure(rule_data)
@@ -480,7 +493,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
                 system=system_prompt,
                 user=user_prompt,
                 schema=suggestions_schema,
-                max_output=self.rule_gen_max_completion_tokens * 2,  # several rules
+                max_output=self.rule_suggest_max_completion_tokens,
                 # Only the envelope: a bad rule is dropped below, not the reply.
                 check_schema={
                     "type": "object",
@@ -489,8 +502,10 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
                 },
                 record=record,
                 end_user=end_user,
+                reasoning_effort=self._reasoning_effort(provider),
             )
         except AIError as error:
+            logger.warning("Rule suggestions failed: %s", error)
             raise ValueError(rule_error_message(error)) from error
 
         validated_rules = []
@@ -503,6 +518,10 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
 
         logger.info(f"Successfully generated {len(validated_rules)} rule suggestions")
         return validated_rules
+
+    def _reasoning_effort(self, provider: ResolvedProvider | None) -> str | None:
+        """The operator's chosen effort; a user's own provider keeps its model's default."""
+        return self.rule_gen_reasoning_effort if provider is None else None
 
     def _format_variables_context(self, kobo_variables: list[dict[str, Any]]) -> str:
         """Format Kobo variables into a readable context string for the prompt."""

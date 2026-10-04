@@ -12,7 +12,8 @@ Endpoints differ in three request details, so each provider carries a
 
 - structured output: ``json_schema`` (strict), ``json_object``, or neither;
 - the output limit is ``max_completion_tokens`` or the older ``max_tokens``;
-- whether a ``temperature`` is accepted (reasoning models reject one).
+- whether a ``temperature`` is accepted (reasoning models reject one);
+- whether a ``reasoning_effort`` is accepted (only reasoning models take one).
 
 A profile starts at the most capable setting. When an endpoint rejects a
 request because of one of these details, the client steps that detail down
@@ -76,6 +77,7 @@ class Capabilities:
     structured_output: str = JSON_SCHEMA
     token_param: str = MAX_COMPLETION_TOKENS
     temperature: bool = True
+    reasoning_effort: bool = True
 
     def step_down(self, rejection: str) -> bool:
         """
@@ -86,6 +88,9 @@ class Capabilities:
         text = rejection.lower()
         if self.temperature and "temperature" in text:
             self.temperature = False
+            return True
+        if self.reasoning_effort and "reasoning_effort" in text:
+            self.reasoning_effort = False
             return True
         if self.token_param in text:
             self.token_param = (
@@ -166,9 +171,9 @@ def safety_identifier(end_user: str) -> str:
 class AIClient:
     """Sends schema-shaped requests to OpenAI-compatible endpoints."""
 
-    # Rejections of a request detail the profile can step down from. Three
-    # details, so at most three retries before the rejection stands.
-    _MAX_STEP_DOWNS = 3
+    # Rejections of a request detail the profile can step down from. Four
+    # details, so at most four retries before the rejection stands.
+    _MAX_STEP_DOWNS = 4
 
     def __init__(
         self,
@@ -193,6 +198,7 @@ class AIClient:
         check_schema: dict[str, Any] | None = None,
         record: UsageRecorder | None = None,
         end_user: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         """
         Ask for a JSON object matching ``schema``; return it or raise AIError.
@@ -202,6 +208,9 @@ class AIClient:
         ``record`` is told about every call, successful or not.
         ``end_user`` is who the call is for, sent hashed to OpenAI's own API
         so its abuse monitoring can single out one user rather than the key.
+        ``reasoning_effort`` is sent to endpoints that accept one: a reasoning
+        model's thinking counts against ``max_output``, and at its default
+        effort can use all of it before writing any reply.
         """
         client = self._client_factory(
             api_key=provider.api_key,
@@ -222,7 +231,7 @@ class AIClient:
                     provider,
                     capabilities,
                     end_user,
-                    (name, system, user, schema, max_output),
+                    (name, system, user, schema, max_output, reasoning_effort),
                 )
                 # Summed over a format retry: both calls were billed.
                 usage = getattr(response, "usage", None)
@@ -333,6 +342,7 @@ class AIClient:
         user: str,
         schema: dict[str, Any],
         max_output: int,
+        reasoning_effort: str | None,
     ) -> dict[str, Any]:
         if capabilities.structured_output != JSON_SCHEMA:
             system = system + _schema_instructions(schema)
@@ -354,6 +364,8 @@ class AIClient:
             request["response_format"] = {"type": "json_object"}
         if capabilities.temperature:
             request["temperature"] = self.temperature
+        if reasoning_effort and capabilities.reasoning_effort:
+            request["reasoning_effort"] = reasoning_effort
         return request
 
     @staticmethod
@@ -363,10 +375,13 @@ class AIClient:
         if refusal:
             raise AIError(BAD_REQUEST, f"The AI declined: {refusal}")
         content = choice.message.content
+        # Cut off by the output limit: whatever came back is partial JSON at best.
+        if getattr(choice, "finish_reason", None) == "length":
+            raise AIError(
+                BAD_RESPONSE, "The AI reply could not be used: it ran out of output tokens."
+            )
         if not content:
-            reason = getattr(choice, "finish_reason", None)
-            detail = "it ran out of output tokens" if reason == "length" else "it was empty"
-            raise AIError(BAD_RESPONSE, f"The AI reply could not be used: {detail}.")
+            raise AIError(BAD_RESPONSE, "The AI reply could not be used: it was empty.")
         # Leniently, whatever was asked for: some endpoints accept
         # response_format and still wrap the JSON in prose or code fences.
         return _first_json_object(content)

@@ -148,6 +148,13 @@ class TestRequestShape:
             "https://r.openai.azure.com/openai/v1/",
         )
 
+    def test_reasoning_effort_only_when_asked(self):
+        endpoint = FakeEndpoint(_reply('{"answer": "yes"}'), _reply('{"answer": "yes"}'))
+        _call(endpoint)
+        _call(endpoint, reasoning_effort="low")
+        assert "reasoning_effort" not in endpoint.requests[0]
+        assert endpoint.requests[1]["reasoning_effort"] == "low"
+
     def test_redirects_are_not_followed(self):
         endpoint = FakeEndpoint(_reply('{"answer": "yes"}'))
         _call(endpoint)
@@ -193,6 +200,19 @@ class TestSteppingDown:
         _call(endpoint, provider)
         assert "temperature" not in endpoint.requests[2]
         assert len(endpoint.requests) == 3
+
+    def test_reasoning_effort_rejected_by_a_non_reasoning_model(self):
+        endpoint = FakeEndpoint(
+            _rejected("Unrecognized request argument supplied: reasoning_effort"),
+            _reply('{"answer": "yes"}'),
+            _reply('{"answer": "again"}'),
+        )
+        _, provider = _call(endpoint, reasoning_effort="low")
+        assert endpoint.requests[0]["reasoning_effort"] == "low"
+        assert "reasoning_effort" not in endpoint.requests[1]
+
+        _call(endpoint, provider, reasoning_effort="low")
+        assert "reasoning_effort" not in endpoint.requests[2]
 
     def test_old_server_without_max_completion_tokens(self):
         endpoint = FakeEndpoint(
@@ -271,9 +291,20 @@ class TestReplies:
 
     def test_a_reply_cut_off_by_the_limit_is_not_retried(self):
         endpoint = FakeEndpoint(_reply('{"answ', finish_reason="length"))
-        with pytest.raises(AIError):
+        with pytest.raises(AIError) as raised:
             _call(endpoint)
         assert len(endpoint.requests) == 1
+        assert "ran out of output tokens" in raised.value.message
+
+    def test_reasoning_that_used_the_whole_limit(self):
+        """A reasoning model can spend every output token thinking."""
+        endpoint = FakeEndpoint(
+            _reply("", completion_tokens=5000, reasoning_tokens=5000, finish_reason="length")
+        )
+        with pytest.raises(AIError) as raised:
+            _call(endpoint)
+        assert raised.value.category == BAD_RESPONSE
+        assert "ran out of output tokens" in raised.value.message
 
     def test_check_schema_replaces_the_request_schema_for_validation(self):
         endpoint = FakeEndpoint(_reply('{"answer": 42}'))
