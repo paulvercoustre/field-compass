@@ -1,13 +1,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { progressApi, triggerETL, ETLStats, getSurveyConfig, SurveyConfig } from '../services/progressApi';
+import { progressApi, getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import { useSurvey } from '../contexts/SurveyContext';
 import { ProgressData } from '../types';
 import { Spinner } from '../components/Spinner';
 import PageHeader from '../components/ui/PageHeader';
-import Button from '../components/ui/Button';
-import Banner from '../components/ui/Banner';
-import { RefreshIcon } from '../components/ui/icons';
+import { PullButton, PullStartError, usePull } from '../components/activity/PullButton';
 import ProgressDataView, { ProgressSubTab } from '../components/progress-tracker/ProgressDataView';
 
 const DataCollectionProgressPage: React.FC = () => {
@@ -15,18 +13,16 @@ const DataCollectionProgressPage: React.FC = () => {
   const [progressData, setProgressData] = useState<ProgressData | null>(null);
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRunningETL, setIsRunningETL] = useState(false);
-  const [etlStats, setEtlStats] = useState<ETLStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [approvedOnly, setApprovedOnly] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>('overall');
   const [filter, setFilter] = useState('');
 
-  const fetchData = useCallback(async () => {
+  // `quiet`: re-read after a pull without swapping the page for a spinner.
+  const fetchData = useCallback(async (quiet = false) => {
     if (!selectedSurvey) return;
 
-    setIsLoading(true);
+    if (!quiet) setIsLoading(true);
     setError(null);
     try {
       const [progress, config] = await Promise.all([
@@ -47,35 +43,7 @@ const DataCollectionProgressPage: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  const handleRefresh = async () => {
-    if (!selectedSurvey) {
-      setError('Please select a survey first');
-      return;
-    }
-
-    setIsRunningETL(true);
-    setError(null);
-    setSuccess(null);
-    setEtlStats(null);
-
-    try {
-      const stats = await triggerETL(selectedSurvey.survey_id);
-      setEtlStats(stats);
-      
-      await fetchData();
-      
-      const checkedCount = (stats.validated || 0);
-      const skippedCount = (stats.skipped || 0);
-      setSuccess(
-        `ETL completed: ${stats.fetched} fetched, ${stats.created} created, ${stats.updated} updated, ${checkedCount} checked${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run ETL pipeline');
-      console.error(err);
-    } finally {
-      setIsRunningETL(false);
-    }
-  };
+  const pull = usePull(() => fetchData(true));
 
   return (
     <div className="flex flex-col h-full">
@@ -102,25 +70,11 @@ const DataCollectionProgressPage: React.FC = () => {
               Approved submissions only
             </label>
             <span className="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-800" aria-hidden="true" />
-            {etlStats && (
-              <span className="tabular text-xs text-gray-500 dark:text-gray-400">
-                Last run took {etlStats.duration_seconds.toFixed(1)}s
-              </span>
-            )}
-            <Button
-              variant="primary"
-              onClick={handleRefresh}
-              disabled={!selectedSurvey}
-              loading={isRunningETL}
-              icon={<RefreshIcon />}
-            >
-              {isRunningETL ? 'Running ETL…' : 'Refresh from Kobo'}
-            </Button>
+            <PullButton pull={pull} />
           </>
         }
       >
-        {error && <Banner tone="error" className="mt-3">{error}</Banner>}
-        {success && <Banner tone="success" className="mt-3">{success}</Banner>}
+        <PullStartError pull={pull} />
       </PageHeader>
 
       {/* Main Content */}
@@ -129,7 +83,7 @@ const DataCollectionProgressPage: React.FC = () => {
           <div className="flex items-center justify-center h-full">
             <Spinner />
           </div>
-        ) : error && !isRunningETL ? (
+        ) : error ? (
           <div className="p-4 text-center text-sm text-red-600 dark:text-red-400">{error}</div>
         ) : (
           <div className="mx-auto max-w-screen-2xl">

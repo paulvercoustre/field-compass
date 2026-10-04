@@ -3,7 +3,7 @@
  * survey uses. Keys are sent, never received: responses carry `api_key_hint`.
  */
 
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, apiFetch } from './apiBase';
 
 export type AIPreset = 'openai' | 'azure' | 'anthropic' | 'openrouter' | 'mistral' | 'groq' | 'self_hosted' | 'custom';
 /** What a key is for: AI review and rule writing, or audio transcription. */
@@ -111,7 +111,7 @@ const headers = (): HeadersInit => {
 };
 
 const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
+  const response = await apiFetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: response.statusText }));
     const detail = typeof body.detail === 'string' ? body.detail : response.statusText;

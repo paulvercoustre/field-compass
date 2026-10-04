@@ -7,7 +7,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
   ReferenceLine,
 } from 'recharts';
 import { EnumeratorCollectionStats } from '../../types';
@@ -35,12 +34,6 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
     return data.reduce((sum, e) => sum + e.total, 0) / data.length;
   }, [data]);
 
-  const getBarColor = (percentValidated: number): string => {
-    if (percentValidated >= 80) return '#10b981'; // emerald-500
-    if (percentValidated >= 60) return '#f59e0b'; // amber-500
-    return '#ef4444'; // red-500
-  };
-
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const d = payload[0].payload;
@@ -51,14 +44,11 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
             <p className="text-gray-600 dark:text-gray-300">
               Total: <span className="font-medium">{d.total}</span>
             </p>
-            <p className="text-emerald-600 dark:text-emerald-400">
-              Validated: <span className="font-medium">{d.validated}</span>
+            <p className="text-gray-600 dark:text-gray-300">
+              Flagged, not yet approved: <span className="font-medium">{d.needsReview}</span>
             </p>
-            <p className="text-amber-600 dark:text-amber-400">
-              Needs Review: <span className="font-medium">{d.needsReview}</span>
-            </p>
-            <p className="text-gray-500 dark:text-gray-400">
-              Validation Rate: <span className="font-medium">{d.percentValidated}%</span>
+            <p className="text-gray-600 dark:text-gray-300">
+              Approved by reviewer: <span className="font-medium">{d.validated}</span> ({d.percentValidated}%)
             </p>
           </div>
         </div>
@@ -70,9 +60,9 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800 w-full flex flex-col">
       <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-        Submissions by Enumerator
+        Submissions by enumerator
       </h3>
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-[16rem]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
@@ -110,32 +100,12 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
             <Bar 
               dataKey="total" 
               radius={[4, 4, 0, 0]}
+              fill="#6366f1"
               cursor={onEnumeratorClick ? 'pointer' : 'default'}
               onClick={(d) => onEnumeratorClick?.(d.id)}
-            >
-              {chartData.map((entry, index) => (
-                <Cell 
-                  key={`cell-${index}`} 
-                  fill={getBarColor(entry.percentValidated)}
-                />
-              ))}
-            </Bar>
+            />
           </BarChart>
         </ResponsiveContainer>
-      </div>
-      <div className="flex items-center justify-center gap-6 mt-4 text-xs text-gray-500 dark:text-gray-400">
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-emerald-500"></div>
-          <span>≥80% validated</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-amber-500"></div>
-          <span>60-79% validated</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-red-500"></div>
-          <span>&lt;60% validated</span>
-        </div>
       </div>
     </div>
   );

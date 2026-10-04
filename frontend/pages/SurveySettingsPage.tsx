@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, updateSurvey, deleteSurvey, rerunAiChecks, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
 import { KoboToolData } from '../services/koboParser';
@@ -32,11 +32,63 @@ interface SurveySettingsPageProps {
   requestedTab?: { tab: string; at: number };
 }
 
+/**
+ * The page's sections. Each saves only its own fields, merged into the config
+ * as it is on the server at that moment, so saving one section never writes
+ * another's unsaved edits (or an older copy of what someone else saved).
+ */
+type SettingsSection = 'basicInfo' | 'coreIdentifiers' | 'koboTool' | 'samplingFrame' | 'generalFlags' | 'outlier' | 'llm';
+
+const GENERAL_FLAG_KEYS = [
+  'flag_out_of_period', 'flag_weekend', 'weekend_days', 'flag_office_hours', 'office_hours_start', 'office_hours_end',
+  'flag_sampling_frame', 'flag_dk_percentage', 'dk_percentage_threshold', 'flag_empty_percentage', 'empty_percentage_threshold',
+] as const;
+const OUTLIER_KEYS = ['flag_outliers', 'outlier_variables', 'outlier_log_transform_variables', 'outlier_method', 'outlier_threshold'] as const;
+const LLM_KEYS = ['flag_llm_qualitative', 'llm_qualitative_fields', 'llm_check_types'] as const;
+
+/** A new survey's quality checks; also what an unsaved key falls back to. */
+const DEFAULT_QUALITY_CHECKS = {
+  flag_out_of_period: false,
+  flag_weekend: false,
+  weekend_days: [5, 6], // Default to Sat, Sun
+  flag_office_hours: false,
+  office_hours_start: '08:00',
+  office_hours_end: '17:00',
+  flag_sampling_frame: false,
+  flag_outliers: false,
+  outlier_variables: [] as string[],
+  outlier_log_transform_variables: [] as string[],
+  outlier_method: 'iqr' as 'iqr' | 'mad' | 'zscore',
+  outlier_threshold: 1.5,
+  flag_dk_percentage: false,
+  dk_percentage_threshold: 50,
+  flag_empty_percentage: false,
+  empty_percentage_threshold: 50,
+  flag_llm_qualitative: false,
+  llm_qualitative_fields: [] as string[],
+  llm_check_types: ['content_quality', 'relevance', 'completeness'] as Array<'content_quality' | 'relevance' | 'completeness'>,
+};
+
+const pick = <T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Pick<T, K> =>
+  Object.fromEntries(keys.map((key) => [key, obj[key]])) as Pick<T, K>;
+
+/** "Saved 14:32", inside the section, until it is edited again. */
+const SavedNote: React.FC<{ at?: Date; className?: string }> = ({ at, className = '' }) =>
+  at ? (
+    <span role="status" className={`inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-400 ${className}`}>
+      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m5 12.5 4.5 4.5L19 7" />
+      </svg>
+      Saved {at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+    </span>
+  ) : null;
+
 const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab }) => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditingOutlier, setIsEditingOutlier] = useState(false);
+  const [isSavingGeneralFlags, setIsSavingGeneralFlags] = useState(false);
   const [isEditingLLM, setIsEditingLLM] = useState(false);
   const [isSavingOutlier, setIsSavingOutlier] = useState(false);
   const [isSavingLLM, setIsSavingLLM] = useState(false);
@@ -52,6 +104,12 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<Partial<Record<SettingsSection, Date>>>({});
+  // Saves run one at a time, each on the config as the previous one left it.
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  // The survey on screen now: a save that finishes after a switch must not
+  // touch the new survey's page.
+  const currentSurveyId = useRef<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<SurveySettingsTab>(() =>
     requestedTab && SURVEY_SETTINGS_TABS.includes(requestedTab.tab)
       ? (requestedTab.tab as SurveySettingsTab)
@@ -198,27 +256,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     );
 
   // Quality Checks State
-  const [qualityChecks, setQualityChecks] = useState({
-    flag_out_of_period: false,
-    flag_weekend: false,
-    weekend_days: [5, 6], // Default to Sat, Sun
-    flag_office_hours: false,
-    office_hours_start: '08:00',
-    office_hours_end: '17:00',
-    flag_sampling_frame: false,
-    flag_outliers: false,
-    outlier_variables: [] as string[],
-    outlier_log_transform_variables: [] as string[],
-    outlier_method: 'iqr' as 'iqr' | 'mad' | 'zscore',
-    outlier_threshold: 1.5,
-    flag_dk_percentage: false,
-    dk_percentage_threshold: 50,
-    flag_empty_percentage: false,
-    empty_percentage_threshold: 50,
-    flag_llm_qualitative: false,
-    llm_qualitative_fields: [] as string[],
-    llm_check_types: ['content_quality', 'relevance', 'completeness'] as Array<'content_quality' | 'relevance' | 'completeness'>,
-  });
+  const [qualityChecks, setQualityChecks] = useState(DEFAULT_QUALITY_CHECKS);
 
   // Dirty flag for General Quality Checks section only (Save/Cancel when user edits)
   const savedQc = config?.config_data?.quality_checks;
@@ -243,6 +281,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       // Clear any success/error messages when switching to a different survey
       setSuccess(null);
       setError(null);
+      setSavedAt({});
       loadSurveyConfig();
 
       // Check if we should open the quality tab (set from CreateSurveyPage)
@@ -331,6 +370,56 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     }
   }, [koboToolData]);
 
+  /** Show a config's collection targets, or none; drops any unsaved file. */
+  const applySamplingFrame = (cd: SurveyConfig['config_data']) => {
+    setSamplingFrameData(null);
+    setSamplingFrameFileName('');
+    setFrameValidationError(null);
+    setFrameValidationNote(null);
+    const frame = cd.sampling_frame;
+    setSamplingFrame({
+      // A config stored before `mode` existed carries none. Infer it the
+      // way get_sampling_mode() does rather than defaulting to a constant,
+      // so an existing survey shows the mode it actually behaves as.
+      mode: frame ? inferSamplingMode(frame) : null,
+      sampling_cols: frame?.sampling_cols || [],
+      admin_level_for_label: frame?.admin_level_for_label || '',
+      admin_level_choice_name: frame?.admin_level_choice_name || '',
+      total_target: frame?.total_target ?? null,
+      variable: frame?.variable ?? null,
+      targets_by_value: frame?.targets_by_value || {},
+    });
+    if (frame?.frame_data) setSamplingFrameData(frame.frame_data);
+  };
+
+  /** Show a config's stored Kobo form and label language, or none. */
+  const applyKoboTool = (cd: SurveyConfig['config_data']) => {
+    setKoboToolFileName('');
+    const tool = cd.kobo_tool;
+    if (!(tool && tool.survey && tool.choices)) {
+      setKoboToolData(null);
+      return;
+    }
+    // Load label column settings first
+    if (tool.label_column_survey) setLabelColumnSurvey(tool.label_column_survey);
+    if (tool.label_column_choices) setLabelColumnChoices(tool.label_column_choices);
+    // Reconstruct KoboToolData from stored tool with label column
+    const reconstructed = reconstructKoboToolData(tool.survey, tool.choices, tool.label_column_survey);
+    setKoboToolData({ ...reconstructed, has_audit: tool.has_audit ?? null });
+  };
+
+  /** Cancel in a quality-check section: back to what is saved, for its keys only. */
+  const restoreQualityChecks = (keys: ReadonlyArray<keyof typeof DEFAULT_QUALITY_CHECKS>) => {
+    const saved = (config?.config_data?.quality_checks ?? {}) as Partial<typeof DEFAULT_QUALITY_CHECKS>;
+    setQualityChecks((prev) => {
+      const next = { ...prev };
+      for (const key of keys) {
+        (next as Record<string, unknown>)[key] = saved[key] ?? DEFAULT_QUALITY_CHECKS[key];
+      }
+      return next;
+    });
+  };
+
   const loadSurveyConfig = async () => {
     if (!selectedSurvey) return;
     
@@ -338,23 +427,9 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     setError(null);
     setSuccess(null);
     
-    // Reset all state before loading new survey config to prevent stale data from previous survey
-    // Sampling frame state
-    setSamplingFrameData(null);
-    setSamplingFrameFileName('');
-    setFrameValidationError(null);
-    setFrameValidationNote(null);
-    setSamplingFrame({
-      mode: null,
-      sampling_cols: [],
-      admin_level_for_label: '',
-      admin_level_choice_name: '',
-      total_target: null,
-      variable: null,
-      targets_by_value: {},
-    });
-    
-    // Kobo tool state
+    // Reset all state before loading new survey config to prevent stale data
+    // from previous survey.
+    applySamplingFrame({} as SurveyConfig['config_data']);
     setKoboToolData(null);
     setKoboToolFileName('');
     setAvailableVariables([]);
@@ -374,24 +449,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       if (cd.core_identifiers) {
         setCoreIdentifiers({ ...coreIdentifiers, ...cd.core_identifiers });
       }
-      if (cd.sampling_frame) {
-        setSamplingFrame({
-          // A config stored before `mode` existed carries none. Infer it the
-          // way get_sampling_mode() does rather than defaulting to a constant,
-          // so an existing survey shows the mode it actually behaves as.
-          mode: inferSamplingMode(cd.sampling_frame),
-          sampling_cols: cd.sampling_frame.sampling_cols || [],
-          admin_level_for_label: cd.sampling_frame.admin_level_for_label || '',
-          admin_level_choice_name: cd.sampling_frame.admin_level_choice_name || '',
-          total_target: cd.sampling_frame.total_target ?? null,
-          variable: cd.sampling_frame.variable ?? null,
-          targets_by_value: cd.sampling_frame.targets_by_value || {},
-        });
-        if (cd.sampling_frame.frame_data) {
-          setSamplingFrameData(cd.sampling_frame.frame_data);
-          setSamplingFrameFileName('');
-        }
-      }
+      applySamplingFrame(cd);
       if (cd.special_values) {
         // Stored configs hold `dk_value` as one number and `dk_string_value`
         // as one string; new ones hold lists. Old ones are never rewritten, so
@@ -445,23 +503,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
         });
       }
 
-      if (cd.kobo_tool && cd.kobo_tool.survey && cd.kobo_tool.choices) {
-        // Load label column settings first
-        if (cd.kobo_tool.label_column_survey) {
-          setLabelColumnSurvey(cd.kobo_tool.label_column_survey);
-        }
-        if (cd.kobo_tool.label_column_choices) {
-          setLabelColumnChoices(cd.kobo_tool.label_column_choices);
-        }
-        // Reconstruct KoboToolData from stored tool with label column
-        const reconstructed = reconstructKoboToolData(
-          cd.kobo_tool.survey, 
-          cd.kobo_tool.choices,
-          cd.kobo_tool.label_column_survey
-        );
-        setKoboToolData({ ...reconstructed, has_audit: cd.kobo_tool.has_audit ?? null });
-        setKoboToolFileName('');
-      }
+      applyKoboTool(cd);
       
       // Load validation rules
       await loadValidationRules();
@@ -699,56 +741,108 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     }));
   };
 
-  // Persist current state to API (shared by section save handlers)
-  const persistSurveyConfig = async () => {
-    if (!selectedSurvey) return;
-    const configData: SurveyConfig['config_data'] = {
-      core_identifiers: coreIdentifiers,
-      sampling_frame: {
-        ...samplingFrame,
-        frame_data: samplingFrameData,
-      },
-      special_values: specialValues,
-      global_parameters: globalParameters,
-      quality_checks: qualityChecks,
-      pii_cols: config?.config_data.pii_cols || null,
-      roster_processing: config?.config_data.roster_processing || {
-        roster_uuid: '_submission__uuid',
-        roster_configs: {},
-      },
-      kobo_tool: koboToolData ? {
-        survey: koboToolData.survey,
-        choices: koboToolData.choices,
-        has_audit: koboToolData.has_audit ?? config?.config_data.kobo_tool?.has_audit ?? null,
-        label_column_survey: labelColumnSurvey,
-        label_column_choices: labelColumnChoices,
-      } : config?.config_data.kobo_tool ? {
-        ...config.config_data.kobo_tool,
-        label_column_survey: labelColumnSurvey,
-        label_column_choices: labelColumnChoices,
-      } : undefined,
+  currentSurveyId.current = selectedSurvey?.survey_id;
+
+  /**
+   * What one section changes, from what is on screen now. Applied later to
+   * the config as the server has it, so other sections stay as saved.
+   */
+  const sectionUpdate = (section: SettingsSection) => {
+    const qc = qualityChecks;
+    const gp = globalParameters;
+    return (base: SurveyConfig) => {
+      const cd = { ...base.config_data };
+      const update: { survey_name?: string; kobo_asset_id?: string | null; config_data: SurveyConfig['config_data'] } = { config_data: cd };
+      switch (section) {
+        case 'basicInfo':
+          update.survey_name = surveyName;
+          update.kobo_asset_id = koboAssetId || null;
+          cd.global_parameters = {
+            ...cd.global_parameters,
+            data_collection_start_date: gp.data_collection_start_date,
+            data_collection_end_date: gp.data_collection_end_date,
+          };
+          break;
+        case 'coreIdentifiers':
+          cd.core_identifiers = coreIdentifiers;
+          cd.special_values = { ...cd.special_values, ...specialValues };
+          break;
+        case 'koboTool':
+          cd.kobo_tool = koboToolData ? {
+            survey: koboToolData.survey,
+            choices: koboToolData.choices,
+            has_audit: koboToolData.has_audit ?? cd.kobo_tool?.has_audit ?? null,
+            label_column_survey: labelColumnSurvey,
+            label_column_choices: labelColumnChoices,
+          } : cd.kobo_tool ? {
+            ...cd.kobo_tool,
+            label_column_survey: labelColumnSurvey,
+            label_column_choices: labelColumnChoices,
+          } : undefined;
+          break;
+        case 'samplingFrame':
+          cd.sampling_frame = { ...samplingFrame, frame_data: samplingFrameData };
+          break;
+        case 'generalFlags':
+          cd.quality_checks = { ...cd.quality_checks, ...pick(qc, GENERAL_FLAG_KEYS) };
+          cd.global_parameters = {
+            ...cd.global_parameters,
+            min_survey_duration_minutes: gp.min_survey_duration_minutes,
+            max_survey_duration_minutes: gp.max_survey_duration_minutes,
+          };
+          break;
+        case 'outlier':
+          cd.quality_checks = { ...cd.quality_checks, ...pick(qc, OUTLIER_KEYS) };
+          break;
+        case 'llm':
+          cd.quality_checks = { ...cd.quality_checks, ...pick(qc, LLM_KEYS) };
+          break;
+      }
+      return update;
     };
-    await updateSurvey(selectedSurvey.survey_id, {
-      survey_name: surveyName,
-      kobo_asset_id: koboAssetId || null,
-      config_data: configData,
-    });
   };
 
-  const handleSaveBasicInfo = async () => {
+  /**
+   * Save one section: queued behind any save still running, applied to the
+   * config read fresh from the server, and kept on screen without reloading
+   * the page -- which used to throw away other sections' unsaved edits and
+   * the "saved" message with them. Throws the save's error.
+   */
+  const saveSection = async (section: SettingsSection) => {
     if (!selectedSurvey) return;
-    setIsSavingBasicInfo(true);
+    const surveyId = selectedSurvey.survey_id;
+    const build = sectionUpdate(section);
+    const run = async () => {
+      const latest = await getSurveyConfig(surveyId);
+      return updateSurvey(surveyId, build(latest));
+    };
+    const result = saveQueue.current.then(run, run);
+    saveQueue.current = result.catch(() => undefined);
+    const saved = await result;
+    if (currentSurveyId.current !== surveyId) return;
+    setConfig((prev) => (prev ? { ...prev, ...saved } : saved));
+    setSavedAt((prev) => ({ ...prev, [section]: new Date() }));
+  };
+
+  /** Run a section's save with its busy flag; errors stay on screen until dismissed. */
+  const handleSectionSave = async (
+    section: SettingsSection,
+    setBusy?: (busy: boolean) => void,
+    onSaved?: () => void
+  ) => {
+    setBusy?.(true);
     setError(null);
     try {
-      await persistSurveyConfig();
-      setSuccess('Basic information updated');
-      await loadSurveyConfig();
+      await saveSection(section);
+      onSaved?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
-      setIsSavingBasicInfo(false);
+      setBusy?.(false);
     }
   };
+
+  const handleSaveBasicInfo = () => handleSectionSave('basicInfo', setIsSavingBasicInfo);
 
   const handleCancelBasicInfo = () => {
     if (config) {
@@ -762,20 +856,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     }
   };
 
-  const handleSaveCoreIdentifiers = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingCoreIdentifiers(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Core identifiers updated');
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingCoreIdentifiers(false);
-    }
-  };
+  const handleSaveCoreIdentifiers = () => handleSectionSave('coreIdentifiers', setIsSavingCoreIdentifiers);
 
   const handleCancelCoreIdentifiers = () => {
     if (config?.config_data?.core_identifiers) {
@@ -791,100 +872,40 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     }
   };
 
-  const handleSaveKoboTool = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingKoboTool(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Kobo tool updated');
-      setIsEditingKoboTool(false);
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingKoboTool(false);
-    }
-  };
+  const handleSaveKoboTool = () => handleSectionSave('koboTool', setIsSavingKoboTool, () => setIsEditingKoboTool(false));
 
   const handleCancelKoboTool = () => {
     setIsEditingKoboTool(false);
-    loadSurveyConfig();
+    if (config) applyKoboTool(config.config_data);
   };
 
-  const handleSaveSamplingFrame = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingSamplingFrame(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Collection targets updated');
-      setIsEditingSamplingFrame(false);
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingSamplingFrame(false);
-    }
-  };
+  const handleSaveSamplingFrame = () => handleSectionSave('samplingFrame', setIsSavingSamplingFrame, () => setIsEditingSamplingFrame(false));
 
   const handleCancelSamplingFrame = () => {
     setIsEditingSamplingFrame(false);
-    loadSurveyConfig();
+    if (config) applySamplingFrame(config.config_data);
   };
 
-  const handleSaveGeneralFlags = async () => {
-    if (!selectedSurvey) return;
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('General flags updated');
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    }
-  };
+  const handleSaveGeneralFlags = () => handleSectionSave('generalFlags', setIsSavingGeneralFlags);
 
   const handleCancelGeneralFlags = () => {
-    loadSurveyConfig();
+    restoreQualityChecks(GENERAL_FLAG_KEYS);
+    const saved = config?.config_data?.global_parameters;
+    setGlobalParameters((prev) => ({
+      ...prev,
+      min_survey_duration_minutes: saved?.min_survey_duration_minutes ?? null,
+      max_survey_duration_minutes: saved?.max_survey_duration_minutes ?? null,
+    }));
   };
 
-  const handleSaveOutlier = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingOutlier(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('Outlier checks updated');
-      setIsEditingOutlier(false);
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingOutlier(false);
-    }
-  };
+  const handleSaveOutlier = () => handleSectionSave('outlier', setIsSavingOutlier, () => setIsEditingOutlier(false));
 
   const handleCancelOutlier = () => {
     setIsEditingOutlier(false);
-    loadSurveyConfig();
+    restoreQualityChecks(OUTLIER_KEYS);
   };
 
-  const handleSaveLLM = async () => {
-    if (!selectedSurvey) return;
-    setIsSavingLLM(true);
-    setError(null);
-    try {
-      await persistSurveyConfig();
-      setSuccess('AI review settings saved');
-      setIsEditingLLM(false);
-      await loadSurveyConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSavingLLM(false);
-    }
-  };
+  const handleSaveLLM = () => handleSectionSave('llm', setIsSavingLLM, () => setIsEditingLLM(false));
 
   const [isRerunningAI, setIsRerunningAI] = useState(false);
   const handleRerunAI = async () => {
@@ -903,7 +924,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
 
   const handleCancelLLM = () => {
     setIsEditingLLM(false);
-    loadSurveyConfig();
+    restoreQualityChecks(LLM_KEYS);
   };
 
   const handleDeleteClick = () => {
@@ -1021,7 +1042,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       <div className="flex items-center justify-center h-full">
         <div className="text-center max-w-lg w-full px-4">
           <div className="mb-4 space-y-2">
-            <ErrorMessage error={error} className="text-base" />
+            <ErrorMessage error={error} className="text-base" autoHide={false} onDismiss={() => setError(null)} />
             <SuccessMessage
               message={success}
               onDismiss={() => setSuccess(null)}
@@ -1072,7 +1093,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       onSelect={setActiveTab}
       banner={<>
         {(error || success) && <div className="mb-4 space-y-2">
-          <ErrorMessage error={error} className="text-base" />
+          <ErrorMessage error={error} className="text-base" autoHide={false} onDismiss={() => setError(null)} />
           <SuccessMessage 
             message={success} 
             onDismiss={() => setSuccess(null)}
@@ -1219,6 +1240,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                     )}
                   </div>
                 </div>
+                {!isBasicInfoDirty && <SavedNote at={savedAt.basicInfo} className="pt-2" />}
                 {canEditSurvey && isBasicInfoDirty && (
                   <div className="flex gap-3 pt-2">
                     <button
@@ -1244,6 +1266,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Kobo form</h2>
+                {!isEditingKoboTool && <SavedNote at={savedAt.koboTool} className="ml-auto mr-2" />}
                 {canEditSurvey && !isEditingKoboTool && (
                   <button
                     onClick={() => setIsEditingKoboTool(true)}
@@ -1364,6 +1387,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Data collection targets</h2>
+                {!isEditingSamplingFrame && <SavedNote at={savedAt.samplingFrame} className="ml-auto mr-2" />}
                 {canEditSurvey && !isEditingSamplingFrame && (
                   <button
                     onClick={() => setIsEditingSamplingFrame(true)}
@@ -1558,6 +1582,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                   readOnly={!canEditSurvey}
                 />
               </div>
+              {!isCoreIdentifiersDirty && <SavedNote at={savedAt.coreIdentifiers} className="pt-4" />}
               {canEditSurvey && isCoreIdentifiersDirty && (
                 <div className="flex gap-3 pt-4">
                   <button
@@ -2015,16 +2040,19 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                     </div>
                   </div>
                 </div>
+                {!isGeneralFlagsDirty && <SavedNote at={savedAt.generalFlags} className="pt-4" />}
                 {canEditSurvey && isGeneralFlagsDirty && (
                   <div className="flex gap-3 pt-4">
                     <button
                       onClick={handleSaveGeneralFlags}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 text-sm font-medium"
+                      disabled={isSavingGeneralFlags}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      Save changes
+                      {isSavingGeneralFlags ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
                       onClick={handleCancelGeneralFlags}
+                      disabled={isSavingGeneralFlags}
                       className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
@@ -2038,6 +2066,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Outlier checks</h2>
+                {!isEditingOutlier && <SavedNote at={savedAt.outlier} className="ml-auto mr-2" />}
                 {canEditSurvey && !isEditingOutlier && (
                   <button
                     onClick={() => setIsEditingOutlier(true)}
@@ -2293,6 +2322,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white"><SparkleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />AI review</h2>
+                {!isEditingLLM && <SavedNote at={savedAt.llm} className="ml-auto mr-2" />}
                 {canEditSurvey && !isEditingLLM && (
                   <button
                     onClick={() => setIsEditingLLM(true)}

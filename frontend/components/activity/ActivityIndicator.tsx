@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useActivity } from '../../contexts/ActivityContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import { getSurveyRuns, isOpen, RunSummary } from '../../services/activityApi';
 import { Spinner } from '../Spinner';
@@ -27,15 +28,105 @@ const headline = (runs: RunSummary[]): string | null => {
   return `${name}: ${parts.join(', ') || 'finishing'}`;
 };
 
+/** How one of your own runs ended, for the header until you have seen it. */
+const outcome = (run: RunSummary): { tone: 'ok' | 'warn' | 'error' | 'muted'; text: string } => {
+  const name = run.survey_name || 'Survey';
+  if (run.status === 'failed') return { tone: 'error', text: run.kind === 'pull' ? `Couldn't pull ${name}` : `${name}: failed` };
+  if (run.status === 'stopped') return { tone: 'muted', text: `${name}: stopped` };
+  if (run.problems.length) return { tone: 'warn', text: `${name}: finished with problems` };
+  if (run.kind === 'pull' && run.pull) return { tone: 'ok', text: `${name}: ${run.pull.new} new, ${run.pull.flagged} flagged` };
+  return { tone: 'ok', text: `${name}: finished` };
+};
+
+const outcomeClass = {
+  ok: 'bg-emerald-50 text-emerald-800 ring-emerald-600/20 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-400/25 dark:hover:bg-emerald-500/20',
+  warn: 'bg-amber-50 text-amber-900 ring-amber-600/20 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-400/25 dark:hover:bg-amber-500/20',
+  error: 'bg-red-50 text-red-800 ring-red-600/20 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-200 dark:ring-red-400/25 dark:hover:bg-red-500/20',
+  muted: 'bg-gray-100 text-gray-700 ring-gray-500/20 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600/30 dark:hover:bg-gray-700',
+};
+
+const OutcomeIcon: React.FC<{ tone: keyof typeof outcomeClass }> = ({ tone }) => (
+  <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {tone === 'ok' ? (
+      <path d="m5 12.5 4.5 4.5L19 7" />
+    ) : tone === 'muted' ? (
+      <path d="M8 12h8" />
+    ) : (
+      <path d="M12 8v5M12 16.5h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+    )}
+  </svg>
+);
+
+const SEEN_KEY = 'fc_seen_runs';
+
+const readSeen = (): string[] => {
+  try {
+    return JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]');
+  } catch {
+    return [];
+  }
+};
+
 /**
- * Header control: a spinner and one line while anything runs, on every page.
- * Opens the activity panel.
+ * Header control, on every page: a spinner and one line while anything runs;
+ * then how your own last run ended (pulled, failed, problems) until you open
+ * the panel, or for the ten minutes the server keeps a finished run. This is
+ * where a pull reports back, whichever page started it.
  */
 export const ActivityIndicator: React.FC = () => {
-  const { runs, setPanelOpen } = useActivity();
+  const { runs, panelOpen, setPanelOpen } = useActivity();
+  const { user } = useAuth();
+  const [seen, setSeen] = useState<string[]>(readSeen);
   const line = headline(runs);
-  if (!line) {
-    return (
+
+  // Opening the panel shows every finished run in full: they are seen.
+  useEffect(() => {
+    if (!panelOpen) return;
+    const ended = runs.filter((run) => !isOpen(run)).map((run) => run.run_id);
+    setSeen((current) => {
+      if (ended.every((id) => current.includes(id))) return current;
+      const next = [...current, ...ended.filter((id) => !current.includes(id))].slice(-50);
+      try {
+        sessionStorage.setItem(SEEN_KEY, JSON.stringify(next));
+      } catch {
+        // Storage can be refused; the outcome then shows again after a reload.
+      }
+      return next;
+    });
+  }, [panelOpen, runs]);
+
+  const ended = line
+    ? null
+    : runs.find((run) => !isOpen(run) && run.started_by.user_id === user?.user_id && !seen.includes(run.run_id)) ?? null;
+  const result = ended ? outcome(ended) : null;
+
+  let control: React.ReactNode;
+  if (line) {
+    control = (
+      <button
+        type="button"
+        onClick={() => setPanelOpen(true)}
+        className="inline-flex max-w-[22rem] items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-800 ring-1 ring-inset ring-indigo-600/20 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-200 dark:ring-indigo-400/25 dark:hover:bg-indigo-500/20"
+        aria-label={`Activity: ${line}`}
+      >
+        <Spinner size="sm" className="text-indigo-600 dark:text-indigo-300" />
+        <span className="truncate">{line}</span>
+      </button>
+    );
+  } else if (result) {
+    control = (
+      <button
+        type="button"
+        onClick={() => setPanelOpen(true)}
+        className={`inline-flex max-w-[22rem] items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${outcomeClass[result.tone]}`}
+        aria-label={`Activity: ${result.text}. Open for details.`}
+      >
+        <OutcomeIcon tone={result.tone} />
+        <span className="truncate">{result.text}</span>
+      </button>
+    );
+  } else {
+    control = (
       <button
         type="button"
         onClick={() => setPanelOpen(true)}
@@ -49,16 +140,15 @@ export const ActivityIndicator: React.FC = () => {
       </button>
     );
   }
+
   return (
-    <button
-      type="button"
-      onClick={() => setPanelOpen(true)}
-      className="inline-flex max-w-[22rem] items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-800 ring-1 ring-inset ring-indigo-600/20 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-200 dark:ring-indigo-400/25 dark:hover:bg-indigo-500/20"
-      aria-label={`Activity: ${line}`}
-    >
-      <Spinner size="sm" className="text-indigo-600 dark:text-indigo-300" />
-      <span className="truncate">{line}</span>
-    </button>
+    <>
+      {control}
+      {/* Says when a run ends, for screen readers; the control above changes too often to be live itself. */}
+      <span className="sr-only" role="status">
+        {result ? result.text : ''}
+      </span>
+    </>
   );
 };
 

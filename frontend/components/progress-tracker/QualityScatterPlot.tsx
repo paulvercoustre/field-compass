@@ -40,20 +40,16 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
     return chartData.reduce((sum, d) => sum + d.submissions, 0) / chartData.length;
   }, [chartData]);
 
-  const avgValidated = useMemo(() => {
-    if (chartData.length === 0) return 0;
-    return chartData.reduce((sum, d) => sum + d.validatedPercent, 0) / chartData.length;
+  const avgIssues = useMemo(() => {
+    const total = chartData.reduce((sum, d) => sum + d.submissions, 0);
+    if (total === 0) return 0;
+    return chartData.reduce((sum, d) => sum + d.avgIssues * d.submissions, 0) / total;
   }, [chartData]);
 
-  const getPointColor = (validatedPercent: number, submissions: number): string => {
-    // High volume, high quality = green
-    // High volume, low quality = red (priority concern)
-    // Low volume = gray/blue
-    if (submissions < 3) return '#94a3b8'; // slate-400 (too few to judge)
-    if (validatedPercent >= 80) return '#10b981'; // emerald-500
-    if (validatedPercent >= 60) return '#f59e0b'; // amber-500
-    return '#ef4444'; // red-500
-  };
+  // One colour: the position says it all, and a verdict per dot ("top
+  // performer", "priority concern") is more than these numbers can carry.
+  // Fewer than 3 submissions are drawn lighter, as too few to read much into.
+  const getPointColor = (submissions: number): string => (submissions < 3 ? '#94a3b8' : '#6366f1');
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -65,14 +61,14 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
             <p className="text-gray-600 dark:text-gray-300">
               Submissions: <span className="font-medium">{d.submissions}</span>
             </p>
-            <p className="text-emerald-600 dark:text-emerald-400">
-              Validated: <span className="font-medium">{d.validatedPercent}%</span> ({d.validated})
+            <p className="text-gray-600 dark:text-gray-300">
+              Issues per submission: <span className="font-medium">{d.avgIssues.toFixed(2)}</span>
             </p>
-            <p className="text-amber-600 dark:text-amber-400">
-              Needs Review: <span className="font-medium">{d.needsReviewPercent}%</span> ({d.needsReview})
+            <p className="text-gray-600 dark:text-gray-300">
+              Flagged, not yet approved: <span className="font-medium">{d.needsReview}</span>
             </p>
-            <p className="text-gray-500 dark:text-gray-400">
-              Avg Issues: <span className="font-medium">{d.avgIssues.toFixed(2)}</span>
+            <p className="text-gray-600 dark:text-gray-300">
+              Approved by reviewer: <span className="font-medium">{d.validated}</span> ({d.validatedPercent}%)
             </p>
           </div>
         </div>
@@ -83,7 +79,7 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
 
   const CustomDot = (props: any) => {
     const { cx, cy, payload } = props;
-    const color = getPointColor(payload.validatedPercent, payload.submissions);
+    const color = getPointColor(payload.submissions);
     const size = Math.max(6, Math.min(14, 6 + payload.submissions / 5));
     
     return (
@@ -103,10 +99,10 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800">
       <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-        Quality vs. Quantity
+        Issues against submissions
       </h3>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-        Circle size = submission count. Click to filter.
+        Each circle is an enumerator, sized by submissions. Dashed lines are the team average. Click one to see their submissions.
       </p>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
@@ -120,7 +116,7 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
               tickLine={false}
               stroke="var(--fc-chart-axis)"
               label={{ 
-                value: 'Total Submissions', 
+                value: 'Submissions', 
                 position: 'bottom', 
                 offset: -5,
                 fontSize: 11,
@@ -129,14 +125,14 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
             />
             <YAxis 
               type="number"
-              dataKey="validatedPercent"
-              name="Validated %"
-              domain={[0, 100]}
+              dataKey="avgIssues"
+              name="Issues per submission"
+              domain={[0, 'auto']}
               tick={{ fontSize: 12, fill: 'var(--fc-chart-tick)' }}
               tickLine={false}
               stroke="var(--fc-chart-axis)"
               label={{ 
-                value: 'Validated %', 
+                value: 'Issues per submission', 
                 angle: -90, 
                 position: 'insideLeft',
                 fontSize: 11,
@@ -153,12 +149,11 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
               strokeDasharray="5 5"
             />
             <ReferenceLine 
-              y={avgValidated} 
+              y={avgIssues} 
               stroke="#6366f1" 
               strokeDasharray="5 5"
             />
             
-            {/* Quadrant labels */}
             <Scatter
               data={chartData}
               shape={<CustomDot />}
@@ -167,25 +162,6 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
         </ResponsiveContainer>
       </div>
       
-      {/* Quadrant Legend - order matches chart: top-left, top-right, bottom-left, bottom-right */}
-      <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
-        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-center">
-          <span className="text-blue-700 dark:text-blue-300 font-medium">↖ Low Vol, High Quality</span>
-          <br /><span className="text-blue-600 dark:text-blue-400">Good but slow</span>
-        </div>
-        <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded text-center">
-          <span className="text-emerald-700 dark:text-emerald-300 font-medium">↗ High Vol, High Quality</span>
-          <br /><span className="text-emerald-600 dark:text-emerald-400">Top performers</span>
-        </div>
-        <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-center">
-          <span className="text-amber-700 dark:text-amber-300 font-medium">↙ Low Vol, Low Quality</span>
-          <br /><span className="text-amber-600 dark:text-amber-400">Needs training</span>
-        </div>
-        <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded text-center">
-          <span className="text-red-700 dark:text-red-300 font-medium">↘ High Vol, Low Quality</span>
-          <br /><span className="text-red-600 dark:text-red-400">Priority concern</span>
-        </div>
-      </div>
     </div>
   );
 };

@@ -5,7 +5,7 @@
  * answers are sent, and no model is called.
  */
 
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, apiFetch } from './apiBase';
 
 const authHeaders = (): HeadersInit => {
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
@@ -60,7 +60,7 @@ export async function lintForm(
   form: Record<string, unknown>,
   labelColumn?: string | null
 ): Promise<LintReport> {
-  const response = await fetch(`${API_BASE_URL}/api/lint`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/lint`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ form, label_column: labelColumn || null }),
@@ -71,7 +71,7 @@ export async function lintForm(
 
 export async function lintSurvey(surveyId: string, labelColumn?: string | null): Promise<LintReport> {
   const query = labelColumn ? `?label_column=${encodeURIComponent(labelColumn)}` : '';
-  const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/lint${query}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/lint${query}`, {
     headers: authHeaders(),
   });
   if (!response.ok) throw new Error(await readError(response, 'Could not lint this survey.'));
@@ -84,7 +84,7 @@ export async function adoptLintRules(
   isActive = true,
   labelColumn?: string | null
 ): Promise<AdoptedRule[]> {
-  const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/lint/adopt-rules`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/lint/adopt-rules`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ items, is_active: isActive, label_column: labelColumn || null }),
@@ -112,7 +112,7 @@ export async function findDkValues(
   survey: Array<Record<string, unknown>>,
   choices: Array<Record<string, unknown>>
 ): Promise<DkValue[]> {
-  const response = await fetch(`${API_BASE_URL}/api/lint/dk-values`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/lint/dk-values`, {
     method: 'POST',
     headers: authHeaders(),
     // The survey rows matter: only lists a question uses are read, exactly

@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
-import { API_BASE_URL } from '../services/apiBase';
+import { API_BASE_URL, apiFetch, setReauthHandler } from '../services/apiBase';
+import SessionExpiredDialog from '../components/SessionExpiredDialog';
 import { forgetSurveyId } from '../utils/selectedSurveyStorage';
 import { readSignupSource } from '../utils/signupSource';
 
@@ -94,8 +95,67 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [isLoading, setIsLoading] = useState(true);
+  // A request came back 401 while signed in: the sign-in dialog is open, and
+  // this settles the requests waiting on it (true: retry them).
+  const [reauthPending, setReauthPending] = useState(false);
+  const settleReauth = useRef<((signedIn: boolean) => void) | null>(null);
+  const userRef = useRef(user);
+  userRef.current = user;
 
-  // Helper to make authenticated API requests
+  useEffect(() => {
+    setReauthHandler(() => {
+      if (!userRef.current) return Promise.resolve(false);
+      return new Promise<boolean>((resolve) => {
+        settleReauth.current = resolve;
+        setReauthPending(true);
+      });
+    });
+    return () => setReauthHandler(null);
+  }, []);
+
+  /** Ask for a token for the signed-in account; throws with the server's reason. */
+  const requestToken = async (email: string, password: string): Promise<string> => {
+    const formData = new URLSearchParams();
+    formData.append('username', email); // OAuth2 expects 'username' field
+    formData.append('password', password);
+
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(await errorDetail(response, 'Login failed'));
+    }
+
+    const data = await response.json();
+    return data.access_token;
+  };
+
+  // Signing in again from the dialog keeps everything: the page, the survey
+  // selected, what was typed. Only the token changes.
+  const signInAgain = async (password: string) => {
+    if (!user) return;
+    const newToken = await requestToken(user.email, password);
+    setToken(newToken);
+    localStorage.setItem(TOKEN_KEY, newToken);
+    setReauthPending(false);
+    settleReauth.current?.(true);
+    settleReauth.current = null;
+  };
+
+  const signOutFromDialog = () => {
+    setReauthPending(false);
+    settleReauth.current?.(false);
+    settleReauth.current = null;
+    logout();
+  };
+
+  // Helper to make authenticated API requests. A 401 opens the sign-in
+  // dialog (see apiFetch); one that remains means the person signed out.
   const authFetch = async (endpoint: string, options: RequestInit = {}) => {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -106,7 +166,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await apiFetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
     });
@@ -129,7 +189,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       try {
-        const response = await authFetch('/api/users/me');
+        // On load, an expired token simply signs out: there is no work on
+        // the page to keep, so no dialog.
+        const response = await fetch(`${API_BASE_URL}/api/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
@@ -150,24 +214,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = async (email: string, password: string) => {
-    const formData = new URLSearchParams();
-    formData.append('username', email); // OAuth2 expects 'username' field
-    formData.append('password', password);
-
-    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(await errorDetail(response, 'Login failed'));
-    }
-
-    const data = await response.json();
-    const newToken = data.access_token;
+    const newToken = await requestToken(email, password);
 
     setToken(newToken);
     localStorage.setItem(TOKEN_KEY, newToken);
@@ -337,6 +384,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }}
     >
       {children}
+      {reauthPending && user && (
+        <SessionExpiredDialog email={user.email} onSignIn={signInAgain} onSignOut={signOutFromDialog} />
+      )}
     </AuthContext.Provider>
   );
 };

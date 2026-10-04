@@ -1,140 +1,94 @@
 import React, { useMemo, useState } from 'react';
 import { PerformanceData } from '../../types';
 
-type LeaderboardMetric = 'validated' | 'submissions' | 'avgIssues' | 'avgTime';
+type RankingMetric = 'avgIssues' | 'submissions' | 'avgTime' | 'approved';
 
 interface EnumeratorLeaderboardProps {
   data: PerformanceData;
   onEnumeratorClick?: (enumeratorId: string) => void;
 }
 
+// Each metric is a fact about the enumerator, ranked without a verdict: no
+// medals, no "top performers". Issues come first because they are the only
+// one here that says something about the interviews; approval only says how
+// far review has got, and active time is worth a look at both ends.
+const METRICS: Array<{ key: RankingMetric; label: string; highest: string; lowest: string }> = [
+  { key: 'avgIssues', label: 'Issues', highest: 'Most issues per submission', lowest: 'Fewest issues per submission' },
+  { key: 'submissions', label: 'Submissions', highest: 'Most submissions', lowest: 'Fewest submissions' },
+  { key: 'avgTime', label: 'Active time', highest: 'Longest active time', lowest: 'Shortest active time' },
+  { key: 'approved', label: 'Approved', highest: 'Most approved by reviewer', lowest: 'Least approved by reviewer' },
+];
+
+const MIN_SUBMISSIONS = 3;
+
 const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onEnumeratorClick }) => {
   const { collection, quality } = data;
-  const [metric, setMetric] = useState<LeaderboardMetric>('validated');
-  const [showBottom, setShowBottom] = useState(false);
+  const [metric, setMetric] = useState<RankingMetric>('avgIssues');
+  const [lowest, setLowest] = useState(false);
+
+  const value = (item: { avgIssues: number; total: number; avgActiveTime: number; approvedPercent: number }) =>
+    ({ avgIssues: item.avgIssues, submissions: item.total, avgTime: item.avgActiveTime, approved: item.approvedPercent })[metric];
 
   const rankings = useMemo(() => {
-    const combined = collection.map(c => {
-      const q = quality.find(qs => qs.id === c.id);
-      return {
-        id: c.id,
-        total: c.total,
-        validated: c.validated,
-        validatedPercent: parseFloat(c.percentValidated),
-        needsReviewPercent: parseFloat(c.percentNeedsReview),
-        avgIssues: q?.avgIssuesPerSurvey || 0,
-        avgActiveTime: q?.avgActiveTime || 0,
-        avgTotalTime: q?.avgTotalTime || 0,
-      };
-    });
+    const combined = collection
+      .filter((c) => c.total >= MIN_SUBMISSIONS)
+      .map((c) => {
+        const q = quality.find((qs) => qs.id === c.id);
+        return {
+          id: c.id,
+          total: c.total,
+          approved: c.validated,
+          approvedPercent: parseFloat(c.percentValidated),
+          avgIssues: q?.avgIssuesPerSurvey || 0,
+          avgActiveTime: q?.avgActiveTime || 0,
+        };
+      });
+    const sorted = [...combined].sort((a, b) => (lowest ? value(a) - value(b) : value(b) - value(a)));
+    return sorted.slice(0, 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collection, quality, metric, lowest]);
 
-    // Sort based on selected metric
-    const sorted = [...combined].sort((a, b) => {
-      switch (metric) {
-        case 'validated':
-          // Higher is better
-          return showBottom 
-            ? a.validatedPercent - b.validatedPercent 
-            : b.validatedPercent - a.validatedPercent;
-        case 'submissions':
-          // Higher is better
-          return showBottom 
-            ? a.total - b.total 
-            : b.total - a.total;
-        case 'avgIssues':
-          // Lower is better
-          return showBottom 
-            ? b.avgIssues - a.avgIssues 
-            : a.avgIssues - b.avgIssues;
-        case 'avgTime':
-          // Context-dependent, but moderate is usually best
-          // For simplicity, sort by time descending for "top" (most thorough)
-          return showBottom 
-            ? a.avgActiveTime - b.avgActiveTime 
-            : b.avgActiveTime - a.avgActiveTime;
-        default:
-          return 0;
-      }
-    });
-
-    // Filter out enumerators with less than 3 submissions for fair comparison
-    const eligible = sorted.filter(e => e.total >= 3);
-    return eligible.slice(0, 5);
-  }, [collection, quality, metric, showBottom]);
-
-  const getMetricDisplay = (item: typeof rankings[0]) => {
+  const display = (item: (typeof rankings)[0]): { value: string; sublabel: string } => {
     switch (metric) {
-      case 'validated':
-        return {
-          value: `${item.validatedPercent}%`,
-          sublabel: `${item.validated} of ${item.total}`,
-          color: item.validatedPercent >= 80 ? 'text-emerald-600 dark:text-emerald-400' : 
-                 item.validatedPercent >= 60 ? 'text-amber-600 dark:text-amber-400' : 
-                 'text-red-600 dark:text-red-400'
-        };
-      case 'submissions':
-        return {
-          value: item.total.toString(),
-          sublabel: `${item.validatedPercent}% validated`,
-          color: 'text-indigo-600 dark:text-indigo-400'
-        };
       case 'avgIssues':
-        return {
-          value: item.avgIssues.toFixed(2),
-          sublabel: `per submission`,
-          color: item.avgIssues < 1 ? 'text-emerald-600 dark:text-emerald-400' : 
-                 item.avgIssues < 2 ? 'text-amber-600 dark:text-amber-400' : 
-                 'text-red-600 dark:text-red-400'
-        };
+        return { value: item.avgIssues.toFixed(2), sublabel: `per submission, of ${item.total}` };
+      case 'submissions':
+        return { value: item.total.toString(), sublabel: 'submissions' };
       case 'avgTime':
-        return {
-          value: `${item.avgActiveTime} min`,
-          sublabel: `active time`,
-          color: 'text-blue-600 dark:text-blue-400'
-        };
+        return { value: `${item.avgActiveTime} min`, sublabel: 'average active time' };
+      case 'approved':
+        return { value: `${item.approvedPercent}%`, sublabel: `${item.approved} of ${item.total} approved` };
     }
   };
 
-  const getMedalColor = (rank: number): string => {
-    if (showBottom) return 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300';
-    
-    switch (rank) {
-      case 0: return 'bg-amber-400 text-amber-900';
-      case 1: return 'bg-gray-300 text-gray-700';
-      case 2: return 'bg-amber-600 text-amber-100';
-      default: return 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300';
-    }
-  };
+  const current = METRICS.find((m) => m.key === metric)!;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800 w-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-          {showBottom ? 'Bottom 5' : 'Top 5'} Performers
+          {lowest ? current.lowest : current.highest}
         </h3>
         <button
-          onClick={() => setShowBottom(!showBottom)}
-          className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          type="button"
+          onClick={() => setLowest(!lowest)}
+          className="flex-shrink-0 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
         >
-          Show {showBottom ? 'Top' : 'Bottom'}
+          Show {lowest ? 'highest' : 'lowest'}
         </button>
       </div>
 
-      {/* Metric Selector */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {[
-          { key: 'validated', label: 'Validation Rate' },
-          { key: 'submissions', label: 'Volume' },
-          { key: 'avgIssues', label: 'Fewest Issues' },
-          { key: 'avgTime', label: 'Active Time' },
-        ].map(m => (
+      <div className="flex flex-wrap gap-2 mb-4" role="group" aria-label="Rank by">
+        {METRICS.map((m) => (
           <button
             key={m.key}
-            onClick={() => setMetric(m.key as LeaderboardMetric)}
+            type="button"
+            onClick={() => setMetric(m.key)}
+            aria-pressed={metric === m.key}
             className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
               metric === m.key
                 ? 'bg-indigo-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
             {m.label}
@@ -142,51 +96,47 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
         ))}
       </div>
 
-      {/* Rankings List */}
-      <div className="space-y-2 flex-1 overflow-y-auto">
+      <ol className="space-y-2 flex-1 overflow-y-auto">
         {rankings.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
-            Need at least 3 submissions to rank
-          </p>
+          <li className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
+            No enumerator has {MIN_SUBMISSIONS} submissions yet.
+          </li>
         ) : (
           rankings.map((item, index) => {
-            const display = getMetricDisplay(item);
+            const shown = display(item);
+            const content = (
+              <>
+                <span className="tabular w-6 flex-shrink-0 text-center text-sm text-gray-500 dark:text-gray-400">{index + 1}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block font-medium text-gray-900 dark:text-white truncate">{item.id}</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">{shown.sublabel}</span>
+                </span>
+                <span className="tabular text-base font-semibold text-gray-900 dark:text-white">{shown.value}</span>
+              </>
+            );
             return (
-              <div
-                key={item.id}
-                onClick={() => onEnumeratorClick?.(item.id)}
-                className={`flex items-center gap-3 p-2 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${
-                  onEnumeratorClick ? 'cursor-pointer' : ''
-                }`}
-              >
-                {/* Rank Badge */}
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${getMedalColor(index)}`}>
-                  {index + 1}
-                </div>
-                
-                {/* Enumerator Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 dark:text-white truncate">
-                    {item.id}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {display.sublabel}
-                  </div>
-                </div>
-                
-                {/* Metric Value */}
-                <div className={`text-lg font-bold ${display.color}`}>
-                  {display.value}
-                </div>
-              </div>
+              <li key={item.id}>
+                {onEnumeratorClick ? (
+                  <button
+                    type="button"
+                    onClick={() => onEnumeratorClick(item.id)}
+                    className="flex w-full items-center gap-3 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    title={`See ${item.id}'s submissions`}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 dark:bg-gray-800">{content}</div>
+                )}
+              </li>
             );
           })
         )}
-      </div>
-      
+      </ol>
+
       {rankings.length > 0 && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-3 text-center">
-          Based on enumerators with ≥3 submissions
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">
+          Enumerators with at least {MIN_SUBMISSIONS} submissions
         </p>
       )}
     </div>

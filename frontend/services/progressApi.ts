@@ -1,7 +1,7 @@
 
 import { ProgressData, PerformanceData, SamplingMode } from '../types';
 
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, apiFetch } from './apiBase';
 
 // Helper to get auth token from localStorage
 const getAuthToken = (): string | null => {
@@ -143,7 +143,7 @@ export interface SurveyCreate {
  */
 export const getSurveys = async (): Promise<Survey[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys`, {
       headers: createAuthHeaders(),
     });
     
@@ -181,7 +181,7 @@ export const progressApi = {
       }
 
       const url = `${API_BASE_URL}/api/progress?${params.toString()}`;
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         headers: createAuthHeaders(),
       });
       
@@ -211,7 +211,7 @@ export const progressApi = {
       params.append('survey_id', surveyId);
 
       const url = `${API_BASE_URL}/api/performance?${params.toString()}`;
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         headers: createAuthHeaders(),
       });
       
@@ -233,7 +233,7 @@ export const progressApi = {
  */
 export const getSurveyConfig = async (surveyId: string): Promise<SurveyConfig & { permission?: string; is_owner?: boolean }> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
       headers: createAuthHeaders(),
     });
     
@@ -254,7 +254,7 @@ export const getSurveyConfig = async (surveyId: string): Promise<SurveyConfig & 
  */
 export const createSurvey = async (surveyData: SurveyCreate): Promise<SurveyConfig> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys`, {
       method: 'POST',
       headers: createAuthHeaders(),
       body: JSON.stringify(surveyData),
@@ -281,7 +281,7 @@ export const updateSurvey = async (
   updates: Partial<SurveyCreate>
 ): Promise<SurveyConfig> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
       method: 'PUT',
       headers: createAuthHeaders(),
       body: JSON.stringify(updates),
@@ -305,7 +305,7 @@ export const updateSurvey = async (
  */
 export const deleteSurvey = async (surveyId: string): Promise<void> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
       method: 'DELETE',
       headers: createAuthHeaders(),
     });
@@ -325,7 +325,7 @@ export const deleteSurvey = async (surveyId: string): Promise<void> => {
  * Returns how many submissions will be re-checked.
  */
 export const rerunAiChecks = async (surveyId: string): Promise<number> => {
-  const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/ai-checks/rerun`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/ai-checks/rerun`, {
     method: 'POST',
     headers: createAuthHeaders(),
   });
@@ -346,7 +346,7 @@ export const rerunAiChecks = async (surveyId: string): Promise<number> => {
  */
 export const getSurveyAccess = async (surveyId: string): Promise<SurveyAccessEntry[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/access`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/access`, {
       headers: createAuthHeaders(),
     });
     
@@ -372,7 +372,7 @@ export const shareSurvey = async (
   permissionLevel: 'editor' | 'viewer'
 ): Promise<SurveyAccessEntry> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/access`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/access`, {
       method: 'POST',
       headers: createAuthHeaders(),
       body: JSON.stringify({ email, permission_level: permissionLevel }),
@@ -400,7 +400,7 @@ export const updateSurveyAccess = async (
   permissionLevel: 'editor' | 'viewer'
 ): Promise<void> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/access/${userId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/access/${userId}`, {
       method: 'PUT',
       headers: createAuthHeaders(),
       body: JSON.stringify({ permission_level: permissionLevel }),
@@ -421,7 +421,7 @@ export const updateSurveyAccess = async (
  */
 export const revokeSurveyAccess = async (surveyId: string, userId: string): Promise<void> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/access/${userId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/access/${userId}`, {
       method: 'DELETE',
       headers: createAuthHeaders(),
     });
@@ -485,7 +485,7 @@ export interface ValidationRuleUpdate {
  */
 export const getValidationRules = async (surveyId: string): Promise<ValidationRule[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules`, {
       headers: createAuthHeaders(),
     });
     
@@ -509,7 +509,7 @@ export const createValidationRule = async (
   ruleData: ValidationRuleCreate
 ): Promise<ValidationRule> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules`, {
       method: 'POST',
       headers: createAuthHeaders(),
       body: JSON.stringify(ruleData),
@@ -537,7 +537,7 @@ export const updateValidationRule = async (
   updates: ValidationRuleUpdate
 ): Promise<ValidationRule> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules/${ruleId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules/${ruleId}`, {
       method: 'PUT',
       headers: createAuthHeaders(),
       body: JSON.stringify(updates),
@@ -561,7 +561,7 @@ export const updateValidationRule = async (
  */
 export const deleteValidationRule = async (surveyId: string, ruleId: string): Promise<void> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules/${ruleId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules/${ruleId}`, {
       method: 'DELETE',
       headers: createAuthHeaders(),
     });
@@ -572,75 +572,6 @@ export const deleteValidationRule = async (surveyId: string, ruleId: string): Pr
     }
   } catch (error) {
     console.error('Error deleting validation rule:', error);
-    throw error;
-  }
-};
-
-// ============================================================================
-// ETL Pipeline API
-// ============================================================================
-
-export interface ETLStats {
-  fetched: number;
-  created: number;
-  updated: number;
-  edited: number;
-  validated: number;  // Number of submissions that went through validation checks
-  skipped: number;    // Number of submissions that skipped validation (incremental optimization)
-  validation_reasons?: Record<string, number>;  // Breakdown of why submissions were validated
-  llm_queued?: number;
-  llm_skipped?: number;
-  llm_not_run_allowance?: number;  // AI checks held back: included usage used up for the month
-  llm_paused?: number;  // AI checks not sent: the survey's own provider is paused
-  hfc_flagged: number;
-  errors: number;
-  duration_seconds: number;
-}
-
-/**
- * Trigger ETL pipeline for a survey
- * This will:
- * 1. Fetch submissions from KoboToolbox API
- * 2. Merge submissions (with edit detection)
- * 3. Run High-Frequency Checks (HFC)
- * 4. Update database with results
- * 
- * Note: If authenticated, will use the user's configured Kobo API key.
- * Otherwise, falls back to server-side KOBO_API_TOKEN environment variable.
- * 
- * @param surveyId Survey ID (UUID string)
- * @param limit Optional limit on number of submissions to process
- * @param startDate Optional start date (YYYY-MM-DD format) - only process submissions after this date
- */
-export const triggerETL = async (
-  surveyId: string,
-  limit?: number,
-  startDate?: string
-): Promise<ETLStats> => {
-  try {
-    const params = new URLSearchParams();
-    if (limit) {
-      params.append('limit', limit.toString());
-    }
-    if (startDate) {
-      params.append('start_date', startDate);
-    }
-
-    const url = `${API_BASE_URL}/api/etl/run/${surveyId}${params.toString() ? `?${params}` : ''}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: createAuthHeaders(), // Include auth token for per-user Kobo API key
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to trigger ETL: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.data as ETLStats;
-  } catch (error) {
-    console.error('Error triggering ETL:', error);
     throw error;
   }
 };
