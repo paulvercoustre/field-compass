@@ -226,10 +226,10 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
           <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
-            Check this form for best practices
+            Form readiness check
           </h2>
           <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-            Finds form issues that would switch off quality checks or let errors through.
+            Is this form ready for fieldwork? Finds form issues that would switch off quality checks or let errors through.
           </p>
         </div>
         <button

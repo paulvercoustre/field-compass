@@ -9,7 +9,10 @@ rewritten, so the single-string form stays live indefinitely.
 from etl.dk_utils import (
     build_eligible_dk_question_index,
     compute_dk_metrics,
+    describe_dk_codes,
     describe_dk_strings,
+    dk_codes_fingerprint,
+    dk_numeric_codes,
     dk_string_tokens,
     is_dk_value,
 )
@@ -40,43 +43,85 @@ class TestIsDkValue:
     tokens = {"dont_know", "dk"}
 
     def test_matches_any_configured_string(self):
-        assert is_dk_value("dont_know", -99, self.tokens)
-        assert is_dk_value("dk", -99, self.tokens)
+        assert is_dk_value("dont_know", [-99], self.tokens)
+        assert is_dk_value("dk", [-99], self.tokens)
 
     def test_matches_regardless_of_case(self):
         """The enumerator screen used a raw `==` and missed these."""
-        assert is_dk_value("DK", -99, self.tokens)
-        assert is_dk_value(" Dont_Know ", -99, self.tokens)
+        assert is_dk_value("DK", [-99], self.tokens)
+        assert is_dk_value(" Dont_Know ", [-99], self.tokens)
 
     def test_matches_inside_a_select_multiple_answer(self):
-        assert is_dk_value("option_a dk option_b", -99, self.tokens)
+        assert is_dk_value("option_a dk option_b", [-99], self.tokens)
 
     def test_matches_the_numeric_code_as_number_or_text(self):
-        assert is_dk_value(-99, -99, self.tokens)
-        assert is_dk_value("-99", -99, self.tokens)
+        assert is_dk_value(-99, [-99], self.tokens)
+        assert is_dk_value("-99", [-99], self.tokens)
+
+    def test_matches_any_of_several_numeric_codes(self):
+        """Modules from different teams can code DK as both -99 and -999."""
+        assert is_dk_value(-99, [-99, -999], set())
+        assert is_dk_value(-999.0, [-99, -999], set())
+        assert is_dk_value("-999", [-99, -999], set())
+        assert not is_dk_value(-98, [-99, -999], set())
+
+    def test_no_numeric_code_counts_no_number(self):
+        assert not is_dk_value(-99, [], set())
+        assert not is_dk_value("-99", [], self.tokens)
 
     def test_does_not_match_a_substring(self):
         """`dkother` is a different answer option, not a don't-know."""
-        assert not is_dk_value("dkother", -99, self.tokens)
-        assert not is_dk_value("no_dk", -99, self.tokens)
+        assert not is_dk_value("dkother", [-99], self.tokens)
+        assert not is_dk_value("no_dk", [-99], self.tokens)
 
     def test_ordinary_answers_are_not_dk(self):
-        assert not is_dk_value("yes", -99, self.tokens)
-        assert not is_dk_value(None, -99, self.tokens)
-        assert not is_dk_value(5, -99, self.tokens)
+        assert not is_dk_value("yes", [-99], self.tokens)
+        assert not is_dk_value(None, [-99], self.tokens)
+        assert not is_dk_value(5, [-99], self.tokens)
 
     def test_nothing_configured_counts_nothing(self):
         assert not is_dk_value("dk", None, set())
 
     def test_list_values(self):
-        assert is_dk_value(["yes", "dk"], -99, self.tokens)
-        assert not is_dk_value(["yes", "no"], -99, self.tokens)
+        assert is_dk_value(["yes", "dk"], [-99], self.tokens)
+        assert not is_dk_value(["yes", "no"], [-99], self.tokens)
 
     def test_whole_answer_only_when_not_split(self):
         """Free text mentioning `dk` is a real answer."""
-        assert not is_dk_value("call the dk office", -99, self.tokens, split_multiple=False)
-        assert is_dk_value(" DK ", -99, self.tokens, split_multiple=False)
-        assert is_dk_value("-99", -99, self.tokens, split_multiple=False)
+        assert not is_dk_value("call the dk office", [-99], self.tokens, split_multiple=False)
+        assert is_dk_value(" DK ", [-99], self.tokens, split_multiple=False)
+        assert is_dk_value("-99", [-99], self.tokens, split_multiple=False)
+
+
+class TestDkNumericCodes:
+    def test_reads_a_stored_single_number(self):
+        """Configs written before this was a list must keep their code."""
+        assert dk_numeric_codes({"dk_value": -99}) == [-99]
+
+    def test_reads_a_list(self):
+        assert dk_numeric_codes({"dk_value": [-99, -999]}) == [-99, -999]
+
+    def test_empty_or_null_means_none(self):
+        """Optional: a survey can have no numeric DK code at all."""
+        assert dk_numeric_codes({"dk_value": []}) == []
+        assert dk_numeric_codes({"dk_value": None}) == []
+
+    def test_never_set_keeps_the_old_default(self):
+        assert dk_numeric_codes({}) == [-99]
+        assert dk_numeric_codes(None) == [-99]
+
+    def test_normalises_text_floats_and_duplicates(self):
+        assert dk_numeric_codes({"dk_value": ["-99", -99.0, " -999 ", "abc", True]}) == [-99, -999]
+
+    def test_one_code_fingerprints_as_the_bare_number(self):
+        """So surveys keeping one code are not all revalidated by the upgrade."""
+        assert dk_codes_fingerprint([-99]) == -99
+        assert dk_codes_fingerprint([-999, -99]) == [-999, -99]
+        assert dk_codes_fingerprint([]) == []
+
+    def test_describe(self):
+        assert describe_dk_codes([-99, -999]) == "-99 or -999"
+        assert describe_dk_codes([]) == "(none configured)"
 
 
 class TestDescribeDkStrings:

@@ -124,7 +124,7 @@ def _check(service):
     return service.check_qualitative_responses(
         field_values={"comments": "fine"},
         question_contexts={"comments": "Comments"},
-        dk_numeric=-99,
+        dk_codes=[-99],
         dk_string="dk",
         check_types=["relevance"],
     )
@@ -481,7 +481,7 @@ def test_prompt_names_dk_strings_not_a_python_list():
     service.check_qualitative_responses(
         field_values={"comments": "fine"},
         question_contexts={"comments": "Comments"},
-        dk_numeric=-99,
+        dk_codes=[-99],
         dk_string=["dk", "dont_know"],
         check_types=["relevance"],
     )

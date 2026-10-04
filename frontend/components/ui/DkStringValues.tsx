@@ -102,7 +102,7 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
             </div>
           ) : (
             <p className="text-sm text-gray-500 mb-2">
-              {readOnly ? '—' : 'None set — don\'t-know rates will count the numeric code only.'}
+              {readOnly ? '—' : 'None set — don\'t-know rates will count numeric codes only.'}
             </p>
           )
   );

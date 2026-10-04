@@ -208,6 +208,11 @@ class TestSpecialValueClassification:
         assert classify_text("hh_size_dk") == DONT_KNOW
         assert classify_text("income_na") == NOT_APPLICABLE
 
+    def test_two_coded_edges_settle_in_category_order(self):
+        """Not by set order, which changes with each process's hash seed."""
+        assert classify_text("dk_na") == DONT_KNOW
+        assert classify_text("na_dk") == DONT_KNOW
+
     def test_typos_still_classify(self):
         assert classify_text("refusd") == REFUSED
         assert classify_text("dont knwo") == DONT_KNOW

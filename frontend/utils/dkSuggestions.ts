@@ -95,3 +95,45 @@ export const readDkValues = (stored: string | string[] | null | undefined): stri
 /** Same values in the same order, ignoring case -- for dirty checks. */
 export const sameDkValues = (a: string[], b: string[]): boolean =>
   a.length === b.length && a.every((value, i) => value.toLowerCase() === b[i].toLowerCase());
+
+/** What a config that never set `dk_value` has always been read as. */
+const LEGACY_DK_CODE = -99;
+
+/**
+ * Read `dk_value` in any shape: one number, a list, or nothing.
+ *
+ * An empty list or null means the survey has no numeric don't-know code; a
+ * config that never set the key keeps the -99 it always had -- mirroring
+ * `dk_numeric_codes()` in backend/etl/dk_utils.py.
+ */
+export const readDkCodes = (stored: number | string | Array<number | string> | null | undefined): number[] => {
+  if (stored === undefined) {
+    return [LEGACY_DK_CODE];
+  }
+  if (stored === null) {
+    return [];
+  }
+  const values = Array.isArray(stored) ? stored : [stored];
+  const codes: number[] = [];
+  for (const value of values) {
+    const code = parseDkCode(String(value));
+    if (code !== null && !codes.includes(code)) {
+      codes.push(code);
+    }
+  }
+  return codes;
+};
+
+/** A typed code as a number, or null when it is not one. */
+export const parseDkCode = (typed: string): number | null => {
+  const trimmed = typed.trim();
+  if (trimmed === '') {
+    return null;
+  }
+  const code = Number(trimmed);
+  return Number.isFinite(code) ? code : null;
+};
+
+/** Same codes in the same order -- for dirty checks. */
+export const sameDkCodes = (a: number[], b: number[]): boolean =>
+  a.length === b.length && a.every((code, i) => code === b[i]);

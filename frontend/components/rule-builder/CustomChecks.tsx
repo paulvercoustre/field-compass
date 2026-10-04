@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { KoboToolData, StagedRule } from '../../types';
 import { generateRuleFromNaturalLanguage } from '../../services/aiApi';
 import RuleEditor from './RuleEditor';
@@ -19,8 +19,6 @@ interface CustomChecksProps {
   onSave: (rule: Omit<StagedRule, 'id'>, ruleId: string | null) => Promise<void>;
   onDelete: (ruleId: string) => Promise<void>;
   onAddMany: (rules: StagedRule[]) => Promise<void>;
-  /** Opens the composer on arrival, e.g. right after a survey is created. */
-  startComposing?: boolean;
 }
 
 type Panel = 'none' | 'compose' | 'suggest';
@@ -54,7 +52,6 @@ const CustomChecks: React.FC<CustomChecksProps> = ({
   onSave,
   onDelete,
   onAddMany,
-  startComposing = false,
 }) => {
   const [panel, setPanel] = useState<Panel>('none');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -68,15 +65,6 @@ const CustomChecks: React.FC<CustomChecksProps> = ({
   const [aiError, setAiError] = useState<string | null>(null);
 
   const canCompose = canEdit && !!koboToolData;
-
-  // The form usually arrives after this mounts; open the composer once it does.
-  const openedOnArrival = useRef(false);
-  useEffect(() => {
-    if (startComposing && canCompose && !openedOnArrival.current) {
-      openedOnArrival.current = true;
-      setPanel('compose');
-    }
-  }, [startComposing, canCompose]);
 
   const closePanel = () => {
     setPanel('none');

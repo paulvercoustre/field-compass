@@ -26,6 +26,11 @@ from services.permissions import require_survey_access
 
 router = APIRouter()
 
+# The endpoints are plain `def`: linting, and the Kobo fetch an old stored
+# form needs, are synchronous, and FastAPI runs `def` endpoints in a thread
+# pool. As `async def` they ran on the event loop and stalled every other
+# request until the check finished.
+
 
 class LintFormRequest(BaseModel):
     form: dict[str, Any] = Field(..., description="kobo_tool, asset content, or asset payload")
@@ -111,7 +116,7 @@ def _rule_payload(rule: ValidationRule, *, created: bool) -> dict[str, Any]:
 
 
 @router.post("/lint")
-async def lint_form_payload(
+def lint_form_payload(
     payload: LintFormRequest,
     current_user: User = Depends(get_current_active_user),
 ):
@@ -126,7 +131,7 @@ async def lint_form_payload(
 
 
 @router.post("/lint/dk-values")
-async def dk_values_for_form(
+def dk_values_for_form(
     payload: DkValuesRequest,
     current_user: User = Depends(get_current_active_user),
 ):
@@ -147,7 +152,7 @@ async def dk_values_for_form(
 
 
 @router.get("/surveys/{survey_id}/lint")
-async def lint_survey(
+def lint_survey(
     survey_id: str,
     label_column: str | None = None,
     db: Session = Depends(get_db),
@@ -168,7 +173,7 @@ async def lint_survey(
 
 
 @router.post("/surveys/{survey_id}/lint/adopt-rules")
-async def adopt_lint_rules(
+def adopt_lint_rules(
     survey_id: str,
     payload: AdoptRulesRequest,
     db: Session = Depends(get_db),

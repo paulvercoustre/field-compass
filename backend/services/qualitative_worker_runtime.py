@@ -174,7 +174,7 @@ def run_qualitative_check_job(
                 llm_results = ai_service.check_qualitative_responses(
                     field_values=field_values,
                     question_contexts=question_contexts,
-                    dk_numeric=engine.dk_value,
+                    dk_codes=engine.dk_codes,
                     dk_string=engine.dk_string_value,
                     check_types=engine.llm_check_types,
                     record=usage_recorder(
