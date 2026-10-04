@@ -41,7 +41,11 @@
 		# then calls a DIFFERENT origin, and 'self' alone would block every
 		# request -- login included -- before CORS was ever consulted. Leave
 		# API_ORIGIN empty whenever VITE_API_URL is "/api" (same-origin).
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' {$API_ORIGIN:}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		#
+		# media-src allows blob: because recordings are fetched with the
+		# user's token and played from an object URL; under default-src
+		# alone the <audio> player appears but never loads.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self' {$API_ORIGIN:}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 	}
 
 	# Sampling-frame uploads (CSV/XLSX) need headroom. nginx's 1MB default
