@@ -19,9 +19,11 @@ different answers, and treating them as one convention reported every form
 that had both as inconsistently coded.
 """
 
+from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from functools import lru_cache
 
 from forms.schema import Choice, FormSchema, Question
 from linter.questions import SELECT_TYPES, normalize_text
@@ -128,22 +130,60 @@ def _contains_phrase(text: str, phrase: str) -> bool:
     return f" {phrase} " in f" {text} "
 
 
+@lru_cache(maxsize=262144)
 def _fuzzy_matches(text: str, phrase: str) -> bool:
-    if len(text) < _FUZZY_MIN_LENGTH or len(phrase) < _FUZZY_MIN_LENGTH:
+    """
+    Whether ``text`` is a typo of ``phrase``.
+
+    A full ``ratio()`` is slow, and a form makes hundreds of thousands of
+    these comparisons -- every option, in every language, against every
+    phrase -- which made the form check take most of a minute. Words repeat
+    across options, so results are cached; and almost all of
+    them are settled by bounds that never undercount: the ratio cannot exceed
+    what the two lengths allow, nor what the letters they share allow
+    (``quick_ratio``). Only the few left get the full comparison, so the
+    result is exactly what ``ratio()`` alone would give.
+    """
+    text_length, phrase_length = len(text), len(phrase)
+    if text_length < _FUZZY_MIN_LENGTH or phrase_length < _FUZZY_MIN_LENGTH:
+        return False
+    total = text_length + phrase_length
+    if 2 * min(text_length, phrase_length) / total < _FUZZY_THRESHOLD:
+        return False
+    text_letters = _letters(text)
+    shared = sum(min(count, text_letters[letter]) for letter, count in _letters(phrase).items())
+    if 2 * shared / total < _FUZZY_THRESHOLD:
         return False
     return SequenceMatcher(None, text, phrase).ratio() >= _FUZZY_THRESHOLD
+
+
+@lru_cache(maxsize=65536)
+def _letters(text: str) -> Counter[str]:
+    """Letter counts, for the shared-letters bound (``quick_ratio``) above."""
+    return Counter(text)
 
 
 def classify_text(value: str | None) -> str | None:
     """
     The category ``value`` expresses, or None when it reads as a real answer.
 
+    Cached: forms repeat the same options (yes, no, don't know) across many
+    lists, and the checks, the DK suggestions and re-runs all classify them.
+    """
+    return _classify_text(value or "")
+
+
+@lru_cache(maxsize=65536)
+def _classify_text(value: str) -> str | None:
+    """
+    Uncached :func:`classify_text`.
+
     Categories are tested in :data:`CATEGORY_LABELS` order, so a label reading
     "Don't know / refused" is reported as don't-know.
     """
     # Tested before normalizing, which strips the sign that tells `-99` and
     # `99` apart.
-    if _is_numeric_sentinel(value or ""):
+    if _is_numeric_sentinel(value):
         return DONT_KNOW
 
     normalized = normalize_text(value)
@@ -163,14 +203,49 @@ def classify_text(value: str | None) -> str | None:
         if category is not None:
             return category
 
+    # The whole text against every phrase; each word only against the
+    # one-word phrases.
+    matches = {
+        phrase for phrase in _phrases_of_length(len(normalized)) if _fuzzy_matches(normalized, phrase)
+    }
+    for token in set(tokens):
+        matches |= _fuzzy_word_matches(token)
     for category in CATEGORY_LABELS:
         for phrase in _PHRASES[category]:
-            if _fuzzy_matches(normalized, phrase):
-                return category
-            if " " not in phrase and any(_fuzzy_matches(token, phrase) for token in tokens):
+            if phrase in matches:
                 return category
 
     return None
+
+
+_ALL_PHRASES = tuple(phrase for phrases in _PHRASES.values() for phrase in phrases)
+
+
+@lru_cache(maxsize=256)
+def _phrases_of_length(length: int, one_word: bool = False) -> tuple[str, ...]:
+    """
+    The phrases a text of ``length`` could be a typo of.
+
+    Two strings whose lengths differ too much cannot reach the threshold
+    (the first bound in :func:`_fuzzy_matches`), so most phrases are never
+    compared at all.
+    """
+    return tuple(
+        phrase
+        for phrase in _ALL_PHRASES
+        if (not one_word or " " not in phrase)
+        and 2 * min(length, len(phrase)) / (length + len(phrase)) >= _FUZZY_THRESHOLD
+    )
+
+
+@lru_cache(maxsize=65536)
+def _fuzzy_word_matches(word: str) -> frozenset[str]:
+    """The one-word phrases ``word`` is a typo of; cached, as words repeat."""
+    return frozenset(
+        phrase
+        for phrase in _phrases_of_length(len(word), one_word=True)
+        if _fuzzy_matches(word, phrase)
+    )
 
 
 def classify_choice(choice: Choice) -> str | None:
