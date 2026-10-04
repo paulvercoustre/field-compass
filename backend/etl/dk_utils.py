@@ -42,6 +42,61 @@ def dk_string_tokens(special_values: dict[str, Any] | None) -> set[str]:
     return {_normalize_token(v) for v in values if v is not None and str(v).strip()}
 
 
+# What a survey whose config never set `dk_value` has always been read as.
+LEGACY_DK_CODE = -99
+
+
+def _as_number(raw: Any) -> int | float | None:
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int | float):
+        number = raw
+    else:
+        try:
+            number = float(str(raw).strip())
+        except ValueError:
+            return None
+    # `-99.0` and `-99` are one code, and Kobo sends it as the text "-99".
+    return int(number) if float(number).is_integer() else number
+
+
+def dk_numeric_codes(special_values: dict[str, Any] | None) -> list[int | float]:
+    """
+    The numbers this survey counts as "don't know", e.g. `[-99, -999]`.
+
+    `dk_value` holds one number, a list of them, or nothing. A survey can
+    have none -- its numeric questions take no DK code -- or several, when
+    modules were written by different teams. An empty list or `None` means
+    none; a config that never set the key keeps the -99 it always had.
+    """
+    sv = special_values or {}
+    if "dk_value" not in sv:
+        return [LEGACY_DK_CODE]
+    raw = sv.get("dk_value")
+    values = raw if isinstance(raw, list) else [raw]
+    codes: list[int | float] = []
+    for value in values:
+        number = _as_number(value) if value is not None else None
+        if number is not None and number not in codes:
+            codes.append(number)
+    return codes
+
+
+def dk_codes_fingerprint(codes: list[int | float]) -> Any:
+    """
+    The codes as they go into a config hash.
+
+    One code hashes as the bare number it was stored as before lists, so
+    surveys that keep a single code are not all revalidated by the upgrade.
+    """
+    return codes[0] if len(codes) == 1 else sorted(codes)
+
+
+def describe_dk_codes(codes: list[int | float]) -> str:
+    """The numeric DK codes as prompt text: `-99 or -999`."""
+    return " or ".join(str(code) for code in codes) if codes else "(none configured)"
+
+
 def describe_dk_strings(dk_string_value: Any) -> str:
     """
     The configured DK strings as prompt text: `"dk" or "dont_know"`.
@@ -55,14 +110,18 @@ def describe_dk_strings(dk_string_value: Any) -> str:
 
 
 def is_dk_value(
-    value: Any, dk_value: Any, dk_tokens: set[str], *, split_multiple: bool = True
+    value: Any,
+    dk_codes: list[int | float] | None,
+    dk_tokens: set[str],
+    *,
+    split_multiple: bool = True,
 ) -> bool:
     """
     Whether one submitted value means "don't know".
 
-    Compares against every configured string, and against `dk_value` itself --
-    a numeric DK code often arrives as text, depending on the question type it
-    was answered under.
+    Compares against every configured string, and against each numeric code
+    in `dk_codes` -- a numeric DK code often arrives as text, depending on the
+    question type it was answered under.
 
     With `split_multiple`, a string is also read as a space-delimited
     `select_multiple` answer, so `"rice dk"` counts. Pass False when the value
@@ -72,13 +131,14 @@ def is_dk_value(
     if value is None:
         return False
 
+    codes = dk_codes or []
+
     # Numeric DK.
-    if isinstance(value, int | float) and dk_value is not None and value == dk_value:
+    if isinstance(value, int | float) and not isinstance(value, bool) and value in codes:
         return True
 
     tokens = set(dk_tokens)
-    if dk_value is not None:
-        tokens.add(_normalize_token(dk_value))
+    tokens.update(_normalize_token(code) for code in codes)
     tokens.discard("")
     if not tokens:
         return False
@@ -95,7 +155,7 @@ def is_dk_value(
     # Defensive handling if list values appear.
     if isinstance(value, list):
         return any(
-            is_dk_value(item, dk_value, dk_tokens, split_multiple=split_multiple) for item in value
+            is_dk_value(item, codes, dk_tokens, split_multiple=split_multiple) for item in value
         )
 
     return False
@@ -131,14 +191,11 @@ def build_eligible_dk_question_index(config_data: dict[str, Any]) -> EligibleDKI
     choices_sheet = kobo_tool.get("choices", []) or []
     special_values = (config_data or {}).get("special_values", {}) or {}
 
-    dk_value = special_values.get("dk_value")
-
     dk_tokens = dk_string_tokens(special_values)
-    if dk_value is not None:
-        dk_tokens.add(_normalize_token(dk_value))
+    dk_tokens.update(_normalize_token(code) for code in dk_numeric_codes(special_values))
 
     # If no DK token is configured, no select question can be considered DK-eligible.
-    # integer/decimal/text remain eligible because DK can still be represented as dk_value.
+    # integer/decimal/text remain eligible because DK can still be represented as a numeric code.
     choices_by_list: dict[str, set[str]] = {}
     for choice in choices_sheet:
         list_name = choice.get("list_name")
@@ -242,7 +299,7 @@ def compute_dk_metrics(
         return (0, 0, None)
 
     special_values = special_values or {}
-    dk_value = special_values.get("dk_value")
+    dk_codes = dk_numeric_codes(special_values)
     dk_tokens = dk_string_tokens(special_values)
 
     dk_count = 0
@@ -257,7 +314,7 @@ def compute_dk_metrics(
 
         dk_eligible_count += 1
         if is_dk_value(
-            value, dk_value, dk_tokens, split_multiple=field_name in select_multiple_names
+            value, dk_codes, dk_tokens, split_multiple=field_name in select_multiple_names
         ):
             dk_count += 1
 

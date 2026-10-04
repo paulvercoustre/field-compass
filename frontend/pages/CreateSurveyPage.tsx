@@ -13,15 +13,14 @@ import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import QualityCheckPromptModal from '../components/QualityCheckPromptModal';
-import FieldLabel from '../components/ui/FieldLabel';
 import { parseKoboAssetId, labelColumnFor } from '../utils/koboUrl';
 import { getKoboProjectForm, KoboProject } from '../services/api';
-import { CORE_IDENTIFIER_HINTS } from '../constants/coreIdentifiers';
 import KoboProjectPicker from '../components/ui/KoboProjectPicker';
 import CollectionTargets, { totalFromFrameRows } from '../components/ui/CollectionTargets';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import { autoFillIdentifier } from '../utils/identifierSuggestions';
 import DkStringValues from '../components/ui/DkStringValues';
+import DkNumericCodes from '../components/ui/DkNumericCodes';
 import { findDkValues } from '../services/lintApi';
 import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
@@ -99,7 +98,8 @@ const CreateSurveyPage: React.FC = () => {
     targets_by_value: {} as Record<string, number>,
   });
   const [specialValues, setSpecialValues] = useState({
-    dk_value: -99,
+    // The common convention, pre-filled; removable, as a form may have none.
+    dk_value: [-99] as number[],
     // Empty until a form is read: `dk` was a blind default like the identifier
     // ones, set whether or not the form had such an option.
     dk_string_value: [] as string[],
@@ -764,15 +764,10 @@ const CreateSurveyPage: React.FC = () => {
                 helpKey="consent"
                 availableVariables={availableVariables}
               />
-              <div className="field-cell">
-                <FieldLabel hint={CORE_IDENTIFIER_HINTS.dk_value}>Don't know — numeric code</FieldLabel>
-                <input
-                  type="number"
-                  value={specialValues.dk_value}
-                  onChange={(e) => setSpecialValues({ ...specialValues, dk_value: parseInt(e.target.value) || -99 })}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
+              <DkNumericCodes
+                codes={specialValues.dk_value}
+                onChange={(codes) => setSpecialValues({ ...specialValues, dk_value: codes })}
+              />
               <DkStringValues
                 values={specialValues.dk_string_value}
                 onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}

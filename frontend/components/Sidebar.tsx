@@ -148,7 +148,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               ) : (
                 <div className="space-y-px">
                   {surveys.map((survey) => {
-                    const isSelected = selectedSurvey?.survey_id === survey.survey_id;
+                    // Account settings is not about any survey, so none is shown as open.
+                    const isSelected = !isUserSettingsActive && selectedSurvey?.survey_id === survey.survey_id;
                     return (
                       <button
                         key={survey.survey_id}

@@ -7,7 +7,12 @@ import logging
 import os
 from typing import Any
 
-from etl.dk_utils import describe_dk_strings
+from etl.dk_utils import (
+    describe_dk_codes,
+    describe_dk_strings,
+    dk_numeric_codes,
+    dk_string_tokens,
+)
 from services.ai_client import AIClient, ResolvedProvider, UsageRecorder, operator_provider
 from services.ai_errors import AUTH, BAD_RESPONSE, NOT_CONFIGURED, PROVIDER_QUOTA, AIError
 
@@ -115,7 +120,7 @@ class AIService:
 
             sv = survey_context.get("special_values", {})
             if sv:
-                survey_context_text += f"- Special values: DK numeric = {sv.get('dk_value', -99)}, DK string = {describe_dk_strings(sv.get('dk_string_value', 'dk'))}\n"
+                survey_context_text += f"- Special values: DK numeric = {describe_dk_codes(dk_numeric_codes(sv))}, DK string = {describe_dk_strings(sv.get('dk_string_value', 'dk'))}\n"
 
         # Create system prompt
         system_prompt = """You are a data quality validation expert. Convert natural language rule descriptions into structured validation rules.
@@ -313,7 +318,7 @@ Generate a validation rule matching the exact JSON schema."""
         special_values_context = ""
         if special_values:
             sv = special_values
-            dk_num = sv.get("dk_value", -99)
+            dk_num = describe_dk_codes(dk_numeric_codes(sv))
             dk_str = describe_dk_strings(sv.get("dk_string_value", "dk"))
             special_values_context = f"\n\nSPECIAL VALUES (Don't Know / Refused):\n- DK numeric value: {dk_num}\n- DK string value: {dk_str}\n"
 
@@ -540,7 +545,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
         self,
         field_values: dict[str, str],
         question_contexts: dict[str, str],
-        dk_numeric: int,
+        dk_codes: list[int | float],
         dk_string: str | list[str] | None,
         check_types: list[str],
         record: UsageRecorder | None = None,
@@ -576,10 +581,19 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
 
         fields_combined = "\n\n".join(fields_text)
 
+        # Either coding may be absent: a survey need not have numeric DK codes.
+        dk_parts = []
+        if dk_codes:
+            dk_parts.append(f"{describe_dk_codes(dk_codes)} (numeric)")
+        if dk_string_tokens({"dk_string_value": dk_string}):
+            dk_parts.append(f"{describe_dk_strings(dk_string)} (text)")
+        dk_coding = " or ".join(dk_parts) or "nothing special in this survey"
+        dk_reminder = f'\nRemember: {dk_coding} are valid "Don\'t Know" values.' if dk_parts else ""
+
         system_prompt = f"""You are a data quality expert analyzing survey text responses.
 
 IMPORTANT CONTEXT:
-- "Don't Know" responses are coded as {dk_numeric} (numeric) or {describe_dk_strings(dk_string)} (text)
+- "Don't Know" responses are coded as {dk_coding}
 - These are valid responses and should not be flagged
 - Support multilingual responses and evaluate in the response's language
 - Always provide your response in english
@@ -608,8 +622,7 @@ Examples of responses to NOT flag (meaning is clear):
 - "1. Pot 2. Heater 5. Cast 6. Dish" (numbering gap, possible typo, but list is interpretable)
 - Listing 6 items when asked for 3-5 (over-complete is acceptable)
 
-Return only clear issues. If no clear issue exists, return an empty list.
-Remember: {describe_dk_strings(dk_string)} and {dk_numeric} are valid "Don't Know" values."""
+Return only clear issues. If no clear issue exists, return an empty list.{dk_reminder}"""
 
         response_schema = {
             "type": "object",

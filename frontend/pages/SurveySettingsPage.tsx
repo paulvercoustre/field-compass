@@ -11,16 +11,15 @@ import { Spinner } from '../components/Spinner';
 import SettingsLayout from '../components/ui/SettingsLayout';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
-import FieldLabel from '../components/ui/FieldLabel';
 import { SparkleIcon } from '../components/ui/icons';
-import { CORE_IDENTIFIER_HINTS } from '../constants/coreIdentifiers';
 import { getKoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
 import CollectionTargets, { totalFromFrameRows } from '../components/ui/CollectionTargets';
 import { inferSamplingMode } from '../utils/samplingMode';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
-import { readDkValues, sameDkValues } from '../utils/dkSuggestions';
+import DkNumericCodes from '../components/ui/DkNumericCodes';
+import { readDkCodes, readDkValues, sameDkCodes, sameDkValues } from '../utils/dkSuggestions';
 import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 import AudioTranscriptionCard from '../components/transcription/AudioTranscriptionCard';
@@ -37,8 +36,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // Opens the custom-check composer on arrival, after a survey is created
-  const [isEditing, setIsEditing] = useState(false);
   const [isEditingOutlier, setIsEditingOutlier] = useState(false);
   const [isEditingLLM, setIsEditingLLM] = useState(false);
   const [isSavingOutlier, setIsSavingOutlier] = useState(false);
@@ -157,7 +154,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     targets_by_value: {} as Record<string, number>,
   });
   const [specialValues, setSpecialValues] = useState({
-    dk_value: -99,
+    dk_value: readDkCodes(undefined),
     // Nothing pre-selected here, for the reason the identifiers beside it are
     // empty: the stored config is the source of truth after creation.
     dk_string_value: [] as string[],
@@ -186,7 +183,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     coreIdentifiers.start_time !== (savedCoreIdentifiers.start_time ?? '') ||
     coreIdentifiers.end_time !== (savedCoreIdentifiers.end_time ?? '') ||
     coreIdentifiers.consent !== (savedCoreIdentifiers.consent ?? '') ||
-    specialValues.dk_value !== (config?.config_data?.special_values?.dk_value ?? -99) ||
+    !sameDkCodes(specialValues.dk_value, readDkCodes(config?.config_data?.special_values?.dk_value)) ||
     !sameDkValues(
       specialValues.dk_string_value,
       readDkValues(config?.config_data?.special_values?.dk_string_value)
@@ -247,7 +244,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       // Only open quality tab if this is the survey we just created
       if (shouldOpenQualityTab === 'true' && targetSurveyId === selectedSurvey.survey_id) {
         setActiveTab('quality');
-        setIsEditing(true); // Enable edit mode so user can immediately configure quality checks
         // Clear the flags so they don't persist
         localStorage.removeItem('openQualityTab');
         localStorage.removeItem('openQualityTabForSurveyId');
@@ -389,11 +385,13 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
         }
       }
       if (cd.special_values) {
-        // Stored configs hold `dk_string_value` as a single string; new ones
-        // hold a list. Old ones are never rewritten, so both shapes arrive here.
+        // Stored configs hold `dk_value` as one number and `dk_string_value`
+        // as one string; new ones hold lists. Old ones are never rewritten, so
+        // both shapes arrive here.
         setSpecialValues({
           ...specialValues,
           ...cd.special_values,
+          dk_value: readDkCodes(cd.special_values.dk_value),
           dk_string_value: readDkValues(cd.special_values.dk_string_value),
         });
       }
@@ -779,6 +777,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       setSpecialValues(prev => ({
         ...prev,
         ...config.config_data.special_values,
+        dk_value: readDkCodes(config.config_data.special_values.dk_value),
         dk_string_value: readDkValues(config.config_data.special_values.dk_string_value),
       }));
     }
@@ -1132,23 +1131,10 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               </div>
             )}
 
-        {/* Rendered outside the tab switch and only hidden, so its results
-            survive leaving the tab -- and a refresh's check runs once, not
-            again on every return to "Quality checks". */}
-        {selectedSurvey && (
-          <div className={activeTab === 'quality' ? 'mb-6' : 'hidden'}>
-            <FormLintPanel
-              surveyId={selectedSurvey.survey_id}
-              form={refreshedFormPayload}
-              canEdit={canEditSurvey}
-              onRulesAdopted={loadValidationRules}
-              autoRunKey={formCheckRunKey}
-              labelColumn={labelColumnSurvey}
-            />
-          </div>
-        )}
-        {activeTab === 'settings' ? (
-          <div className="space-y-6">
+        {/* General is only hidden on other tabs, not unmounted, so the form
+            check's results survive leaving the tab -- and a refresh's check
+            runs once, not again on every return to General. */}
+          <div className={activeTab === 'settings' ? 'space-y-6' : 'hidden'}>
             {/* Survey Profile */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Survey profile</h2>
@@ -1353,6 +1339,19 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               )}
             </section>
 
+            {/* Form readiness: about the Kobo form, so it sits right below it,
+                and re-runs on its own when the form is refreshed above. */}
+            {selectedSurvey && (
+              <FormLintPanel
+                surveyId={selectedSurvey.survey_id}
+                form={refreshedFormPayload}
+                canEdit={canEditSurvey}
+                onRulesAdopted={loadValidationRules}
+                autoRunKey={formCheckRunKey}
+                labelColumn={labelColumnSurvey}
+              />
+            )}
+
             {/* Collection Targets */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
@@ -1538,21 +1537,11 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                   availableVariables={availableVariables}
                   readOnly={!canEditSurvey}
                 />
-                <div className="field-cell">
-                  <FieldLabel hint={CORE_IDENTIFIER_HINTS.dk_value}>Don't know — numeric code</FieldLabel>
-                  {canEditSurvey ? (
-                    <input
-                      type="number"
-                      value={specialValues.dk_value}
-                      onChange={(e) => setSpecialValues({ ...specialValues, dk_value: parseInt(e.target.value) || -99 })}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  ) : (
-                    <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                      {specialValues.dk_value}
-                    </div>
-                  )}
-                </div>
+                <DkNumericCodes
+                  codes={specialValues.dk_value}
+                  onChange={(codes) => setSpecialValues({ ...specialValues, dk_value: codes })}
+                  readOnly={!canEditSurvey}
+                />
                 <DkStringValues
                   values={specialValues.dk_string_value}
                   onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
@@ -1600,7 +1589,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               </section>
             )}
           </div>
-        ) : activeTab === 'access' ? (
+        {activeTab === 'access' ? (
           <div className="space-y-6">
             {/* Who has access */}
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
@@ -2409,7 +2398,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 onSave={handleSaveCustomCheck}
                 onDelete={handleDeleteRule}
                 onAddMany={handleAISuggestedRulesAdded}
-                startComposing={isEditing}
               />
             )}
           </div>

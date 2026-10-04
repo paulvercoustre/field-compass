@@ -73,7 +73,9 @@ export interface SurveyConfig {
       targets_by_value?: Record<string, number> | null;
     };
     special_values?: {
-      dk_value?: number;
+      // One number in configs written before multiple codes; a list (possibly
+      // empty, for none) since. Read with `readDkCodes`.
+      dk_value?: number | number[] | null;
       // A list since #59. Configs written before that hold a single string and
       // are not rewritten, so both shapes are read.
       dk_string_value?: string | string[];

@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 from database.models import SubmissionCurrent, SurveyConfig, ValidationRule
 from etl.dk_utils import (
     build_eligible_dk_question_index,
+    dk_codes_fingerprint,
+    dk_numeric_codes,
     dk_string_tokens,
     is_dk_value,
 )
@@ -146,7 +148,7 @@ class HFCEngine:
 
         # Special values
         self.special_values = special_values
-        self.dk_value = special_values.get("dk_value", -99)
+        self.dk_codes = dk_numeric_codes(special_values)
         self.dk_string_value = special_values.get("dk_string_value", "dk")
         # `dk_string_value` may be one string or a list; compare against this.
         self.dk_tokens = dk_string_tokens({"dk_string_value": self.dk_string_value})
@@ -263,7 +265,7 @@ class HFCEngine:
                         continue
 
                     # Skip DK values
-                    if isinstance(numeric_value, int | float) and numeric_value == self.dk_value:
+                    if numeric_value in self.dk_codes:
                         continue
 
                     raw_values.append(float(numeric_value))
@@ -532,7 +534,7 @@ class HFCEngine:
             "dk_config": {
                 "enabled": self.flag_dk_percentage,
                 "threshold": self.dk_percentage_threshold,
-                "dk_value": self.dk_value,
+                "dk_value": dk_codes_fingerprint(self.dk_codes),
                 "dk_string_value": self.dk_string_value,
             },
             "global_parameters": {
@@ -1276,7 +1278,7 @@ class HFCEngine:
                     continue  # Skip non-numeric values
 
                 # Check for DK values
-                if isinstance(numeric_value, int | float) and numeric_value == self.dk_value:
+                if numeric_value in self.dk_codes:
                     continue
 
                 # Get cached statistics for this variable
@@ -1400,7 +1402,7 @@ class HFCEngine:
                 continue
 
             # Skip DK values
-            if isinstance(numeric_value, int | float) and numeric_value == self.dk_value:
+            if numeric_value in self.dk_codes:
                 continue
 
             values.append(float(numeric_value))
@@ -1684,9 +1686,9 @@ class HFCEngine:
                 return issues  # Skip if any required variable is None
 
             # Skip DK answers. Kobo sends numbers as text, so `"-99"` has to
-            # match `dk_value` too. Whole answers only: `"dk rice"` is what a
+            # match the numeric codes too. Whole answers only: `"dk rice"` is what a
             # dk_not_exclusive rule exists to flag.
-            if is_dk_value(value, self.dk_value, self.dk_tokens, split_multiple=False):
+            if is_dk_value(value, self.dk_codes, self.dk_tokens, split_multiple=False):
                 return issues
 
         # Evaluate the check expression
