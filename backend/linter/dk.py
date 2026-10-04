@@ -209,7 +209,9 @@ def _classify_text(value: str) -> str | None:
     # The whole text against every phrase; each word only against the
     # one-word phrases.
     matches = {
-        phrase for phrase in _phrases_of_length(len(normalized)) if _fuzzy_matches(normalized, phrase)
+        phrase
+        for phrase in _phrases_of_length(len(normalized))
+        if _fuzzy_matches(normalized, phrase)
     }
     for token in set(tokens):
         matches |= _fuzzy_word_matches(token)
