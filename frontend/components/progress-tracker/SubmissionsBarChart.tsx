@@ -62,7 +62,7 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
       <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
         Submissions by enumerator
       </h3>
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-[16rem]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
