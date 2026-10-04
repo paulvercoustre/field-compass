@@ -4,7 +4,7 @@
 
 import { QualityOverviewResponse, QualityOverviewFilters } from '../types';
 
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, apiFetch } from './apiBase';
 
 // Helper to get auth token from localStorage
 const getAuthToken = (): string | null => {
@@ -52,7 +52,7 @@ export const fetchQualityOverview = async (
       params.append('sampling_filters', filters.samplingFilters);
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/quality/overview?${params}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/quality/overview?${params}`, {
       headers: createHeaders(),
     });
 

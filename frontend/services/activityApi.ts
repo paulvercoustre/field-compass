@@ -3,7 +3,7 @@
  * in-app notifications. See docs/specs/audio-transcription.md, part B.
  */
 
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, apiFetch } from './apiBase';
 
 export type RunStatus = 'queued' | 'running' | 'background' | 'finished' | 'failed' | 'stopped';
 export type RunKind = 'pull' | 'ai_rerun' | 'transcription_rerun' | 'kobo_resend';
@@ -105,7 +105,7 @@ export class ApiError extends Error {
 }
 
 export const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
+  const response = await apiFetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
   const body = await response.json().catch(() => ({ detail: response.statusText }));
   if (!response.ok) {
     const detail = typeof body?.detail === 'string' ? body.detail : response.statusText;

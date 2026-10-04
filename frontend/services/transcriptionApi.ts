@@ -4,7 +4,7 @@
  * See docs/specs/audio-transcription.md, part A.
  */
 
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, apiFetch } from './apiBase';
 import { ApiError, RunSummary } from './activityApi';
 
 export interface AudioQuestion {
@@ -149,7 +149,7 @@ const headers = (): HeadersInit => ({
 });
 
 const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
+  const response = await apiFetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
   const body = await response.json().catch(() => ({ detail: response.statusText }));
   if (!response.ok) {
     const detail = typeof body?.detail === 'string' ? body.detail : response.statusText;
@@ -185,7 +185,7 @@ export const getSubmissionTranscripts = (koboId: number) =>
  * send the auth header itself). Returns an object URL to revoke when done.
  */
 export const loadRecording = async (koboId: number, questionPath: string): Promise<string> => {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_BASE_URL}/api/submissions/${koboId}/audio?question=${encodeURIComponent(questionPath)}`,
     { headers: token() ? { Authorization: `Bearer ${token()}` } : {} }
   );
