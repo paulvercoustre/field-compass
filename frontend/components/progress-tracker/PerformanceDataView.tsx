@@ -9,15 +9,15 @@ type CollectionSortKey = 'id' | 'needsReview' | 'validated' | 'total' | 'percent
 type QualitySortKey = 'id' | 'avgActiveTime' | 'avgTotalTime' | 'avgDkRate' | 'avgIssuesPerSurvey';
 
 const DEFINITIONS: Record<string, { title: string; text: string }> = {
-  needsReview: { title: "Needs Review", text: "The number of surveys where at least one potential issue was flagged." },
-  validated: { title: "Validated", text: "The number of surveys with no issues found." },
-  totalSurveys: { title: "Total Surveys", text: "The total number of surveys submitted by the enumerator that have been checked (excluding deleted surveys)." },
-  percentValidated: { title: "% Validated", text: "The percentage of checked surveys that were validated." },
-  percentNeedsReview: { title: "% Needs Review", text: "The percentage of checked surveys that have issues needing review." },
+  needsReview: { title: "Flagged, not yet approved", text: "Submissions where the checks found at least one issue, and that no reviewer has approved or rejected in Kobo yet." },
+  validated: { title: "Approved by reviewer", text: "Submissions a reviewer marked Approved in Kobo. This says how far review has got, not how good the interviews were: an enumerator whose work has not been reviewed yet has few." },
+  totalSurveys: { title: "Total", text: "All of this enumerator's submissions pulled from Kobo, except deleted ones." },
+  percentValidated: { title: "% Approved by reviewer", text: "The share of this enumerator's submissions that a reviewer approved in Kobo. Low while review is behind; not a measure of quality." },
+  percentNeedsReview: { title: "% Flagged, not yet approved", text: "The share of this enumerator's submissions with issues that no reviewer has decided on yet." },
   avgActiveTime: { title: "Avg. Active Survey Time (min)", text: "The average time the enumerator spent actively answering questions (e.g., excluding pauses). Requires audit logs." },
   avgTotalTime: { title: "Avg. Total Survey Time (min)", text: "The average total time from the first event to the last event in the audit log." },
   avgDkRate: { title: "Avg. DK Rate (%)", text: "The average percentage of 'Don\\'t Know' or equivalent answers across all questions for this enumerator." },
-  avgIssuesPerSurvey: { title: "Avg. Issues per Survey", text: "The average number of cleaning log issues flagged per survey for this enumerator. A higher number may indicate a need for follow-up." },
+  avgIssuesPerSurvey: { title: "Issues per submission", text: "The average number of issues the checks found per submission from this enumerator, whether or not a reviewer has seen them. A higher number may mean they need follow-up." },
 };
 
 const InfoIcon: React.FC<{ onClick: () => void }> = ({ onClick }) => (
@@ -165,14 +165,8 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
     }));
   };
 
-  // Color coding helpers
-  const getValidatedColor = (percentStr: string) => {
-    const percent = parseFloat(percentStr);
-    if (percent >= 80) return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
-    if (percent >= 60) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
-    return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
-  };
-
+  // Color coding helpers. Approval share is not coloured: it measures review
+  // progress, and a low one says nothing against the enumerator.
   const getNeedsReviewColor = (percentStr: string) => {
     const percent = parseFloat(percentStr);
     if (percent <= 10) return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
@@ -186,15 +180,19 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
     return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
   };
 
-  const getComparisonBadge = (value: number, avg: number, higherIsBetter: boolean = true) => {
+  // `higherIsBetter: null`: above or below the team, with no verdict (time
+  // spent, where both very short and very long interviews are worth a look).
+  const getComparisonBadge = (value: number, avg: number, higherIsBetter: boolean | null = true) => {
     const diff = ((value - avg) / avg) * 100;
-    if (Math.abs(diff) < 5) return null; // Within 5% of average
-    
-    const isGood = higherIsBetter ? diff > 0 : diff < 0;
+    if (!isFinite(diff) || Math.abs(diff) < 5) return null; // Within 5% of average
+
     const arrow = diff > 0 ? '↑' : '↓';
-    const colorClass = isGood 
-      ? 'text-emerald-600 dark:text-emerald-400' 
-      : 'text-red-600 dark:text-red-400';
+    const colorClass =
+      higherIsBetter === null
+        ? 'text-gray-500 dark:text-gray-400'
+        : (higherIsBetter ? diff > 0 : diff < 0)
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : 'text-red-600 dark:text-red-400';
     
     return (
       <span className={`ml-1 text-xs ${colorClass}`} title={`${diff > 0 ? '+' : ''}${diff.toFixed(0)}% vs avg`}>
@@ -229,11 +227,11 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
               <SortableHeader label="Enumerator ID" sortKey="id" currentSort={collectionSort} onSort={handleCollectionSort} />
-              <SortableHeader label="Needs Review" sortKey="needsReview" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="needsReview" />
-              <SortableHeader label="Validated" sortKey="validated" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="validated" />
+              <SortableHeader label="Flagged, not yet approved" sortKey="needsReview" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="needsReview" />
+              <SortableHeader label="Approved by reviewer" sortKey="validated" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="validated" />
               <SortableHeader label="Total" sortKey="total" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="totalSurveys" />
-              <SortableHeader label="% Validated" sortKey="percentValidated" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="percentValidated" />
-              <SortableHeader label="% Needs Review" sortKey="percentNeedsReview" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="percentNeedsReview" />
+              <SortableHeader label="% Approved" sortKey="percentValidated" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="percentValidated" />
+              <SortableHeader label="% Flagged, not yet approved" sortKey="percentNeedsReview" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="percentNeedsReview" />
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-950 divide-y divide-gray-100 dark:divide-gray-800">
@@ -254,13 +252,10 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.total}
-                  {getComparisonBadge(row.total, teamAverages.total, true)}
+                  {getComparisonBadge(row.total, teamAverages.total, null)}
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
-                  <span className={`px-2 py-1 rounded-md text-xs font-medium ${getValidatedColor(row.percentValidated)}`}>
-                    {row.percentValidated}
-                  </span>
-                  {getComparisonBadge(parseFloat(row.percentValidated), teamAverages.validatedPercent, true)}
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
+                  {row.percentValidated}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
                   <span className={`px-2 py-1 rounded-md text-xs font-medium ${getNeedsReviewColor(row.percentNeedsReview)}`}>
@@ -283,7 +278,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
               <SortableHeader label="Avg Active Time (min)" sortKey="avgActiveTime" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgActiveTime" />
               <SortableHeader label="Avg Total Time (min)" sortKey="avgTotalTime" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgTotalTime" />
               <SortableHeader label="Avg DK Rate (%)" sortKey="avgDkRate" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgDkRate" />
-              <SortableHeader label="Avg Issues/Survey" sortKey="avgIssuesPerSurvey" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgIssuesPerSurvey" />
+              <SortableHeader label="Issues per submission" sortKey="avgIssuesPerSurvey" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgIssuesPerSurvey" />
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-950 divide-y divide-gray-100 dark:divide-gray-800">
@@ -298,7 +293,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.avgActiveTime}
-                  {getComparisonBadge(row.avgActiveTime, teamAverages.activeTime, true)}
+                  {getComparisonBadge(row.avgActiveTime, teamAverages.activeTime, null)}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.avgTotalTime}
@@ -352,8 +347,8 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
           {activeSubTab === 'collected' ? (
             <>
               <span>Submissions: <strong>{teamAverages.total.toFixed(1)}</strong>/enum</span>
-              <span>Validated: <strong>{teamAverages.validatedPercent.toFixed(1)}%</strong></span>
-              <span>Needs Review: <strong>{teamAverages.needsReviewPercent.toFixed(1)}%</strong></span>
+              <span>Approved by reviewer: <strong>{teamAverages.validatedPercent.toFixed(1)}%</strong></span>
+              <span>Flagged, not yet approved: <strong>{teamAverages.needsReviewPercent.toFixed(1)}%</strong></span>
             </>
           ) : (
             <>
@@ -370,7 +365,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
       </div>
       
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-        ↑↓ compared with the team average (±5%)
+        ↑↓ more than 5% above or below the team average. Green or red only where more or less is clearly better.
       </p>
     </div>
   );

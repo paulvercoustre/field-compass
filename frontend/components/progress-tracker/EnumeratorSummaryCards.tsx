@@ -15,16 +15,6 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
     ? (totalSubmissions / totalEnumerators).toFixed(1) 
     : '0';
   
-  // Find best performer (highest % validated with at least 5 submissions)
-  const eligibleForBest = collection.filter(e => e.total >= 5);
-  const bestPerformer = eligibleForBest.length > 0
-    ? eligibleForBest.reduce((best, current) => {
-        const bestPercent = parseFloat(best.percentValidated);
-        const currentPercent = parseFloat(current.percentValidated);
-        return currentPercent > bestPercent ? current : best;
-      })
-    : null;
-  
   // Count enumerators needing attention (>30% needs review or high issue rate)
   const enumeratorsNeedingAttention = collection.filter(e => {
     const needsReviewPercent = parseFloat(e.percentNeedsReview);
@@ -33,8 +23,9 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
     return needsReviewPercent > 30 || highIssueRate;
   }).length;
   
-  // Calculate team averages
-  const teamAvgValidated = totalSubmissions > 0
+  // Share of submissions a reviewer has approved in Kobo: how far review
+  // has got, not how good the interviews were.
+  const teamApproved = totalSubmissions > 0
     ? ((collection.reduce((sum, e) => sum + e.validated, 0) / totalSubmissions) * 100).toFixed(1)
     : '0';
   
@@ -44,7 +35,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
     : '0';
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
       {/* Total Enumerators */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
         <div className="text-sm text-gray-500 dark:text-gray-400">Enumerators</div>
@@ -60,43 +51,32 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
         <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
           {totalSubmissions}
         </div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-          {avgSubmissionsPerEnumerator} avg/enum
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          {avgSubmissionsPerEnumerator} per enumerator
         </div>
       </div>
       
-      {/* Team Validation Rate */}
+      {/* Review progress */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-sm text-gray-500 dark:text-gray-400">Team Validated</div>
-        <div className="tabular text-2xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-400 mt-2">
-          {teamAvgValidated}%
+        <div className="text-sm text-gray-500 dark:text-gray-400">Approved by reviewer</div>
+        <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
+          {teamApproved}%
         </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">approval rate</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">of submissions</div>
       </div>
       
       {/* Avg Issues per Submission */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-sm text-gray-500 dark:text-gray-400">Avg Issues</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">Issues</div>
         <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
           {teamAvgIssuesPerSubmission}
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">per submission</div>
       </div>
       
-      {/* Best Performer */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-sm text-gray-500 dark:text-gray-400">Top Performer</div>
-        <div className="text-lg font-semibold tracking-tight text-amber-600 dark:text-amber-400 mt-1 truncate" title={bestPerformer?.id}>
-          {bestPerformer ? bestPerformer.id : 'N/A'}
-        </div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-          {bestPerformer ? `${bestPerformer.percentValidated} validated` : 'min 5 subs'}
-        </div>
-      </div>
-      
       {/* Needs Attention */}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-sm text-gray-500 dark:text-gray-400">Need Attention</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">Often flagged</div>
         <div className={`tabular text-2xl font-semibold tracking-tight mt-1 ${
           enumeratorsNeedingAttention > 0 
             ? 'text-amber-600 dark:text-amber-400' 
@@ -104,7 +84,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
         }`}>
           {enumeratorsNeedingAttention}
         </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">enumerators</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">enumerators: over 30% flagged, or 2+ issues each</div>
       </div>
     </div>
   );
