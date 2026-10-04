@@ -198,9 +198,12 @@ def _classify_text(value: str) -> str | None:
             return category
 
     tokens = normalized.split()
-    for edge in {tokens[0], tokens[-1]}:
-        category = _EDGE_ABBREVIATIONS.get(edge)
-        if category is not None:
+    # Both edges, settled in category order like everything above, so
+    # `dk_na` is always don't-know. Iterating a set of the two edges let the
+    # answer change from one server start to the next.
+    edge_categories = {_EDGE_ABBREVIATIONS.get(tokens[0]), _EDGE_ABBREVIATIONS.get(tokens[-1])}
+    for category in CATEGORY_LABELS:
+        if category in edge_categories:
             return category
 
     # The whole text against every phrase; each word only against the
