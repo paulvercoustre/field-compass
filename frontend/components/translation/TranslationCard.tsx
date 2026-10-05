@@ -169,8 +169,15 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
                 )}
                 {!question.in_repeat && question.kind === 'audio' && !question.transcribed && (
                   <span className="block text-xs text-amber-700 dark:text-amber-300">
-                    Not transcribed here: only transcripts made in Kobo get translated. Turn on transcription for it in
-                    Audio transcription.
+                    Field Compass doesn't transcribe this question, so only recordings that already have a transcript in
+                    Kobo will be translated.{' '}
+                    <button
+                      type="button"
+                      onClick={() => navigate({ view: 'settings', survey_id: surveyId, tab: 'transcription' })}
+                      className="font-medium underline underline-offset-2"
+                    >
+                      Turn on its transcription
+                    </button>
                   </span>
                 )}
               </span>

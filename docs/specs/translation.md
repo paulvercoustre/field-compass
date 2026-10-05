@@ -101,6 +101,14 @@ Calls go to `ai_usage` with feature `translation` and the submission's id.
   translations, counts (translated, from Kobo, in progress, failed, not yet
   translated), **Translate N now**, **Send N to Kobo**, **Translate all
   again**.
+- **Survey Settings › Audio transcription**: "Translate the transcripts", a
+  shortcut into the same Translation settings. Ticked, the transcribed
+  questions join the translated ones (the language is picked there if none
+  is set yet); unticked, they leave and translation stays on for any text
+  questions. The summary says whether transcripts are translated, with a
+  link to Translation. In Translation, an audio question Field Compass does
+  not transcribe says only recordings with a transcript in Kobo will be
+  translated, with a link to turn its transcription on.
 - **Submission**: under a typed answer or a recording, its translation (or
   why there is none yet). Kobo lines say what they are about: "Transcript in
   Kobo", "Translation in Kobo".

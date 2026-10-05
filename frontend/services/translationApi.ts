@@ -138,3 +138,56 @@ export const sendTranslationsToKobo = (surveyId: string) =>
 
 export const getSubmissionTranslations = (koboId: number) =>
   request<SubmissionTranslations>(`/api/submissions/${koboId}/translations`);
+
+/** Whether a survey translates the transcripts of all the questions it transcribes. */
+export const translatesTranscripts = (settings: TranslationSettings, transcribed: string[]): boolean =>
+  settings.enabled &&
+  !!settings.language &&
+  transcribed.length > 0 &&
+  transcribed.every((path) => settings.questions.includes(path));
+
+/**
+ * The translation settings after "Translate the transcripts" is turned on or
+ * off from the transcription settings, or null when nothing changes. On: the
+ * transcribed questions join the translated ones (and those no longer
+ * transcribed leave). Off: the transcribed questions leave; translation stays
+ * on for any text questions. Questions picked in Translation are kept.
+ */
+export const withTranscriptTranslation = (
+  current: TranslationSettings,
+  change: {
+    on: boolean;
+    /** Used when translation has no language yet. */
+    language: string | null;
+    transcribed: string[];
+    /** What was transcribed before this save. */
+    previouslyTranscribed: string[];
+    /** Whether transcripts go to Kobo: their translations follow, when first turned on. */
+    sendToKobo: boolean;
+  }
+): TranslationSettings | null => {
+  const dropped = change.previouslyTranscribed.filter((path) => !change.transcribed.includes(path));
+  let next: TranslationSettings;
+  if (change.on) {
+    const questions = [...current.questions.filter((path) => !dropped.includes(path))];
+    change.transcribed.forEach((path) => !questions.includes(path) && questions.push(path));
+    next = {
+      enabled: true,
+      language: current.language ?? change.language,
+      questions,
+      send_to_kobo: current.enabled ? current.send_to_kobo : change.sendToKobo,
+    };
+  } else {
+    if (!translatesTranscripts(current, change.previouslyTranscribed)) return null;
+    const leaving = new Set([...change.previouslyTranscribed, ...change.transcribed]);
+    const questions = current.questions.filter((path) => !leaving.has(path));
+    next = { ...current, questions, enabled: current.enabled && questions.length > 0 };
+  }
+  const same =
+    next.enabled === current.enabled &&
+    next.language === current.language &&
+    next.send_to_kobo === current.send_to_kobo &&
+    next.questions.length === current.questions.length &&
+    next.questions.every((path, i) => path === current.questions[i]);
+  return same ? null : next;
+};

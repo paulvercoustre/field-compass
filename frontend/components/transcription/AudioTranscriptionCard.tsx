@@ -11,6 +11,13 @@ import {
   TranscriptionOverview,
   TranscriptionSettingsInput,
 } from '../../services/transcriptionApi';
+import {
+  getTranslationOverview,
+  saveTranslationSettings,
+  translatesTranscripts,
+  TranslationOverview,
+  withTranscriptTranslation,
+} from '../../services/translationApi';
 import Banner from '../ui/Banner';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -86,12 +93,23 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
   const [confirmConsent, setConfirmConsent] = useState(false);
   const [estimate, setEstimate] = useState<TranscriptionEstimate | null>(null);
   const [starting, setStarting] = useState(false);
+  // Translation of the transcripts: the Translation settings, seen from here.
+  const [translation, setTranslation] = useState<TranslationOverview | null>(null);
+  const [translateDraft, setTranslateDraft] = useState<{ on: boolean; language: string | null }>({ on: false, language: 'eng' });
 
   const load = useCallback(async () => {
     try {
-      const data = await getTranscriptionOverview(surveyId);
+      const [data, translated] = await Promise.all([
+        getTranscriptionOverview(surveyId),
+        getTranslationOverview(surveyId).catch(() => null),
+      ]);
       setOverview(data);
       setDraft(toInput(data));
+      setTranslation(translated);
+      setTranslateDraft({
+        on: !!translated && translatesTranscripts(translated.settings, data.settings.questions),
+        language: translated?.settings.language ?? 'eng',
+      });
       setLoadError(null);
       onSettingsChange?.(data.settings.questions, data.settings.enabled);
     } catch (err) {
@@ -153,10 +171,36 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
       setEditing(false);
       setConfirmConsent(false);
       onSettingsChange?.(saved.settings.questions, saved.settings.enabled);
+      // Translation of the transcripts lives in the Translation settings.
+      let translationNote = '';
+      const nextTranslation =
+        translation &&
+        withTranscriptTranslation(translation.settings, {
+          on: translateDraft.on && saved.settings.enabled,
+          language: translateDraft.language,
+          transcribed: saved.settings.enabled ? saved.settings.questions : [],
+          previouslyTranscribed: settings.enabled ? settings.questions : [],
+          sendToKobo: saved.settings.send_to_kobo,
+        });
+      if (nextTranslation) {
+        try {
+          const translated = await saveTranslationSettings(surveyId, nextTranslation);
+          setTranslation(translated);
+          translationNote = translatesTranscripts(translated.settings, saved.settings.questions)
+            ? ' Transcripts are translated too.'
+            : ' Transcripts are no longer translated.';
+        } catch (err) {
+          setError(
+            `Transcription settings saved, but translation couldn't be changed: ${
+              err instanceof Error ? err.message : 'unknown error'
+            }`
+          );
+        }
+      }
       setNotice(
-        saved.settings.enabled && !settings.enabled
+        (saved.settings.enabled && !settings.enabled
           ? 'Transcription is on. New recordings are transcribed on each pull; use “Transcribe now” for the ones already pulled.'
-          : 'Transcription settings saved.'
+          : 'Transcription settings saved.') + translationNote
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save.');
@@ -447,13 +491,57 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                 </p>
               </div>
             </div>
+
+            {translation && (
+              <div className="flex items-start">
+                <input
+                  id="transcription-translate"
+                  type="checkbox"
+                  className={`mt-0.5 ${checkboxClass}`}
+                  disabled={!editable || !draft.enabled || !translation.available || !translation.can_edit}
+                  checked={translateDraft.on}
+                  onChange={(e) => setTranslateDraft({ ...translateDraft, on: e.target.checked })}
+                />
+                <div className="ml-3 min-w-0">
+                  <label htmlFor="transcription-translate" className="text-sm font-medium text-gray-900 dark:text-white">
+                    Translate the transcripts
+                    {translation.settings.language && (
+                      <span className="font-normal text-gray-500 dark:text-gray-400"> into {languageName(translation.settings.language)}</span>
+                    )}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {!translation.available
+                      ? 'Needs an AI key for translation first.'
+                      : translation.settings.language
+                      ? 'Uses the Translation settings: the language is set there, and typed answers can be translated there too.'
+                      : 'Adds these questions to the Translation settings, where typed answers can be translated too.'}
+                  </p>
+                  {translateDraft.on && !translation.settings.language && (
+                    <select
+                      aria-label="Translate into"
+                      value={translateDraft.language ?? ''}
+                      disabled={!editable || !draft.enabled}
+                      onChange={(e) => setTranslateDraft({ ...translateDraft, language: e.target.value || null })}
+                      className="mt-2 w-full max-w-xs rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                    >
+                      {translation.languages.map((lang) => (
+                        <option key={lang.code} value={lang.code}>
+                          Into {lang.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {editing && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Recordings of the chosen questions are sent to ElevenLabs to be transcribed. Nothing else from the submission is
-            sent. Make sure respondents' consent covers this.
+            Recordings of the chosen questions are sent to ElevenLabs to be transcribed
+            {translateDraft.on && draft.enabled ? ', and their transcripts to the AI to be translated' : ''}. Nothing else
+            from the submission is sent. Make sure respondents' consent covers this.
           </p>
         )}
 
@@ -466,6 +554,10 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
               variant="secondary"
               onClick={() => {
                 setDraft(toInput(overview));
+                setTranslateDraft({
+                  on: !!translation && translatesTranscripts(translation.settings, settings.questions),
+                  language: translation?.settings.language ?? 'eng',
+                });
                 setEditing(false);
                 setError(null);
               }}
@@ -496,6 +588,24 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
             <dd className="text-gray-900 dark:text-white">{languageName(settings.language)}</dd>
             <dt className="text-gray-500 dark:text-gray-400">Speakers</dt>
             <dd className="text-gray-900 dark:text-white">{settings.multiple_speakers ? 'Several' : 'One'}</dd>
+            {translation && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">Translation</dt>
+                <dd className="text-gray-900 dark:text-white">
+                  {translatesTranscripts(translation.settings, settings.questions)
+                    ? `Transcripts are translated into ${languageName(translation.settings.language)}`
+                    : 'Transcripts are not translated'}
+                  {' \u00b7 '}
+                  <button
+                    type="button"
+                    onClick={() => navigate({ view: 'settings', survey_id: surveyId, tab: 'translation' })}
+                    className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                  >
+                    Translation settings
+                  </button>
+                </dd>
+              </>
+            )}
             <dt className="text-gray-500 dark:text-gray-400">Kobo</dt>
             <dd className="text-gray-900 dark:text-white">{settings.send_to_kobo ? 'Transcripts are sent to Kobo' : 'Kept in Field Compass only'}</dd>
           </dl>
