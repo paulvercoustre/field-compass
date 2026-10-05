@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import type { SectionControls } from '../components/settings/SectionControls';
 
 type Flags<S extends string> = Partial<Record<S, boolean>>;
 
@@ -45,12 +46,23 @@ export function useSectionEditor<S extends string>({ save, restore, onError }: S
   /** Close every section, e.g. when another survey is chosen. */
   const closeAll = useCallback(() => setEditing({}), []);
 
+  const isEditing = (section: S) => editing[section] === true;
+  const isSaving = (section: S) => saving[section] === true;
+
   return {
-    isEditing: (section: S) => editing[section] === true,
-    isSaving: (section: S) => saving[section] === true,
+    isEditing,
+    isSaving,
     edit,
     save: saveSection,
     cancel,
     closeAll,
+    /** One section's state and actions, for its buttons. */
+    controls: (section: S): SectionControls => ({
+      editing: isEditing(section),
+      saving: isSaving(section),
+      edit: () => edit(section),
+      save: () => saveSection(section),
+      cancel: () => cancel(section),
+    }),
   };
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
-import { getSurveyConfig, updateSurvey, deleteSurvey, rerunAiChecks, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule } from '../services/progressApi';
+import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule } from '../services/progressApi';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
 import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
 import { KoboToolData, StagedRule } from '../types';
@@ -9,13 +9,13 @@ import { Spinner } from '../components/Spinner';
 import SettingsLayout from '../components/ui/SettingsLayout';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
-import { SparkleIcon } from '../components/ui/icons';
 import { getKoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
 import CollectionTargets from '../components/ui/CollectionTargets';
 import CollectionTargetsEditor from '../components/ui/CollectionTargetsEditor';
 import { useCollectionTargets } from '../hooks/useCollectionTargets';
 import { useSectionEditor } from '../hooks/useSectionEditor';
+import { DEFAULT_QUALITY_CHECKS, GENERAL_FLAG_KEYS, LLM_KEYS, OUTLIER_KEYS, pick, sameSetting } from '../utils/qualityCheckSettings';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
 import DkNumericCodes from '../components/ui/DkNumericCodes';
@@ -24,8 +24,10 @@ import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 import AudioTranscriptionCard from '../components/transcription/AudioTranscriptionCard';
 import TranslationCard from '../components/translation/TranslationCard';
-import SurveyKeyPicker from '../components/ai/SurveyKeyPicker';
 import SurveyAccessTab from '../components/settings/SurveyAccessTab';
+import OutlierChecksSection from '../components/settings/OutlierChecksSection';
+import AiReviewSection from '../components/settings/AiReviewSection';
+import { SavedNote, SectionActions, SectionEditButton } from '../components/settings/SectionControls';
 import { RequestedTab } from '../contexts/NavigationContext';
 
 type SurveySettingsTab = 'settings' | 'access' | 'quality' | 'transcription' | 'translation';
@@ -42,53 +44,6 @@ interface SurveySettingsPageProps {
  * another's unsaved edits (or an older copy of what someone else saved).
  */
 type SettingsSection = 'basicInfo' | 'coreIdentifiers' | 'koboTool' | 'samplingFrame' | 'generalFlags' | 'outlier' | 'llm';
-
-const GENERAL_FLAG_KEYS = [
-  'flag_out_of_period', 'flag_weekend', 'weekend_days', 'flag_office_hours', 'office_hours_start', 'office_hours_end',
-  'flag_sampling_frame', 'flag_dk_percentage', 'dk_percentage_threshold', 'flag_empty_percentage', 'empty_percentage_threshold',
-] as const;
-/** Whether a setting is unchanged; lists compare as sets, so the order days were ticked in doesn't count. */
-const sameSetting = (a: unknown, b: unknown) =>
-  Array.isArray(a) && Array.isArray(b) ? JSON.stringify([...a].sort()) === JSON.stringify([...b].sort()) : a === b;
-const OUTLIER_KEYS = ['flag_outliers', 'outlier_variables', 'outlier_log_transform_variables', 'outlier_method', 'outlier_threshold'] as const;
-const LLM_KEYS = ['flag_llm_qualitative', 'llm_qualitative_fields', 'llm_check_types'] as const;
-
-/** A new survey's quality checks; also what an unsaved key falls back to. */
-const DEFAULT_QUALITY_CHECKS = {
-  flag_out_of_period: false,
-  flag_weekend: false,
-  weekend_days: [5, 6], // Default to Sat, Sun
-  flag_office_hours: false,
-  office_hours_start: '08:00',
-  office_hours_end: '17:00',
-  flag_sampling_frame: false,
-  flag_outliers: false,
-  outlier_variables: [] as string[],
-  outlier_log_transform_variables: [] as string[],
-  outlier_method: 'iqr' as 'iqr' | 'mad' | 'zscore',
-  outlier_threshold: 1.5,
-  flag_dk_percentage: false,
-  dk_percentage_threshold: 50,
-  flag_empty_percentage: false,
-  empty_percentage_threshold: 50,
-  flag_llm_qualitative: false,
-  llm_qualitative_fields: [] as string[],
-  llm_check_types: ['content_quality', 'relevance', 'completeness'] as Array<'content_quality' | 'relevance' | 'completeness'>,
-};
-
-const pick = <T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Pick<T, K> =>
-  Object.fromEntries(keys.map((key) => [key, obj[key]])) as Pick<T, K>;
-
-/** "Saved 14:32", inside the section, until it is edited again. */
-const SavedNote: React.FC<{ at?: Date; className?: string }> = ({ at, className = '' }) =>
-  at ? (
-    <span role="status" className={`inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-400 ${className}`}>
-      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="m5 12.5 4.5 4.5L19 7" />
-      </svg>
-      Saved {at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-    </span>
-  ) : null;
 
 const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab }) => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -648,21 +603,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     }
   };
 
-  const [isRerunningAI, setIsRerunningAI] = useState(false);
-  const handleRerunAI = async () => {
-    if (!selectedSurvey) return;
-    setIsRerunningAI(true);
-    setError(null);
-    try {
-      const count = await rerunAiChecks(selectedSurvey.survey_id);
-      setSuccess(`${count} submissions will be reviewed again on the next pull.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not schedule the review');
-    } finally {
-      setIsRerunningAI(false);
-    }
-  };
-
   const handleDeleteClick = () => {
     // Reset deletion state when opening the modal
     setIsDeleting(false);
@@ -979,22 +919,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 </div>
                 {!isBasicInfoDirty && <SavedNote at={savedAt.basicInfo} className="pt-2" />}
                 {canEditSurvey && isBasicInfoDirty && (
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      onClick={() => sections.save('basicInfo')}
-                      disabled={sections.isSaving('basicInfo')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {sections.isSaving('basicInfo') ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={() => sections.cancel('basicInfo')}
-                      disabled={sections.isSaving('basicInfo')}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <SectionActions controls={sections.controls('basicInfo')} className="pt-2" />
                 )}
               </div>
             </section>
@@ -1005,12 +930,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Kobo form</h2>
                 {!sections.isEditing('koboTool') && <SavedNote at={savedAt.koboTool} className="ml-auto mr-2" />}
                 {canEditSurvey && !sections.isEditing('koboTool') && (
-                  <button
-                    onClick={() => sections.edit('koboTool')}
-                    className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                  >
-                    Edit
-                  </button>
+                  <SectionEditButton onClick={() => sections.edit('koboTool')} />
                 )}
               </div>
               {sections.isEditing('koboTool') ? (
@@ -1076,22 +996,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                       </div>
                     );
                   })()}
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={() => sections.save('koboTool')}
-                      disabled={sections.isSaving('koboTool')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {sections.isSaving('koboTool') ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={() => sections.cancel('koboTool')}
-                      disabled={sections.isSaving('koboTool')}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <SectionActions controls={sections.controls('koboTool')} className="mt-4" />
                 </div>
               ) : (
                 <div className="text-gray-700 dark:text-gray-300">
@@ -1126,12 +1031,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Data collection targets</h2>
                 {!sections.isEditing('samplingFrame') && <SavedNote at={savedAt.samplingFrame} className="ml-auto mr-2" />}
                 {canEditSurvey && !sections.isEditing('samplingFrame') && (
-                  <button
-                    onClick={() => sections.edit('samplingFrame')}
-                    className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                  >
-                    Edit
-                  </button>
+                  <SectionEditButton onClick={() => sections.edit('samplingFrame')} />
                 )}
               </div>
               {sections.isEditing('samplingFrame') ? (
@@ -1141,22 +1041,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                     koboToolData={koboToolData}
                     labelColumnChoices={labelColumnChoices}
                   />
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={() => sections.save('samplingFrame')}
-                      disabled={sections.isSaving('samplingFrame')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {sections.isSaving('samplingFrame') ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={() => sections.cancel('samplingFrame')}
-                      disabled={sections.isSaving('samplingFrame')}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <SectionActions controls={sections.controls('samplingFrame')} className="mt-4" />
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1220,22 +1105,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               </div>
               {!isCoreIdentifiersDirty && <SavedNote at={savedAt.coreIdentifiers} className="pt-4" />}
               {canEditSurvey && isCoreIdentifiersDirty && (
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => sections.save('coreIdentifiers')}
-                    disabled={sections.isSaving('coreIdentifiers')}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                  >
-                    {sections.isSaving('coreIdentifiers') ? 'Saving...' : 'Save changes'}
-                  </button>
-                  <button
-                    onClick={() => sections.cancel('coreIdentifiers')}
-                    disabled={sections.isSaving('coreIdentifiers')}
-                    className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <SectionActions controls={sections.controls('coreIdentifiers')} className="pt-4" />
               )}
             </section>
 
@@ -1553,400 +1423,33 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 </div>
                 {!isGeneralFlagsDirty && <SavedNote at={savedAt.generalFlags} className="pt-4" />}
                 {canEditSurvey && isGeneralFlagsDirty && (
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={() => sections.save('generalFlags')}
-                      disabled={sections.isSaving('generalFlags')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {sections.isSaving('generalFlags') ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={() => sections.cancel('generalFlags')}
-                      disabled={sections.isSaving('generalFlags')}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <SectionActions controls={sections.controls('generalFlags')} className="pt-4" />
                 )}
               </div>
             </section>
 
-            {/* Outlier Checks Settings */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Outlier checks</h2>
-                {!sections.isEditing('outlier') && <SavedNote at={savedAt.outlier} className="ml-auto mr-2" />}
-                {canEditSurvey && !sections.isEditing('outlier') && (
-                  <button
-                    onClick={() => sections.edit('outlier')}
-                    className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-              <div className="space-y-6">
-                {/* Outlier Checks Flag */}
-                <div className="space-y-2">
-                  <div className="flex items-start">
-                    <div className="flex h-5 items-center">
-                      <input
-                        type="checkbox"
-                        disabled={!sections.isEditing('outlier')}
-                        checked={qualityChecks.flag_outliers}
-                        onChange={(e) => setQualityChecks({ ...qualityChecks, flag_outliers: e.target.checked })}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                      />
-                    </div>
-                    <div className="ml-3">
-                      <label className="text-sm font-medium text-gray-900 dark:text-white">
-                        Flag outlier values
-                      </label>
-                    </div>
-                  </div>
+            <OutlierChecksSection
+              checks={qualityChecks}
+              setChecks={setQualityChecks}
+              numericVariables={numericVariables}
+              questionLabel={questionLabel}
+              canEdit={canEditSurvey}
+              controls={sections.controls('outlier')}
+              savedAt={savedAt.outlier}
+            />
 
-                  {qualityChecks.flag_outliers && (
-                    <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 space-y-4">
-                      {/* Variable Selection */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Variables to check
-                        </label>
-                        {sections.isEditing('outlier') ? (
-                          <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
-                            {numericVariables.length > 0 ? (
-                              numericVariables.map((variable) => (
-                                <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
-                                  <input
-                                    type="checkbox"
-                                    checked={qualityChecks.outlier_variables.includes(variable)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setQualityChecks({
-                                          ...qualityChecks,
-                                          outlier_variables: [...qualityChecks.outlier_variables, variable],
-                                        });
-                                      } else {
-                                        setQualityChecks({
-                                          ...qualityChecks,
-                                          outlier_variables: qualityChecks.outlier_variables.filter((v) => v !== variable),
-                                          outlier_log_transform_variables: qualityChecks.outlier_log_transform_variables.filter((v) => v !== variable),
-                                        });
-                                      }
-                                    }}
-                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                  />
-                                  <span className="text-sm text-gray-700 dark:text-gray-300">{questionLabel(variable) || variable}</span>
-                                  {questionLabel(variable) && (
-                                    <span className="text-xs text-gray-500">({variable})</span>
-                                  )}
-                                </label>
-                              ))
-                            ) : (
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                No variables available. Please upload a Kobo tool first.
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            {qualityChecks.outlier_variables.length > 0 ? (
-                              qualityChecks.outlier_variables.map((variable) => (
-                                <span
-                                  key={variable}
-                                  className="inline-block mr-2 mb-1 px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded dark:bg-indigo-900 dark:text-indigo-200"
-                                >
-                                  {questionLabel(variable) || variable}
-                                  {questionLabel(variable) && <span className="opacity-70"> ({variable})</span>}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">No variables selected</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Log transform per variable */}
-                      {qualityChecks.outlier_variables.length > 0 && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Log transform (signed)
-                          </label>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                            Use signed log transform for skewed or mixed-sign variables: sign(x) × log(1 + |x|)
-                          </p>
-                          {sections.isEditing('outlier') ? (
-                            <div className="space-y-2">
-                              {qualityChecks.outlier_variables.map((variable) => (
-                                <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
-                                  <input
-                                    type="checkbox"
-                                    checked={qualityChecks.outlier_log_transform_variables.includes(variable)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setQualityChecks({
-                                          ...qualityChecks,
-                                          outlier_log_transform_variables: [...qualityChecks.outlier_log_transform_variables, variable],
-                                        });
-                                      } else {
-                                        setQualityChecks({
-                                          ...qualityChecks,
-                                          outlier_log_transform_variables: qualityChecks.outlier_log_transform_variables.filter((v) => v !== variable),
-                                        });
-                                      }
-                                    }}
-                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                  />
-                                  <span className="text-sm text-gray-700 dark:text-gray-300">{questionLabel(variable) || variable}</span>
-                                  {questionLabel(variable) && (
-                                    <span className="text-xs text-gray-500">({variable})</span>
-                                  )}
-                                </label>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              {qualityChecks.outlier_log_transform_variables.length > 0 ? (
-                                qualityChecks.outlier_log_transform_variables.map((variable) => (
-                                  <span
-                                    key={variable}
-                                    className="inline-block mr-2 mb-1 px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded dark:bg-amber-900 dark:text-amber-200"
-                                  >
-                                    {questionLabel(variable) || variable}
-                                    {questionLabel(variable) && <span className="opacity-70"> ({variable})</span>} (log)
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-xs text-gray-500 dark:text-gray-400">None</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Method Selection */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Detection method
-                        </label>
-                        {sections.isEditing('outlier') ? (
-                          <select
-                            value={qualityChecks.outlier_method}
-                            onChange={(e) => {
-                              const newMethod = e.target.value as 'iqr' | 'mad' | 'zscore';
-                              // Update threshold based on method
-                              const defaultThresholds = {
-                                iqr: 1.5,
-                                mad: 3.0,
-                                zscore: 2.0,
-                              };
-                              setQualityChecks({
-                                ...qualityChecks,
-                                outlier_method: newMethod,
-                                outlier_threshold: defaultThresholds[newMethod],
-                              });
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          >
-                            <option value="iqr">IQR (Interquartile Range)</option>
-                            <option value="mad">MAD (Median Absolute Deviation)</option>
-                            <option value="zscore">Z-Score</option>
-                          </select>
-                        ) : (
-                          <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {qualityChecks.outlier_method === 'iqr'
-                              ? 'IQR (Interquartile Range)'
-                              : qualityChecks.outlier_method === 'mad'
-                              ? 'MAD (Median Absolute Deviation)'
-                              : 'Z-Score'}
-                          </span>
-                        )}
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {qualityChecks.outlier_method === 'iqr'
-                            ? 'Uses quartiles and IQR. Standard threshold: 1.5'
-                            : qualityChecks.outlier_method === 'mad'
-                            ? 'Robust method using median and MAD. Standard threshold: 3.0'
-                            : 'Uses mean and standard deviation. Standard threshold: 2.0 (moderate) or 3.0 (strict)'}
-                        </p>
-                      </div>
-
-                      {/* Threshold */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                          Threshold
-                        </label>
-                        {sections.isEditing('outlier') ? (
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0.1"
-                            value={qualityChecks.outlier_threshold}
-                            onChange={(e) =>
-                              setQualityChecks({
-                                ...qualityChecks,
-                                outlier_threshold: parseFloat(e.target.value) || 1.5,
-                              })
-                            }
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        ) : (
-                          <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {qualityChecks.outlier_threshold}
-                          </span>
-                        )}
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {qualityChecks.outlier_method === 'iqr'
-                            ? 'IQR multiplier (e.g., 1.5 = standard, 3.0 = more conservative)'
-                            : qualityChecks.outlier_method === 'mad'
-                            ? 'Modified Z-score threshold (e.g., 3.0 = standard)'
-                            : 'Z-score threshold (e.g., 2.0 = moderate, 3.0 = strict)'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {sections.isEditing('outlier') && (
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={() => sections.save('outlier')}
-                      disabled={sections.isSaving('outlier')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {sections.isSaving('outlier') ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={() => sections.cancel('outlier')}
-                      disabled={sections.isSaving('outlier')}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* AI review of open-text answers */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white"><SparkleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />AI review</h2>
-                {!sections.isEditing('llm') && <SavedNote at={savedAt.llm} className="ml-auto mr-2" />}
-                {canEditSurvey && !sections.isEditing('llm') && (
-                  <button
-                    onClick={() => sections.edit('llm')}
-                    className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-              {userPermission === 'owner' && selectedSurvey && (
-                <div className="mb-4">
-                  <SurveyKeyPicker surveyId={selectedSurvey.survey_id} use="review" />
-                </div>
-              )}
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <div className="flex h-5 items-center">
-                    <input
-                      type="checkbox"
-                      disabled={!sections.isEditing('llm')}
-                      checked={qualityChecks.flag_llm_qualitative}
-                      onChange={(e) =>
-                        setQualityChecks({
-                          ...qualityChecks,
-                          flag_llm_qualitative: e.target.checked,
-                        })
-                      }
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                    />
-                  </div>
-                  <div className="ml-3">
-                    <label className="text-sm font-medium text-gray-900 dark:text-white">
-                      Flag weak open-text answers
-                    </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Unreadable, off-topic or too vague answers to the questions you pick. Counts toward the included usage, unless it runs on your own API key.
-                    </p>
-                  </div>
-                </div>
-
-                {qualityChecks.flag_llm_qualitative && (
-                  <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                    <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Questions to review</h3>
-                    {reviewableVariables.length === 0 ? (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        This form has no open-text questions.
-                      </p>
-                    ) : (
-                      <div className="max-h-48 overflow-y-auto space-y-1">
-                        {reviewableVariables.map((variable) => (
-                          <label key={variable.name} className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              disabled={!sections.isEditing('llm')}
-                              checked={qualityChecks.llm_qualitative_fields.includes(variable.name)}
-                              onChange={(e) => {
-                                const selected = qualityChecks.llm_qualitative_fields;
-                                if (e.target.checked) {
-                                  setQualityChecks({
-                                    ...qualityChecks,
-                                    llm_qualitative_fields: [...selected, variable.name],
-                                  });
-                                } else {
-                                  setQualityChecks({
-                                    ...qualityChecks,
-                                    llm_qualitative_fields: selected.filter((name) => name !== variable.name),
-                                  });
-                                }
-                              }}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                            />
-                            <span className="text-gray-900 dark:text-white">{variable.label}</span>
-                            <span className="text-xs text-gray-500">({variable.name})</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {canEditSurvey && !sections.isEditing('llm') && qualityChecks.flag_llm_qualitative && (
-                  <div className="ml-7 flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={handleRerunAI}
-                      disabled={isRerunningAI}
-                      className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md disabled:opacity-50"
-                    >
-                      {isRerunningAI ? 'Scheduling…' : 'Review all answers again'}
-                    </button>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      On the next pull, including answers already reviewed. Counts toward the included usage, unless it runs on your own API key.
-                    </p>
-                  </div>
-                )}
-                {sections.isEditing('llm') && (
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={() => sections.save('llm')}
-                      disabled={sections.isSaving('llm')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {sections.isSaving('llm') ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={() => sections.cancel('llm')}
-                      disabled={sections.isSaving('llm')}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            </section>
+            <AiReviewSection
+              surveyId={selectedSurvey.survey_id}
+              isOwner={userPermission === 'owner'}
+              checks={qualityChecks}
+              setChecks={setQualityChecks}
+              reviewableVariables={reviewableVariables}
+              canEdit={canEditSurvey}
+              controls={sections.controls('llm')}
+              savedAt={savedAt.llm}
+              onError={setError}
+              onSuccess={setSuccess}
+            />
 
             {/* Custom checks */}
             {selectedSurvey && (
