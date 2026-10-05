@@ -17,22 +17,13 @@ import ErrorMessage from './ui/ErrorMessage';
 import { inferSamplingMode } from '../utils/samplingMode';
 import { useSubmissionTranscripts } from './transcription/AudioAnswers';
 import { useSubmissionTranslations } from './translation/TranslationBlock';
+import { findAnswer } from '../utils/answers';
 
 interface SubmissionDetailProps {
   submission: Submission | null;
   isLoading: boolean;
   onSubmissionUpdate?: (updated: Submission) => void;
 }
-
-// Helper to get value from submission data (path-based lookup like backend)
-const getFieldValueFromData = (submissionData: Record<string, any>, fieldName: string): any => {
-  if (!submissionData || !fieldName) return undefined;
-  if (fieldName in submissionData) return submissionData[fieldName];
-  for (const key in submissionData) {
-    if (key.endsWith(`/${fieldName}`) || key === fieldName) return submissionData[key];
-  }
-  return undefined;
-};
 
 /** A dataset statistic for display; a missing one reads as a dash, not NaN. */
 const roundStat = (value: number | undefined): number | string =>
@@ -44,8 +35,8 @@ const getDurationMinutes = (config: SurveyConfig | null, data: Record<string, an
   const startF = config?.config_data?.core_identifiers?.start_time;
   const endF = config?.config_data?.core_identifiers?.end_time;
   if (!startF || !endF) return null;
-  const s = getFieldValueFromData(data, startF);
-  const e = getFieldValueFromData(data, endF);
+  const s = findAnswer(data, startF);
+  const e = findAnswer(data, endF);
   if (!s || !e) return null;
   try {
     return (new Date(e).getTime() - new Date(s).getTime()) / 60000;
@@ -61,17 +52,17 @@ const GENERAL_CHECK_DEFINITIONS: Array<{
   enabled: (config: SurveyConfig | null) => boolean;
   getDetails: (config: SurveyConfig | null, submissionData: Record<string, any>) => { field: string; value: any } | null;
 }> = [
-  { id: 'missing_uuid', label: issueName('missing_uuid'), enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.uuid || '_uuid'; const v = getFieldValueFromData(d, f) ?? d?._uuid; return v != null ? { field: f, value: v } : null; } },
-  { id: 'missing_enumerator', label: issueName('missing_enumerator'), enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.enumerator; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
-  { id: 'date_out_of_range', label: issueName('date_out_of_range'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_out_of_period && (c?.config_data?.global_parameters?.data_collection_start_date || c?.config_data?.global_parameters?.data_collection_end_date)), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
-  { id: 'interview_on_weekend', label: issueName('interview_on_weekend'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_weekend), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
-  { id: 'interview_out_of_office_hours', label: issueName('interview_out_of_office_hours'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_office_hours), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.start_time; if (!f) return null; return { field: f, value: getFieldValueFromData(d, f) }; } },
+  { id: 'missing_uuid', label: issueName('missing_uuid'), enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.uuid || '_uuid'; const v = findAnswer(d, f) ?? d?._uuid; return v != null ? { field: f, value: v } : null; } },
+  { id: 'missing_enumerator', label: issueName('missing_enumerator'), enabled: () => true, getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.enumerator; if (!f) return null; return { field: f, value: findAnswer(d, f) }; } },
+  { id: 'date_out_of_range', label: issueName('date_out_of_range'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_out_of_period && (c?.config_data?.global_parameters?.data_collection_start_date || c?.config_data?.global_parameters?.data_collection_end_date)), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: findAnswer(d, f) }; } },
+  { id: 'interview_on_weekend', label: issueName('interview_on_weekend'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_weekend), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.date_interview; if (!f) return null; return { field: f, value: findAnswer(d, f) }; } },
+  { id: 'interview_out_of_office_hours', label: issueName('interview_out_of_office_hours'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_office_hours), getDetails: (c, d) => { const f = c?.config_data?.core_identifiers?.start_time; if (!f) return null; return { field: f, value: findAnswer(d, f) }; } },
   { id: 'dk_percentage_high', label: issueName('dk_percentage_high'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_dk_percentage), getDetails: () => ({ field: 'submission', value: 'Within threshold' }) },
   { id: 'empty_percentage_high', label: issueName('empty_percentage_high'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_empty_percentage), getDetails: () => ({ field: 'submission', value: 'Within threshold' }) },
   { id: 'duration_too_short', label: issueName('duration_too_short'), enabled: (c) => c?.config_data?.global_parameters?.min_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
   { id: 'duration_too_long', label: issueName('duration_too_long'), enabled: (c) => c?.config_data?.global_parameters?.max_survey_duration_minutes != null, getDetails: (c, d) => { const v = getDurationMinutes(c, d); return v != null ? { field: 'active_interview_time', value: `${v.toFixed(2)} min` } : null; } },
-  { id: 'sampling_frame_mismatch', label: issueName('sampling_frame_mismatch'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && c?.config_data?.sampling_frame?.sampling_cols?.length && inferSamplingMode(c?.config_data?.sampling_frame) === 'uploaded'), getDetails: (c, d) => { const cols = c?.config_data?.sampling_frame?.sampling_cols; if (!cols?.length) return null; const combo = cols.map((col: string) => `${col}=${getFieldValueFromData(d, col) ?? 'N/A'}`).join(', '); return { field: cols.join(', '), value: combo }; } },
-  { id: 'strata_value_not_in_form', label: issueName('strata_value_not_in_form'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && inferSamplingMode(c?.config_data?.sampling_frame) === 'by_variable' && c?.config_data?.sampling_frame?.variable), getDetails: (c, d) => { const v = c?.config_data?.sampling_frame?.variable; if (!v) return null; return { field: v, value: getFieldValueFromData(d, v) ?? 'N/A' }; } },
+  { id: 'sampling_frame_mismatch', label: issueName('sampling_frame_mismatch'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && c?.config_data?.sampling_frame?.sampling_cols?.length && inferSamplingMode(c?.config_data?.sampling_frame) === 'uploaded'), getDetails: (c, d) => { const cols = c?.config_data?.sampling_frame?.sampling_cols; if (!cols?.length) return null; const combo = cols.map((col: string) => `${col}=${findAnswer(d, col) ?? 'N/A'}`).join(', '); return { field: cols.join(', '), value: combo }; } },
+  { id: 'strata_value_not_in_form', label: issueName('strata_value_not_in_form'), enabled: (c) => !!(c?.config_data?.quality_checks?.flag_sampling_frame && inferSamplingMode(c?.config_data?.sampling_frame) === 'by_variable' && c?.config_data?.sampling_frame?.variable), getDetails: (c, d) => { const v = c?.config_data?.sampling_frame?.variable; if (!v) return null; return { field: v, value: findAnswer(d, v) ?? 'N/A' }; } },
 ];
 
 /**
@@ -294,32 +285,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     };
   };
 
-  // Helper function to get value from submission data, handling Kobo path-based field names.
-  // This matches the backend implementation in backend/etl/hfc_engine.py and backend/routers/progress.py
-  // Kobo stores fields with full paths like 'module/variable' or 'module1/module2/variable',
-  // but config may only specify 'variable'. This function searches for the field by:
-  // 1. Direct lookup (exact match)
-  // 2. Path-based search (field name at end of path, e.g., 'module/variable' matches 'variable')
-  const getFieldValue = (fieldName: string): any => {
-    if (!submission_data || !fieldName) return undefined;
-    
-    // First try direct lookup
-    if (fieldName in submission_data) {
-      return submission_data[fieldName];
-    }
-    
-    // Search for fields that end with the field name (path-based)
-    // e.g., 'enumerator_id' should match 'sampling_information/enumerator_id'
-    // e.g., 'sampling_admin2' should match 'sampling_information/sampling_admin2'
-    for (const key in submission_data) {
-      if (key.endsWith(`/${fieldName}`) || key === fieldName) {
-        return submission_data[key];
-      }
-    }
-    
-    // Not found
-    return undefined;
-  };
+  const getFieldValue = (fieldName: string): any => findAnswer(submission_data, fieldName);
+
 
   // Extract metadata from submission data using survey config
   const getMetadata = () => {

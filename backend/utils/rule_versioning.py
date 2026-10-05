@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from etl.dk_utils import dk_codes_fingerprint, dk_numeric_codes, dk_string_tokens, is_dk_value
+from forms.answers import answer_value
 
 
 def _canonical_json(value: dict[str, Any]) -> str:
@@ -58,23 +59,6 @@ def generate_llm_rules_hash(config_data: dict[str, Any], qualitative_model: str)
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
 
 
-def _resolve_field_value(submission_data: dict[str, Any], field_name: str) -> Any:
-    """
-    Resolve a field value from submission data using path-aware lookup.
-
-    Kobo stores fields with full group paths (e.g. 'group/field'), but config
-    entries often use only the leaf name.  This mirrors the logic in
-    HFCEngine._get_field_value so that hash computation and actual LLM
-    field extraction are consistent.
-    """
-    if field_name in submission_data:
-        return submission_data[field_name]
-    for key in submission_data:
-        if key.endswith(f"/{field_name}"):
-            return submission_data[key]
-    return None
-
-
 def generate_llm_input_hash(
     submission_data: dict[str, Any],
     llm_fields: list[str],
@@ -88,7 +72,7 @@ def generate_llm_input_hash(
     dk_tokens = dk_string_tokens({"dk_string_value": dk_string_value})
     normalized: dict[str, str] = {}
     for field in sorted(llm_fields or []):
-        value = _resolve_field_value(submission_data, field)
+        value = answer_value(submission_data, field)
         text = _normalize_text(value)
         if not text:
             continue

@@ -17,6 +17,7 @@ from database.models import SubmissionCurrent, SurveyConfig
 from etl.audio import ai_audio_fields, review_data
 from etl.dk_utils import is_dk_value
 from etl.hfc_engine import HFCEngine
+from forms.answers import find_answer
 from services.ai_errors import NOT_CONFIGURED, AIError
 from services.ai_providers import CHECKS, resolve_provider
 from services.ai_review_queue import transcript_views
@@ -158,7 +159,7 @@ def run_qualitative_check_job(
         )
         field_values: dict[str, str] = {}
         for field in llm_fields:
-            value, _ = engine._get_field_value(review_input, field)
+            value, _ = find_answer(review_input, field)
             if not isinstance(value, str):
                 continue
             text = value.strip()

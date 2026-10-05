@@ -5,7 +5,6 @@ Handles CRUD operations for survey submissions with permission checks.
 
 import logging
 from datetime import datetime
-from typing import Any
 from uuid import UUID as UUIDType
 
 import requests
@@ -17,6 +16,7 @@ from database.models import AudioTranscript, SubmissionCurrent, User
 from database.models import SubmissionHistory as SubmissionHistoryORM
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
+from forms.answers import answer_value
 from models import (
     JsonPatch,
     QualityIssue,
@@ -74,36 +74,6 @@ def _orm_to_pydantic_history(orm_history: SubmissionHistoryORM) -> SubmissionHis
         deprecated_uuid=orm_history.deprecated_uuid,
         data_delta=patches,
     )
-
-
-def _get_field_value_from_jsonb(submission_data: dict[str, Any], field_name: str) -> Any:
-    """
-    Get field value from JSONB submission_data, handling Kobo path-based field names.
-
-    Kobo stores fields with full paths like 'module/variable', but config may only
-    specify 'variable'. This function searches for the field by:
-    1. Direct lookup (exact match)
-    2. Path-based search (field name at end of path)
-
-    Args:
-        submission_data: Submission data dictionary
-        field_name: Field name from config (may be just the variable name)
-
-    Returns:
-        Field value or None if not found
-    """
-    # First try direct lookup
-    if field_name in submission_data:
-        return submission_data[field_name]
-
-    # Search for fields that end with the field name (path-based)
-    # e.g., 'enumerator_id' should match 'sampling_information/enumerator_id'
-    for key in submission_data:
-        if key.endswith(f"/{field_name}") or key == field_name:
-            return submission_data[key]
-
-    # Not found
-    return None
 
 
 def _transcript_summaries(
@@ -285,7 +255,7 @@ async def get_submissions(  # noqa: C901 -- split pending, see docs/code-quality
         filtered_submissions = []
         for sub in orm_submissions:
             if sub.submission_data:
-                enum_value = _get_field_value_from_jsonb(sub.submission_data, enumerator_field)
+                enum_value = answer_value(sub.submission_data, enumerator_field)
                 if enum_value and str(enum_value) in enumerators:
                     filtered_submissions.append(sub)
         orm_submissions = filtered_submissions
@@ -311,7 +281,7 @@ async def get_submissions(  # noqa: C901 -- split pending, see docs/code-quality
             filtered_submissions = []
             for sub in orm_submissions:
                 if sub.submission_data:
-                    var_value = _get_field_value_from_jsonb(sub.submission_data, variable)
+                    var_value = answer_value(sub.submission_data, variable)
                     if var_value and str(var_value) in values:
                         filtered_submissions.append(sub)
             orm_submissions = filtered_submissions

@@ -27,6 +27,7 @@ from etl.dk_utils import (
     compute_dk_metrics as compute_submission_dk_metrics,
 )
 from etl.relevance import is_shown
+from forms.answers import find_answer
 from forms.schema import Question, load_form_schema
 from linter.form_source import SurveyForm, load_survey_form
 from linter.questions import iter_answerable
@@ -255,7 +256,7 @@ class HFCEngine:
                 # Extract raw values for this variable from all submissions
                 raw_values: list[float] = []
                 for submission in submissions:
-                    value, _ = self._get_field_value(submission.submission_data, variable)
+                    value, _ = find_answer(submission.submission_data, variable)
                     if value is None:
                         continue
 
@@ -400,44 +401,6 @@ class HFCEngine:
         if y >= 0:
             return math.exp(y) - 1
         return 1 - math.exp(-y)
-
-    def _get_field_value(
-        self, submission_data: dict[str, Any], field_name: str | None
-    ) -> tuple[Any, str | None]:
-        """
-        Get field value from submission data, handling Kobo path-based field names.
-
-        Kobo stores fields with full paths like 'module/variable' or 'module1/module2/variable',
-        but config may only specify 'variable'. This function searches for the field by:
-        1. Direct lookup (exact match)
-        2. Path-based search (field name at end of path, e.g., 'module/variable' matches 'variable')
-
-        Args:
-            submission_data: Submission data dictionary
-            field_name: Field name from config (may be just the variable name)
-
-        Returns:
-            Tuple of (value, actual_field_path) where actual_field_path is the full path found
-        """
-        # Core identifiers are optional, so the field name may be unset. Bail
-        # out explicitly: otherwise the suffix search below looks for the
-        # literal "/None", which is not found by accident rather than by
-        # intent.
-        if not field_name:
-            return None, None
-
-        # First try direct lookup
-        if field_name in submission_data:
-            return submission_data[field_name], field_name
-
-        # Search for fields that end with the field name (path-based)
-        # e.g., 'enumerator_id' should match 'sampling_information/enumerator_id'
-        for key in submission_data:
-            if key.endswith(f"/{field_name}") or key == field_name:
-                return submission_data[key], key
-
-        # Not found
-        return None, None
 
     def run_checks(
         self,
@@ -670,7 +633,7 @@ class HFCEngine:
         # enumerator configured every submission would otherwise be flagged,
         # which is the app telling a new user that all of their data is bad.
         enumerator_id, enumerator_field_path = (
-            self._get_field_value(submission_data, self.enumerator_field)
+            find_answer(submission_data, self.enumerator_field)
             if self.enumerator_field
             else (None, None)
         )
@@ -687,12 +650,8 @@ class HFCEngine:
             )
 
         # 3. Check date range and time
-        date_value, date_field_path = self._get_field_value(
-            submission_data, self.date_interview_field
-        )
-        start_time_value, start_time_path = self._get_field_value(
-            submission_data, self.start_time_field
-        )
+        date_value, date_field_path = find_answer(submission_data, self.date_interview_field)
+        start_time_value, start_time_path = find_answer(submission_data, self.start_time_field)
 
         if date_value:
             try:
@@ -896,7 +855,7 @@ class HFCEngine:
             return (0, 0, None)
 
         def lookup(name: str) -> Any:
-            return self._get_field_value(submission_data, name)[0]
+            return find_answer(submission_data, name)[0]
 
         empty_count = shown_count = 0
         for question in self._empty_eligible_questions():
@@ -998,12 +957,8 @@ class HFCEngine:
                 f"Using submission data fields: {self.start_time_field}, {self.end_time_field}"
             )
             logger.debug(f"Submission data keys (sample): {list(submission_data.keys())[:20]}")
-            start_time_data, start_field_path = self._get_field_value(
-                submission_data, self.start_time_field
-            )
-            end_time_data, end_field_path = self._get_field_value(
-                submission_data, self.end_time_field
-            )
+            start_time_data, start_field_path = find_answer(submission_data, self.start_time_field)
+            end_time_data, end_field_path = find_answer(submission_data, self.end_time_field)
             logger.debug(
                 f"Found in submission data: start={start_time_data} (path={start_field_path}), end={end_time_data} (path={end_field_path})"
             )
@@ -1098,7 +1053,7 @@ class HFCEngine:
         missing_cols = []
 
         for col in self.sampling_cols:
-            value, field_path = self._get_field_value(submission_data, col)
+            value, field_path = find_answer(submission_data, col)
             if value is None and field_path is None:
                 missing_cols.append(col)
             else:
@@ -1220,7 +1175,7 @@ class HFCEngine:
             )
             return issues
 
-        value, field_path = self._get_field_value(submission_data, self.sampling_variable)
+        value, field_path = find_answer(submission_data, self.sampling_variable)
         if value is None and field_path is None:
             # The submission never answered. That is a missing answer, not an
             # illegal one, and blaming the enumerator for it would be wrong.
@@ -1265,7 +1220,7 @@ class HFCEngine:
         for variable in self.outlier_variables:
             try:
                 # Get value for this variable from current submission
-                value, field_path = self._get_field_value(submission_data, variable)
+                value, field_path = find_answer(submission_data, variable)
 
                 # Skip if value is missing or is a special value (DK/NA)
                 if value is None:
@@ -1572,7 +1527,7 @@ class HFCEngine:
         missing_vars = []
         var_values = {}
         for var in variables_involved:
-            value, field_path = self._get_field_value(submission_data, var)
+            value, field_path = find_answer(submission_data, var)
             if value is None and field_path is None and var not in blank_checked:
                 missing_vars.append(var)
             else:
@@ -1711,7 +1666,7 @@ class HFCEngine:
             return False
 
         def lookup(name: str) -> Any:
-            return self._get_field_value(submission_data, name)[0]
+            return find_answer(submission_data, name)[0]
 
         return is_shown(form.schema, question, lookup) is True
 

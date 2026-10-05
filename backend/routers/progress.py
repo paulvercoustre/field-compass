@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from database.models import SubmissionCurrent, User
 from etl.dk_utils import dk_numeric_codes, dk_string_tokens, is_dk_value
+from forms.answers import answer_value
 from models import (
     DetailedProgress,
     EnumeratorCollectionStats,
@@ -64,36 +65,6 @@ def _is_target_column(column_name: str) -> bool:
     """Check if a column name is a target column."""
     normalized = column_name.lower().strip()
     return any(name in normalized for name in TARGET_COLUMN_NAMES)
-
-
-def _get_field_value(submission_data: dict[str, Any], field_name: str) -> Any:
-    """
-    Get field value from submission data, handling Kobo path-based field names.
-
-    Kobo stores fields with full paths like 'module/variable', but config may only
-    specify 'variable'. This function searches for the field by:
-    1. Direct lookup (exact match)
-    2. Path-based search (field name at end of path)
-
-    Args:
-        submission_data: Submission data dictionary
-        field_name: Field name from config (may be just the variable name)
-
-    Returns:
-        Field value or None if not found
-    """
-    # First try direct lookup
-    if field_name in submission_data:
-        return submission_data[field_name]
-
-    # Search for fields that end with the field name (path-based)
-    # e.g., 'sampling_admin2' should match 'sampling_information/sampling_admin2'
-    for key in submission_data:
-        if key.endswith(f"/{field_name}") or key == field_name:
-            return submission_data[key]
-
-    # Not found
-    return None
 
 
 def _percentage(conducted: int, target: int | None) -> float | None:
@@ -317,7 +288,7 @@ async def get_progress_data(
 
         # Count conducted surveys for each value in this column
         for sub in submissions:
-            col_value = _get_field_value(sub.submission_data, col) or "Unknown"
+            col_value = answer_value(sub.submission_data, col) or "Unknown"
             col_value = str(col_value) if col_value is not None else "Unknown"
             col_counts[col_value] += 1
 
@@ -362,7 +333,7 @@ async def get_progress_data(
             combo_key_parts = []
 
             for col in sampling_cols:
-                col_value = _get_field_value(sub.submission_data, col) or "Unknown"
+                col_value = answer_value(sub.submission_data, col) or "Unknown"
                 col_value = str(col_value) if col_value is not None else "Unknown"
                 combo_values[col] = col_value
                 combo_key_parts.append(col_value)
@@ -560,7 +531,7 @@ async def get_performance_data(  # noqa: C901 -- split pending, see docs/code-qu
         return dk_count, total_count
 
     for sub in submissions:
-        enum_id = _get_field_value(sub.submission_data, enumerator_field) or "Unknown"
+        enum_id = answer_value(sub.submission_data, enumerator_field) or "Unknown"
         enum_id = str(enum_id) if enum_id else "Unknown"
 
         enum_collection_stats[enum_id]["total"] += 1

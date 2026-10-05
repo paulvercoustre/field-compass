@@ -6,13 +6,13 @@ Provides aggregated quality metrics for the quality dashboard.
 import contextlib
 from collections import defaultdict
 from datetime import datetime
-from typing import Any
 from uuid import UUID as UUIDType
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database.models import SubmissionCurrent, User
+from forms.answers import answer_value
 from models import (
     IssueFrequency,
     IssueTimeSeriesPoint,
@@ -27,30 +27,6 @@ from services.permissions import require_survey_access
 from services.survey_config import get_enumerator_field
 
 router = APIRouter()
-
-
-def _get_field_value_from_jsonb(submission_data: dict[str, Any], field_name: str) -> Any:
-    """
-    Get field value from JSONB submission_data, handling Kobo path-based field names.
-
-    Kobo stores fields with full paths like 'module/variable', but config may only
-    specify 'variable'. This function searches for the field by:
-    1. Direct lookup (exact match)
-    2. Path-based search (field name at end of path)
-    """
-    if not submission_data:
-        return None
-
-    # First try direct lookup
-    if field_name in submission_data:
-        return submission_data[field_name]
-
-    # Search for fields that end with the field name (path-based)
-    for key in submission_data:
-        if key.endswith(f"/{field_name}") or key == field_name:
-            return submission_data[key]
-
-    return None
 
 
 def _parse_sampling_filters(sampling_filters_str: str) -> dict[str, list[str]]:
@@ -94,8 +70,7 @@ def _filter_submissions_by_jsonb(
             sub
             for sub in filtered
             if sub.submission_data
-            and str(_get_field_value_from_jsonb(sub.submission_data, enumerator_field))
-            in enumerator_values
+            and str(answer_value(sub.submission_data, enumerator_field)) in enumerator_values
         ]
 
     # Filter by sampling variables
@@ -105,8 +80,7 @@ def _filter_submissions_by_jsonb(
         filtered = [
             sub
             for sub in filtered
-            if sub.submission_data
-            and str(_get_field_value_from_jsonb(sub.submission_data, variable)) in values
+            if sub.submission_data and str(answer_value(sub.submission_data, variable)) in values
         ]
 
     return filtered
