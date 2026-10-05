@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database.models import SubmissionCurrent, SurveyConfig
-from models import QualityOverviewResponse
+from schemas import QualityOverviewResponse
 from services.database import get_db
 from services.permissions import survey_access
 from services.quality import quality_overview

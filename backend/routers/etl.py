@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database.models import Run, SurveyConfig, User
-from models import BaseResponse
+from schemas import BaseResponse
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
 from services.permissions import survey_access

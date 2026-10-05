@@ -17,7 +17,7 @@ from database.models import User
 from etl.kobo_fetcher import KoboFetcher
 from forms import load_form_schema
 from linter.questions import enclosing_relevants
-from models import KoboProject, SurveyFormResponse
+from schemas import KoboProject, SurveyFormResponse
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
 from services.permissions import get_accessible_surveys

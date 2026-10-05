@@ -31,7 +31,7 @@ from forms.answers import find_answer
 from forms.schema import Question, load_form_schema
 from linter.form_source import SurveyForm, load_survey_form
 from linter.questions import iter_answerable
-from models import QualityIssue
+from schemas import QualityIssue
 from services.survey_config import (
     DEFAULT_LLM_CHECK_TYPES,
     SAMPLING_MODE_BY_VARIABLE,

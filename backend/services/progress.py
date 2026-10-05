@@ -12,7 +12,7 @@ from typing import Any
 from database.models import SubmissionCurrent
 from etl.dk_utils import dk_numeric_codes, dk_string_tokens, is_dk_value
 from forms.answers import answer_value
-from models import (
+from schemas import (
     DetailedProgress,
     EnumeratorCollectionStats,
     EnumeratorQualityStats,

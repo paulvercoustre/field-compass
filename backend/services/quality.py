@@ -9,7 +9,7 @@ import contextlib
 from collections import defaultdict
 
 from database.models import SubmissionCurrent
-from models import (
+from schemas import (
     IssueFrequency,
     IssueTimeSeriesPoint,
     QualityMetricsSummary,

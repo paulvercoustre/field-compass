@@ -16,7 +16,7 @@ from database.models import AI_REVIEW_OPEN, ITEM_OPEN, AudioTranscript, Submissi
 from database.models import SubmissionHistory as SubmissionHistoryORM
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
-from models import (
+from schemas import (
     JsonPatch,
     QualityIssue,
     ReviewerNotesUpdate,

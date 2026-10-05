@@ -1,6 +1,6 @@
 """
-Pydantic models for API request/response validation.
-These models match the frontend TypeScript types.
+Pydantic schemas for API requests and responses, matching the frontend's
+TypeScript types. The database tables are in database/models.py.
 """
 
 from datetime import datetime
