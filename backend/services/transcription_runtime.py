@@ -19,7 +19,7 @@ from typing import Any
 if "/app" not in sys.path and os.path.isdir("/app"):
     sys.path.insert(0, "/app")
 
-from database.models import AudioTranscript, SubmissionCurrent, SurveyConfig, User
+from database.models import ITEM_OPEN, AudioTranscript, SubmissionCurrent, SurveyConfig, User
 from etl.audio import (
     audio_questions,
     is_transcription_issue,
@@ -205,7 +205,7 @@ def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality
         if row is None:
             db.commit()
             return {"status": "missing"}
-        if row.input_hash != payload.get("input_hash") or row.status not in ("pending", "running"):
+        if row.input_hash != payload.get("input_hash") or row.status not in ITEM_OPEN:
             db.commit()
             return {"status": "stale", "transcript_id": transcript_id}
 
@@ -401,7 +401,7 @@ def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality
                     .filter(AudioTranscript.transcript_id == row.transcript_id)
                     .first()
                 )
-                if failed is not None and failed.status in ("pending", "running"):
+                if failed is not None and failed.status in ITEM_OPEN:
                     _finish(db, failed, "failed", error=f"internal: {exc}")
                     _after_any(db, failed, survey)
             except Exception:  # noqa: BLE001 -- recording the failure must not mask it

@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import AudioTranscript, SubmissionCurrent, SurveyConfig, User
+from database.models import ITEM_OPEN, AudioTranscript, SubmissionCurrent, SurveyConfig, User
 from etl.audio import (
     SOURCE_KOBO,
     answer_filename,
@@ -373,7 +373,7 @@ async def transcribe_now(
     if mode == "all":
         db.query(AudioTranscript).filter(
             AudioTranscript.survey_id == survey.survey_id,
-            AudioTranscript.status.notin_(("pending", "running")),
+            AudioTranscript.status.notin_(ITEM_OPEN),
             AudioTranscript.source != SOURCE_KOBO,
         ).update({AudioTranscript.input_hash: None}, synchronize_session=False)
 

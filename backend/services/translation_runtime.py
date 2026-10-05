@@ -17,7 +17,13 @@ from typing import Any
 if "/app" not in sys.path and os.path.isdir("/app"):
     sys.path.insert(0, "/app")
 
-from database.models import AnswerTranslation, AudioTranscript, SubmissionCurrent, SurveyConfig
+from database.models import (
+    ITEM_OPEN,
+    AnswerTranslation,
+    AudioTranscript,
+    SubmissionCurrent,
+    SurveyConfig,
+)
 from etl.translation import (
     ORIGIN_AI,
     SOURCE_TRANSCRIPT,
@@ -95,7 +101,7 @@ def run_translation_job(
             return {"status": "missing"}
         if (
             row.input_hash != payload.get("input_hash")
-            or row.status not in ("pending", "running")
+            or row.status not in ITEM_OPEN
             or row.origin != ORIGIN_AI
         ):
             db.commit()
@@ -190,7 +196,7 @@ def run_translation_job(
         if row is not None:
             try:
                 failed = db.get(AnswerTranslation, row.translation_id)
-                if failed is not None and failed.status in ("pending", "running"):
+                if failed is not None and failed.status in ITEM_OPEN:
                     _finish(db, failed, "failed", f"internal: {exc}")
                     finish_if_done(db, failed.run_id)
             except Exception:  # noqa: BLE001 -- recording the failure must not mask it

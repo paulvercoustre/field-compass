@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from database.models import AudioTranscript, SubmissionCurrent, User
+from database.models import AI_REVIEW_OPEN, ITEM_OPEN, AudioTranscript, SubmissionCurrent, User
 from database.models import SubmissionHistory as SubmissionHistoryORM
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
@@ -104,7 +104,7 @@ def _transcript_summaries(
                 entry["no_speech"] += 1
         elif status == "failed":
             entry["failed"] += 1
-        elif status in ("pending", "running"):
+        elif status in ITEM_OPEN:
             entry["in_progress"] += 1
     return out
 
@@ -178,7 +178,7 @@ async def get_submissions(
     if ai_review:
         statuses = {
             "failed": ("failed",),
-            "in_progress": ("pending", "running", "waiting"),
+            "in_progress": AI_REVIEW_OPEN,
             "not_run": ("not_run_allowance", "cancelled"),
         }[ai_review]
         query = query.filter(SubmissionCurrent.llm_check_status.in_(statuses))
@@ -190,7 +190,7 @@ async def get_submissions(
         if transcript == "failed":
             transcripts = transcripts.filter(AudioTranscript.status == "failed")
         elif transcript == "in_progress":
-            transcripts = transcripts.filter(AudioTranscript.status.in_(("pending", "running")))
+            transcripts = transcripts.filter(AudioTranscript.status.in_(ITEM_OPEN))
         elif transcript == "no_speech":
             transcripts = transcripts.filter(
                 AudioTranscript.status == "success",

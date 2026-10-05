@@ -428,6 +428,12 @@ class SurveyAccess(Base):
 RUN_ACTIVE = ("queued", "running")
 RUN_OPEN = ("queued", "running", "background")
 
+# A work item (AI review, transcript, translation) not yet finished, and a send
+# to Kobo not yet made. An AI review can also be waiting on its transcripts.
+ITEM_OPEN = ("pending", "running")
+AI_REVIEW_OPEN = (*ITEM_OPEN, "waiting")
+KOBO_SEND_OPEN = ("pending",)
+
 
 class Run(Base):
     """

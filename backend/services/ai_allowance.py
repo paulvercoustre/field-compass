@@ -24,7 +24,7 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import AIUsage, AnswerTranslation, SubmissionCurrent
+from database.models import ITEM_OPEN, AIUsage, AnswerTranslation, SubmissionCurrent
 from services.ai_usage import QUALITATIVE_CHECK, RULE_GENERATION, RULE_SUGGESTION, TRANSLATION
 
 NOT_RUN_ALLOWANCE = "not_run_allowance"
@@ -118,7 +118,7 @@ def checks_in_flight(db: Session, survey_id: UUID, now: datetime | None = None) 
         db.query(func.count(SubmissionCurrent._id))
         .filter(
             SubmissionCurrent.survey_id == survey_id,
-            SubmissionCurrent.llm_check_status.in_(("pending", "running")),
+            SubmissionCurrent.llm_check_status.in_(ITEM_OPEN),
             ~SubmissionCurrent._id.in_(_spent_submissions(db, survey_id, now)),
         )
         .scalar()
@@ -189,7 +189,7 @@ def translations_in_flight(db: Session, survey_id: UUID) -> int:
         db.query(func.count(AnswerTranslation.translation_id))
         .filter(
             AnswerTranslation.survey_id == survey_id,
-            AnswerTranslation.status.in_(("pending", "running")),
+            AnswerTranslation.status.in_(ITEM_OPEN),
         )
         .scalar()
     ) or 0

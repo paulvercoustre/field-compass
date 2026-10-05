@@ -753,3 +753,95 @@ class TestUsageHistory:
         from uuid import uuid4
 
         assert client.get(f"/api/ai/usage/history?survey_id={uuid4()}").status_code == 404
+
+
+class TestRunProblems:
+    """Every kind of problem a run can report, in the order it reports them."""
+
+    def test_every_kind_in_order(self, db, survey):
+        from services.runs import run_problems
+
+        run = _run(db, survey, status="finished", stats={"llm_paused": True, "errors": 3})
+        _submission(
+            db,
+            survey,
+            1,
+            llm_check_status="failed",
+            llm_run_id=run.run_id,
+            llm_last_error="auth: The provider rejected the key.",
+        )
+        _submission(
+            db,
+            survey,
+            2,
+            llm_check_status="failed",
+            llm_run_id=run.run_id,
+            llm_last_error="provider_quota: No credit.",
+        )
+        _submission(db, survey, 3, llm_check_status="not_run_allowance", llm_run_id=run.run_id)
+
+        def transcript(n, **fields):
+            db.add(
+                AudioTranscript(
+                    survey_id=survey.survey_id,
+                    submission_id=n,
+                    question_path="interview/story",
+                    run_id=run.run_id,
+                    **fields,
+                )
+            )
+
+        transcript(1, status="failed", last_error="auth: ElevenLabs refused your key.")
+        transcript(2, status="failed", last_error="bad_request: Unsupported file.")
+        transcript(3, status="failed", last_error="bad_request: Damaged file.")
+        transcript(4, status="not_run_allowance")
+        transcript(5, status="skipped", skip_reason="too_long")
+        db.add(
+            AnswerTranslation(
+                survey_id=survey.survey_id,
+                submission_id=1,
+                question_path="v",
+                language="eng",
+                run_id=run.run_id,
+                status="not_run_allowance",
+            )
+        )
+        db.commit()
+
+        problems = run_problems(
+            db, run, survey, {"ai_checks": 1, "transcripts": 1, "translations": 1}
+        )
+
+        assert [p["kind"] for p in problems] == [
+            "ai_paused",
+            "ai_auth",
+            "ai_quota",
+            "ai_allowance",
+            "transcription_auth",
+            "transcription_bad_file",
+            "transcription_allowance",
+            "transcription_too_long",
+            "translation_allowance",
+            "pull_errors",
+        ]
+        by_kind = {p["kind"]: p for p in problems}
+        assert by_kind["transcription_auth"] == {
+            "kind": "transcription_auth",
+            "text": "Transcription stopped: ElevenLabs refused your key.",
+            "action": "open_ai_providers",
+        }
+        assert by_kind["transcription_bad_file"]["text"].startswith(
+            "2 recordings couldn't be transcribed"
+        )
+        assert by_kind["ai_allowance"]["text"].startswith("1 answer not reviewed")
+        assert by_kind["pull_errors"] == {
+            "kind": "pull_errors",
+            "text": "3 submissions couldn't be processed; the rest of the pull went through.",
+            "action": None,
+        }
+
+    def test_nothing_to_report(self, db, survey):
+        from services.runs import run_problems
+
+        run = _run(db, survey, status="finished", stats={})
+        assert run_problems(db, run, survey, {"ai_checks": 1, "transcripts": 1}) == []
