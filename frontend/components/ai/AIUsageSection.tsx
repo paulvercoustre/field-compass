@@ -56,7 +56,7 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
   const monthName = usage
     ? new Date(`${usage.month}-01T00:00:00Z`).toLocaleString(undefined, { month: 'long', timeZone: 'UTC' })
     : '';
-  const rules = usage?.rule_requests_today;
+  const rules = usage?.rule_requests_this_month;
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-card dark:border-gray-800 dark:bg-gray-900">
@@ -80,6 +80,7 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
                   <tr>
                     <th className="py-2 pr-4 font-medium">Survey</th>
                     <th className="py-2 pr-4 font-medium">AI review</th>
+                    <th className="py-2 pr-4 font-medium">Translation</th>
                     <th className="py-2 font-medium">Transcription</th>
                   </tr>
                 </thead>
@@ -89,6 +90,7 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
                       .filter((row) => row.feature === 'qualitative_check')
                       .reduce((total, row) => total + row.calls - row.failed, 0);
                     const transcription = survey.transcription;
+                    const translation = survey.translation;
                     return (
                       <tr key={survey.survey_id} className="border-t border-gray-100 align-top dark:border-gray-800">
                         <td className="py-3 pr-4 font-medium text-gray-900 dark:text-white">{survey.survey_name}</td>
@@ -104,6 +106,23 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
                             <OwnKey label={survey.provider.label} amount={`${reviews.toLocaleString()} reviewed`} />
                           ) : (
                             <span className="text-xs text-gray-400 dark:text-gray-500">None</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4">
+                          {translation?.provider ? (
+                            <OwnKey
+                              label={translation.provider.label}
+                              amount={`${translation.own_key_translations.toLocaleString()} translated`}
+                            />
+                          ) : translation?.allowance ? (
+                            <Meter
+                              used={translation.allowance.used}
+                              inFlight={translation.allowance.in_flight}
+                              limit={translation.allowance.limit}
+                              label={`Included translations used in ${monthName} on ${survey.survey_name}`}
+                            />
+                          ) : (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">Off</span>
                           )}
                         </td>
                         <td className="py-3">
@@ -130,9 +149,9 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
 
           {rules && rules.limit > 0 && (
             <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-gray-100 pt-4 dark:border-gray-800">
-              <span className="text-sm text-gray-700 dark:text-gray-300">AI rule requests today</span>
+              <span className="text-sm text-gray-700 dark:text-gray-300">AI rule requests this month</span>
               <div className="w-48">
-                <Meter used={rules.used} limit={rules.limit} label="Included AI rule requests used today" />
+                <Meter used={rules.used} limit={rules.limit} label="Included AI rule requests used this month" />
               </div>
             </div>
           )}

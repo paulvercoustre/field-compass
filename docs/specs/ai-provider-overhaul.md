@@ -273,7 +273,7 @@ demand.
 | `DELETE` | `/api/ai/connections/{id}` | Detaches it from every survey first |
 | `POST` | `/api/ai/connections/{id}/test` | Re-run the test |
 | `PUT` | `/api/surveys/{id}/ai-connection` | Owner attaches one of their connections, or `null` for the allowance |
-| `GET` | `/api/ai/usage` | For each survey the user owns: provider, allowance used and remaining, and calls and tokens this month by feature; plus today's free rule requests |
+| `GET` | `/api/ai/usage` | For each survey the user owns: provider, allowance used and remaining, and calls and tokens this month by feature; plus this month's free rule requests |
 
 `/api/ai/generate-rule` and `/api/ai/suggest-rules` keep their contracts and
 resolve the provider from the survey.
@@ -473,7 +473,7 @@ Configured by the operator; proposed defaults:
 | Variable | Default | Meaning |
 |---|---|---|
 | `AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH` | 200 | Qualitative checks per survey per calendar month (UTC) on the operator key |
-| `AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY` | 30 | Rule generations + suggestions per user per day on the operator key. The per-IP 20/hour limit stays as abuse protection |
+| `AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH` | 30 | Rule generations + suggestions per user per month on the operator key (was per day). The per-IP 20/hour limit stays as abuse protection |
 | `AI_ALLOWANCE_ENABLED` | `true` if `OPENAI_API_KEY` is set | With it off, AI features require a connection |
 
 Counting reads `ai_usage` (`connection_id IS NULL`), and only calls that

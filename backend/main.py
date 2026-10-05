@@ -28,6 +28,7 @@ from routers import (
     submissions,
     surveys,
     transcription,
+    translation,
     users,
     validation_rules,
 )
@@ -132,6 +133,7 @@ app.include_router(kobo.router, prefix="/api", tags=["kobo"])
 app.include_router(lint.router, prefix="/api", tags=["lint"])
 app.include_router(activity.router, prefix="/api", tags=["activity"])
 app.include_router(transcription.router, prefix="/api", tags=["transcription"])
+app.include_router(translation.router, prefix="/api", tags=["translation"])
 app.include_router(admin.router, prefix="/api", tags=["admin"])
 
 

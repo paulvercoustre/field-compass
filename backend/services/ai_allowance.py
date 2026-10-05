@@ -2,8 +2,9 @@
 Included AI usage: how much a survey may spend on the operator's key.
 
 Surveys without their own provider run AI checks on the operator's key, up
-to a monthly number of checked submissions per survey; AI rule writing on
-that key is limited per user per day. Both are counted from ``ai_usage``, so
+to a monthly number of checked submissions per survey, and translate answers
+up to a separate monthly number of translations per survey; AI rule writing on
+that key is limited per user per month. All are counted from ``ai_usage``, so
 the limit is what was actually spent, not an estimate. A survey with its own
 provider has no Field Compass limit -- its provider's apply.
 
@@ -23,8 +24,8 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import AIUsage, SubmissionCurrent
-from services.ai_usage import QUALITATIVE_CHECK, RULE_GENERATION, RULE_SUGGESTION
+from database.models import AIUsage, AnswerTranslation, SubmissionCurrent
+from services.ai_usage import QUALITATIVE_CHECK, RULE_GENERATION, RULE_SUGGESTION, TRANSLATION
 
 NOT_RUN_ALLOWANCE = "not_run_allowance"
 
@@ -44,8 +45,12 @@ def checks_per_survey_month() -> int:
     return _int_env("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", 200)
 
 
-def rule_requests_per_user_day() -> int:
-    return _int_env("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY", 30)
+def translations_per_survey_month() -> int:
+    return _int_env("AI_ALLOWANCE_TRANSLATIONS_PER_SURVEY_MONTH", 500)
+
+
+def rule_requests_per_user_month() -> int:
+    return _int_env("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH", 30)
 
 
 def allowance_enabled() -> bool:
@@ -67,11 +72,6 @@ def next_month_start(now: datetime | None = None) -> datetime:
         if start.month == 12
         else start.replace(month=start.month + 1)
     )
-
-
-def _day_start(now: datetime | None = None) -> datetime:
-    now = now or datetime.utcnow()
-    return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _spent_submissions(db: Session, survey_id: UUID, now: datetime | None = None):
@@ -134,7 +134,7 @@ def checks_remaining(db: Session, survey_id: UUID, now: datetime | None = None) 
 
 
 def rule_requests_remaining(db: Session, user_id: UUID, now: datetime | None = None) -> int:
-    """How many more AI rule requests this user may make on the operator's key today."""
+    """How many more AI rule requests this user may make on the operator's key this month."""
     if not allowance_enabled():
         return 0
     used = (
@@ -144,11 +144,11 @@ def rule_requests_remaining(db: Session, user_id: UUID, now: datetime | None = N
             AIUsage.feature.in_((RULE_GENERATION, RULE_SUGGESTION)),
             AIUsage.connection_id.is_(None),
             AIUsage.outcome.in_(_SPENT),
-            AIUsage.created_at >= _day_start(now),
+            AIUsage.created_at >= month_start(now),
         )
         .scalar()
     )
-    return max(0, rule_requests_per_user_day() - used)
+    return max(0, rule_requests_per_user_month() - used)
 
 
 def not_run_message(now: datetime | None = None) -> str:
@@ -157,4 +157,56 @@ def not_run_message(now: datetime | None = None) -> str:
     return (
         f"allowance: This survey has used its included AI reviews for {month}. They resume next "
         "month, or straight away with your own AI key."
+    )
+
+
+# --- Translations ---------------------------------------------------------------
+
+
+def translations_used(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
+    """
+    Answers this survey had translated on the operator's key this month.
+
+    Counted per call that cost credit: one answer, one translation (a retry
+    after a billed but unusable reply counts again: it was billed again).
+    """
+    return (
+        db.query(func.count(AIUsage.usage_id))
+        .filter(
+            AIUsage.survey_id == survey_id,
+            AIUsage.feature == TRANSLATION,
+            AIUsage.connection_id.is_(None),
+            AIUsage.outcome.in_(_SPENT),
+            AIUsage.created_at >= month_start(now),
+        )
+        .scalar()
+    ) or 0
+
+
+def translations_in_flight(db: Session, survey_id: UUID) -> int:
+    """Translations queued or running, each holding one allowance slot."""
+    return (
+        db.query(func.count(AnswerTranslation.translation_id))
+        .filter(
+            AnswerTranslation.survey_id == survey_id,
+            AnswerTranslation.status.in_(("pending", "running")),
+        )
+        .scalar()
+    ) or 0
+
+
+def translations_remaining(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
+    """How many more answers this survey may have translated on the operator's key this month."""
+    if not allowance_enabled():
+        return 0
+    used = translations_used(db, survey_id, now) + translations_in_flight(db, survey_id)
+    return max(0, translations_per_survey_month() - used)
+
+
+def translation_not_run_message(now: datetime | None = None) -> str:
+    """Stored as last_error for a translation the allowance did not cover."""
+    month = month_start(now).strftime("%B")
+    return (
+        f"allowance: This survey has used its included translations for {month}. They resume "
+        "next month, or straight away with your own AI key for translation."
     )

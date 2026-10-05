@@ -84,6 +84,7 @@ CREATE TABLE survey_configs (
     user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
     ai_connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
     transcription_connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
+    translation_connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(survey_name)
@@ -334,6 +335,53 @@ COMMENT ON COLUMN audio_transcripts.status IS 'pending | running | success | fai
 COMMENT ON COLUMN audio_transcripts.kobo_status IS 'not_sent | pending | sent | failed | unsupported | edited_in_kobo';
 
 -- ============================================================================
+-- Table: answer_translations
+-- ============================================================================
+-- Answers translated into the survey's translation language by its AI
+-- provider: typed answers to text questions, and transcripts of audio ones.
+-- One per (submission, question).
+-- ============================================================================
+
+CREATE TABLE answer_translations (
+    translation_id BIGSERIAL PRIMARY KEY,
+    survey_id UUID NOT NULL REFERENCES survey_configs(survey_id) ON DELETE CASCADE,
+    submission_id INTEGER NOT NULL,
+    question_path VARCHAR(255) NOT NULL,
+    source VARCHAR(16) NOT NULL DEFAULT 'text',
+    transcript_id BIGINT REFERENCES audio_transcripts(transcript_id) ON DELETE CASCADE,
+    language VARCHAR(16) NOT NULL,
+    origin VARCHAR(16) NOT NULL DEFAULT 'ai',
+    input_hash VARCHAR(64),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    skip_reason VARCHAR(32),
+    text TEXT,
+    model VARCHAR(64),
+    last_error TEXT,
+    run_id UUID REFERENCES runs(run_id) ON DELETE SET NULL,
+    requested_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    job_id VARCHAR(128),
+    queued_at TIMESTAMP WITH TIME ZONE,
+    started_at TIMESTAMP WITH TIME ZONE,
+    finished_at TIMESTAMP WITH TIME ZONE,
+    kobo_status VARCHAR(20) NOT NULL DEFAULT 'not_sent',
+    kobo_language VARCHAR(16),
+    kobo_version_uuid VARCHAR(64),
+    kobo_attempted_at TIMESTAMP WITH TIME ZONE,
+    kobo_sent_at TIMESTAMP WITH TIME ZONE,
+    kobo_last_error TEXT,
+    kobo_run_id UUID REFERENCES runs(run_id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (survey_id, submission_id, question_path)
+);
+
+COMMENT ON TABLE answer_translations IS 'Answers (typed, or transcripts) translated by the survey''s AI provider, and whether each transcript translation was sent to Kobo';
+COMMENT ON COLUMN answer_translations.origin IS 'ai (translated by Field Compass) | kobo (the translation Kobo shows, read on pull; never translated again)';
+COMMENT ON COLUMN answer_translations.source IS 'text (a typed answer) | transcript (an audio answer''s transcript)';
+COMMENT ON COLUMN answer_translations.status IS 'pending | running | success | failed | skipped | not_run_allowance | cancelled';
+COMMENT ON COLUMN answer_translations.kobo_status IS 'not_sent | pending | sent | failed | unsupported | edited_in_kobo';
+
+-- ============================================================================
 -- Table: notifications
 -- ============================================================================
 
@@ -427,6 +475,9 @@ CREATE INDEX idx_runs_status ON runs(status) WHERE status IN ('queued', 'running
 CREATE INDEX idx_audio_transcripts_run ON audio_transcripts(run_id, status);
 CREATE INDEX idx_audio_transcripts_kobo_run ON audio_transcripts(kobo_run_id, kobo_status);
 CREATE INDEX idx_audio_transcripts_submission ON audio_transcripts(survey_id, submission_id);
+CREATE INDEX idx_answer_translations_run ON answer_translations(run_id, status);
+CREATE INDEX idx_answer_translations_kobo_run ON answer_translations(kobo_run_id, kobo_status);
+CREATE INDEX idx_answer_translations_transcript ON answer_translations(transcript_id);
 CREATE INDEX idx_notifications_user ON notifications(user_id, created_at);
 CREATE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 CREATE INDEX idx_app_events_kind_created ON app_events(kind, created_at);
@@ -470,6 +521,10 @@ CREATE TRIGGER update_submissions_current_updated_at
 
 CREATE TRIGGER update_audio_transcripts_updated_at
     BEFORE UPDATE ON audio_transcripts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_answer_translations_updated_at
+    BEFORE UPDATE ON answer_translations
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================

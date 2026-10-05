@@ -481,7 +481,16 @@ class TestConnectionsApi:
         assert summary["host"] == "ours.openai.azure.com"
         assert SECRET_KEY not in str(summary)
         listed = client.get("/api/ai/connections").json()[0]
-        assert listed["surveys"] == [{"survey_id": survey["survey_id"], "survey_name": "With AI"}]
+        assert listed["surveys"] == [
+            {"survey_id": survey["survey_id"], "survey_name": "With AI", "uses": ["review"]}
+        ]
+        # The same key can translate too: chosen apart from AI review.
+        client.put(
+            f"/api/surveys/{survey['survey_id']}/ai-connection",
+            json={"connection_id": created["connection_id"], "kind": "translation"},
+        )
+        listed = client.get("/api/ai/connections").json()[0]
+        assert listed["surveys"][0]["uses"] == ["review", "translation"]
 
         client.put(
             f"/api/surveys/{survey['survey_id']}/ai-connection", json={"connection_id": None}
@@ -496,8 +505,19 @@ class TestConnectionsApi:
             json={"connection_id": created["connection_id"]},
         )
 
+        client.put(
+            f"/api/surveys/{survey['survey_id']}/ai-connection",
+            json={"connection_id": created["connection_id"], "kind": "translation"},
+        )
+
         assert client.delete(f"/api/ai/connections/{created['connection_id']}").status_code == 204
         assert client.get(f"/api/surveys/{survey['survey_id']}").json()["ai_connection"] is None
+        from database.models import SurveyConfig
+        from tests.test_api_endpoints import TestingSessionLocal
+
+        with TestingSessionLocal() as db:
+            stored = db.get(SurveyConfig, UUID(survey["survey_id"]))
+            assert stored.translation_connection_id is None
 
     def test_someone_elses_connection_is_invisible(self, client):
         from tests.test_api_endpoints import TestingSessionLocal

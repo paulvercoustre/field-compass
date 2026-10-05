@@ -2,7 +2,7 @@
 Phase 3: the free AI allowance on the operator's key.
 
 200 checked submissions per survey per month and 30 rule requests per user
-per day by default, counted from ai_usage. Surveys with their own provider
+per month by default, counted from ai_usage. Surveys with their own provider
 have no Field Compass limit.
 """
 
@@ -37,7 +37,7 @@ def _operator_key(monkeypatch):
     for name in (
         "AI_ALLOWANCE_ENABLED",
         "AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH",
-        "AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY",
+        "AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -146,8 +146,8 @@ class TestChecksUsed:
 
 
 class TestRuleRequests:
-    def test_per_user_per_day(self, test_db, test_survey_config, monkeypatch):
-        monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY", "3")
+    def test_per_user_per_month(self, test_db, test_survey_config, monkeypatch):
+        monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH", "3")
         sid = test_survey_config.survey_id
         me = User(user_id=uuid4(), email="me@example.invalid", username="me", password_hash="x")
         test_db.add(me)
@@ -161,7 +161,7 @@ class TestRuleRequests:
             sid,
             feature=RULE_GENERATION,
             user_id=me.user_id,
-            when=NOW - timedelta(days=1),
+            when=NOW - timedelta(days=40),  # last month
         )
 
         assert rule_requests_remaining(test_db, me.user_id, NOW) == 1
@@ -339,13 +339,13 @@ def _api_survey(client):
 
 
 class TestHttp:
-    def test_rule_requests_stop_at_the_daily_limit(self, client, monkeypatch):
+    def test_rule_requests_stop_at_the_monthly_limit(self, client, monkeypatch):
         from uuid import UUID
 
         from services.ai_service import ai_service
         from tests.test_api_endpoints import TEST_USER_ID, TestingSessionLocal
 
-        monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY", "1")
+        monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH", "1")
         # The shared service read OPENAI_API_KEY at import; CI has none.
         monkeypatch.setattr(ai_service, "api_key", "sk-operator")
         survey_id = _api_survey(client)
@@ -371,7 +371,7 @@ class TestHttp:
         from tests.test_api_endpoints import TEST_USER_ID, TestingSessionLocal
 
         monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "200")
-        monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY", "30")
+        monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH", "30")
         survey_id = _api_survey(client)
         db = TestingSessionLocal()
         now = datetime.utcnow()
@@ -389,7 +389,7 @@ class TestHttp:
 
         body = client.get("/api/ai/usage").json()
         assert body["month"] == now.strftime("%Y-%m")
-        assert body["rule_requests_today"] == {"limit": 30, "used": 1, "remaining": 29}
+        assert body["rule_requests_this_month"] == {"limit": 30, "used": 1, "remaining": 29}
         (survey,) = body["surveys"]
         assert survey["survey_id"] == survey_id
         assert survey["provider"] is None

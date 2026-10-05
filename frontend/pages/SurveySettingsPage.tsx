@@ -23,9 +23,11 @@ import { readDkCodes, readDkValues, sameDkCodes, sameDkValues } from '../utils/d
 import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 import AudioTranscriptionCard from '../components/transcription/AudioTranscriptionCard';
+import TranslationCard from '../components/translation/TranslationCard';
+import SurveyKeyPicker from '../components/ai/SurveyKeyPicker';
 
-type SurveySettingsTab = 'settings' | 'access' | 'quality' | 'transcription';
-const SURVEY_SETTINGS_TABS: string[] = ['settings', 'access', 'quality', 'transcription'];
+type SurveySettingsTab = 'settings' | 'access' | 'quality' | 'transcription' | 'translation';
+const SURVEY_SETTINGS_TABS: string[] = ['settings', 'access', 'quality', 'transcription', 'translation'];
 
 interface SurveySettingsPageProps {
   /** A tab asked for by a link elsewhere in the app (a notification, the activity panel). */
@@ -1083,6 +1085,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     { id: 'access', label: 'Access' },
     { id: 'quality', label: 'Quality checks' },
     ...(hasAudioQuestions ? [{ id: 'transcription' as const, label: 'Audio transcription' }] : []),
+    { id: 'translation', label: 'Translation' },
   ];
 
   return (
@@ -2332,6 +2335,11 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                   </button>
                 )}
               </div>
+              {userPermission === 'owner' && selectedSurvey && (
+                <div className="mb-4">
+                  <SurveyKeyPicker surveyId={selectedSurvey.survey_id} use="review" />
+                </div>
+              )}
               <div className="space-y-4">
                 <div className="flex items-start">
                   <div className="flex h-5 items-center">
@@ -2353,7 +2361,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                       Flag weak open-text answers
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Unreadable, off-topic or too vague answers to the questions you pick. Counts toward the included usage, unless the survey has its own key.
+                      Unreadable, off-topic or too vague answers to the questions you pick. Counts toward the included usage, unless it runs on your own API key.
                     </p>
                   </div>
                 </div>
@@ -2407,7 +2415,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                       {isRerunningAI ? 'Scheduling…' : 'Review all answers again'}
                     </button>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      On the next pull, including answers already reviewed. Counts toward the included usage, unless the survey has its own key.
+                      On the next pull, including answers already reviewed. Counts toward the included usage, unless it runs on your own API key.
                     </p>
                   </div>
                 )}
@@ -2454,6 +2462,12 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             surveyName={selectedSurvey.survey_name}
             formKey={config?.updated_at}
             onSettingsChange={(paths, enabled) => setTranscribed({ paths, enabled })}
+          />
+        ) : activeTab === 'translation' && selectedSurvey ? (
+          <TranslationCard
+            key={`translation-${selectedSurvey.survey_id}`}
+            surveyId={selectedSurvey.survey_id}
+            formKey={config?.updated_at}
           />
         ) : null}
     </SettingsLayout>

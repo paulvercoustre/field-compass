@@ -194,7 +194,7 @@ const AIKeyDialog: React.FC<AIKeyDialogProps> = ({ connection, initialKind = 're
           {isReview && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <FieldLabel htmlFor="ai-key-check-model">Model for reviews</FieldLabel>
+                <FieldLabel htmlFor="ai-key-check-model">Model for review and translation</FieldLabel>
                 <input
                   id="ai-key-check-model"
                   value={checkModel}

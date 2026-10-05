@@ -11,6 +11,7 @@ import pytest
 import routers.etl as etl_router
 import routers.transcription as transcription_router
 from database.models import (
+    AnswerTranslation,
     AudioTranscript,
     Base,
     Notification,
@@ -504,6 +505,102 @@ class TestSubmissionTranscripts:
         monkeypatch.setattr(transcription_router, "get_user_kobo_token", lambda user: "kobo-token")
         response = client.post(f"/api/surveys/{survey.survey_id}/transcripts/run")
         assert response.status_code == 400
+
+
+class TestTranslationApi:
+    """Translation: its own settings, "Translate now", a submission's translations, usage."""
+
+    URL = "/api/surveys/{}/translation"
+    ON = {"enabled": True, "language": "en", "questions": ["village", "interview/story"]}
+
+    def test_payload_lists_text_and_audio_questions(self, client, survey):
+        body = client.get(self.URL.format(survey.survey_id)).json()
+        assert [(q["path"], q["kind"], q["in_repeat"]) for q in body["questions"]] == [
+            ("village", "text", False),
+            ("interview/story", "audio", False),
+            ("voice", "audio", True),
+        ]
+        # Audio questions are translated through their transcript.
+        assert [q["transcribed"] for q in body["questions"]] == [True, False, False]
+        assert body["settings"]["enabled"] is False and body["can_edit"] is True
+
+    def test_saved_normalised(self, client, survey):
+        saved = client.put(self.URL.format(survey.survey_id), json=self.ON).json()
+        assert saved["settings"]["language"] == "eng"
+        assert saved["settings"]["questions"] == ["village", "interview/story"]
+
+    @pytest.mark.parametrize(
+        "body,message",
+        [
+            ({"enabled": True, "language": "en", "questions": ["nope"]}, "not a text or audio"),
+            ({"enabled": True, "language": "en", "questions": ["voice"]}, "repeat group"),
+            ({"enabled": True, "language": "tlh", "questions": ["village"]}, "can't be translated"),
+            ({"enabled": True, "questions": ["village"]}, "Choose a language"),
+            ({"enabled": True, "language": "en", "questions": []}, "at least one"),
+        ],
+    )
+    def test_validation(self, client, survey, body, message):
+        response = client.put(self.URL.format(survey.survey_id), json=body)
+        assert response.status_code == 400 and message in response.json()["detail"]
+
+    def test_other_settings_saves_keep_it(self, client, db, survey):
+        client.put(self.URL.format(survey.survey_id), json=self.ON)
+        response = client.put(
+            f"/api/surveys/{survey.survey_id}", json={"config_data": {"kobo_tool": KOBO_TOOL}}
+        )
+        assert response.json()["config_data"]["translation"]["enabled"] is True
+
+    def test_included_translations_apart_from_reviews(self, client, survey, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-operator")
+        monkeypatch.setenv("AI_ALLOWANCE_TRANSLATIONS_PER_SURVEY_MONTH", "300")
+        body = client.get(self.URL.format(survey.survey_id)).json()
+        assert body["key"]["source"] == "operator"
+        assert (body["allowance"]["limit"], body["allowance"]["remaining"]) == (300, 300)
+        client.put(self.URL.format(survey.survey_id), json=self.ON)
+        usage = client.get("/api/ai/usage").json()
+        assert usage["included"]["translations_per_survey_month"] == 300
+        mine = next(s for s in usage["surveys"] if s["survey_id"] == str(survey.survey_id))
+        assert mine["translation"]["allowance"]["limit"] == 300
+        assert client.get("/api/ai/usage/history?metric=translations").status_code == 200
+
+    def test_translate_now_needs_it_on(self, client, survey):
+        assert client.post(f"/api/surveys/{survey.survey_id}/translations/run").status_code == 400
+
+    def test_translate_now_queues_the_missing_ones(self, client, db, survey, monkeypatch):
+        from services.translation_worker import translate_answer_task
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-operator")
+        task = _Task()
+        monkeypatch.setattr(translate_answer_task, "apply_async", task.apply_async)
+        client.put(self.URL.format(survey.survey_id), json=self.ON)
+        submission = _submission(db, survey, 1, llm_check_status="skipped")
+        submission.submission_data = {**submission.submission_data, "village": "Kabul"}
+        db.commit()
+        before = client.get(self.URL.format(survey.survey_id)).json()
+        assert before["counts"]["missing"] == 1
+        run = client.post(f"/api/surveys/{survey.survey_id}/translations/run").json()
+        assert run["kind"] == "translation_rerun" and run["translations"]["queued"] == 1
+        assert len(task.sent) == 1
+
+    def test_a_submission_shows_its_translations(self, client, db, survey):
+        client.put(self.URL.format(survey.survey_id), json=self.ON)
+        _submission(db, survey, 1, llm_check_status="skipped")
+        db.add(
+            AnswerTranslation(
+                survey_id=survey.survey_id,
+                submission_id=1,
+                question_path="village",
+                source="text",
+                language="eng",
+                status="success",
+                text="Kabul",
+            )
+        )
+        db.commit()
+        body = client.get("/api/submissions/1/translations").json()
+        assert (body["language"], body["language_name"]) == ("eng", "English")
+        assert body["answers"]["village"]["text"] == "Kabul"
+        assert body["answers"]["village"]["origin"] == "ai"
 
 
 class TestTranscriptionKeys:

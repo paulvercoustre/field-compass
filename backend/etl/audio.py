@@ -42,6 +42,7 @@ class AudioQuestion:
     name: str
     label: str
     in_repeat: bool
+    type: str = AUDIO_TYPE
 
 
 @dataclass(frozen=True)
@@ -103,8 +104,15 @@ def _label(question, row: dict[str, Any], label_column: str | None) -> str:
 
 
 def audio_questions(config_data: dict[str, Any] | None) -> list[AudioQuestion]:
+    """The form's audio questions, in form order."""
+    return form_questions(config_data, (AUDIO_TYPE,))
+
+
+def form_questions(
+    config_data: dict[str, Any] | None, types: tuple[str, ...]
+) -> list[AudioQuestion]:
     """
-    The form's audio questions, in form order.
+    The form's questions of the given types, in form order.
 
     The stored form keeps no group rows when it came from Kobo, so the path is
     rebuilt from each row's ``group_path`` column; an uploaded XLSForm keeps its
@@ -118,7 +126,7 @@ def audio_questions(config_data: dict[str, Any] | None) -> list[AudioQuestion]:
     found: list[AudioQuestion] = []
     seen: set[str] = set()
     for question in schema.questions:
-        if question.type != AUDIO_TYPE or not question.name:
+        if question.type not in types or not question.name:
             continue
         row = question.raw or {}
         group_path = row.get("group_path")
@@ -134,6 +142,7 @@ def audio_questions(config_data: dict[str, Any] | None) -> list[AudioQuestion]:
                 name=question.name,
                 label=_label(question, row, label_column),
                 in_repeat=bool(question.repeat_name or row.get("roster_name")),
+                type=question.type,
             )
         )
     return found

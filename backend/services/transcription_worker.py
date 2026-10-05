@@ -49,23 +49,32 @@ def transcribe_recording_task(self, payload: dict[str, Any]) -> dict[str, Any]:
 @celery_app.task(name="services.transcription_worker.sweep_background_work")
 def sweep_background_work() -> dict[str, int]:
     """
-    Fail transcriptions and pulls that lost their worker, release reservations
+    Fail transcriptions, translations and pulls that lost their worker, release reservations
     left by them, and finish runs whose work has all ended. Runs on beat.
     """
     from services.database import SessionLocal
     from services.runs import sweep_runs
     from services.transcription_allowance import release_stale_reservations
     from services.transcription_runtime import sweep_stalled_transcripts
+    from services.translation_runtime import sweep_stalled_translations
 
     with SessionLocal() as db:
         transcripts = sweep_stalled_transcripts(db)
+        translations = sweep_stalled_translations(db)
         reservations = release_stale_reservations(db)
         runs = sweep_runs(db)
-    if transcripts or reservations or runs.get("failed"):
+    if transcripts or translations or reservations or runs.get("failed"):
         logger.warning(
-            "Swept %s stalled transcriptions, %s stale reservations, runs %s",
+            "Swept %s stalled transcriptions, %s stalled translations, %s stale reservations, "
+            "runs %s",
             transcripts,
+            translations,
             reservations,
             runs,
         )
-    return {"transcripts": transcripts, "reservations": reservations, **runs}
+    return {
+        "transcripts": transcripts,
+        "translations": translations,
+        "reservations": reservations,
+        **runs,
+    }

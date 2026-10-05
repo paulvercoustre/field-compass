@@ -19,6 +19,7 @@ from etl.kobo_fetcher import KoboFetcher
 from services.ai_review_queue import AIReviewQueuer
 from services.qualitative_worker import run_qualitative_check_task
 from services.transcription_queue import TranscriptionQueuer
+from services.translation_queue import TranslationQueuer
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,12 @@ class ETLPipeline:
             # after each commit so a worker never sees a row before it is pending.
             ai_reviews = AIReviewQueuer(self.db, survey_config, hfc_engine, run_id=run_id)
             transcriptions = TranscriptionQueuer(
+                self.db, survey_config, run_id=run_id, user_id=self.started_by_user_id
+            )
+            # Typed answers and transcripts already made (or taken from Kobo)
+            # are translated here, or Kobo's translations taken; new
+            # transcripts as soon as each is made.
+            translations = TranslationQueuer(
                 self.db, survey_config, run_id=run_id, user_id=self.started_by_user_id
             )
 
@@ -330,6 +337,10 @@ class ETLPipeline:
                     if transcript_rows:
                         self.db.flush()
                         transcriptions.queue(transcript_rows)
+                    translation_rows = translations.consider_submission(submission)
+                    if translation_rows:
+                        self.db.flush()
+                        translations.queue(translation_rows)
 
                     # Queue the AI review (independent from deterministic checks)
                     llm_outcome = ai_reviews.consider(submission)
@@ -338,6 +349,7 @@ class ETLPipeline:
                     self.db.commit()
                     ai_reviews.dispatch(run_qualitative_check_task)
                     transcriptions.dispatch()
+                    translations.dispatch()
 
                 except Exception as e:
                     logger.error(f"Error processing submission: {e}", exc_info=True)
@@ -345,7 +357,11 @@ class ETLPipeline:
                     self.db.rollback()
                     continue
 
-            for key, value in {**ai_reviews.stats, **transcriptions.stats}.items():
+            for key, value in {
+                **ai_reviews.stats,
+                **transcriptions.stats,
+                **translations.stats,
+            }.items():
                 stats[key] = stats.get(key, 0) + value
 
             stats["end_time"] = datetime.utcnow()

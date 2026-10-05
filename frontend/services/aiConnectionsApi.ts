@@ -6,8 +6,10 @@
 import { API_BASE_URL, apiFetch } from './apiBase';
 
 export type AIPreset = 'openai' | 'azure' | 'anthropic' | 'openrouter' | 'mistral' | 'groq' | 'self_hosted' | 'custom';
-/** What a key is for: AI review and rule writing, or audio transcription. */
+/** What a key is: an AI model (AI review, rule writing, translation), or ElevenLabs (audio transcription). */
 export type AIKeyKind = 'review' | 'transcription';
+/** What a survey uses a key for: an AI model key serves AI review or translation, chosen apart. */
+export type AIKeyUse = 'review' | 'translation' | 'transcription';
 export type TranscriptionPreset = 'elevenlabs';
 export type AIConnectionStatus = 'untested' | 'ok' | 'failing';
 
@@ -37,7 +39,8 @@ export interface AIConnection extends AIConnectionSummary {
   rule_model: string | null;
   capabilities: Record<string, unknown> | null;
   last_tested_at: string | null;
-  surveys: Array<{ survey_id: string; survey_name: string }>;
+  /** The surveys using this key, and what for. */
+  surveys: Array<{ survey_id: string; survey_name: string; uses: AIKeyUse[] }>;
   test?: AIConnectionTest;
 }
 
@@ -52,15 +55,34 @@ export interface AIConnectionInput {
   rule_model?: string | null;
 }
 
-/** What each kind of key does, in the words the AI integration page uses. */
+/** What each kind of key is, in the words the AI integration page uses. */
 export const KEY_KINDS: Record<AIKeyKind, { name: string; does: string }> = {
+  review: {
+    name: 'AI model',
+    does: 'Any OpenAI-compatible model. For AI review and translation.',
+  },
+  transcription: {
+    name: 'Audio transcription',
+    does: 'ElevenLabs. Turns recorded answers into text.',
+  },
+};
+
+/** What each feature does, and the kind of key it runs on. */
+export const AI_FEATURES: Record<AIKeyUse, { name: string; does: string; kind: AIKeyKind }> = {
   review: {
     name: 'AI review',
     does: 'Flags weak open-text answers and transcripts, and writes custom checks.',
+    kind: 'review',
+  },
+  translation: {
+    name: 'Translation',
+    does: 'Translates typed answers and transcripts into one language.',
+    kind: 'review',
   },
   transcription: {
     name: 'Audio transcription',
     does: 'Turns recorded answers into text.',
+    kind: 'transcription',
   },
 };
 
@@ -136,7 +158,7 @@ export const deleteAIConnection = (id: string) =>
   request<void>(`/api/ai/connections/${id}`, { method: 'DELETE' });
 
 /** `null` puts the survey back on included usage (Field Compass's key). */
-export const setSurveyAIConnection = (surveyId: string, connectionId: string | null, kind: AIKeyKind = 'review') =>
+export const setSurveyAIConnection = (surveyId: string, connectionId: string | null, kind: AIKeyUse = 'review') =>
   request<{ ai_connection: AIConnectionSummary | null }>(`/api/surveys/${surveyId}/ai-connection`, {
     method: 'PUT',
     body: JSON.stringify({ connection_id: connectionId, kind }),
@@ -157,7 +179,7 @@ export const describeAIError = (stored: string | null | undefined): string => {
 };
 
 export interface AIFeatureUsage {
-  feature: 'qualitative_check' | 'rule_generation' | 'rule_suggestion' | 'transcription';
+  feature: 'qualitative_check' | 'rule_generation' | 'rule_suggestion' | 'transcription' | 'translation';
   calls: number;
   failed: number;
   input_tokens: number;
@@ -170,11 +192,13 @@ export interface AccountAIUsage {
   /** What each survey includes on Field Compass's keys; 0 or null when this server includes none. */
   included: {
     reviews_per_survey_month: number;
+    /** Included translated answers per survey per month, apart from AI reviews. */
+    translations_per_survey_month: number;
     transcription_minutes_per_survey_month: number | null;
-    rule_requests_per_day: number;
+    rule_requests_per_month: number;
   };
-  /** Included AI rule requests on the Field Compass key, today. */
-  rule_requests_today: { limit: number; used: number; remaining: number };
+  /** Included AI rule requests on the Field Compass key, this month. */
+  rule_requests_this_month: { limit: number; used: number; remaining: number };
   /** Every survey the user owns. */
   surveys: Array<{
     survey_id: string;
@@ -191,6 +215,13 @@ export interface AccountAIUsage {
       provider: AIConnectionSummary | null;
       own_key_minutes: number;
     } | null;
+    /** Translation this month; null when the survey never translated. */
+    translation: {
+      /** The survey's own key for translation, when it has one: no Field Compass limit. */
+      provider: AIConnectionSummary | null;
+      allowance: { limit: number; used: number; in_flight: number; remaining: number } | null;
+      own_key_translations: number;
+    } | null;
     by_feature: AIFeatureUsage[];
   }>;
 }
@@ -198,7 +229,7 @@ export interface AccountAIUsage {
 /** This month's AI use across the surveys the current user owns. */
 export const getAccountAIUsage = () => request<AccountAIUsage>('/api/ai/usage');
 
-export type UsageMetric = 'reviews' | 'minutes';
+export type UsageMetric = 'reviews' | 'translations' | 'minutes';
 export type UsagePeriod = '30d' | '6m';
 
 export interface AIUsageHistory {

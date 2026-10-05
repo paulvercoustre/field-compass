@@ -107,6 +107,8 @@ export interface TranscriptSegment {
   text: string;
 }
 
+export type KoboStatus = 'not_sent' | 'pending' | 'sent' | 'failed' | 'unsupported' | 'edited_in_kobo';
+
 export interface Transcript {
   /** "kobo": the transcript Kobo shows, typed or made there (or ours, corrected there). */
   source: 'elevenlabs' | 'kobo';
@@ -120,7 +122,7 @@ export interface Transcript {
   audio_seconds: number | null;
   last_error: string | null;
   finished_at: string | null;
-  kobo_status: 'not_sent' | 'pending' | 'sent' | 'failed' | 'unsupported' | 'edited_in_kobo';
+  kobo_status: KoboStatus;
   kobo_last_error: string | null;
   kobo_sent_at: string | null;
 }

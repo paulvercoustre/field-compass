@@ -1,10 +1,12 @@
 """
 A user's own AI keys, and which one each survey uses.
 
-Two kinds: "review" keys are OpenAI-compatible providers for AI review and
-rule writing; "transcription" keys are ElevenLabs keys for audio
-transcription. A survey uses at most one of each; without one it runs on
-the operator's keys, within the included usage.
+Two kinds: "review" keys are OpenAI-compatible providers, for AI review and
+rule writing, and for translation; "transcription" keys are ElevenLabs keys
+for audio transcription. A survey picks at most one key for each feature --
+AI review, translation (an OpenAI-compatible key, chosen apart from AI
+review's) and transcription; without one a feature runs on the operator's
+keys, within the included usage.
 
 A connection belongs to the user who created it: only they can see, edit,
 test, delete or attach it, and only to surveys they own. The key goes in and
@@ -27,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from database.models import AIConnection, AIUsage, SurveyConfig, User
 from etl.audio import transcription_settings
+from etl.translation import translation_settings
 from services.ai_allowance import (
     allowance_enabled,
     checks_in_flight,
@@ -34,13 +37,22 @@ from services.ai_allowance import (
     checks_used,
     month_start,
     next_month_start,
-    rule_requests_per_user_day,
+    rule_requests_per_user_month,
     rule_requests_remaining,
+    translations_in_flight,
+    translations_per_survey_month,
+    translations_used,
 )
 from services.ai_endpoints import EndpointRejected, validate_base_url
-from services.ai_providers import UNTESTED, run_connection_test, survey_connection
+from services.ai_providers import (
+    UNTESTED,
+    run_connection_test,
+    survey_connection,
+    translation_connection,
+)
 from services.ai_usage import QUALITATIVE_CHECK
 from services.ai_usage import TRANSCRIPTION as TRANSCRIPTION_FEATURE
+from services.ai_usage import TRANSLATION as TRANSLATION_FEATURE
 from services.auth import encrypt_api_key, get_current_active_user
 from services.database import get_db
 from services.permissions import require_survey_access
@@ -73,6 +85,9 @@ Preset = Literal[
     "elevenlabs",
 ]
 Kind = Literal["review", "transcription"]
+# What a survey uses a key for: a review key serves AI review or translation.
+Use = Literal["review", "translation", "transcription"]
+TRANSLATION = "translation"
 
 
 class ConnectionCreate(BaseModel):
@@ -98,7 +113,7 @@ class ConnectionUpdate(BaseModel):
 
 class SurveyConnectionUpdate(BaseModel):
     connection_id: UUID | None = None  # None: the operator's key
-    kind: Kind = "review"
+    kind: Use = "review"
 
 
 def connection_summary(connection: AIConnection) -> dict:
@@ -116,16 +131,22 @@ def connection_summary(connection: AIConnection) -> dict:
 
 
 def _connection_out(db: Session, connection: AIConnection, test: dict | None = None) -> dict:
-    column = (
-        SurveyConfig.transcription_connection_id
+    # What each survey uses this key for.
+    columns = (
+        {TRANSCRIPTION: SurveyConfig.transcription_connection_id}
         if connection.kind == TRANSCRIPTION
-        else SurveyConfig.ai_connection_id
+        else {
+            REVIEW: SurveyConfig.ai_connection_id,
+            TRANSLATION: SurveyConfig.translation_connection_id,
+        }
     )
-    surveys = (
-        db.query(SurveyConfig.survey_id, SurveyConfig.survey_name)
-        .filter(column == connection.connection_id)
-        .all()
-    )
+    uses: dict = {}
+    for use, column in columns.items():
+        for sid, name in db.query(SurveyConfig.survey_id, SurveyConfig.survey_name).filter(
+            column == connection.connection_id
+        ):
+            uses.setdefault(sid, {"survey_id": str(sid), "survey_name": name, "uses": []})
+            uses[sid]["uses"].append(use)
     out = {
         **connection_summary(connection),
         "base_url": connection.base_url,
@@ -136,7 +157,7 @@ def _connection_out(db: Session, connection: AIConnection, test: dict | None = N
         "last_tested_at": (
             connection.last_tested_at.isoformat() if connection.last_tested_at else None
         ),
-        "surveys": [{"survey_id": str(sid), "survey_name": name} for sid, name in surveys],
+        "surveys": sorted(uses.values(), key=lambda survey: survey["survey_name"] or ""),
     }
     if test is not None:
         out["test"] = test
@@ -332,6 +353,9 @@ async def delete_connection(
     db.query(SurveyConfig).filter(
         SurveyConfig.transcription_connection_id == connection.connection_id
     ).update({SurveyConfig.transcription_connection_id: None}, synchronize_session=False)
+    db.query(SurveyConfig).filter(
+        SurveyConfig.translation_connection_id == connection.connection_id
+    ).update({SurveyConfig.translation_connection_id: None}, synchronize_session=False)
     db.delete(connection)
     db.commit()
 
@@ -345,7 +369,8 @@ async def set_survey_connection(
 ):
     """
     Use one of the owner's keys for this survey, or the operator's key (null):
-    a review key for AI review, or a transcription key for transcription.
+    a review key for AI review or for translation, or a transcription key for
+    transcription.
     """
     try:
         survey_uuid = UUID(survey_id)
@@ -356,11 +381,16 @@ async def set_survey_connection(
     connection = None
     if payload.connection_id is not None:
         connection = _owned_connection(db, current_user, str(payload.connection_id))
-        if (connection.kind or REVIEW) != payload.kind:
+        wanted = TRANSCRIPTION if payload.kind == TRANSCRIPTION else REVIEW
+        if (connection.kind or REVIEW) != wanted:
             raise HTTPException(
                 status_code=400,
                 detail="That key is for "
-                + ("audio transcription." if connection.kind == TRANSCRIPTION else "AI review."),
+                + (
+                    "audio transcription."
+                    if connection.kind == TRANSCRIPTION
+                    else "AI review and translation."
+                ),
             )
         if survey.user_id != current_user.user_id:
             # An admin can reach this endpoint for any survey, but a key is
@@ -371,6 +401,8 @@ async def set_survey_connection(
 
     if payload.kind == TRANSCRIPTION:
         survey.transcription_connection_id = connection.connection_id if connection else None
+    elif payload.kind == TRANSLATION:
+        survey.translation_connection_id = connection.connection_id if connection else None
     else:
         survey.ai_connection_id = connection.connection_id if connection else None
     db.commit()
@@ -389,7 +421,7 @@ async def account_ai_usage(
 ):
     """
     This month's AI use on every survey the current user owns, and their
-    free AI rule requests today.
+    free AI rule requests this month.
 
     Per survey: which provider it runs on, its free allowance when that is
     the operator's key, and calls, failures and tokens by feature. Tokens are
@@ -442,6 +474,7 @@ async def account_ai_usage(
 
     enabled = allowance_enabled()
     check_limit = checks_per_survey_month() if enabled else 0
+    translation_limit = translations_per_survey_month() if enabled else 0
     out = []
     for survey in surveys:
         connection = survey_connection(db, survey)
@@ -469,6 +502,37 @@ async def account_ai_usage(
                 "provider": connection_summary(own_transcription) if own_transcription else None,
                 "own_key_minutes": round(seconds_on_own_key(db, survey.survey_id) / 60, 1),
             }
+        translation = None
+        own_translation = translation_connection(db, survey)
+        translated = TRANSLATION_FEATURE in totals.get(survey.survey_id, {})
+        if translated or translation_settings(survey.config_data).enabled:
+            translation = {
+                # On the owner's own key: no Field Compass limit.
+                "provider": connection_summary(own_translation) if own_translation else None,
+                "allowance": None,
+                "own_key_translations": 0,
+            }
+            if own_translation is None:
+                used = translations_used(db, survey.survey_id)
+                in_flight = translations_in_flight(db, survey.survey_id)
+                translation["allowance"] = {
+                    "limit": translation_limit,
+                    "used": used,
+                    "in_flight": in_flight,
+                    "remaining": max(0, translation_limit - used - in_flight),
+                }
+            else:
+                translation["own_key_translations"] = (
+                    db.query(func.count(AIUsage.usage_id))
+                    .filter(
+                        AIUsage.survey_id == survey.survey_id,
+                        AIUsage.feature == TRANSLATION_FEATURE,
+                        AIUsage.connection_id.isnot(None),
+                        AIUsage.outcome == "ok",
+                        AIUsage.created_at >= since,
+                    )
+                    .scalar()
+                ) or 0
         out.append(
             {
                 "survey_id": str(survey.survey_id),
@@ -476,13 +540,14 @@ async def account_ai_usage(
                 "provider": connection_summary(connection) if connection else None,
                 "allowance": allowance,
                 "transcription": transcription,
+                "translation": translation,
                 "by_feature": sorted(
                     totals.get(survey.survey_id, {}).values(), key=lambda entry: entry["feature"]
                 ),
             }
         )
 
-    rule_limit = rule_requests_per_user_day() if enabled else 0
+    rule_limit = rule_requests_per_user_month() if enabled else 0
     rule_left = rule_requests_remaining(db, current_user.user_id)
     return {
         "month": since.strftime("%Y-%m"),
@@ -491,12 +556,13 @@ async def account_ai_usage(
         # this server includes none (no key of its own).
         "included": {
             "reviews_per_survey_month": check_limit,
+            "translations_per_survey_month": translation_limit,
             "transcription_minutes_per_survey_month": minutes_per_survey_month()
             if (os.getenv("ELEVENLABS_API_KEY") or "").strip()
             else None,
-            "rule_requests_per_day": rule_limit,
+            "rule_requests_per_month": rule_limit,
         },
-        "rule_requests_today": {
+        "rule_requests_this_month": {
             "limit": rule_limit,
             "used": rule_limit - rule_left,
             "remaining": rule_left,
@@ -507,7 +573,7 @@ async def account_ai_usage(
 
 @router.get("/ai/usage/history")
 async def account_ai_usage_history(
-    metric: Literal["reviews", "minutes"] = "reviews",
+    metric: Literal["reviews", "translations", "minutes"] = "reviews",
     period: Literal["30d", "6m"] = "30d",
     survey_id: UUID | None = None,
     db: Session = Depends(get_db),
@@ -516,8 +582,8 @@ async def account_ai_usage_history(
     """
     AI use over time on the surveys the caller owns, for the usage chart.
 
-    ``reviews``: submissions reviewed by AI; ``minutes``: minutes of audio
-    transcribed. Daily over 30 days, or monthly over 6 months, each split
+    ``reviews``: submissions reviewed by AI; ``translations``: answers
+    translated; ``minutes``: minutes of audio transcribed. Daily over 30 days, or monthly over 6 months, each split
     between the included usage (Field Compass's keys) and the caller's own.
     """
     owned = {
@@ -547,9 +613,9 @@ async def account_ai_usage_history(
 
     values = {start: {"included": 0.0, "own": 0.0} for start in starts}
     if owned:
-        if metric == "reviews":
+        if metric in ("reviews", "translations"):
             amount = func.count(AIUsage.usage_id)
-            feature = QUALITATIVE_CHECK
+            feature = QUALITATIVE_CHECK if metric == "reviews" else TRANSLATION_FEATURE
         else:
             amount = func.coalesce(func.sum(AIUsage.audio_seconds), 0)
             feature = TRANSCRIPTION_FEATURE

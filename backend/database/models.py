@@ -89,6 +89,14 @@ class SurveyConfig(Base):
         ForeignKey("ai_connections.connection_id", ondelete="SET NULL"),
         nullable=True,
     )
+    # The owner's own AI provider for translation (an OpenAI-compatible key,
+    # chosen apart from AI review's); NULL uses the operator's, within the
+    # included translations.
+    translation_connection_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("ai_connections.connection_id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     owner = relationship("User", back_populates="owned_surveys", foreign_keys=[user_id])
     shared_access = relationship(
@@ -433,6 +441,78 @@ class AudioTranscript(Base):
     __table_args__ = (
         UniqueConstraint("survey_id", "submission_id", "question_path"),
         Index("idx_audio_transcripts_run", "run_id", "status"),
+    )
+
+
+class AnswerTranslation(Base):
+    """
+    One answer translated into the survey's translation language by its AI
+    provider: a typed answer to a text question, or the transcript of an
+    audio question. A translated transcript can be sent to Kobo as Kobo's
+    translation of the question.
+
+    One per (submission, question): a survey translates into one language. A
+    new text (an edited answer, a transcript made again or corrected in Kobo)
+    or another language translates it again. See docs/specs/translation.md.
+    """
+
+    __tablename__ = "answer_translations"
+
+    translation_id = Column(Integer, primary_key=True, autoincrement=True)
+    survey_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("survey_configs.survey_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    submission_id = Column(Integer, nullable=False)  # Kobo _id
+    question_path = Column(String(255), nullable=False)
+    # text: a typed answer | transcript: an audio answer's transcript
+    source = Column(String(16), nullable=False, default="text")
+    transcript_id = Column(
+        Integer,
+        ForeignKey("audio_transcripts.transcript_id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    language = Column(String(16), nullable=False)  # ISO 639-3, the target
+    # ai: translated here | kobo: the translation Kobo shows, read on pull
+    # (never translated again, nor sent back)
+    origin = Column(String(16), nullable=False, default="ai", server_default="ai")
+    input_hash = Column(String(64), nullable=True)  # the text + the target
+    # pending | running | success | failed | skipped | not_run_allowance | cancelled
+    status = Column(String(20), nullable=False, default="pending")
+    skip_reason = Column(String(32), nullable=True)  # same_language | no_text
+    text = Column(Text, nullable=True)
+    model = Column(String(64), nullable=True)
+    last_error = Column(Text, nullable=True)  # "<category>: <message>"
+    run_id = Column(
+        UUID(as_uuid=True), ForeignKey("runs.run_id", ondelete="SET NULL"), nullable=True
+    )
+    # Whose Kobo token sends it: the user who started the run.
+    requested_by_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    job_id = Column(String(128), nullable=True)
+    queued_at = Column(DateTime(timezone=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    # not_sent | pending | sent | failed | unsupported | edited_in_kobo
+    kobo_status = Column(String(20), nullable=False, default="not_sent")
+    kobo_language = Column(String(16), nullable=True)  # the code Kobo stored it under
+    kobo_version_uuid = Column(String(64), nullable=True)  # the version we created
+    kobo_attempted_at = Column(DateTime(timezone=True), nullable=True)
+    kobo_sent_at = Column(DateTime(timezone=True), nullable=True)
+    kobo_last_error = Column(Text, nullable=True)
+    kobo_run_id = Column(
+        UUID(as_uuid=True), ForeignKey("runs.run_id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("survey_id", "submission_id", "question_path"),
+        Index("idx_answer_translations_run", "run_id", "status"),
+        Index("idx_answer_translations_kobo_run", "kobo_run_id", "kobo_status"),
+        Index("idx_answer_translations_transcript", "transcript_id"),
     )
 
 

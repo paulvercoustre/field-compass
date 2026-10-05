@@ -95,6 +95,7 @@ when it is done.
   transcript by question path, and how it handles repeat instances must be
   checked first (§12).
 - Translation. Kobo can machine-translate a transcript once it is there.
+  (Since added with AI: see translation.md.)
 - Users' own ElevenLabs keys, and organisation-owned providers. The
   operator's key comes first, as AI checks did (§4.7).
 - Email notifications. The backend sends no email today; in-app and
