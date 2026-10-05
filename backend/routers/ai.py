@@ -38,17 +38,6 @@ class SuggestRulesRequest(BaseModel):
     survey_id: str = Field(..., description="UUID of the survey")
 
 
-class RuleCondition(BaseModel):
-    variable: str
-    operator: str
-    value: str
-    valueType: str
-
-
-class RuleJoiner(BaseModel):
-    joiner: str
-
-
 class GeneratedRule(BaseModel):
     description: str
     issue_message: str

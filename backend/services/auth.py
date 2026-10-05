@@ -285,24 +285,6 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
     return current_user
 
 
-async def get_optional_current_user(
-    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
-) -> User | None:
-    """
-    FastAPI dependency to optionally get the current user.
-    Returns None if no valid token is provided (instead of raising an error).
-    Useful for endpoints that work with or without authentication.
-    """
-    if not token:
-        return None
-
-    token_data = decode_access_token(token)
-    if token_data is None:
-        return None
-
-    return get_user_by_id(db, token_data.user_id)
-
-
 # =============================================================================
 # Kobo API key helpers
 # =============================================================================
@@ -319,12 +301,6 @@ def get_user_kobo_token(user: User) -> str | None:
         return decrypt_api_key(user.kobo_api_token_encrypted)
     except Exception:
         return None
-
-
-def set_user_kobo_token(db: Session, user: User, api_token: str) -> None:
-    """Set the Kobo API token for a user (encrypts before storing)."""
-    user.kobo_api_token_encrypted = encrypt_api_key(api_token)
-    db.commit()
 
 
 def user_to_response(user: User) -> dict:

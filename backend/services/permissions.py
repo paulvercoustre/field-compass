@@ -76,36 +76,6 @@ def get_accessible_surveys(db: Session, user: User) -> list[SurveyConfig]:
     )
 
 
-def can_view_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can view a survey (any access level)."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission is not None
-
-
-def can_edit_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can edit survey data (run ETL, resolve flags)."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission in ("owner", "editor", "admin")
-
-
-def can_configure_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can configure survey settings (HFC rules, etc)."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission in ("owner", "admin")
-
-
-def can_share_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can share survey with others."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission in ("owner", "admin")
-
-
-def can_delete_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can delete the survey."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission in ("owner", "admin")
-
-
 def require_survey_access(
     db: Session,
     user: User,

@@ -18,25 +18,6 @@ from services.permissions import require_survey_access
 router = APIRouter()
 
 
-class ValidationRuleCreate:
-    def __init__(self, rule_name: str, rule_data: dict[str, Any], is_active: bool = True):
-        self.rule_name = rule_name
-        self.rule_data = rule_data
-        self.is_active = is_active
-
-
-class ValidationRuleUpdate:
-    def __init__(
-        self,
-        rule_name: str | None = None,
-        rule_data: dict[str, Any] | None = None,
-        is_active: bool | None = None,
-    ):
-        self.rule_name = rule_name
-        self.rule_data = rule_data
-        self.is_active = is_active
-
-
 class ValidationRuleCreateModel(BaseModel):
     rule_name: str = Field(..., min_length=1, max_length=255)
     rule_data: dict[str, Any]

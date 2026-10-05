@@ -4,7 +4,6 @@ These models match the frontend TypeScript types.
 """
 
 from datetime import datetime
-from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,15 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field
 # ============================================================================
 # QA Status Enum
 # ============================================================================
-
-
-class QAStatus(str, Enum):
-    """Field Compass QA status values."""
-
-    PENDING_APPROVAL = "PENDING_APPROVAL"  # Passes HFC checks, waiting for approval in Kobo
-    FLAGGED = "FLAGGED"  # Has HFC issues that need to be fixed
-    APPROVED = "APPROVED"  # Approved in KoboToolbox
-    REJECTED = "REJECTED"  # Rejected/Not Approved in KoboToolbox
 
 
 # ============================================================================
@@ -111,7 +101,7 @@ class Submission(BaseModel):
                         "message": "Age 99 is above the 95th percentile (90).",
                     }
                 ],
-                "qa_status": "HFC_FLAGGED",
+                "qa_status": "FLAGGED",
             }
         },
     )
@@ -365,10 +355,6 @@ class SubmissionListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-
-
-class ErrorResponse(BaseModel):
-    detail: str
 
 
 # ============================================================================

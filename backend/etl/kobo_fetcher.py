@@ -192,19 +192,6 @@ class KoboFetcher:
             return all_submissions[:effective_limit]
         return all_submissions
 
-    def get_submission_audit_url(self, submission: dict[str, Any]) -> str | None:
-        """
-        Extract audit log URL from submission data.
-
-        Args:
-            submission: Submission dictionary from Kobo API
-
-        Returns:
-            Audit log URL or None if not available
-        """
-        # Audit URL is typically in the submission metadata
-        return submission.get("_audit_URL") or submission.get("audit_URL")
-
     def download_audit_log(self, audit_url: str, output_path: str) -> bool:
         """
         Download audit log CSV file.

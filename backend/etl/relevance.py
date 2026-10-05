@@ -45,10 +45,6 @@ _REWRITES = (
 )
 
 
-class _Unknown(Exception):
-    """The expression reads something this evaluator cannot."""
-
-
 def _as_number(value: Any) -> float:
     """XPath number(): NaN for anything that is not one, so comparisons are false."""
     if isinstance(value, Answer):

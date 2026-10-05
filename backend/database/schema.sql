@@ -200,7 +200,7 @@ COMMENT ON COLUMN submissions_current.submission_data IS 'Complete survey data a
 COMMENT ON COLUMN submissions_current.is_edited IS 'Whether this submission has been edited after initial submission';
 COMMENT ON COLUMN submissions_current.has_edit_history IS 'Permanent flag: submission was edited at least once (is_edited is cleared after revalidation)';
 COMMENT ON COLUMN submissions_current.data_quality_issues IS 'JSONB array of quality issues found by HFC: [{check, field, value, message}, ...]';
-COMMENT ON COLUMN submissions_current.qa_status IS 'QA status: FLAGGED, PENDING_APPROVAL, PENDING_RE_QA, APPROVED';
+COMMENT ON COLUMN submissions_current.qa_status IS 'QA status: PENDING_APPROVAL, FLAGGED, APPROVED, REJECTED';
 COMMENT ON COLUMN submissions_current.dk_count IS 'Count of DK answers for eligible questions in this submission';
 COMMENT ON COLUMN submissions_current.dk_eligible_count IS 'Count of eligible question instances included in DK denominator';
 COMMENT ON COLUMN submissions_current.dk_percentage IS 'DK percentage for this submission (dk_count / dk_eligible_count * 100)';
@@ -483,7 +483,7 @@ CREATE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHER
 CREATE INDEX idx_app_events_kind_created ON app_events(kind, created_at);
 -- Composite index for common triage queue queries
 CREATE INDEX idx_submissions_triage ON submissions_current(qa_status, survey_id)
-    WHERE qa_status IN ('FLAGGED', 'PENDING_RE_QA');
+    WHERE qa_status = 'FLAGGED';
 
 -- Submissions history indexes
 CREATE INDEX idx_history_kobo_id ON submissions_history(kobo_id);

@@ -96,16 +96,6 @@ def _get_field_value(submission_data: dict[str, Any], field_name: str) -> Any:
     return None
 
 
-def _extract_sampling_cols(
-    submission_data: dict[str, Any], sampling_cols: list[str]
-) -> dict[str, Any]:
-    """Extract sampling frame columns from submission data."""
-    result = {}
-    for col in sampling_cols:
-        result[col] = _get_field_value(submission_data, col)
-    return result
-
-
 def _percentage(conducted: int, target: int | None) -> float | None:
     """
     Percent of target conducted, or None when there is nothing to divide by.
@@ -575,7 +565,7 @@ async def get_performance_data(
 
         enum_collection_stats[enum_id]["total"] += 1
 
-        if sub.qa_status in ["FLAGGED", "PENDING_RE_QA"]:
+        if sub.qa_status == "FLAGGED":
             enum_collection_stats[enum_id]["needsReview"] += 1
         elif sub.qa_status == "APPROVED":
             enum_collection_stats[enum_id]["validated"] += 1
