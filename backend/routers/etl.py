@@ -77,7 +77,7 @@ async def run_etl_pipeline(
         except ValueError:
             raise HTTPException(
                 status_code=400, detail=f"Invalid date format: {start_date}. Use YYYY-MM-DD"
-            )
+            ) from None
 
     if not get_user_kobo_token(current_user):
         raise HTTPException(
@@ -144,7 +144,7 @@ async def run_etl_pipeline(
         raise HTTPException(
             status_code=503,
             detail="The pull could not start: the background worker is unavailable. Try again shortly.",
-        )
+        ) from exc
 
     db.refresh(run)
     return JSONResponse(

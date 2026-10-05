@@ -106,7 +106,7 @@ class ETLPipeline:
         try:
             survey_uuid = UUID(survey_id)
         except ValueError:
-            raise ValueError(f"Invalid survey_id format: {survey_id}")
+            raise ValueError(f"Invalid survey_id format: {survey_id}") from None
 
         survey_config = (
             self.db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_uuid).first()

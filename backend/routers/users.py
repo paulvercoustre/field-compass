@@ -326,16 +326,16 @@ def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
         response = requests.get(
             f"{base_url}/assets/", params={"limit": 0}, headers=headers, timeout=10
         )
-    except requests.exceptions.Timeout:
+    except requests.exceptions.Timeout as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=f"{host} took too long to answer. Try again in a moment.",
-        )
-    except requests.exceptions.RequestException:
+        ) from exc
+    except requests.exceptions.RequestException as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Could not reach a Kobo server at {host}. Check the server address.",
-        )
+        ) from exc
 
     if response.status_code in (401, 403):
         raise HTTPException(

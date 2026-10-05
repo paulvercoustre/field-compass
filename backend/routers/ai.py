@@ -172,13 +172,13 @@ async def generate_rule_from_natural_language(
 
     except ValueError as e:
         logger.error(f"Failed to generate rule: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error generating rule: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while generating the rule. Please try again.",
-        )
+        ) from e
 
 
 @router.post("/ai/suggest-rules", response_model=list[GeneratedRule])
@@ -276,13 +276,13 @@ async def suggest_validation_rules(
 
     except ValueError as e:
         logger.error(f"Failed to generate suggestions: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error generating suggestions: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while generating suggestions. Please try again.",
-        )
+        ) from e
 
 
 def _extract_variables_from_config(survey_config: SurveyConfig) -> list[dict[str, Any]]:

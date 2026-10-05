@@ -168,7 +168,7 @@ def _owned_connection(db: Session, user: User, connection_id: str) -> AIConnecti
     try:
         uuid = UUID(connection_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="AI provider not found")
+        raise HTTPException(status_code=404, detail="AI provider not found") from None
     connection = db.get(AIConnection, uuid)
     # Someone else's connection is reported as missing, not forbidden.
     if connection is None or connection.owner_user_id != user.user_id:
@@ -187,7 +187,7 @@ def _checked_url(url: str) -> str:
     try:
         return validate_base_url(url)
     except EndpointRejected as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _set_key(connection: AIConnection, api_key: str | None) -> None:
