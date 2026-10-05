@@ -8,7 +8,7 @@ import Banner from './ui/Banner';
 import { ExternalLinkIcon, SparkleIcon } from './ui/icons';
 import { aiFindingName, issueName } from '../utils/issueNames';
 import { useSurvey } from '../contexts/SurveyContext';
-import { getSurveyConfig, SurveyConfig, getValidationRules, ValidationRule } from '../services/progressApi';
+import { SurveyConfig, getValidationRules, ValidationRule } from '../services/progressApi';
 import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
 import { api } from '../services/api';
 import ValidationStatusDropdown from './ValidationStatusDropdown';
@@ -22,8 +22,14 @@ import { findAnswer } from '../utils/answers';
 interface SubmissionDetailProps {
   submission: Submission | null;
   isLoading: boolean;
+  /** The survey's settings, as the dashboard loaded them; null until then. */
+  surveyConfig: SurveyConfig | null;
   onSubmissionUpdate?: (updated: Submission) => void;
 }
+
+/** An issue from the AI review of open-text answers. */
+const isQualitativeIssue = (issue: { check: string; metadata?: unknown }): boolean =>
+  issue.check.startsWith('qual_') || (issue.metadata as Record<string, unknown> | undefined)?.source === 'llm_qualitative_v1';
 
 /** A dataset statistic for display; a missing one reads as a dash, not NaN. */
 const roundStat = (value: number | undefined): number | string =>
@@ -114,9 +120,7 @@ const describeAiCheck = (
   return { tone: 'muted', title: 'Not reviewed yet.' };
 };
 
-const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoading, onSubmissionUpdate }) => {
-  const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
-  const [isLoadingConfig, setIsLoadingConfig] = useState(false);
+const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoading, surveyConfig, onSubmissionUpdate }) => {
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
   const [isLoadingRules, setIsLoadingRules] = useState(false);
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
@@ -152,25 +156,6 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     setShowChecksList(false);
     setShowGeneralChecksList(false);
   }, [submission?._id]);
-
-  // Fetch survey config when submission or survey changes
-  useEffect(() => {
-    const fetchConfig = async () => {
-      if (!selectedSurvey) return;
-      
-      setIsLoadingConfig(true);
-      try {
-        const config = await getSurveyConfig(selectedSurvey.survey_id);
-        setSurveyConfig(config);
-      } catch (error) {
-        console.error('Failed to load survey config:', error);
-      } finally {
-        setIsLoadingConfig(false);
-      }
-    };
-
-    fetchConfig();
-  }, [selectedSurvey]);
 
   // Fetch validation rules when survey changes
   useEffect(() => {
@@ -212,11 +197,9 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
   useEffect(() => {
     if (!submission) return;
     const validationIds = new Set(validationRules.map(r => r.rule_data.check_id || r.rule_name));
-    const isQual = (i: { check: string; metadata?: unknown }) =>
-      i.check.startsWith('qual_') || (i.metadata as Record<string, unknown>)?.source === 'llm_qualitative_v1';
     const failedGeneralIds = new Set(
       submission.data_quality_issues
-        .filter(i => !validationIds.has(i.check) && !i.check.startsWith('outlier_') && !isQual(i))
+        .filter(i => !validationIds.has(i.check) && !i.check.startsWith('outlier_') && !isQualitativeIssue(i))
         .map(i => i.check)
     );
     setExpandedGeneralChecks(failedGeneralIds);
@@ -375,11 +358,6 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
       .replace(/\//g, ' / ')
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (l) => l.toUpperCase());
-  };
-
-  const isQualitativeIssue = (issue: QualityIssue): boolean => {
-    const metadata = (issue.metadata || {}) as Record<string, any>;
-    return issue.check.startsWith('qual_') || metadata.source === 'llm_qualitative_v1';
   };
 
   const qualitativeIssues = data_quality_issues.filter(isQualitativeIssue);
@@ -1279,7 +1257,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
         <div className="min-w-0">
             <div className="py-4 min-w-0">
-                {isLoading || isLoadingConfig ? (
+                {isLoading ? (
                     <div className="flex justify-center mt-8">
                         <Spinner />
                     </div>

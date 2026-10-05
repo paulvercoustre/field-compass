@@ -33,6 +33,57 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString
  * one language by AI: the owner's own key for translation, or the included
  * translations. Translations Kobo already has are kept, never redone.
  */
+interface QuestionListProps {
+  title: string;
+  questions: TranslatableQuestion[];
+  /** Paths of the questions chosen for translation. */
+  chosen: string[];
+  disabled: boolean;
+  onToggle: (path: string, on: boolean) => void;
+  onTurnOnTranscription: () => void;
+}
+
+/** One kind of question (text or audio), each with its box to tick. */
+const QuestionList: React.FC<QuestionListProps> = ({ title, questions, chosen, disabled, onToggle, onTurnOnTranscription }) =>
+  questions.length === 0 ? null : (
+    <div>
+      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</p>
+      <div className="space-y-1.5">
+        {questions.map((question) => (
+          <label key={question.path} className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className={`mt-0.5 ${checkboxClass}`}
+              disabled={disabled || question.in_repeat}
+              checked={chosen.includes(question.path) && !question.in_repeat}
+              onChange={(e) => onToggle(question.path, e.target.checked)}
+            />
+            <span className="min-w-0">
+              <span className="text-gray-900 dark:text-white">{question.label}</span>
+              <span className="block text-xs text-gray-500 dark:text-gray-400">{question.path}</span>
+              {question.in_repeat && (
+                <span className="block text-xs text-gray-500 dark:text-gray-400">Inside a repeat group: can't be translated yet.</span>
+              )}
+              {!question.in_repeat && question.kind === 'audio' && !question.transcribed && (
+                <span className="block text-xs text-amber-700 dark:text-amber-300">
+                  Field Compass doesn't transcribe this question, so only recordings that already have a transcript in
+                  Kobo will be translated.{' '}
+                  <button
+                    type="button"
+                    onClick={onTurnOnTranscription}
+                    className="font-medium underline underline-offset-2"
+                  >
+                    Turn on its transcription
+                  </button>
+                </span>
+              )}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+
 const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) => {
   const { trackRun, setPanelOpen, navigate, version } = useActivity();
   const [overview, setOverview] = useState<TranslationOverview | null>(null);
@@ -78,6 +129,7 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
   const { settings, counts, allowance, key } = overview;
   const canEdit = overview.can_edit;
   const editable = editing && canEdit;
+
   const languageName = (code: string | null) =>
     code ? overview.languages.find((lang) => lang.code === code)?.name ?? code : 'Not chosen';
   const selectable = overview.questions.filter((q) => !q.in_repeat);
@@ -148,45 +200,12 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
       questions: on ? [...draft.questions, path] : draft.questions.filter((p) => p !== path),
     });
 
-  const QuestionList: React.FC<{ title: string; questions: TranslatableQuestion[] }> = ({ title, questions }) =>
-    questions.length === 0 ? null : (
-      <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</p>
-        <div className="space-y-1.5">
-          {questions.map((question) => (
-            <label key={question.path} className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className={`mt-0.5 ${checkboxClass}`}
-                disabled={!editable || !draft.enabled || question.in_repeat}
-                checked={draft.questions.includes(question.path) && !question.in_repeat}
-                onChange={(e) => toggleQuestion(question.path, e.target.checked)}
-              />
-              <span className="min-w-0">
-                <span className="text-gray-900 dark:text-white">{question.label}</span>
-                <span className="block text-xs text-gray-500 dark:text-gray-400">{question.path}</span>
-                {question.in_repeat && (
-                  <span className="block text-xs text-gray-500 dark:text-gray-400">Inside a repeat group: can't be translated yet.</span>
-                )}
-                {!question.in_repeat && question.kind === 'audio' && !question.transcribed && (
-                  <span className="block text-xs text-amber-700 dark:text-amber-300">
-                    Field Compass doesn't transcribe this question, so only recordings that already have a transcript in
-                    Kobo will be translated.{' '}
-                    <button
-                      type="button"
-                      onClick={() => navigate({ view: 'settings', survey_id: surveyId, tab: 'transcription' })}
-                      className="font-medium underline underline-offset-2"
-                    >
-                      Turn on its transcription
-                    </button>
-                  </span>
-                )}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-    );
+  const questionListProps = {
+    chosen: draft.questions,
+    disabled: !editable || !draft.enabled,
+    onToggle: toggleQuestion,
+    onTurnOnTranscription: () => navigate({ view: 'settings', survey_id: surveyId, tab: 'transcription' }),
+  };
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-card dark:border-gray-800 dark:bg-gray-900">
@@ -339,8 +358,8 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
                 <p className="text-sm text-gray-500 dark:text-gray-400">This form has no text or audio questions.</p>
               ) : (
                 <div className="max-h-96 space-y-4 overflow-y-auto pr-1">
-                  <QuestionList title="Text questions" questions={text} />
-                  <QuestionList title="Audio questions (their transcript)" questions={audio} />
+                  <QuestionList title="Text questions" questions={text} {...questionListProps} />
+                  <QuestionList title="Audio questions (their transcript)" questions={audio} {...questionListProps} />
                 </div>
               )}
             </fieldset>

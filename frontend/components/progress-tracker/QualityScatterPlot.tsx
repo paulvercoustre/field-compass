@@ -17,6 +17,56 @@ interface QualityScatterPlotProps {
   onEnumeratorClick?: (enumeratorId: string) => void;
 }
 
+const EnumeratorTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const d = payload[0].payload;
+    return (
+      <div className="bg-white dark:bg-gray-900 px-3 py-2 text-xs rounded-lg shadow-popover border border-gray-200 dark:border-gray-700">
+        <p className="font-semibold text-gray-900 dark:text-white">{d.id}</p>
+        <div className="text-sm mt-2 space-y-1">
+          <p className="text-gray-600 dark:text-gray-300">
+            Submissions: <span className="font-medium">{d.submissions}</span>
+          </p>
+          <p className="text-gray-600 dark:text-gray-300">
+            Issues per submission: <span className="font-medium">{d.avgIssues.toFixed(2)}</span>
+          </p>
+          <p className="text-gray-600 dark:text-gray-300">
+            Flagged, not yet approved: <span className="font-medium">{d.needsReview}</span>
+          </p>
+          <p className="text-gray-600 dark:text-gray-300">
+            Approved by reviewer: <span className="font-medium">{d.validated}</span> ({d.validatedPercent}%)
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// One colour: the position says it all, and a verdict per dot ("top
+// performer", "priority concern") is more than these numbers can carry.
+// Fewer than 3 submissions are drawn lighter, as too few to read much into.
+const getPointColor = (submissions: number): string => (submissions < 3 ? '#94a3b8' : '#6366f1');
+
+/** An enumerator's circle, sized by submissions; recharts supplies the position and the row. */
+const EnumeratorDot = ({ cx, cy, payload, onEnumeratorClick }: any) => {
+  const color = getPointColor(payload.submissions);
+  const size = Math.max(6, Math.min(14, 6 + payload.submissions / 5));
+
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={size}
+      fill={color}
+      stroke="white"
+      strokeWidth={1}
+      style={{ cursor: onEnumeratorClick ? 'pointer' : 'default' }}
+      onClick={() => onEnumeratorClick?.(payload.id)}
+    />
+  );
+};
+
 const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumeratorClick }) => {
   const { collection, quality } = data;
 
@@ -45,56 +95,6 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
     if (total === 0) return 0;
     return chartData.reduce((sum, d) => sum + d.avgIssues * d.submissions, 0) / total;
   }, [chartData]);
-
-  // One colour: the position says it all, and a verdict per dot ("top
-  // performer", "priority concern") is more than these numbers can carry.
-  // Fewer than 3 submissions are drawn lighter, as too few to read much into.
-  const getPointColor = (submissions: number): string => (submissions < 3 ? '#94a3b8' : '#6366f1');
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const d = payload[0].payload;
-      return (
-        <div className="bg-white dark:bg-gray-900 px-3 py-2 text-xs rounded-lg shadow-popover border border-gray-200 dark:border-gray-700">
-          <p className="font-semibold text-gray-900 dark:text-white">{d.id}</p>
-          <div className="text-sm mt-2 space-y-1">
-            <p className="text-gray-600 dark:text-gray-300">
-              Submissions: <span className="font-medium">{d.submissions}</span>
-            </p>
-            <p className="text-gray-600 dark:text-gray-300">
-              Issues per submission: <span className="font-medium">{d.avgIssues.toFixed(2)}</span>
-            </p>
-            <p className="text-gray-600 dark:text-gray-300">
-              Flagged, not yet approved: <span className="font-medium">{d.needsReview}</span>
-            </p>
-            <p className="text-gray-600 dark:text-gray-300">
-              Approved by reviewer: <span className="font-medium">{d.validated}</span> ({d.validatedPercent}%)
-            </p>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const CustomDot = (props: any) => {
-    const { cx, cy, payload } = props;
-    const color = getPointColor(payload.submissions);
-    const size = Math.max(6, Math.min(14, 6 + payload.submissions / 5));
-    
-    return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={size}
-        fill={color}
-        stroke="white"
-        strokeWidth={1}
-        style={{ cursor: onEnumeratorClick ? 'pointer' : 'default' }}
-        onClick={() => onEnumeratorClick?.(payload.id)}
-      />
-    );
-  };
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800">
@@ -140,7 +140,7 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
               }}
             />
             <ZAxis range={[60, 400]} />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<EnumeratorTooltip />} />
             
             {/* Reference lines for averages */}
             <ReferenceLine 
@@ -156,7 +156,7 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
             
             <Scatter
               data={chartData}
-              shape={<CustomDot />}
+              shape={<EnumeratorDot onEnumeratorClick={onEnumeratorClick} />}
             />
           </ScatterChart>
         </ResponsiveContainer>

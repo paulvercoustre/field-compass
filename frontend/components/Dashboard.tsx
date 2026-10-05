@@ -280,6 +280,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
           <SubmissionDetail
             submission={selectedSubmission}
             isLoading={false}
+            surveyConfig={surveyConfig}
             onSubmissionUpdate={handleSubmissionUpdate}
           />
         </div>

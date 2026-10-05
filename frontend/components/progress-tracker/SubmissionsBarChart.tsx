@@ -16,6 +16,29 @@ interface SubmissionsBarChartProps {
   onEnumeratorClick?: (enumeratorId: string) => void;
 }
 
+const EnumeratorTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const d = payload[0].payload;
+    return (
+      <div className="bg-white dark:bg-gray-900 px-3 py-2 text-xs rounded-lg shadow-popover border border-gray-200 dark:border-gray-700">
+        <p className="font-semibold text-gray-900 dark:text-white">{d.id}</p>
+        <div className="text-sm mt-1 space-y-1">
+          <p className="text-gray-600 dark:text-gray-300">
+            Total: <span className="font-medium">{d.total}</span>
+          </p>
+          <p className="text-gray-600 dark:text-gray-300">
+            Flagged, not yet approved: <span className="font-medium">{d.needsReview}</span>
+          </p>
+          <p className="text-gray-600 dark:text-gray-300">
+            Approved by reviewer: <span className="font-medium">{d.validated}</span> ({d.percentValidated}%)
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnumeratorClick }) => {
   const chartData = useMemo(() => {
     return [...data]
@@ -33,29 +56,6 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
     if (data.length === 0) return 0;
     return data.reduce((sum, e) => sum + e.total, 0) / data.length;
   }, [data]);
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const d = payload[0].payload;
-      return (
-        <div className="bg-white dark:bg-gray-900 px-3 py-2 text-xs rounded-lg shadow-popover border border-gray-200 dark:border-gray-700">
-          <p className="font-semibold text-gray-900 dark:text-white">{d.id}</p>
-          <div className="text-sm mt-1 space-y-1">
-            <p className="text-gray-600 dark:text-gray-300">
-              Total: <span className="font-medium">{d.total}</span>
-            </p>
-            <p className="text-gray-600 dark:text-gray-300">
-              Flagged, not yet approved: <span className="font-medium">{d.needsReview}</span>
-            </p>
-            <p className="text-gray-600 dark:text-gray-300">
-              Approved by reviewer: <span className="font-medium">{d.validated}</span> ({d.percentValidated}%)
-            </p>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800 w-full flex flex-col">
@@ -85,7 +85,7 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
               stroke="var(--fc-chart-axis)"
               className="text-gray-600 dark:text-gray-400"
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<EnumeratorTooltip />} />
             <ReferenceLine 
               y={avgSubmissions} 
               stroke="#6366f1" 
