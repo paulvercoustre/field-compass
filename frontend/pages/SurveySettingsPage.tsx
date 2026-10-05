@@ -15,6 +15,7 @@ import { labelColumnFor } from '../utils/koboUrl';
 import CollectionTargets from '../components/ui/CollectionTargets';
 import CollectionTargetsEditor from '../components/ui/CollectionTargetsEditor';
 import { useCollectionTargets } from '../hooks/useCollectionTargets';
+import { useSectionEditor } from '../hooks/useSectionEditor';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
 import DkNumericCodes from '../components/ui/DkNumericCodes';
@@ -46,6 +47,9 @@ const GENERAL_FLAG_KEYS = [
   'flag_out_of_period', 'flag_weekend', 'weekend_days', 'flag_office_hours', 'office_hours_start', 'office_hours_end',
   'flag_sampling_frame', 'flag_dk_percentage', 'dk_percentage_threshold', 'flag_empty_percentage', 'empty_percentage_threshold',
 ] as const;
+/** Whether a setting is unchanged; lists compare as sets, so the order days were ticked in doesn't count. */
+const sameSetting = (a: unknown, b: unknown) =>
+  Array.isArray(a) && Array.isArray(b) ? JSON.stringify([...a].sort()) === JSON.stringify([...b].sort()) : a === b;
 const OUTLIER_KEYS = ['flag_outliers', 'outlier_variables', 'outlier_log_transform_variables', 'outlier_method', 'outlier_threshold'] as const;
 const LLM_KEYS = ['flag_llm_qualitative', 'llm_qualitative_fields', 'llm_check_types'] as const;
 
@@ -90,23 +94,19 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEditingOutlier, setIsEditingOutlier] = useState(false);
-  const [isSavingGeneralFlags, setIsSavingGeneralFlags] = useState(false);
-  const [isEditingLLM, setIsEditingLLM] = useState(false);
-  const [isSavingOutlier, setIsSavingOutlier] = useState(false);
-  const [isSavingLLM, setIsSavingLLM] = useState(false);
-  const [isEditingKoboTool, setIsEditingKoboTool] = useState(false);
-  const [isEditingSamplingFrame, setIsEditingSamplingFrame] = useState(false);
-  const [isSavingBasicInfo, setIsSavingBasicInfo] = useState(false);
-  const [isSavingCoreIdentifiers, setIsSavingCoreIdentifiers] = useState(false);
-  const [isSavingKoboTool, setIsSavingKoboTool] = useState(false);
-  const [isSavingSamplingFrame, setIsSavingSamplingFrame] = useState(false);
+
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // Wrapped so the handlers can be the ones defined further down.
+  const sections = useSectionEditor<SettingsSection>({
+    save: (section) => saveSection(section),
+    restore: (section) => restoreSection(section),
+    onError: setError,
+  });
   const [savedAt, setSavedAt] = useState<Partial<Record<SettingsSection, Date>>>({});
   // Saves run one at a time, each on the config as the previous one left it.
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -241,17 +241,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   // Dirty flag for General Quality Checks section only (Save/Cancel when user edits)
   const savedQc = config?.config_data?.quality_checks;
   const isGeneralFlagsDirty = savedQc ? (
-    qualityChecks.flag_out_of_period !== (savedQc.flag_out_of_period ?? false) ||
-    qualityChecks.flag_weekend !== (savedQc.flag_weekend ?? false) ||
-    JSON.stringify([...(qualityChecks.weekend_days || [])].sort()) !== JSON.stringify([...(savedQc.weekend_days ?? [5, 6])].sort()) ||
-    qualityChecks.flag_office_hours !== (savedQc.flag_office_hours ?? false) ||
-    qualityChecks.office_hours_start !== (savedQc.office_hours_start ?? '08:00') ||
-    qualityChecks.office_hours_end !== (savedQc.office_hours_end ?? '17:00') ||
-    qualityChecks.flag_sampling_frame !== (savedQc.flag_sampling_frame ?? false) ||
-    qualityChecks.flag_dk_percentage !== (savedQc.flag_dk_percentage ?? false) ||
-    qualityChecks.dk_percentage_threshold !== (savedQc.dk_percentage_threshold ?? 50) ||
-    qualityChecks.flag_empty_percentage !== (savedQc.flag_empty_percentage ?? false) ||
-    qualityChecks.empty_percentage_threshold !== (savedQc.empty_percentage_threshold ?? 50) ||
+    GENERAL_FLAG_KEYS.some((key) => !sameSetting(qualityChecks[key], savedQc[key] ?? DEFAULT_QUALITY_CHECKS[key])) ||
     globalParameters.min_survey_duration_minutes !== (config?.config_data?.global_parameters?.min_survey_duration_minutes ?? null) ||
     globalParameters.max_survey_duration_minutes !== (config?.config_data?.global_parameters?.max_survey_duration_minutes ?? null)
   ) : false;
@@ -268,8 +258,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       setIsDeleting(false);
       setShowDeleteConfirm(false);
       setError(null);
-      setIsEditingKoboTool(false);
-      setIsEditingSamplingFrame(false);
+      sections.closeAll();
     }
     // Keyed on the id, not the object.
     //
@@ -490,8 +479,8 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const [formCheckRunKey, setFormCheckRunKey] = useState(0);
   // Until it is saved, the refreshed form is what the check reads.
   const refreshedFormPayload = useMemo(
-    () => (formCheckRunKey > 0 && isEditingKoboTool ? koboToolPayload(koboToolData) : null),
-    [formCheckRunKey, isEditingKoboTool, koboToolData]
+    () => (formCheckRunKey > 0 && sections.isEditing('koboTool') ? koboToolPayload(koboToolData) : null),
+    [formCheckRunKey, sections.isEditing('koboTool'), koboToolData]
   );
 
   const handleRefreshFormFromProject = async () => {
@@ -609,89 +598,55 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     setSavedAt((prev) => ({ ...prev, [section]: new Date() }));
   };
 
-  /** Run a section's save with its busy flag; errors stay on screen until dismissed. */
-  const handleSectionSave = async (
-    section: SettingsSection,
-    setBusy?: (busy: boolean) => void,
-    onSaved?: () => void
-  ) => {
-    setBusy?.(true);
-    setError(null);
-    try {
-      await saveSection(section);
-      onSaved?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setBusy?.(false);
+  /** Put a section's fields back as last saved: the counterpart of sectionUpdate. */
+  const restoreSection = (section: SettingsSection) => {
+    if (!config) return;
+    const cd = config.config_data;
+    switch (section) {
+      case 'basicInfo':
+        setSurveyName(config.survey_name);
+        setKoboAssetId(config.kobo_asset_id || '');
+        setGlobalParameters((prev) => ({
+          ...prev,
+          data_collection_start_date: cd?.global_parameters?.data_collection_start_date || '',
+          data_collection_end_date: cd?.global_parameters?.data_collection_end_date || '',
+        }));
+        break;
+      case 'coreIdentifiers': {
+        if (cd?.core_identifiers) setCoreIdentifiers((prev) => ({ ...prev, ...cd.core_identifiers }));
+        const savedSpecialValues = cd?.special_values;
+        if (savedSpecialValues) {
+          setSpecialValues((prev) => ({
+            ...prev,
+            ...savedSpecialValues,
+            dk_value: readDkCodes(savedSpecialValues.dk_value),
+            dk_string_value: readDkValues(savedSpecialValues.dk_string_value),
+          }));
+        }
+        break;
+      }
+      case 'koboTool':
+        applyKoboTool(cd);
+        break;
+      case 'samplingFrame':
+        targets.load(cd.sampling_frame);
+        break;
+      case 'generalFlags':
+        restoreQualityChecks(GENERAL_FLAG_KEYS);
+        setGlobalParameters((prev) => ({
+          ...prev,
+          min_survey_duration_minutes: cd?.global_parameters?.min_survey_duration_minutes ?? null,
+          max_survey_duration_minutes: cd?.global_parameters?.max_survey_duration_minutes ?? null,
+        }));
+        break;
+      case 'outlier':
+        restoreQualityChecks(OUTLIER_KEYS);
+        break;
+      case 'llm':
+        restoreQualityChecks(LLM_KEYS);
+        break;
     }
   };
-
-  const handleSaveBasicInfo = () => handleSectionSave('basicInfo', setIsSavingBasicInfo);
-
-  const handleCancelBasicInfo = () => {
-    if (config) {
-      setSurveyName(config.survey_name);
-      setKoboAssetId(config.kobo_asset_id || '');
-      setGlobalParameters(prev => ({
-        ...prev,
-        data_collection_start_date: config.config_data?.global_parameters?.data_collection_start_date || '',
-        data_collection_end_date: config.config_data?.global_parameters?.data_collection_end_date || '',
-      }));
-    }
-  };
-
-  const handleSaveCoreIdentifiers = () => handleSectionSave('coreIdentifiers', setIsSavingCoreIdentifiers);
-
-  const handleCancelCoreIdentifiers = () => {
-    if (config?.config_data?.core_identifiers) {
-      setCoreIdentifiers(prev => ({ ...prev, ...config.config_data.core_identifiers }));
-    }
-    const savedSpecialValues = config?.config_data?.special_values;
-    if (savedSpecialValues) {
-      setSpecialValues(prev => ({
-        ...prev,
-        ...savedSpecialValues,
-        dk_value: readDkCodes(savedSpecialValues.dk_value),
-        dk_string_value: readDkValues(savedSpecialValues.dk_string_value),
-      }));
-    }
-  };
-
-  const handleSaveKoboTool = () => handleSectionSave('koboTool', setIsSavingKoboTool, () => setIsEditingKoboTool(false));
-
-  const handleCancelKoboTool = () => {
-    setIsEditingKoboTool(false);
-    if (config) applyKoboTool(config.config_data);
-  };
-
-  const handleSaveSamplingFrame = () => handleSectionSave('samplingFrame', setIsSavingSamplingFrame, () => setIsEditingSamplingFrame(false));
-
-  const handleCancelSamplingFrame = () => {
-    setIsEditingSamplingFrame(false);
-    if (config) targets.load(config.config_data.sampling_frame);
-  };
-
-  const handleSaveGeneralFlags = () => handleSectionSave('generalFlags', setIsSavingGeneralFlags);
-
-  const handleCancelGeneralFlags = () => {
-    restoreQualityChecks(GENERAL_FLAG_KEYS);
-    const saved = config?.config_data?.global_parameters;
-    setGlobalParameters((prev) => ({
-      ...prev,
-      min_survey_duration_minutes: saved?.min_survey_duration_minutes ?? null,
-      max_survey_duration_minutes: saved?.max_survey_duration_minutes ?? null,
-    }));
-  };
-
-  const handleSaveOutlier = () => handleSectionSave('outlier', setIsSavingOutlier, () => setIsEditingOutlier(false));
-
-  const handleCancelOutlier = () => {
-    setIsEditingOutlier(false);
-    restoreQualityChecks(OUTLIER_KEYS);
-  };
-
-  const handleSaveLLM = () => handleSectionSave('llm', setIsSavingLLM, () => setIsEditingLLM(false));
 
   const [isRerunningAI, setIsRerunningAI] = useState(false);
   const handleRerunAI = async () => {
@@ -706,11 +661,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     } finally {
       setIsRerunningAI(false);
     }
-  };
-
-  const handleCancelLLM = () => {
-    setIsEditingLLM(false);
-    restoreQualityChecks(LLM_KEYS);
   };
 
   const handleDeleteClick = () => {
@@ -1031,15 +981,15 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 {canEditSurvey && isBasicInfoDirty && (
                   <div className="flex gap-3 pt-2">
                     <button
-                      onClick={handleSaveBasicInfo}
-                      disabled={isSavingBasicInfo}
+                      onClick={() => sections.save('basicInfo')}
+                      disabled={sections.isSaving('basicInfo')}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingBasicInfo ? 'Saving...' : 'Save changes'}
+                      {sections.isSaving('basicInfo') ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
-                      onClick={handleCancelBasicInfo}
-                      disabled={isSavingBasicInfo}
+                      onClick={() => sections.cancel('basicInfo')}
+                      disabled={sections.isSaving('basicInfo')}
                       className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
@@ -1053,17 +1003,17 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Kobo form</h2>
-                {!isEditingKoboTool && <SavedNote at={savedAt.koboTool} className="ml-auto mr-2" />}
-                {canEditSurvey && !isEditingKoboTool && (
+                {!sections.isEditing('koboTool') && <SavedNote at={savedAt.koboTool} className="ml-auto mr-2" />}
+                {canEditSurvey && !sections.isEditing('koboTool') && (
                   <button
-                    onClick={() => setIsEditingKoboTool(true)}
+                    onClick={() => sections.edit('koboTool')}
                     className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
                   >
                     Edit
                   </button>
                 )}
               </div>
-              {isEditingKoboTool ? (
+              {sections.isEditing('koboTool') ? (
                 <div className="space-y-2">
                   {koboToolData && (
                     <div className="mb-3">
@@ -1128,15 +1078,15 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                   })()}
                   <div className="flex gap-3 mt-4">
                     <button
-                      onClick={handleSaveKoboTool}
-                      disabled={isSavingKoboTool}
+                      onClick={() => sections.save('koboTool')}
+                      disabled={sections.isSaving('koboTool')}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingKoboTool ? 'Saving...' : 'Save changes'}
+                      {sections.isSaving('koboTool') ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
-                      onClick={handleCancelKoboTool}
-                      disabled={isSavingKoboTool}
+                      onClick={() => sections.cancel('koboTool')}
+                      disabled={sections.isSaving('koboTool')}
                       className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
@@ -1174,17 +1124,17 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Data collection targets</h2>
-                {!isEditingSamplingFrame && <SavedNote at={savedAt.samplingFrame} className="ml-auto mr-2" />}
-                {canEditSurvey && !isEditingSamplingFrame && (
+                {!sections.isEditing('samplingFrame') && <SavedNote at={savedAt.samplingFrame} className="ml-auto mr-2" />}
+                {canEditSurvey && !sections.isEditing('samplingFrame') && (
                   <button
-                    onClick={() => setIsEditingSamplingFrame(true)}
+                    onClick={() => sections.edit('samplingFrame')}
                     className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
                   >
                     Edit
                   </button>
                 )}
               </div>
-              {isEditingSamplingFrame ? (
+              {sections.isEditing('samplingFrame') ? (
                 <div className="space-y-4">
                   <CollectionTargetsEditor
                     targets={targets}
@@ -1193,15 +1143,15 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                   />
                   <div className="flex gap-3 mt-4">
                     <button
-                      onClick={handleSaveSamplingFrame}
-                      disabled={isSavingSamplingFrame}
+                      onClick={() => sections.save('samplingFrame')}
+                      disabled={sections.isSaving('samplingFrame')}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingSamplingFrame ? 'Saving...' : 'Save changes'}
+                      {sections.isSaving('samplingFrame') ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
-                      onClick={handleCancelSamplingFrame}
-                      disabled={isSavingSamplingFrame}
+                      onClick={() => sections.cancel('samplingFrame')}
+                      disabled={sections.isSaving('samplingFrame')}
                       className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
@@ -1272,15 +1222,15 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               {canEditSurvey && isCoreIdentifiersDirty && (
                 <div className="flex gap-3 pt-4">
                   <button
-                    onClick={handleSaveCoreIdentifiers}
-                    disabled={isSavingCoreIdentifiers}
+                    onClick={() => sections.save('coreIdentifiers')}
+                    disabled={sections.isSaving('coreIdentifiers')}
                     className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                   >
-                    {isSavingCoreIdentifiers ? 'Saving...' : 'Save changes'}
+                    {sections.isSaving('coreIdentifiers') ? 'Saving...' : 'Save changes'}
                   </button>
                   <button
-                    onClick={handleCancelCoreIdentifiers}
-                    disabled={isSavingCoreIdentifiers}
+                    onClick={() => sections.cancel('coreIdentifiers')}
+                    disabled={sections.isSaving('coreIdentifiers')}
                     className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                   >
                     Cancel
@@ -1605,15 +1555,15 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 {canEditSurvey && isGeneralFlagsDirty && (
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={handleSaveGeneralFlags}
-                      disabled={isSavingGeneralFlags}
+                      onClick={() => sections.save('generalFlags')}
+                      disabled={sections.isSaving('generalFlags')}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingGeneralFlags ? 'Saving...' : 'Save changes'}
+                      {sections.isSaving('generalFlags') ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
-                      onClick={handleCancelGeneralFlags}
-                      disabled={isSavingGeneralFlags}
+                      onClick={() => sections.cancel('generalFlags')}
+                      disabled={sections.isSaving('generalFlags')}
                       className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
@@ -1627,10 +1577,10 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Outlier checks</h2>
-                {!isEditingOutlier && <SavedNote at={savedAt.outlier} className="ml-auto mr-2" />}
-                {canEditSurvey && !isEditingOutlier && (
+                {!sections.isEditing('outlier') && <SavedNote at={savedAt.outlier} className="ml-auto mr-2" />}
+                {canEditSurvey && !sections.isEditing('outlier') && (
                   <button
-                    onClick={() => setIsEditingOutlier(true)}
+                    onClick={() => sections.edit('outlier')}
                     className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
                   >
                     Edit
@@ -1644,7 +1594,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                     <div className="flex h-5 items-center">
                       <input
                         type="checkbox"
-                        disabled={!isEditingOutlier}
+                        disabled={!sections.isEditing('outlier')}
                         checked={qualityChecks.flag_outliers}
                         onChange={(e) => setQualityChecks({ ...qualityChecks, flag_outliers: e.target.checked })}
                         className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
@@ -1664,7 +1614,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                           Variables to check
                         </label>
-                        {isEditingOutlier ? (
+                        {sections.isEditing('outlier') ? (
                           <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
                             {numericVariables.length > 0 ? (
                               numericVariables.map((variable) => (
@@ -1728,7 +1678,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                           <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                             Use signed log transform for skewed or mixed-sign variables: sign(x) × log(1 + |x|)
                           </p>
-                          {isEditingOutlier ? (
+                          {sections.isEditing('outlier') ? (
                             <div className="space-y-2">
                               {qualityChecks.outlier_variables.map((variable) => (
                                 <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
@@ -1782,7 +1732,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                           Detection method
                         </label>
-                        {isEditingOutlier ? (
+                        {sections.isEditing('outlier') ? (
                           <select
                             value={qualityChecks.outlier_method}
                             onChange={(e) => {
@@ -1828,7 +1778,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                           Threshold
                         </label>
-                        {isEditingOutlier ? (
+                        {sections.isEditing('outlier') ? (
                           <input
                             type="number"
                             step="0.1"
@@ -1858,18 +1808,18 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                     </div>
                   )}
                 </div>
-                {isEditingOutlier && (
+                {sections.isEditing('outlier') && (
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={handleSaveOutlier}
-                      disabled={isSavingOutlier}
+                      onClick={() => sections.save('outlier')}
+                      disabled={sections.isSaving('outlier')}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingOutlier ? 'Saving...' : 'Save changes'}
+                      {sections.isSaving('outlier') ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
-                      onClick={handleCancelOutlier}
-                      disabled={isSavingOutlier}
+                      onClick={() => sections.cancel('outlier')}
+                      disabled={sections.isSaving('outlier')}
                       className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
@@ -1883,10 +1833,10 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white"><SparkleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />AI review</h2>
-                {!isEditingLLM && <SavedNote at={savedAt.llm} className="ml-auto mr-2" />}
-                {canEditSurvey && !isEditingLLM && (
+                {!sections.isEditing('llm') && <SavedNote at={savedAt.llm} className="ml-auto mr-2" />}
+                {canEditSurvey && !sections.isEditing('llm') && (
                   <button
-                    onClick={() => setIsEditingLLM(true)}
+                    onClick={() => sections.edit('llm')}
                     className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
                   >
                     Edit
@@ -1903,7 +1853,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                   <div className="flex h-5 items-center">
                     <input
                       type="checkbox"
-                      disabled={!isEditingLLM}
+                      disabled={!sections.isEditing('llm')}
                       checked={qualityChecks.flag_llm_qualitative}
                       onChange={(e) =>
                         setQualityChecks({
@@ -1937,7 +1887,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                           <label key={variable.name} className="flex items-center gap-2 text-sm">
                             <input
                               type="checkbox"
-                              disabled={!isEditingLLM}
+                              disabled={!sections.isEditing('llm')}
                               checked={qualityChecks.llm_qualitative_fields.includes(variable.name)}
                               onChange={(e) => {
                                 const selected = qualityChecks.llm_qualitative_fields;
@@ -1963,7 +1913,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                     )}
                   </div>
                 )}
-                {canEditSurvey && !isEditingLLM && qualityChecks.flag_llm_qualitative && (
+                {canEditSurvey && !sections.isEditing('llm') && qualityChecks.flag_llm_qualitative && (
                   <div className="ml-7 flex flex-wrap items-center gap-3">
                     <button
                       onClick={handleRerunAI}
@@ -1977,18 +1927,18 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                     </p>
                   </div>
                 )}
-                {isEditingLLM && (
+                {sections.isEditing('llm') && (
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={handleSaveLLM}
-                      disabled={isSavingLLM}
+                      onClick={() => sections.save('llm')}
+                      disabled={sections.isSaving('llm')}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
                     >
-                      {isSavingLLM ? 'Saving...' : 'Save changes'}
+                      {sections.isSaving('llm') ? 'Saving...' : 'Save changes'}
                     </button>
                     <button
-                      onClick={handleCancelLLM}
-                      disabled={isSavingLLM}
+                      onClick={() => sections.cancel('llm')}
+                      disabled={sections.isSaving('llm')}
                       className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
                     >
                       Cancel
