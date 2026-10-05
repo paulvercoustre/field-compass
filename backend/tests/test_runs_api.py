@@ -17,6 +17,7 @@ from database.models import (
     Run,
     SubmissionCurrent,
     SurveyConfig,
+    TranscriptTranslation,
 )
 from services import pull_worker
 from services.runs import run_counts, sweep_runs
@@ -504,6 +505,96 @@ class TestSubmissionTranscripts:
         monkeypatch.setattr(transcription_router, "get_user_kobo_token", lambda user: "kobo-token")
         response = client.post(f"/api/surveys/{survey.survey_id}/transcripts/run")
         assert response.status_code == 400
+
+
+class TestTranslation:
+    """Translating transcripts: settings, "Translate now", and what a submission shows."""
+
+    URL = "/api/surveys/{}/audio-transcription"
+    ON = {"enabled": True, "questions": ["interview/story"], "acknowledge": True}
+
+    def test_the_language_is_saved_normalised(self, client, survey):
+        saved = client.put(
+            self.URL.format(survey.survey_id), json={**self.ON, "translate_to": "en"}
+        )
+        body = saved.json()
+        assert body["settings"]["translate_to"] == "eng"
+        assert body["counts"]["translations"]["missing"] == 0
+
+    def test_an_unknown_language_is_refused(self, client, survey):
+        refused = client.put(
+            self.URL.format(survey.survey_id), json={**self.ON, "translate_to": "tlh"}
+        )
+        assert refused.status_code == 400 and "can't be translated" in refused.json()["detail"]
+
+    def test_who_translates(self, client, survey, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-operator")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "50")
+        body = client.get(self.URL.format(survey.survey_id)).json()
+        assert body["translation"]["source"] == "operator"
+        assert body["translation"]["allowance"] == {"limit": 50, "remaining": 50}
+
+    def test_translate_now_needs_a_language(self, client, survey):
+        client.put(self.URL.format(survey.survey_id), json=self.ON)
+        response = client.post(f"/api/surveys/{survey.survey_id}/translations/run")
+        assert response.status_code == 400
+
+    def test_translate_now_queues_the_missing_ones(self, client, db, survey, monkeypatch):
+        from services.translation_worker import translate_transcript_task
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-operator")
+        task = _Task()
+        monkeypatch.setattr(translate_transcript_task, "apply_async", task.apply_async)
+        client.put(self.URL.format(survey.survey_id), json={**self.ON, "translate_to": "eng"})
+        _submission(db, survey, 1, llm_check_status="skipped")
+        db.add(
+            AudioTranscript(
+                survey_id=survey.survey_id,
+                submission_id=1,
+                question_path="interview/story",
+                status="success",
+                text="Il a plu",
+                language_code="fra",
+            )
+        )
+        db.commit()
+        before = client.get(self.URL.format(survey.survey_id)).json()
+        assert before["counts"]["translations"]["missing"] == 1
+        run = client.post(f"/api/surveys/{survey.survey_id}/translations/run").json()
+        assert run["kind"] == "translation_rerun" and run["translations"]["queued"] == 1
+        assert len(task.sent) == 1
+        db.expire_all()
+        assert db.query(TranscriptTranslation).one().status == "pending"
+
+    def test_a_submission_shows_its_translation(self, client, db, survey):
+        client.put(self.URL.format(survey.survey_id), json={**self.ON, "translate_to": "eng"})
+        _submission(db, survey, 1, llm_check_status="skipped")
+        transcript = AudioTranscript(
+            survey_id=survey.survey_id,
+            submission_id=1,
+            question_path="interview/story",
+            status="success",
+            text="Il a plu",
+            language_code="fra",
+        )
+        db.add(transcript)
+        db.flush()
+        db.add(
+            TranscriptTranslation(
+                transcript_id=transcript.transcript_id,
+                survey_id=survey.survey_id,
+                submission_id=1,
+                question_path="interview/story",
+                language="eng",
+                status="success",
+                text="It rained",
+            )
+        )
+        db.commit()
+        body = client.get("/api/submissions/1/transcripts").json()
+        assert (body["translate_to"], body["translate_to_name"]) == ("eng", "English")
+        translation = body["answers"][0]["transcript"]["translation"]
+        assert (translation["text"], translation["language_name"]) == ("It rained", "English")
 
 
 class TestTranscriptionKeys:

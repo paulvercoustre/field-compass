@@ -1,8 +1,11 @@
 """
-Sending transcripts to Kobo as its own transcript of a question.
+Sending transcripts (and their translations) to Kobo as its own transcript
+of a question.
 
 Kobo stores processing results (transcripts, translations, qualitative
 analysis) as a *supplement* to a submission, never in the submission itself.
+Translations are sent the same way, per language, once Kobo has the
+question's transcript.
 A manual transcript is accepted when it is created: it becomes the question's
 selected transcript, shows in Kobo's data table and exports, and anyone can
 correct it in Kobo's processing screen.
@@ -33,6 +36,10 @@ logger = logging.getLogger(__name__)
 MANUAL_TRANSCRIPTION = "manual_transcription"
 # Kobo's own transcription (Google). Kobo shows whichever was accepted last.
 TRANSCRIPTION_ACTIONS = (MANUAL_TRANSCRIPTION, "automatic_google_transcription")
+# Translations are filed per language, each made from the question's
+# transcript; Kobo refuses one when the question has no transcript.
+MANUAL_TRANSLATION = "manual_translation"
+TRANSLATION_ACTIONS = (MANUAL_TRANSLATION, "automatic_google_translation")
 
 # Kobo's supplement schema version (SUBSEQUENCES_SCHEMA_VERSION in kpi). A
 # setting, so a schema bump on Kobo's side does not need a release here.
@@ -47,7 +54,7 @@ RETRYABLE = "unavailable"
 
 # How long a question's feature setup is trusted without asking Kobo again.
 _FEATURE_CACHE_SECONDS = 600
-_feature_cache: dict[tuple[str, str, str, str], float] = {}
+_feature_cache: dict[tuple[str, str, str, str, str], float] = {}
 
 
 def supplement_version() -> str:
@@ -130,14 +137,14 @@ def _features(body: Any) -> list[dict[str, Any]]:
     return [item for item in body or [] if isinstance(item, dict)]
 
 
-def ensure_transcription_feature(
-    fetcher: KoboFetcher, asset_uid: str, question_xpath: str, language: str
+def ensure_feature(
+    fetcher: KoboFetcher, asset_uid: str, question_xpath: str, action: str, language: str
 ) -> None:
     """
-    Make sure Kobo accepts manual transcripts in ``language`` for the question:
-    enable the feature, or add the language to it.
+    Make sure Kobo accepts ``action`` (manual transcripts or translations) in
+    ``language`` for the question: enable the feature, or add the language.
     """
-    key = (fetcher.api_url, asset_uid, question_xpath, language)
+    key = (fetcher.api_url, asset_uid, question_xpath, action, language)
     if _feature_cache.get(key, 0) > time.monotonic():
         return
 
@@ -145,7 +152,7 @@ def ensure_transcription_feature(
     existing = None
     for feature in _features(_call(fetcher, "GET", base, missing_means_unsupported=True)):
         if (
-            feature.get("action") == MANUAL_TRANSCRIPTION
+            feature.get("action") == action
             and str(feature.get("question_xpath") or "").strip("/") == question_xpath
         ):
             existing = feature
@@ -158,7 +165,7 @@ def ensure_transcription_feature(
             base,
             {
                 "question_xpath": question_xpath,
-                "action": MANUAL_TRANSCRIPTION,
+                "action": action,
                 "params": [{"language": language}],
             },
             missing_means_unsupported=True,
@@ -174,6 +181,18 @@ def ensure_transcription_feature(
                 missing_means_unsupported=True,
             )
     _feature_cache[key] = time.monotonic() + _FEATURE_CACHE_SECONDS
+
+
+def ensure_transcription_feature(
+    fetcher: KoboFetcher, asset_uid: str, question_xpath: str, language: str
+) -> None:
+    ensure_feature(fetcher, asset_uid, question_xpath, MANUAL_TRANSCRIPTION, language)
+
+
+def ensure_translation_feature(
+    fetcher: KoboFetcher, asset_uid: str, question_xpath: str, language: str
+) -> None:
+    ensure_feature(fetcher, asset_uid, question_xpath, MANUAL_TRANSLATION, language)
 
 
 def _supplement_path(asset_uid: str, root_uuid: str) -> str:
@@ -250,4 +269,86 @@ def send_transcript(
         },
     )
     version = selected_manual_version(body if isinstance(body, dict) else {}, question_xpath)
+    return str(version.get("_uuid")) if version and version.get("_uuid") else None
+
+
+def _translation_versions(action_data: Any, language: str) -> list[dict[str, Any]]:
+    """
+    One action's versions for ``language``. Kobo files translations under
+    their language (``{"fr": {"_versions": [...]}}``); a flat ``_versions``
+    list is read by each version's own language.
+    """
+    if not isinstance(action_data, dict):
+        return []
+    keyed = action_data.get(language)
+    if isinstance(keyed, dict) and isinstance(keyed.get("_versions"), list):
+        return [v for v in keyed["_versions"] if isinstance(v, dict)]
+    flat = action_data.get("_versions")
+    if isinstance(flat, list):
+        return [
+            v
+            for v in flat
+            if isinstance(v, dict) and (v.get("_data") or {}).get("language") == language
+        ]
+    return []
+
+
+def selected_manual_translation_version(
+    supplement: dict[str, Any], question_xpath: str, language: str
+) -> dict[str, Any] | None:
+    """The newest manual translation into ``language``: the one Kobo shows."""
+    question = supplement.get(question_xpath) if isinstance(supplement, dict) else None
+    action = question.get(MANUAL_TRANSLATION) if isinstance(question, dict) else None
+    candidates = _translation_versions(action, language)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda v: str(v.get("_dateCreated") or ""))
+
+
+def selected_translation(
+    supplement: dict[str, Any], question_xpath: str, language: str
+) -> dict[str, Any] | None:
+    """
+    The translation into ``language`` Kobo shows for a question: the one
+    accepted last, typed (or sent by us) or made by Kobo's automatic
+    translation. A deletion is a version too, with no value.
+    """
+    question = supplement.get(question_xpath) if isinstance(supplement, dict) else None
+    if not isinstance(question, dict):
+        return None
+    accepted: list[tuple[str, dict[str, Any]]] = []
+    for action in TRANSLATION_ACTIONS:
+        for version in _translation_versions(question.get(action), language):
+            # A typed translation is accepted when it is created.
+            when = version.get("_dateAccepted") or (
+                version.get("_dateCreated") if action == MANUAL_TRANSLATION else None
+            )
+            if when:
+                accepted.append((str(when), version))
+    if not accepted:
+        return None
+    return max(accepted, key=lambda item: item[0])[1]
+
+
+def send_translation(
+    fetcher: KoboFetcher,
+    asset_uid: str,
+    root_uuid: str,
+    question_xpath: str,
+    language: str,
+    value: str,
+) -> str | None:
+    """Store ``value`` as the question's translation into ``language``; returns Kobo's version id."""
+    body = _call(
+        fetcher,
+        "PATCH",
+        _supplement_path(asset_uid, root_uuid),
+        {
+            "_version": supplement_version(),
+            question_xpath: {MANUAL_TRANSLATION: {"language": language, "value": value}},
+        },
+    )
+    version = selected_manual_translation_version(
+        body if isinstance(body, dict) else {}, question_xpath, language
+    )
     return str(version.get("_uuid")) if version and version.get("_uuid") else None

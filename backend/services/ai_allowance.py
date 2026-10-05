@@ -2,7 +2,9 @@
 Included AI usage: how much a survey may spend on the operator's key.
 
 Surveys without their own provider run AI checks on the operator's key, up
-to a monthly number of checked submissions per survey; AI rule writing on
+to a monthly number of checked submissions per survey. Translating a
+submission's transcripts counts the same way, against the same number: a
+submission reviewed and translated counts once. AI rule writing on
 that key is limited per user per day. Both are counted from ``ai_usage``, so
 the limit is what was actually spent, not an estimate. A survey with its own
 provider has no Field Compass limit -- its provider's apply.
@@ -23,14 +25,18 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import AIUsage, SubmissionCurrent
-from services.ai_usage import QUALITATIVE_CHECK, RULE_GENERATION, RULE_SUGGESTION
+from database.models import AIUsage, SubmissionCurrent, TranscriptTranslation
+from services.ai_usage import QUALITATIVE_CHECK, RULE_GENERATION, RULE_SUGGESTION, TRANSLATION
 
 NOT_RUN_ALLOWANCE = "not_run_allowance"
 
 # Outcomes that cost credit: the provider produced output. A bad_response
 # was still generated and billed.
 _SPENT = ("ok", "bad_response")
+
+# Work that counts a submission against the included AI reviews.
+_PER_SUBMISSION = (QUALITATIVE_CHECK, TRANSLATION)
+_OPEN = ("pending", "running")
 
 
 def _int_env(name: str, default: int) -> int:
@@ -75,12 +81,12 @@ def _day_start(now: datetime | None = None) -> datetime:
 
 
 def _spent_submissions(db: Session, survey_id: UUID, now: datetime | None = None):
-    """Submissions with a check this month that cost credit on the operator's key."""
+    """Submissions with a check or translation this month that cost credit on the operator's key."""
     return (
         db.query(AIUsage.submission_id)
         .filter(
             AIUsage.survey_id == survey_id,
-            AIUsage.feature == QUALITATIVE_CHECK,
+            AIUsage.feature.in_(_PER_SUBMISSION),
             # Checks always name their submission; without this a NULL would
             # make the NOT IN below match nothing at all.
             AIUsage.submission_id.isnot(None),
@@ -109,20 +115,31 @@ def checks_used(db: Session, survey_id: UUID, now: datetime | None = None) -> in
 
 def checks_in_flight(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
     """
-    Checks queued or running that are not already counted as used.
+    Submissions with a check or translation queued or running, not already
+    counted as used.
 
     A submission retrying after a billed reply is both pending and spent;
-    it holds one allowance slot, not two.
+    it holds one allowance slot, not two. So does one being reviewed and
+    translated at once.
     """
-    return (
-        db.query(func.count(SubmissionCurrent._id))
-        .filter(
-            SubmissionCurrent.survey_id == survey_id,
-            SubmissionCurrent.llm_check_status.in_(("pending", "running")),
-            ~SubmissionCurrent._id.in_(_spent_submissions(db, survey_id, now)),
-        )
-        .scalar()
+    return len(submissions_in_flight(db, survey_id) - counted_submission_ids(db, survey_id, now))
+
+
+def submissions_in_flight(db: Session, survey_id: UUID) -> set[int]:
+    """Submissions with a check or a translation queued or running."""
+    reviews = db.query(SubmissionCurrent._id).filter(
+        SubmissionCurrent.survey_id == survey_id,
+        SubmissionCurrent.llm_check_status.in_(_OPEN),
     )
+    translations = (
+        db.query(TranscriptTranslation.submission_id)
+        .filter(
+            TranscriptTranslation.survey_id == survey_id,
+            TranscriptTranslation.status.in_(_OPEN),
+        )
+        .distinct()
+    )
+    return {i for (i,) in reviews} | {i for (i,) in translations}
 
 
 def checks_remaining(db: Session, survey_id: UUID, now: datetime | None = None) -> int:

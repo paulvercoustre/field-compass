@@ -60,6 +60,9 @@ class TranscriptionSettings:
     language: str | None = None  # ISO 639-3, None = detect
     multiple_speakers: bool = False
     send_to_kobo: bool = False
+    # ISO 639-3: transcripts are translated into it by the survey's AI
+    # provider. None: not translated.
+    translate_to: str | None = None
     kobo_pause: dict[str, Any] | None = None
     acknowledged_at: str | None = None
     acknowledged_by: str | None = None
@@ -72,6 +75,10 @@ class TranscriptionSettings:
     @property
     def sending_to_kobo(self) -> bool:
         return self.active and self.send_to_kobo and not self.kobo_pause
+
+    @property
+    def translating(self) -> bool:
+        return self.active and self.translate_to is not None
 
 
 def transcription_settings(config_data: dict[str, Any] | None) -> TranscriptionSettings:
@@ -89,6 +96,7 @@ def transcription_settings(config_data: dict[str, Any] | None) -> TranscriptionS
         language=normalize_language(raw.get("language")),
         multiple_speakers=bool(raw.get("multiple_speakers")),
         send_to_kobo=bool(raw.get("send_to_kobo")),
+        translate_to=normalize_language(raw.get("translate_to")),
         kobo_pause=pause if isinstance(pause, dict) else None,
         acknowledged_at=raw.get("acknowledged_at"),
         acknowledged_by=raw.get("acknowledged_by"),
@@ -256,6 +264,16 @@ def transcript_input_hash(question_path: str, attachment_uid: str | None) -> str
     re-runs older ones on purpose.
     """
     payload = f"transcript_v1:{question_path}:{attachment_uid or ''}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def translation_input_hash(text: str | None, language: str) -> str:
+    """
+    What a translation is of: one transcript text, into one language. A new
+    text (transcribed again, corrected in Kobo) or another language changes
+    the hash and is translated again.
+    """
+    payload = f"translation_v1:{language}:{(text or '').strip()}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

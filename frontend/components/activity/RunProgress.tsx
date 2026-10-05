@@ -25,6 +25,7 @@ export const runTitle = (run: RunSummary): string => {
     pull: 'Pull',
     ai_rerun: 'AI review',
     transcription_rerun: 'Transcription',
+    translation_rerun: 'Translation',
     kobo_resend: 'Sending to Kobo',
   }[run.kind];
   return `${what} started${who}, ${time(run.started_at || run.created_at)}`;
@@ -192,6 +193,7 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
   const pull = run.pull;
   const ai = run.ai_checks;
   const transcripts = run.transcripts;
+  const translations = run.translations;
   const kobo = run.kobo;
 
   return (
@@ -325,6 +327,39 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
               <>
                 {sep}
                 {formatEta(transcripts.eta_seconds)}
+              </>
+            )}
+          </Step>
+        )}
+
+        {translations && allHandedOff(translations) && (
+          <Step state="done" title="Translations">
+            moved to a later run
+          </Step>
+        )}
+        {translations && translations.queued > 0 && !allHandedOff(translations) && (
+          <Step
+            state={bucketState(translations)}
+            title="Translations"
+            bar={{ done: translations.done + translations.failed + translations.not_run, total: translations.queued - translations.handed_off }}
+          >
+            {number(translations.done)} of {number(translations.queued - translations.handed_off)}
+            {translations.failed > 0 && (
+              <>
+                {sep}
+                <span className="text-amber-700 dark:text-amber-300">{number(translations.failed)} failed</span>
+              </>
+            )}
+            {translations.not_run > 0 && (
+              <>
+                {sep}
+                {number(translations.not_run)} not run
+              </>
+            )}
+            {formatEta(translations.eta_seconds) && (
+              <>
+                {sep}
+                {formatEta(translations.eta_seconds)}
               </>
             )}
           </Step>

@@ -334,6 +334,47 @@ COMMENT ON COLUMN audio_transcripts.status IS 'pending | running | success | fai
 COMMENT ON COLUMN audio_transcripts.kobo_status IS 'not_sent | pending | sent | failed | unsupported | edited_in_kobo';
 
 -- ============================================================================
+-- Table: transcript_translations
+-- ============================================================================
+-- A transcript translated into the survey's translation language by its AI
+-- provider, and whether it was sent to Kobo. One per transcript.
+-- ============================================================================
+
+CREATE TABLE transcript_translations (
+    translation_id BIGSERIAL PRIMARY KEY,
+    transcript_id BIGINT NOT NULL UNIQUE REFERENCES audio_transcripts(transcript_id) ON DELETE CASCADE,
+    survey_id UUID NOT NULL REFERENCES survey_configs(survey_id) ON DELETE CASCADE,
+    submission_id INTEGER NOT NULL,
+    question_path VARCHAR(255) NOT NULL,
+    language VARCHAR(16) NOT NULL,
+    input_hash VARCHAR(64),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    skip_reason VARCHAR(32),
+    text TEXT,
+    model VARCHAR(64),
+    last_error TEXT,
+    run_id UUID REFERENCES runs(run_id) ON DELETE SET NULL,
+    requested_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    job_id VARCHAR(128),
+    queued_at TIMESTAMP WITH TIME ZONE,
+    started_at TIMESTAMP WITH TIME ZONE,
+    finished_at TIMESTAMP WITH TIME ZONE,
+    kobo_status VARCHAR(20) NOT NULL DEFAULT 'not_sent',
+    kobo_language VARCHAR(16),
+    kobo_version_uuid VARCHAR(64),
+    kobo_attempted_at TIMESTAMP WITH TIME ZONE,
+    kobo_sent_at TIMESTAMP WITH TIME ZONE,
+    kobo_last_error TEXT,
+    kobo_run_id UUID REFERENCES runs(run_id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE transcript_translations IS 'Transcripts translated by the survey''s AI provider, and whether each was sent to Kobo';
+COMMENT ON COLUMN transcript_translations.status IS 'pending | running | success | failed | skipped | not_run_allowance | cancelled';
+COMMENT ON COLUMN transcript_translations.kobo_status IS 'not_sent | pending | sent | failed | unsupported | edited_in_kobo';
+
+-- ============================================================================
 -- Table: notifications
 -- ============================================================================
 
@@ -427,6 +468,9 @@ CREATE INDEX idx_runs_status ON runs(status) WHERE status IN ('queued', 'running
 CREATE INDEX idx_audio_transcripts_run ON audio_transcripts(run_id, status);
 CREATE INDEX idx_audio_transcripts_kobo_run ON audio_transcripts(kobo_run_id, kobo_status);
 CREATE INDEX idx_audio_transcripts_submission ON audio_transcripts(survey_id, submission_id);
+CREATE INDEX idx_transcript_translations_run ON transcript_translations(run_id, status);
+CREATE INDEX idx_transcript_translations_kobo_run ON transcript_translations(kobo_run_id, kobo_status);
+CREATE INDEX idx_transcript_translations_submission ON transcript_translations(survey_id, submission_id);
 CREATE INDEX idx_notifications_user ON notifications(user_id, created_at);
 CREATE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 CREATE INDEX idx_app_events_kind_created ON app_events(kind, created_at);
@@ -470,6 +514,10 @@ CREATE TRIGGER update_submissions_current_updated_at
 
 CREATE TRIGGER update_audio_transcripts_updated_at
     BEFORE UPDATE ON audio_transcripts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_transcript_translations_updated_at
+    BEFORE UPDATE ON transcript_translations
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================

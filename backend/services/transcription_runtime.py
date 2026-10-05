@@ -1,7 +1,7 @@
 """
 Transcribing one recording: download it from Kobo, check its length and the
 allowance, send it to ElevenLabs, store the transcript, and pass it on (to
-Kobo, to the built-in checks, to an AI review waiting for it).
+Kobo, to the built-in checks, to translation, to an AI review waiting for it).
 
 The recording only ever exists in a temporary directory that is removed when
 the job ends, whatever happens. See docs/specs/audio-transcription.md, 4.2.
@@ -134,6 +134,26 @@ def _after_success(db, row: AudioTranscript, survey: SurveyConfig) -> None:
         task_id = queue_kobo_send(db, row, row.run_id)
         db.commit()
         dispatch_kobo_send(db, row, task_id, row.run_id)
+    if settings.translating:
+        try:
+            queue_translation(db, row, survey)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not queue the translation of transcript %s", row.transcript_id)
+
+
+def queue_translation(db, row: AudioTranscript, survey: SurveyConfig) -> None:
+    """Translate a transcript just made, as part of the run that made it."""
+    from services.translation_queue import TranslationQueuer
+
+    queuer = TranslationQueuer(db, survey, run_id=row.run_id, user_id=row.requested_by_user_id)
+    translation = queuer.consider(row)
+    if translation is None:
+        return
+    db.flush()
+    queuer.queue([translation])
+    db.commit()
+    queuer.dispatch()
 
 
 def _after_any(db, row: AudioTranscript, survey: SurveyConfig | None) -> None:

@@ -436,6 +436,71 @@ class AudioTranscript(Base):
     )
 
 
+class TranscriptTranslation(Base):
+    """
+    A transcript translated into the survey's translation language by its AI
+    provider, and whether it was sent to Kobo as Kobo's translation.
+
+    One per transcript: a survey translates into one language. A new
+    transcript text (re-transcribed, corrected in Kobo) or another target
+    language translates it again. See docs/specs/transcript-translation.md.
+    """
+
+    __tablename__ = "transcript_translations"
+
+    translation_id = Column(Integer, primary_key=True, autoincrement=True)
+    transcript_id = Column(
+        Integer,
+        ForeignKey("audio_transcripts.transcript_id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    survey_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("survey_configs.survey_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    submission_id = Column(Integer, nullable=False)  # Kobo _id
+    question_path = Column(String(255), nullable=False)
+    language = Column(String(16), nullable=False)  # ISO 639-3, the target
+    input_hash = Column(String(64), nullable=True)  # transcript text + target
+    # pending | running | success | failed | skipped | not_run_allowance | cancelled
+    status = Column(String(20), nullable=False, default="pending")
+    skip_reason = Column(String(32), nullable=True)  # same_language | no_speech
+    text = Column(Text, nullable=True)
+    model = Column(String(64), nullable=True)
+    last_error = Column(Text, nullable=True)  # "<category>: <message>"
+    run_id = Column(
+        UUID(as_uuid=True), ForeignKey("runs.run_id", ondelete="SET NULL"), nullable=True
+    )
+    # Whose Kobo token sends it: the user who started the run.
+    requested_by_user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    job_id = Column(String(128), nullable=True)
+    queued_at = Column(DateTime(timezone=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    # not_sent | pending | sent | failed | unsupported | edited_in_kobo
+    kobo_status = Column(String(20), nullable=False, default="not_sent")
+    kobo_language = Column(String(16), nullable=True)  # the code Kobo stored it under
+    kobo_version_uuid = Column(String(64), nullable=True)  # the version we created
+    kobo_attempted_at = Column(DateTime(timezone=True), nullable=True)
+    kobo_sent_at = Column(DateTime(timezone=True), nullable=True)
+    kobo_last_error = Column(Text, nullable=True)
+    kobo_run_id = Column(
+        UUID(as_uuid=True), ForeignKey("runs.run_id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_transcript_translations_run", "run_id", "status"),
+        Index("idx_transcript_translations_kobo_run", "kobo_run_id", "kobo_status"),
+        Index("idx_transcript_translations_submission", "survey_id", "submission_id"),
+    )
+
+
 class Notification(Base):
     """An in-app notification: a run finished or failed, or work paused."""
 

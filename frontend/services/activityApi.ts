@@ -6,7 +6,7 @@
 import { API_BASE_URL, apiFetch } from './apiBase';
 
 export type RunStatus = 'queued' | 'running' | 'background' | 'finished' | 'failed' | 'stopped';
-export type RunKind = 'pull' | 'ai_rerun' | 'transcription_rerun' | 'kobo_resend';
+export type RunKind = 'pull' | 'ai_rerun' | 'transcription_rerun' | 'translation_rerun' | 'kobo_resend';
 
 /** Counts for one kind of background work in a run. */
 export interface WorkBucket {
@@ -59,6 +59,8 @@ export interface RunSummary {
   ai_checks: WorkBucket | null;
   /** `flagged`: submissions with a finding on a recording (no speech, another language). */
   transcripts: (WorkBucket & { minutes: number; flagged?: number }) | null;
+  translations: WorkBucket | null;
+  /** Transcripts and translations sent to Kobo, together. */
   kobo: (WorkBucket & { edited_in_kobo: number }) | null;
   problems: RunProblem[];
 }

@@ -13,6 +13,7 @@ QUALITATIVE_CHECK = "qualitative_check"
 RULE_GENERATION = "rule_generation"
 RULE_SUGGESTION = "rule_suggestion"
 TRANSCRIPTION = "transcription"
+TRANSLATION = "translation"
 
 
 def usage_recorder(

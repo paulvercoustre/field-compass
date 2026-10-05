@@ -21,6 +21,9 @@ const headline = (runs: RunSummary[]): string | null => {
   if (run.transcripts && run.transcripts.open > 0) {
     parts.push(`transcripts ${run.transcripts.done} of ${run.transcripts.queued - run.transcripts.handed_off}`);
   }
+  if (run.translations && run.translations.open > 0) {
+    parts.push(`translations ${run.translations.done} of ${run.translations.queued - run.translations.handed_off}`);
+  }
   if (run.ai_checks && run.ai_checks.open > 0) {
     parts.push(`AI review ${run.ai_checks.done} of ${run.ai_checks.queued - run.ai_checks.handed_off}`);
   }

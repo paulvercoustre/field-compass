@@ -1,7 +1,8 @@
 /**
  * Audio transcription (ElevenLabs Scribe): a survey's settings, starting work,
- * and a submission's transcripts and recordings.
- * See docs/specs/audio-transcription.md, part A.
+ * and a submission's transcripts, their translations, and recordings.
+ * See docs/specs/audio-transcription.md, part A, and
+ * docs/specs/transcript-translation.md.
  */
 
 import { API_BASE_URL, apiFetch } from './apiBase';
@@ -40,8 +41,43 @@ export interface TranscriptionSettings {
   language: string | null;
   multiple_speakers: boolean;
   send_to_kobo: boolean;
+  /** ISO 639-3: transcripts are translated into it by the survey's AI provider. */
+  translate_to: string | null;
   acknowledged_at: string | null;
   kobo_pause: KoboPause | null;
+}
+
+export interface KoboCounts {
+  sent: number;
+  edited_in_kobo: number;
+  failed: number;
+  unsupported: number;
+  pending: number;
+  unsent: number;
+}
+
+export interface TranslationCounts {
+  total: number;
+  success: number;
+  in_progress: number;
+  failed: number;
+  not_run: number;
+  /** Already in the language, or no speech. */
+  skipped: number;
+  /** Transcripts with no translation in the survey's language yet. */
+  missing: number;
+  kobo: KoboCounts;
+}
+
+/** Who translates: the survey's own AI provider, or Field Compass's within the included AI reviews. */
+export interface TranslationProvider {
+  available: boolean;
+  source: 'own' | 'operator' | null;
+  label: string | null;
+  model: string | null;
+  paused: string | null;
+  /** Included AI reviews this month; a translated submission counts as one. Null on the survey's own provider. */
+  allowance: { limit: number; remaining: number } | null;
 }
 
 export interface TranscriptionOverview {
@@ -60,6 +96,7 @@ export interface TranscriptionOverview {
     own_minutes: number | null;
   };
   settings: TranscriptionSettings;
+  translation: TranslationProvider;
   audio_questions: AudioQuestion[];
   form_languages: FormLanguage[];
   languages: TranscriptionLanguage[];
@@ -79,7 +116,9 @@ export interface TranscriptionOverview {
     no_speech: number;
     /** Transcripts Kobo already had, typed or made there: never transcribed here. */
     from_kobo: number;
-    kobo: { sent: number; edited_in_kobo: number; failed: number; unsupported: number; pending: number; unsent: number };
+    kobo: KoboCounts;
+    /** Null when the survey doesn't translate. */
+    translations: TranslationCounts | null;
   };
   can_edit: boolean;
 }
@@ -90,6 +129,7 @@ export interface TranscriptionSettingsInput {
   language: string | null;
   multiple_speakers: boolean;
   send_to_kobo: boolean;
+  translate_to: string | null;
   acknowledge?: boolean;
 }
 
@@ -107,6 +147,21 @@ export interface TranscriptSegment {
   text: string;
 }
 
+export type KoboStatus = 'not_sent' | 'pending' | 'sent' | 'failed' | 'unsupported' | 'edited_in_kobo';
+
+export interface Translation {
+  status: 'pending' | 'running' | 'success' | 'failed' | 'skipped' | 'not_run_allowance' | 'cancelled';
+  skip_reason: 'same_language' | 'no_speech' | null;
+  language: string;
+  language_name: string | null;
+  text: string | null;
+  last_error: string | null;
+  finished_at: string | null;
+  kobo_status: KoboStatus;
+  kobo_last_error: string | null;
+  kobo_sent_at: string | null;
+}
+
 export interface Transcript {
   /** "kobo": the transcript Kobo shows, typed or made there (or ours, corrected there). */
   source: 'elevenlabs' | 'kobo';
@@ -120,9 +175,10 @@ export interface Transcript {
   audio_seconds: number | null;
   last_error: string | null;
   finished_at: string | null;
-  kobo_status: 'not_sent' | 'pending' | 'sent' | 'failed' | 'unsupported' | 'edited_in_kobo';
+  kobo_status: KoboStatus;
   kobo_last_error: string | null;
   kobo_sent_at: string | null;
+  translation: Translation | null;
 }
 
 export interface AudioAnswer {
@@ -138,6 +194,9 @@ export interface SubmissionTranscripts {
   enabled: boolean;
   send_to_kobo: boolean;
   expected_language: string | null;
+  /** The language transcripts are translated into, when the survey does. */
+  translate_to: string | null;
+  translate_to_name: string | null;
   answers: AudioAnswer[];
 }
 
@@ -174,6 +233,11 @@ export const estimateTranscription = (surveyId: string, mode: 'missing' | 'all')
 export const transcribeNow = (surveyId: string, mode: 'missing' | 'all') =>
   request<RunSummary>(`/api/surveys/${surveyId}/transcripts/run?mode=${mode}`, { method: 'POST' });
 
+/** Translate transcripts already made, now; returns the run to follow. */
+export const translateNow = (surveyId: string, mode: 'missing' | 'all') =>
+  request<RunSummary>(`/api/surveys/${surveyId}/translations/run?mode=${mode}`, { method: 'POST' });
+
+/** Transcripts not yet in Kobo, and translations whose transcript Kobo shows. */
 export const sendTranscriptsToKobo = (surveyId: string) =>
   request<RunSummary>(`/api/surveys/${surveyId}/transcripts/send-to-kobo`, { method: 'POST' });
 

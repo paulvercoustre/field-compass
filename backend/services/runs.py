@@ -5,8 +5,9 @@ people can watch.
 A run's progress is never stored as counters that could drift: it is counted
 from the items that point back at it -- AI reviews
 (``submissions_current.llm_run_id``), transcriptions
-(``audio_transcripts.run_id``) and transcripts sent to Kobo
-(``audio_transcripts.kobo_run_id``). The run row holds what only the pull
+(``audio_transcripts.run_id``), translations
+(``transcript_translations.run_id``) and what was sent to Kobo
+(``kobo_run_id`` on both). The run row holds what only the pull
 knows (how many it fetched, how many it queued) and its stage.
 
 See docs/specs/audio-transcription.md, part B.
@@ -31,6 +32,7 @@ from database.models import (
     Run,
     SubmissionCurrent,
     SurveyConfig,
+    TranscriptTranslation,
     User,
 )
 from etl.audio import is_transcription_issue, transcription_settings
@@ -41,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 PULL = "pull"
 TRANSCRIPTION_RERUN = "transcription_rerun"
+TRANSLATION_RERUN = "translation_rerun"
 KOBO_RESEND = "kobo_resend"
 
 OPEN_AI_STATUSES = ("pending", "running", "waiting")
@@ -185,9 +188,22 @@ def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, 
 
     ai = _group(db, SubmissionCurrent.llm_check_status, SubmissionCurrent.llm_run_id == run.run_id)
     transcripts = _group(db, AudioTranscript.status, AudioTranscript.run_id == run.run_id)
-    kobo = _group(db, AudioTranscript.kobo_status, AudioTranscript.kobo_run_id == run.run_id)
+    translations = _group(
+        db, TranscriptTranslation.status, TranscriptTranslation.run_id == run.run_id
+    )
+    # Transcripts and translations sent to Kobo, together.
+    kobo = _group(
+        db, AudioTranscript.kobo_status, AudioTranscript.kobo_run_id == run.run_id
+    ) + _group(
+        db, TranscriptTranslation.kobo_status, TranscriptTranslation.kobo_run_id == run.run_id
+    )
 
-    out: dict[str, Any] = {"ai_checks": None, "transcripts": None, "kobo": None}
+    out: dict[str, Any] = {
+        "ai_checks": None,
+        "transcripts": None,
+        "translations": None,
+        "kobo": None,
+    }
 
     if ai or stats.get("llm_queued") or stats.get("llm_waiting"):
         bucket = _bucket(
@@ -230,6 +246,25 @@ def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, 
         bucket["flagged"] = _flagged_by_transcripts(db, run)
         bucket["eta_seconds"] = _eta(bucket["open"], bucket["done"] + bucket["failed"], recent)
         out["transcripts"] = bucket
+
+    if translations or stats.get("translations_queued"):
+        bucket = _bucket(
+            translations,
+            stats.get("translations_queued"),
+            OPEN_TRANSCRIPT_STATUSES,
+            ("success",),
+            ("failed",),
+        )
+        recent = (
+            db.query(func.count(TranscriptTranslation.translation_id))
+            .filter(
+                TranscriptTranslation.run_id == run.run_id,
+                TranscriptTranslation.finished_at >= since,
+            )
+            .scalar()
+        )
+        bucket["eta_seconds"] = _eta(bucket["open"], bucket["done"] + bucket["failed"], recent)
+        out["translations"] = bucket
 
     if kobo:
         out["kobo"] = _bucket(
@@ -289,7 +324,23 @@ def has_open_items(db: Session, run_id: UUID) -> bool:
         )
         .first()
     )
-    return kobo is not None
+    if kobo is not None:
+        return True
+    translation = (
+        db.query(TranscriptTranslation.translation_id)
+        .filter(
+            (
+                (TranscriptTranslation.run_id == run_id)
+                & TranscriptTranslation.status.in_(OPEN_TRANSCRIPT_STATUSES)
+            )
+            | (
+                (TranscriptTranslation.kobo_run_id == run_id)
+                & TranscriptTranslation.kobo_status.in_(OPEN_KOBO_STATUSES)
+            )
+        )
+        .first()
+    )
+    return translation is not None
 
 
 # --- Problems, in words ---------------------------------------------------------
@@ -461,6 +512,54 @@ def run_problems(db: Session, run: Run, survey: SurveyConfig | None, counts: dic
                 }
             )
 
+    if counts.get("translations"):
+        failed = _categories(
+            db.query(TranscriptTranslation.last_error).filter(
+                TranscriptTranslation.run_id == run.run_id,
+                TranscriptTranslation.status == "failed",
+            )
+        )
+        if failed.get("auth"):
+            problems.append(
+                {
+                    "kind": "translation_auth",
+                    "text": "Translation stopped: the AI provider rejected the key.",
+                    "action": "open_ai_providers",
+                }
+            )
+        if failed.get("provider_quota"):
+            problems.append(
+                {
+                    "kind": "translation_quota",
+                    "text": "Translation stopped: the AI provider account is out of credit.",
+                    "action": "open_ai_providers",
+                }
+            )
+        if failed.get("not_configured"):
+            problems.append(
+                {
+                    "kind": "translation_not_configured",
+                    "text": "Translation needs an AI provider: none is set up for this survey.",
+                    "action": "open_ai_providers",
+                }
+            )
+        held = (
+            db.query(func.count(TranscriptTranslation.translation_id))
+            .filter(
+                TranscriptTranslation.run_id == run.run_id,
+                TranscriptTranslation.status == "not_run_allowance",
+            )
+            .scalar()
+        )
+        if held:
+            problems.append(
+                {
+                    "kind": "translation_allowance",
+                    "text": f"{_plural(held, 'transcript')} not translated: this survey has used its included AI reviews for {month}.",
+                    "action": "open_ai_usage",
+                }
+            )
+
     if survey is not None and (counts.get("kobo") or counts.get("transcripts")):
         settings = transcription_settings(survey.config_data)
         pause = settings.kobo_pause if settings.send_to_kobo else None
@@ -552,6 +651,9 @@ def _finished_text(summary: dict[str, Any]) -> tuple[str, str]:
             f"{_plural(transcripts['done'], 'recording')} transcribed"
             + (f" ({flagged} flagged)" if flagged else "")
         )
+    translations = summary.get("translations")
+    if translations and translations["queued"]:
+        work.append(f"{_plural(translations['done'], 'transcript')} translated")
     kobo = summary.get("kobo")
     if kobo and kobo["queued"]:
         work.append(f"{kobo['done']} sent to Kobo")
@@ -564,6 +666,7 @@ def _finished_text(summary: dict[str, Any]) -> tuple[str, str]:
     title = {
         PULL: f"{name}: pull finished",
         TRANSCRIPTION_RERUN: f"{name}: transcription finished",
+        TRANSLATION_RERUN: f"{name}: translation finished",
         KOBO_RESEND: f"{name}: transcripts sent to Kobo",
     }.get(summary.get("kind"), f"{name}: finished")
     return title, " ".join(parts) or "Nothing new."
@@ -659,7 +762,7 @@ def notify_pause(
 
 def stop_run(db: Session, run: Run, user: User) -> list[str]:
     """
-    Stop a run's remaining work: queued AI reviews and transcriptions are
+    Stop a run's remaining work: queued AI reviews, transcriptions and translations are
     cancelled (the next pull picks them up again), unsent transcripts stay
     unsent. Items already in progress finish. A pull still fetching stops
     queueing after the submission it is on. Returns the job ids to revoke.
@@ -698,6 +801,24 @@ def stop_run(db: Session, run: Run, user: User) -> list[str]:
     db.query(AudioTranscript).filter(
         AudioTranscript.kobo_run_id == run.run_id, AudioTranscript.kobo_status == "pending"
     ).update({AudioTranscript.kobo_status: "not_sent"}, synchronize_session=False)
+    translation_rows = (
+        db.query(TranscriptTranslation)
+        .filter(
+            TranscriptTranslation.run_id == run.run_id,
+            TranscriptTranslation.status == "pending",
+        )
+        .all()
+    )
+    for row in translation_rows:
+        if row.job_id:
+            job_ids.append(row.job_id)
+        row.status = "cancelled"
+        row.last_error = message
+        row.finished_at = datetime.utcnow()
+    db.query(TranscriptTranslation).filter(
+        TranscriptTranslation.kobo_run_id == run.run_id,
+        TranscriptTranslation.kobo_status == "pending",
+    ).update({TranscriptTranslation.kobo_status: "not_sent"}, synchronize_session=False)
     db.commit()
     return job_ids
 
