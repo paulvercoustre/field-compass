@@ -119,13 +119,6 @@ export interface StagedRule {
     roster_name: string | null;
 }
 
-export interface GlobalParameters {
-    data_collection_start_date: string;
-    data_collection_end_date: string;
-    min_survey_duration_minutes: number | null;
-    max_survey_duration_minutes: number | null;
-}
-
 // --- Progress Tracker Types ---
 
 // How a survey expresses its collection targets. `none` is a supported choice,

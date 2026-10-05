@@ -44,7 +44,7 @@ export interface LintReport {
   form_logic_missing?: boolean;
 }
 
-export interface AdoptedRule {
+interface AdoptedRule {
   rule_id: string;
   rule_name: string;
   rule_data: Record<string, unknown>;

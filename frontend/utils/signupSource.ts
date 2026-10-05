@@ -5,7 +5,7 @@
 const STORAGE_KEY = 'field_compass_signup_source';
 const KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'ref'] as const;
 
-export type SignupSource = Partial<Record<(typeof KEYS)[number], string>>;
+type SignupSource = Partial<Record<(typeof KEYS)[number], string>>;
 
 /** Run once on load. First touch wins: a later visit never overwrites it. */
 export const captureSignupSource = (): void => {

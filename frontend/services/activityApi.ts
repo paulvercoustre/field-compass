@@ -118,8 +118,6 @@ export const request = async <T>(path: string, init: RequestInit = {}): Promise<
 
 export const getActivity = () => request<Activity>('/api/activity');
 
-export const getRun = (runId: string) => request<RunSummary>(`/api/runs/${runId}`);
-
 export const getSurveyRuns = (surveyId: string, limit = 10) =>
   request<{ runs: RunSummary[] }>(`/api/surveys/${surveyId}/runs?limit=${limit}`);
 

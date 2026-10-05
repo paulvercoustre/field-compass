@@ -85,7 +85,7 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
                   cursor={onIssueClick ? 'pointer' : 'default'}
                   onClick={(data: any) => onIssueClick && onIssueClick(data.check ?? data.payload?.check)}
                 >
-                  {chartData.map((entry, index) => (
+                  {chartData.map((_entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill={barColor}

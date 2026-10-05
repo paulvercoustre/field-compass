@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
-import { getSurveyConfig, updateSurvey, deleteSurvey, rerunAiChecks, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
-import { KoboToolData } from '../services/koboParser';
+import { getSurveyConfig, updateSurvey, deleteSurvey, rerunAiChecks, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
 import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from '../utils/samplingFrameParser';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
 import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
-import { StagedRule, SamplingMode } from '../types';
+import { KoboToolData, StagedRule, SamplingMode } from '../types';
 import CustomChecks from '../components/rule-builder/CustomChecks';
 import { Spinner } from '../components/Spinner';
 import SettingsLayout from '../components/ui/SettingsLayout';
@@ -139,7 +138,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const [canManageAccess, setCanManageAccess] = useState(false);
 
   // Validation rules state
-  const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
   const [stagedRules, setStagedRules] = useState<StagedRule[]>([]);
   const [isLoadingRules, setIsLoadingRules] = useState(false);
 
@@ -522,8 +520,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     setIsLoadingRules(true);
     try {
       const rules = await getValidationRules(selectedSurvey.survey_id);
-      setValidationRules(rules);
-      
       // Convert to StagedRule format for display/editing
       const staged = rules.map(rule => 
         dbFormatToStagedRule(rule.rule_id, rule.rule_name, rule.rule_data)

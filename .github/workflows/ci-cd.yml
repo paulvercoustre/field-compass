@@ -98,6 +98,9 @@ jobs:
     - name: Typecheck
       run: npx tsc --noEmit
 
+    - name: Unused files, exports and dependencies
+      run: npx knip
+
     - name: Build
       run: npm run build
 

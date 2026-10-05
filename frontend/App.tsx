@@ -216,7 +216,7 @@ const AppContent: React.FC = () => {
     setView('createSurvey');
   };
 
-  const handleSurveySelect = (surveyId: string | null) => {
+  const handleSurveySelect = () => {
     // Picking a survey stays on the current survey page. Pages that are not
     // about a survey -- creating one, Account settings -- have nothing to
     // show for it, so they make way for its dashboard.

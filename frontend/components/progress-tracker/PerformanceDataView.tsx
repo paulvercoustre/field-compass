@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { PerformanceData, EnumeratorCollectionStats, EnumeratorQualityStats } from '../../types';
+import { PerformanceData } from '../../types';
 import InfoModal from './InfoModal';
 import { SubTabButton } from '../ui/SubTabButton';
 

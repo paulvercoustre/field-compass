@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth, User } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import KoboConnection from '../components/kobo/KoboConnection';
 import AIIntegrationTab from '../components/ai/AIIntegrationTab';
 import NotificationSettings from '../components/activity/NotificationSettings';

@@ -10,8 +10,8 @@ export type AIPreset = 'openai' | 'azure' | 'anthropic' | 'openrouter' | 'mistra
 export type AIKeyKind = 'review' | 'transcription';
 /** What a survey uses a key for: an AI model key serves AI review or translation, chosen apart. */
 export type AIKeyUse = 'review' | 'translation' | 'transcription';
-export type TranscriptionPreset = 'elevenlabs';
-export type AIConnectionStatus = 'untested' | 'ok' | 'failing';
+type TranscriptionPreset = 'elevenlabs';
+type AIConnectionStatus = 'untested' | 'ok' | 'failing';
 
 /** What anyone with access to a survey sees about its provider. */
 export interface AIConnectionSummary {
@@ -44,7 +44,7 @@ export interface AIConnection extends AIConnectionSummary {
   test?: AIConnectionTest;
 }
 
-export interface AIConnectionInput {
+interface AIConnectionInput {
   kind?: AIKeyKind;
   label: string;
   preset: AIPreset | TranscriptionPreset;

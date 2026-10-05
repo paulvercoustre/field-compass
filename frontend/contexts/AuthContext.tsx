@@ -6,7 +6,7 @@ import { forgetSurveyId } from '../utils/selectedSurveyStorage';
 import { readSignupSource } from '../utils/signupSource';
 
 // User type
-export interface User {
+interface User {
   user_id: string;
   email: string;
   username: string;

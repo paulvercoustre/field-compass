@@ -91,7 +91,6 @@ const DataCollectionProgressPage: React.FC = () => {
               <ProgressDataView 
                 data={progressData}
                 surveyConfig={surveyConfig}
-                approvedOnly={approvedOnly}
                 activeSubTab={activeSubTab}
                 setActiveSubTab={setActiveSubTab}
                 filter={filter}

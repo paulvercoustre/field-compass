@@ -1,14 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { createSurvey, SurveyCreate } from '../services/progressApi';
-import { KoboToolData } from '../services/koboParser';
 import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from '../utils/samplingFrameParser';
-import { generateUUID } from '../utils/uuid';
-import { StagedRule, SamplingMode } from '../types';
-import { stagedRuleToDbFormat } from '../utils/ruleConverter';
-import { createValidationRule, ValidationRuleCreate } from '../services/progressApi';
-import RuleEditor from '../components/rule-builder/RuleEditor';
-import StagedRulesList from '../components/rule-builder/StagedRulesList';
+import { KoboToolData, SamplingMode } from '../types';
 import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
@@ -110,10 +104,6 @@ const CreateSurveyPage: React.FC = () => {
     min_survey_duration_minutes: null as number | null,
     max_survey_duration_minutes: null as number | null,
   });
-
-  // Rule builder state
-  const [stagedRules, setStagedRules] = useState<StagedRule[]>([]);
-  const [currentlyEditing, setCurrentlyEditing] = useState<StagedRule | null>(null);
 
   useEffect(() => {
     // Update available variables when tool is loaded
@@ -263,33 +253,6 @@ const CreateSurveyPage: React.FC = () => {
     }
   };
 
-  const handleSaveRule = useCallback((rule: Omit<StagedRule, 'id'>) => {
-    if (currentlyEditing) {
-      setStagedRules(rules => rules.map(r => r.id === currentlyEditing.id ? { ...r, ...rule } : r));
-    } else {
-      setStagedRules(rules => [...rules, { ...rule, id: generateUUID() }]);
-    }
-    setCurrentlyEditing(null);
-  }, [currentlyEditing]);
-
-  const handleEditRule = useCallback((ruleId: string) => {
-    const ruleToEdit = stagedRules.find(r => r.id === ruleId);
-    if (ruleToEdit) {
-      setCurrentlyEditing(ruleToEdit);
-    }
-  }, [stagedRules]);
-
-  const handleDeleteRule = useCallback((ruleId: string) => {
-    setStagedRules(rules => rules.filter(r => r.id !== ruleId));
-    if (currentlyEditing?.id === ruleId) {
-      setCurrentlyEditing(null);
-    }
-  }, [currentlyEditing]);
-
-  const handleCancelEdit = useCallback(() => {
-    setCurrentlyEditing(null);
-  }, []);
-
   // Required to create a survey that can actually run: without a project the
   // ETL has nothing to fetch.
   //
@@ -370,23 +333,6 @@ const CreateSurveyPage: React.FC = () => {
         kobo_asset_id: koboAssetId,
         config_data: configData,
       });
-      
-      // Save validation rules
-      if (stagedRules.length > 0) {
-        try {
-          for (const rule of stagedRules) {
-            const dbRule = stagedRuleToDbFormat(rule);
-            await createValidationRule(newSurvey.survey_id, {
-              rule_name: rule.description,
-              rule_data: dbRule,
-              is_active: true,
-            });
-          }
-        } catch (err) {
-          console.error('Error saving validation rules:', err);
-          // Don't fail the whole operation if rules fail to save
-        }
-      }
       
       setSuccess('Survey created successfully!');
       

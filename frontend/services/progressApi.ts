@@ -163,7 +163,7 @@ export const getSurveys = async (): Promise<Survey[]> => {
  * Fetch progress data from the API
  * @param surveyId Optional survey ID to filter by (UUID string)
  */
-export interface ProgressQueryOptions {
+interface ProgressQueryOptions {
   approvedOnly?: boolean;
 }
 
@@ -456,7 +456,7 @@ export interface ValidationRule {
   updated_at?: string;
 }
 
-export interface ValidationRuleCreate {
+interface ValidationRuleCreate {
   rule_name: string;
   rule_data: {
     check_id: string;
@@ -468,7 +468,7 @@ export interface ValidationRuleCreate {
   is_active?: boolean;
 }
 
-export interface ValidationRuleUpdate {
+interface ValidationRuleUpdate {
   rule_name?: string;
   rule_data?: {
     check_id?: string;

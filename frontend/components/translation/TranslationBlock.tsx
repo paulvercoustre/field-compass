@@ -8,7 +8,7 @@ import { koboState, Tone, toneClass } from '../transcription/koboState';
  * A translation's state in plain words. Null when there is nothing to say:
  * an answer already in the language, or with nothing to translate, has none.
  */
-export const describeTranslation = (translation: Translation): { tone: Tone; text: string } | null => {
+const describeTranslation = (translation: Translation): { tone: Tone; text: string } | null => {
   const language = translation.language_name ?? translation.language;
   const [category, ...rest] = (translation.last_error ?? '').split(': ');
   const message = rest.join(': ').replace(/ \(retrying\)$/, '');

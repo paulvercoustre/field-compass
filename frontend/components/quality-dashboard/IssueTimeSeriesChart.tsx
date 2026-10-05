@@ -141,7 +141,7 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
                 wrapperStyle={{ paddingTop: '12px' }}
                 formatter={(value) => <span className="text-xs text-gray-600 dark:text-gray-300">{value}</span>}
               />
-              {selectedIssues.map((issue, index) => (
+              {selectedIssues.map((issue) => (
                 <Line 
                   key={issue}
                   type="monotone" 

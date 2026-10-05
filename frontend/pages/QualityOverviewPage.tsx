@@ -32,7 +32,7 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
     }
   };
 
-  const handleIssueClick = (check: string) => {
+  const handleIssueClick = () => {
     // For now, just navigate to submissions
     // TODO: Could extend to filter by issue type
     if (onNavigateToSubmissions) {

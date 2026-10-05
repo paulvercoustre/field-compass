@@ -1,11 +1,10 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Submission, FilterState, SamplingFilter } from '../types';
+import { Submission, FilterState } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { Spinner } from './Spinner';
 import {
   extractUniqueEnumerators,
   extractUniqueSamplingValues,
-  hasActiveFilters,
   supportsEnumeratorFiltering,
   supportsSamplingFiltering,
   getSamplingVariables

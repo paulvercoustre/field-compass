@@ -13,7 +13,7 @@ import { SurveyConfig } from '../services/progressApi';
  * @param fieldName Field name from config (may be just the variable name)
  * @returns Field value or null if not found
  */
-export function getFieldValueFromSubmission(submissionData: Record<string, any>, fieldName: string): any {
+function getFieldValueFromSubmission(submissionData: Record<string, any>, fieldName: string): any {
   // First try direct lookup
   if (fieldName in submissionData) {
     return submissionData[fieldName];
@@ -125,23 +125,6 @@ export function buildFilterParams(filters: FilterState): URLSearchParams {
   }
 
   return params;
-}
-
-/**
- * Check if any filters are currently active.
- *
- * @param filters Current filter state
- * @returns True if any filter is active, false otherwise
- */
-export function hasActiveFilters(filters: FilterState): boolean {
-  return !!(
-    (filters.qaStatuses && filters.qaStatuses.length > 0) ||
-    (filters.validationStatuses && filters.validationStatuses.length > 0) ||
-    (filters.enumerators && filters.enumerators.length > 0) ||
-    (filters.samplingFilters && filters.samplingFilters.length > 0) ||
-    !!filters.aiReview ||
-    !!filters.transcript
-  );
 }
 
 /**

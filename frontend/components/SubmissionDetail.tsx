@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Submission, QualityIssue } from '../types';
 import SubmissionDataViewer from './SubmissionDataViewer';
 import { Spinner } from './Spinner';
-import { Badge, EditIcon, AlertIcon } from './Badge';
+import { EditIcon, AlertIcon } from './Badge';
 import Banner from './ui/Banner';
 import { ExternalLinkIcon, SparkleIcon } from './ui/icons';
 import { aiFindingName, issueName } from '../utils/issueNames';
@@ -277,10 +277,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     submission_data,
     has_edit_history,
     data_quality_issues,
-    qa_status,
     kobo_validation_status,
     _submission_time,
-    end,
     llm_check_status,
     llm_checked_at,
     llm_last_error,
