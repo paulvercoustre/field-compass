@@ -32,7 +32,7 @@ from forms.schema import load_form_schema
 from services.ai_allowance import month_start
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
-from services.permissions import get_user_permission, require_survey_access
+from services.permissions import get_user_permission, require_survey_access, survey_access
 from services.runs import (
     KOBO_RESEND,
     TRANSCRIPTION_RERUN,
@@ -65,15 +65,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 SETTINGS_KEY = "audio_transcription"
-
-
-def _uuid(value: str) -> UUID:
-    try:
-        return UUID(value)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {value}. Must be a valid UUID."
-        ) from None
 
 
 def _form_language_labels(config_data: dict[str, Any] | None) -> list[str]:
@@ -200,7 +191,7 @@ def _settings_payload(db: Session, survey: SurveyConfig, user: User) -> dict[str
 
 @router.get("/surveys/{survey_id}/audio-transcription")
 async def get_transcription_settings(
-    survey_id: str,
+    survey: SurveyConfig = Depends(survey_access("viewer")),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -210,7 +201,6 @@ async def get_transcription_settings(
     own first), this month's minutes, and how many transcripts were made and
     sent to Kobo.
     """
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="viewer")
     return _settings_payload(db, survey, current_user)
 
 
@@ -227,13 +217,12 @@ class TranscriptionSettingsUpdate(BaseModel):
 
 @router.put("/surveys/{survey_id}/audio-transcription")
 async def update_transcription_settings(
-    survey_id: str,
     body: TranscriptionSettingsUpdate,
+    survey: SurveyConfig = Depends(survey_access("owner")),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Save the survey's transcription settings (owner). Saving resumes a paused Kobo send."""
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     questions = {q.path: q for q in audio_questions(survey.config_data)}
 
     chosen: list[str] = []
@@ -320,16 +309,14 @@ def _recording_count(db: Session, survey: SurveyConfig) -> int:
 
 @router.get("/surveys/{survey_id}/transcripts/estimate")
 async def estimate_transcription(
-    survey_id: str,
+    survey: SurveyConfig = Depends(survey_access("owner")),
     mode: str = Query("missing", pattern="^(missing|all)$"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
 ):
     """
     How much "Transcribe now" would send: recordings, minutes already known,
     and what is left of this month's allowance.
     """
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     recordings = _recording_count(db, survey)
     # Recordings with a transcript in Kobo are never transcribed here.
     in_kobo = (
@@ -372,7 +359,7 @@ async def estimate_transcription(
 
 @router.post("/surveys/{survey_id}/transcripts/run", status_code=202)
 async def transcribe_now(
-    survey_id: str,
+    survey: SurveyConfig = Depends(survey_access("owner")),
     mode: str = Query("missing", pattern="^(missing|all)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
@@ -382,7 +369,6 @@ async def transcribe_now(
     (owner). ``missing``: those with no transcript yet, or whose last attempt
     can be retried. ``all``: every recording again.
     """
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     _require_kobo_token(current_user)
     settings = transcription_settings(survey.config_data)
     if not settings.active:
@@ -422,12 +408,11 @@ async def transcribe_now(
 
 @router.post("/surveys/{survey_id}/transcripts/send-to-kobo", status_code=202)
 async def send_transcripts_to_kobo(
-    survey_id: str,
+    survey: SurveyConfig = Depends(survey_access("owner")),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Send every transcript not yet in Kobo (or that failed to send) to Kobo (owner)."""
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     _require_kobo_token(current_user)
     settings = transcription_settings(survey.config_data)
     if not settings.send_to_kobo:

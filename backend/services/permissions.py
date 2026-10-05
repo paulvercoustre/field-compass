@@ -3,14 +3,17 @@ Permission checking service for survey access control.
 Handles user-to-survey permissions including ownership and shared access.
 """
 
+from collections.abc import Callable
 from typing import Literal
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database.models import SurveyAccess, SurveyConfig, User
+from services.auth import get_current_active_user
+from services.database import get_db
 
 # Permission level type
 PermissionLevel = Literal["owner", "editor", "viewer", "admin"]
@@ -210,3 +213,39 @@ def get_survey_access_list(db: Session, survey_id: UUID) -> list[dict]:
     )
 
     return access_list
+
+
+AccessLevel = Literal["viewer", "editor", "owner"]
+
+
+def parse_uuid(value: str, what: str = "survey_id") -> UUID:
+    """A UUID from a request, or a 400 naming which value was malformed."""
+    try:
+        return UUID(str(value))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid {what} format: {value}. Must be a valid UUID.",
+        ) from None
+
+
+def survey_access(min_level: AccessLevel = "viewer") -> Callable[..., SurveyConfig]:
+    """
+    A dependency resolving the request's ``survey_id`` to its survey, once the
+    current user is known to hold at least ``min_level`` on it.
+
+    ``survey_id`` binds to the path when the route has ``{survey_id}`` and to
+    the query string otherwise. A malformed id is a 400, an unknown survey a
+    404 and too little access a 403, the same as ``require_survey_access``.
+
+        survey: SurveyConfig = Depends(survey_access("editor"))
+    """
+
+    def dependency(
+        survey_id: str,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user),
+    ) -> SurveyConfig:
+        return require_survey_access(db, current_user, parse_uuid(survey_id), min_level)
+
+    return dependency

@@ -6,12 +6,11 @@ Provides aggregated quality metrics for the quality dashboard.
 import contextlib
 from collections import defaultdict
 from datetime import datetime
-from uuid import UUID as UUIDType
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from database.models import SubmissionCurrent, User
+from database.models import SubmissionCurrent, SurveyConfig
 from forms.answers import answer_value
 from models import (
     IssueFrequency,
@@ -21,9 +20,8 @@ from models import (
     SubmissionStatusSummary,
     TemporalDataPoint,
 )
-from services.auth import get_current_active_user
 from services.database import get_db
-from services.permissions import require_survey_access
+from services.permissions import survey_access
 from services.survey_config import get_enumerator_field
 
 router = APIRouter()
@@ -88,7 +86,6 @@ def _filter_submissions_by_jsonb(
 
 @router.get("/quality/overview", response_model=QualityOverviewResponse)
 async def get_quality_overview(
-    survey_id: UUIDType = Query(..., description="Survey ID (required)"),
     start_date: str | None = Query(None, description="Start date filter (YYYY-MM-DD)"),
     end_date: str | None = Query(None, description="End date filter (YYYY-MM-DD)"),
     enumerator: str | None = Query(
@@ -97,8 +94,8 @@ async def get_quality_overview(
     sampling_filters: str | None = Query(
         None, description="Filter by sampling variables (format: var1=val1,val2;var2=val3)"
     ),
+    survey_config: SurveyConfig = Depends(survey_access("viewer")),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get quality overview data for the dashboard.
@@ -111,8 +108,7 @@ async def get_quality_overview(
 
     Requires viewer access to the specified survey.
     """
-    # Check user has access to this survey
-    survey_config = require_survey_access(db, current_user, survey_id, min_level="viewer")
+    survey_id = survey_config.survey_id
 
     # Get config fields
     config = survey_config.config_data or {}

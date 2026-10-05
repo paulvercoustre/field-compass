@@ -5,17 +5,16 @@ Endpoints for triggering and monitoring ETL pipelines.
 
 import logging
 from datetime import datetime
-from uuid import UUID as UUIDType
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from database.models import Run, User
+from database.models import Run, SurveyConfig, User
 from models import BaseResponse
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
-from services.permissions import require_survey_access
+from services.permissions import survey_access
 from services.pull_worker import execute_pull, run_pull_task
 from services.runs import RunAlreadyActive, fail_run, run_summary, start_pull
 
@@ -40,7 +39,7 @@ def _already_running(db: Session, error: RunAlreadyActive) -> JSONResponse:
 
 @router.post("/etl/run/{survey_id}")
 async def run_etl_pipeline(
-    survey_id: str,
+    survey: SurveyConfig = Depends(survey_access("editor")),
     limit: int | None = Query(None, description="Maximum number of submissions to process"),
     start_date: str | None = Query(
         None, description="Only process submissions after this date (YYYY-MM-DD)"
@@ -70,15 +69,6 @@ async def run_etl_pipeline(
 
     Requires editor access to the survey and the caller's own Kobo API key.
     """
-    try:
-        survey_uuid = UUIDType(survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID.",
-        )
-
-    survey = require_survey_access(db, current_user, survey_uuid, min_level="editor")
 
     start_datetime = None
     if start_date:

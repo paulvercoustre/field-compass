@@ -5,12 +5,11 @@ Provides data collection progress and enumerator performance metrics.
 
 from collections import defaultdict
 from typing import Any
-from uuid import UUID as UUIDType
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from database.models import SubmissionCurrent, User
+from database.models import SubmissionCurrent, SurveyConfig
 from etl.dk_utils import dk_numeric_codes, dk_string_tokens, is_dk_value
 from forms.answers import answer_value
 from models import (
@@ -23,9 +22,8 @@ from models import (
     ProgressData,
     UnavailableCapability,
 )
-from services.auth import get_current_active_user
 from services.database import get_db
-from services.permissions import require_survey_access
+from services.permissions import survey_access
 from services.survey_config import (
     CAPABILITY_ENUMERATOR_PERFORMANCE,
     SAMPLING_MODE_BY_VARIABLE,
@@ -180,13 +178,12 @@ def _calculate_targets_from_frame(
 
 @router.get("/progress", response_model=ProgressData)
 async def get_progress_data(
-    survey_id: str = Query(..., description="Survey ID (UUID) - required"),
+    survey_config: SurveyConfig = Depends(survey_access("viewer")),
     approved_only: bool = Query(
         False,
         description="When true, only count submissions whose qa_status is APPROVED.",
     ),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get data collection progress metrics for a specific survey.
@@ -203,15 +200,6 @@ async def get_progress_data(
     - approved_only=True: only submissions with qa_status APPROVED.
     """
     # Parse and validate survey_id
-    try:
-        survey_uuid = UUIDType(survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
-        )
-
-    # Check user has access to this survey
-    survey_config = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
 
     # Build query filtered by survey
     query = db.query(SubmissionCurrent).filter(
@@ -406,9 +394,8 @@ async def get_progress_data(
 
 @router.get("/performance", response_model=PerformanceData)
 async def get_performance_data(  # noqa: C901 -- split pending, see docs/code-quality-review.md
-    survey_id: str = Query(..., description="Survey ID (UUID) - required"),
+    survey_config: SurveyConfig = Depends(survey_access("viewer")),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get enumerator performance metrics for a specific survey.
@@ -432,15 +419,6 @@ async def get_performance_data(  # noqa: C901 -- split pending, see docs/code-qu
         HTTPException: 400 if survey_id is invalid, 403 if no access, 404 if survey not found
     """
     # Parse and validate survey_id
-    try:
-        survey_uuid = UUIDType(survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
-        )
-
-    # Check user has access to this survey
-    survey_config = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
 
     # Get enumerator field name from survey config
     config = survey_config.config_data

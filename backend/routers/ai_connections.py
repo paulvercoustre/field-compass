@@ -55,7 +55,7 @@ from services.ai_usage import TRANSCRIPTION as TRANSCRIPTION_FEATURE
 from services.ai_usage import TRANSLATION as TRANSLATION_FEATURE
 from services.auth import encrypt_api_key, get_current_active_user
 from services.database import get_db
-from services.permissions import require_survey_access
+from services.permissions import survey_access
 from services.rate_limit import limiter
 from services.transcription_allowance import minutes_per_survey_month, seconds_on_own_key
 from services.transcription_allowance import seconds_used as transcription_seconds_used
@@ -362,8 +362,8 @@ async def delete_connection(
 
 @router.put("/surveys/{survey_id}/ai-connection")
 async def set_survey_connection(
-    survey_id: str,
     payload: SurveyConnectionUpdate,
+    survey: SurveyConfig = Depends(survey_access("owner")),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -372,12 +372,6 @@ async def set_survey_connection(
     a review key for AI review or for translation, or a transcription key for
     transcription.
     """
-    try:
-        survey_uuid = UUID(survey_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid survey_id format: {survey_id}")
-    survey = require_survey_access(db, current_user, survey_uuid, min_level="owner")
-
     connection = None
     if payload.connection_id is not None:
         connection = _owned_connection(db, current_user, str(payload.connection_id))

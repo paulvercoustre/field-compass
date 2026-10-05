@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from typing import Any
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -48,7 +47,7 @@ from services.ai_allowance import (
 from services.ai_providers import translation_connection, translation_paused_error
 from services.auth import get_current_active_user
 from services.database import get_db
-from services.permissions import get_user_permission, require_survey_access
+from services.permissions import get_user_permission, require_survey_access, survey_access
 from services.runs import (
     KOBO_RESEND,
     TRANSLATION_RERUN,
@@ -70,15 +69,6 @@ from services.translation_queue import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def _uuid(value: str) -> UUID:
-    try:
-        return UUID(value)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {value}. Must be a valid UUID."
-        ) from None
 
 
 def _missing(db: Session, survey: SurveyConfig) -> int:
@@ -246,7 +236,7 @@ def _payload(db: Session, survey: SurveyConfig, user: User) -> dict[str, Any]:
 
 @router.get("/surveys/{survey_id}/translation")
 async def get_translation_settings(
-    survey_id: str,
+    survey: SurveyConfig = Depends(survey_access("viewer")),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -255,7 +245,6 @@ async def get_translation_settings(
     the form's text and audio questions, the languages, who translates and
     this month's included translations, and how many answers are translated.
     """
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="viewer")
     return _payload(db, survey, current_user)
 
 
@@ -268,13 +257,12 @@ class TranslationSettingsUpdate(BaseModel):
 
 @router.put("/surveys/{survey_id}/translation")
 async def update_translation_settings(
-    survey_id: str,
     body: TranslationSettingsUpdate,
+    survey: SurveyConfig = Depends(survey_access("owner")),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Save the survey's translation settings (owner)."""
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     questions = {q.path: q for q in translatable_questions(survey.config_data)}
 
     chosen: list[str] = []
@@ -320,7 +308,7 @@ async def update_translation_settings(
 
 @router.post("/surveys/{survey_id}/translations/run", status_code=202)
 async def translate_now(
-    survey_id: str,
+    survey: SurveyConfig = Depends(survey_access("owner")),
     mode: str = Query("missing", pattern="^(missing|all)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
@@ -331,7 +319,6 @@ async def translate_now(
     yet, or whose last attempt can be retried. ``all``: every answer again,
     except translations Kobo has.
     """
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     if not translation_settings(survey.config_data).active:
         raise HTTPException(
             status_code=400,
@@ -361,12 +348,11 @@ async def translate_now(
 
 @router.post("/surveys/{survey_id}/translations/send-to-kobo", status_code=202)
 async def send_translations_to_kobo(
-    survey_id: str,
+    survey: SurveyConfig = Depends(survey_access("owner")),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Send every translated transcript not yet in Kobo whose transcript Kobo shows (owner)."""
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     if not translation_settings(survey.config_data).send_to_kobo:
         raise HTTPException(status_code=400, detail="Turn on “Send translations to Kobo” first.")
     pause = transcription_settings(survey.config_data).kobo_pause

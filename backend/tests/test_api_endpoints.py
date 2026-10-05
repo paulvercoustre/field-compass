@@ -889,3 +889,36 @@ class TestProgressByVariable:
         base = f"/api/progress?survey_id={survey['survey_id']}"
         assert client.get(base).json()["overall"]["conducted"] == 5
         assert client.get(f"{base}&approved_only=true").json()["overall"]["conducted"] == 3
+
+
+class TestSurveyAccessDependency:
+    """survey_access() resolves survey_id from the path or the query string,
+    and answers a bad id the same way everywhere."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "/api/surveys/not-a-uuid",
+            "/api/surveys/not-a-uuid/rules",
+            "/api/progress?survey_id=not-a-uuid",
+            "/api/quality/overview?survey_id=not-a-uuid",
+        ],
+    )
+    def test_a_malformed_id_is_a_400_naming_it(self, client, url):
+        response = client.get(url)
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "Invalid survey_id format: not-a-uuid. Must be a valid UUID."
+        )
+
+    @pytest.mark.parametrize("url", ["/api/surveys/{id}", "/api/progress?survey_id={id}"])
+    def test_an_unknown_survey_is_a_404(self, client, url):
+        response = client.get(url.format(id=uuid4()))
+        assert response.status_code == 404
+
+    def test_a_missing_query_id_is_rejected(self, client):
+        assert client.get("/api/progress").status_code == 422
+
+    def test_the_survey_reaches_the_handler(self, client, test_survey):
+        response = client.get(f"/api/surveys/{test_survey['survey_id']}/rules")
+        assert response.status_code == 200

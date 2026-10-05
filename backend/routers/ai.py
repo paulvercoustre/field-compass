@@ -4,7 +4,6 @@ AI router for validation rule generation and suggestions.
 
 import logging
 from typing import Any
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -19,7 +18,7 @@ from services.ai_service import ai_service, rule_error_message
 from services.ai_usage import RULE_GENERATION, RULE_SUGGESTION, usage_recorder
 from services.auth import get_current_active_user
 from services.database import get_db
-from services.permissions import require_survey_access
+from services.permissions import parse_uuid, require_survey_access
 from services.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -93,15 +92,9 @@ async def generate_rule_from_natural_language(
             "prompt": "Flag if respondent age is greater than 100"
         }
     """
-    # Validate survey_id format
-    try:
-        survey_uuid = UUID(payload.survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {payload.survey_id}"
-        )
-
-    # Check user has access to this survey (editors can create rules too)
+    # The survey is named in the body, so it cannot come from survey_access().
+    # Editors can write rules too.
+    survey_uuid = parse_uuid(payload.survey_id)
     require_survey_access(db, current_user, survey_uuid, min_level="editor")
 
     # Fetch survey config
@@ -208,15 +201,9 @@ async def suggest_validation_rules(
             "survey_id": "123e4567-e89b-12d3-a456-426614174000"
         }
     """
-    # Validate survey_id format
-    try:
-        survey_uuid = UUID(payload.survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {payload.survey_id}"
-        )
-
-    # Check user has access to this survey (editors can create rules too)
+    # The survey is named in the body, so it cannot come from survey_access().
+    # Editors can write rules too.
+    survey_uuid = parse_uuid(payload.survey_id)
     require_survey_access(db, current_user, survey_uuid, min_level="editor")
 
     # Fetch survey config

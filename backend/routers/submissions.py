@@ -28,7 +28,7 @@ from models import (
 )
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
-from services.permissions import require_survey_access
+from services.permissions import parse_uuid, require_survey_access
 from services.survey_config import get_enumerator_field
 
 router = APIRouter()
@@ -156,15 +156,7 @@ async def get_submissions(  # noqa: C901 -- split pending, see docs/code-quality
     if not survey_id:
         raise HTTPException(status_code=400, detail="survey_id is required")
 
-    # Validate and parse survey_id
-    try:
-        survey_uuid = UUIDType(survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
-        )
-
-    # Check user has access to this survey
+    survey_uuid = parse_uuid(survey_id)
     survey_config = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
 
     # Build query
