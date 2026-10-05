@@ -33,10 +33,13 @@ from linter.form_source import SurveyForm, load_survey_form
 from linter.questions import iter_answerable
 from models import QualityIssue
 from services.survey_config import (
+    DEFAULT_LLM_CHECK_TYPES,
     SAMPLING_MODE_BY_VARIABLE,
     SAMPLING_MODE_UPLOADED,
     get_core_identifier,
     get_frame_data,
+    get_global_parameters,
+    get_quality_checks,
     get_sampling_cols,
     get_sampling_mode,
     get_sampling_variable,
@@ -72,6 +75,13 @@ _STRING_LITERAL = re.compile(r"\"[^\"]*\"|'[^']*'")
 
 # The survey-sheet columns that decide which questions a submission was shown.
 _FORM_LOGIC_COLUMNS = ("name", "type", "relevant", "group_relevant", "roster_name", "group_path")
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value) if value is not None else None
+    except (ValueError, TypeError):
+        return None
 
 
 def _is_empty(value: Any) -> bool:
@@ -135,8 +145,6 @@ class HFCEngine:
         # Extract configuration - handle nested structure
         core_identifiers = self.config_data.get("core_identifiers", {})
         special_values = self.config_data.get("special_values", {})
-        global_parameters = self.config_data.get("global_parameters", {})
-        quality_checks = self.config_data.get("quality_checks", {})
 
         # Core identifiers
         self.uuid_field = core_identifiers.get("uuid", "_uuid")
@@ -154,58 +162,38 @@ class HFCEngine:
         # `dk_string_value` may be one string or a list; compare against this.
         self.dk_tokens = dk_string_tokens({"dk_string_value": self.dk_string_value})
 
-        # Global parameters - date range
-        self.data_collection_start_date = global_parameters.get("data_collection_start_date")
-        self.data_collection_end_date = global_parameters.get("data_collection_end_date")
+        # Defaults and types: services/survey_config.py.
+        gp = get_global_parameters(self.config_data)
+        qc = get_quality_checks(self.config_data)
 
-        # Global parameters - duration limits - ensure they're numbers or None
-        min_duration = global_parameters.get("min_survey_duration_minutes")
-        max_duration = global_parameters.get("max_survey_duration_minutes")
-        try:
-            self.min_survey_duration_minutes = (
-                float(min_duration) if min_duration is not None else None
-            )
-        except (ValueError, TypeError):
-            self.min_survey_duration_minutes = None
-        try:
-            self.max_survey_duration_minutes = (
-                float(max_duration) if max_duration is not None else None
-            )
-        except (ValueError, TypeError):
-            self.max_survey_duration_minutes = None
+        self.data_collection_start_date = gp.data_collection_start_date
+        self.data_collection_end_date = gp.data_collection_end_date
+        # Numbers or None: an unreadable limit is no limit.
+        self.min_survey_duration_minutes = _float_or_none(gp.min_survey_duration_minutes)
+        self.max_survey_duration_minutes = _float_or_none(gp.max_survey_duration_minutes)
 
-        # Quality checks configuration
-        self.flag_out_of_period = quality_checks.get("flag_out_of_period", False)
-        self.flag_weekend = quality_checks.get("flag_weekend", False)
-        self.weekend_days = quality_checks.get("weekend_days", [5, 6])  # Default to Sat(5), Sun(6)
-        self.flag_office_hours = quality_checks.get("flag_office_hours", False)
-        self.office_hours_start = quality_checks.get("office_hours_start", "08:00")
-        self.office_hours_end = quality_checks.get("office_hours_end", "17:00")
-        self.flag_sampling_frame = quality_checks.get("flag_sampling_frame", False)
+        self.flag_out_of_period = qc.flag_out_of_period
+        self.flag_weekend = qc.flag_weekend
+        self.weekend_days = qc.weekend_days
+        self.flag_office_hours = qc.flag_office_hours
+        self.office_hours_start = qc.office_hours_start
+        self.office_hours_end = qc.office_hours_end
+        self.flag_sampling_frame = qc.flag_sampling_frame
 
-        # Outlier detection configuration
-        self.flag_outliers = quality_checks.get("flag_outliers", False)
-        self.outlier_variables = quality_checks.get("outlier_variables", [])
-        outlier_log_transform_raw = quality_checks.get("outlier_log_transform_variables", []) or []
+        self.flag_outliers = qc.flag_outliers
+        self.outlier_variables = qc.outlier_variables
         self.outlier_log_transform_variables = [
-            v for v in outlier_log_transform_raw if v in self.outlier_variables
+            v for v in qc.outlier_log_transform_variables or [] if v in self.outlier_variables
         ]
-        self.outlier_method = quality_checks.get(
-            "outlier_method", "iqr"
-        )  # 'iqr', 'mad', or 'zscore'
-        self.outlier_threshold = quality_checks.get(
-            "outlier_threshold", 1.5
-        )  # For IQR multiplier or Z-score threshold
-        self.flag_dk_percentage = quality_checks.get("flag_dk_percentage", False)
-        self.dk_percentage_threshold = quality_checks.get("dk_percentage_threshold", 50.0)
-        self.flag_empty_percentage = quality_checks.get("flag_empty_percentage", False)
-        self.empty_percentage_threshold = quality_checks.get("empty_percentage_threshold", 50.0)
-        self.flag_llm_qualitative = quality_checks.get("flag_llm_qualitative", False)
-        self.llm_qualitative_fields = quality_checks.get("llm_qualitative_fields", []) or []
-        self.llm_check_types = quality_checks.get(
-            "llm_check_types",
-            ["content_quality", "relevance", "completeness"],
-        ) or ["content_quality", "relevance", "completeness"]
+        self.outlier_method = qc.outlier_method
+        self.outlier_threshold = qc.outlier_threshold
+        self.flag_dk_percentage = qc.flag_dk_percentage
+        self.dk_percentage_threshold = qc.dk_percentage_threshold
+        self.flag_empty_percentage = qc.flag_empty_percentage
+        self.empty_percentage_threshold = qc.empty_percentage_threshold
+        self.flag_llm_qualitative = qc.flag_llm_qualitative
+        self.llm_qualitative_fields = qc.llm_qualitative_fields or []
+        self.llm_check_types = qc.llm_check_types or DEFAULT_LLM_CHECK_TYPES
 
         # Statistics cache for outlier detection - computed once per ETL run
         self._outlier_stats_cache: dict[str, dict[str, float]] = {}

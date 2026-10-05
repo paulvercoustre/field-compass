@@ -9,6 +9,7 @@ from typing import Any
 
 from etl.dk_utils import dk_codes_fingerprint, dk_numeric_codes, dk_string_tokens, is_dk_value
 from forms.answers import answer_value
+from services.survey_config import get_quality_checks
 
 
 def _canonical_json(value: dict[str, Any]) -> str:
@@ -35,23 +36,17 @@ def generate_llm_rules_hash(config_data: dict[str, Any], qualitative_model: str)
 
     This is intentionally separate from generic validation_rule_hash.
     """
-    quality_checks = config_data.get("quality_checks", {})
+    qc = get_quality_checks(config_data)
     special_values = config_data.get("special_values", {})
 
     payload = {
         "version": "llm_rules_v1",
-        "enabled": bool(quality_checks.get("flag_llm_qualitative", False)),
-        "fields": sorted(quality_checks.get("llm_qualitative_fields", []) or []),
-        "check_types": sorted(
-            quality_checks.get(
-                "llm_check_types",
-                ["content_quality", "relevance", "completeness"],
-            )
-            or []
-        ),
-        "prompt_template_version": quality_checks.get("llm_prompt_template_version", "v1"),
-        "schema_version": quality_checks.get("llm_response_schema_version", "v1"),
-        "dk_policy_version": quality_checks.get("llm_dk_policy_version", "v1"),
+        "enabled": bool(qc.flag_llm_qualitative),
+        "fields": sorted(qc.llm_qualitative_fields or []),
+        "check_types": sorted(qc.llm_check_types or []),
+        "prompt_template_version": qc.llm_prompt_template_version,
+        "schema_version": qc.llm_response_schema_version,
+        "dk_policy_version": qc.llm_dk_policy_version,
         "dk_numeric": dk_codes_fingerprint(dk_numeric_codes(special_values)),
         "dk_string": special_values.get("dk_string_value", "dk"),
         "qualitative_model": qualitative_model,
