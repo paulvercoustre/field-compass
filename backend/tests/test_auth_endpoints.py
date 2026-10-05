@@ -14,80 +14,18 @@ with credentials, or with a token the login endpoint actually minted, and
 nothing is stubbed but the database session.
 """
 
-import uuid
-
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import JSON, String, TypeDecorator, create_engine, event
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from database.models import Base, User
-
-
-def _build_sqlite_engine():
-    """SQLite engine with the Postgres-only column types mapped across."""
-
-    class JSONBForSQLite(TypeDecorator):
-        impl = JSON
-        cache_ok = True
-
-        def load_dialect_impl(self, dialect):
-            if dialect.name == "sqlite":
-                return dialect.type_descriptor(JSON())
-            return dialect.type_descriptor(JSONB())
-
-    class UUIDForSQLite(TypeDecorator):
-        impl = String(36)
-        cache_ok = True
-
-        def load_dialect_impl(self, dialect):
-            if dialect.name == "sqlite":
-                return dialect.type_descriptor(String(36))
-            return dialect.type_descriptor(PostgresUUID(as_uuid=True))
-
-        def process_bind_param(self, value, dialect):
-            if value is None:
-                return None
-            if dialect.name == "sqlite":
-                return str(value) if not isinstance(value, str) else value
-            return value
-
-        def process_result_value(self, value, dialect):
-            if value is None:
-                return None
-            if dialect.name == "sqlite":
-                return uuid.UUID(value) if isinstance(value, str) else value
-            return value
-
-    for table in Base.metadata.tables.values():
-        for column in table.columns:
-            if isinstance(column.type, JSONB):
-                column.type = JSONBForSQLite()
-            elif isinstance(column.type, PostgresUUID):
-                column.type = UUIDForSQLite()
-
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    @event.listens_for(engine, "connect", propagate=True)
-    def _set_pragma(dbapi_conn, connection_record):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-    return engine
+from tests.sqlite_compat import sqlite_engine
 
 
 @pytest.fixture
 def client():
     """Test client with a real (unstubbed) authentication stack."""
-    engine = _build_sqlite_engine()
+    engine = sqlite_engine()
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
