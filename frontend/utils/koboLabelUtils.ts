@@ -1,4 +1,5 @@
-import { KoboQuestion, KoboChoice, SurveyConfig } from '../types';
+import { KoboQuestion, KoboChoice } from '../types';
+import type { SurveyConfig } from '../services/progressApi';
 
 /**
  * Get the label for a question variable from Kobo survey data

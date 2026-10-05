@@ -20,7 +20,7 @@ const DEFINITIONS: Record<string, { title: string; text: string }> = {
   avgIssuesPerSurvey: { title: "Issues per submission", text: "The average number of issues the checks found per submission from this enumerator, whether or not a reviewer has seen them. A higher number may mean they need follow-up." },
 };
 
-const InfoIcon: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+const InfoIcon: React.FC<{ onClick: (e: React.MouseEvent) => void }> = ({ onClick }) => (
   <span onClick={onClick} className="cursor-pointer text-gray-600 dark:text-gray-400 font-bold ml-1 hover:text-gray-900 dark:hover:text-white">&#9432;</span>
 );
 
@@ -215,7 +215,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
       <div className="flex items-center">
         {label}
         <SortIcon direction={currentSort.key === sortKey ? currentSort.dir : null} />
-        {infoKey && <InfoIcon onClick={(e: any) => { e.stopPropagation(); handleShowModal(infoKey); }} />}
+        {infoKey && <InfoIcon onClick={(e) => { e.stopPropagation(); handleShowModal(infoKey); }} />}
       </div>
     </th>
   );

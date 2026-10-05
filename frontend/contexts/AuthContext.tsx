@@ -157,9 +157,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Helper to make authenticated API requests. A 401 opens the sign-in
   // dialog (see apiFetch); one that remains means the person signed out.
   const authFetch = async (endpoint: string, options: RequestInit = {}) => {
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(options.headers || {}),
+      ...(options.headers as Record<string, string> | undefined),
     };
 
     if (token) {

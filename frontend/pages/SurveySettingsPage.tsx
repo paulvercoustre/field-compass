@@ -864,12 +864,13 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     if (config?.config_data?.core_identifiers) {
       setCoreIdentifiers(prev => ({ ...prev, ...config.config_data.core_identifiers }));
     }
-    if (config?.config_data?.special_values) {
+    const savedSpecialValues = config?.config_data?.special_values;
+    if (savedSpecialValues) {
       setSpecialValues(prev => ({
         ...prev,
-        ...config.config_data.special_values,
-        dk_value: readDkCodes(config.config_data.special_values.dk_value),
-        dk_string_value: readDkValues(config.config_data.special_values.dk_string_value),
+        ...savedSpecialValues,
+        dk_value: readDkCodes(savedSpecialValues.dk_value),
+        dk_string_value: readDkValues(savedSpecialValues.dk_string_value),
       }));
     }
   };
@@ -1089,7 +1090,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   ];
 
   return (
-    <SettingsLayout
+    <SettingsLayout<SurveySettingsTab>
       title="Survey settings"
       items={navItems}
       active={activeTab}

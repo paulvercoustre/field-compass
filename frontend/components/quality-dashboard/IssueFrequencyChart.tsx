@@ -70,7 +70,7 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
                 />
                 <Tooltip
                   {...tooltipProps}
-                  formatter={(value: number, name: string, props: any) => {
+                  formatter={(value, name, props) => {
                     if (name === 'count') {
                       return [`${value} occurrences (${props.payload.percentage}%)`, 'Count'];
                     }

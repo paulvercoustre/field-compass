@@ -95,11 +95,7 @@ export function buildFilterParams(filters: FilterState): URLSearchParams {
   const params = new URLSearchParams();
 
   if (filters.qaStatuses && filters.qaStatuses.length > 0) {
-    // Convert triage to FLAGGED for API
-    const apiStatuses = filters.qaStatuses.map(status =>
-      status === 'triage' ? 'FLAGGED' : status
-    );
-    params.append('qa_status', apiStatuses.join(','));
+    params.append('qa_status', filters.qaStatuses.join(','));
   }
 
   if (filters.validationStatuses && filters.validationStatuses.length > 0) {

@@ -102,7 +102,7 @@ const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnume
               radius={[4, 4, 0, 0]}
               fill="#6366f1"
               cursor={onEnumeratorClick ? 'pointer' : 'default'}
-              onClick={(d) => onEnumeratorClick?.(d.id)}
+              onClick={(d) => { if (d.id !== undefined) onEnumeratorClick?.(d.id); }}
             />
           </BarChart>
         </ResponsiveContainer>

@@ -59,7 +59,7 @@ export interface SurveyConfig {
       // How this survey expresses targets. Absent on configs stored before the
       // field existed, which are inferred rather than defaulted -- see
       // get_sampling_mode() in backend/services/survey_config.py.
-      mode?: SamplingMode;
+      mode?: SamplingMode | null;
       sampling_cols?: string[];
       admin_level_for_label?: string;
       admin_level_choice_name?: string;

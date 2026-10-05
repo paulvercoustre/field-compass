@@ -29,7 +29,7 @@ const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data })
     ? ((collection.reduce((sum, e) => sum + e.validated, 0) / totalSubmissions) * 100).toFixed(1)
     : '0';
   
-  const totalIssues = quality.reduce((sum, q) => sum + (q.avgIssuesPerSurvey * collection.find(c => c.id === q.id)?.total || 0), 0);
+  const totalIssues = quality.reduce((sum, q) => sum + q.avgIssuesPerSurvey * (collection.find(c => c.id === q.id)?.total ?? 0), 0);
   const teamAvgIssuesPerSubmission = totalSubmissions > 0
     ? (totalIssues / totalSubmissions).toFixed(2)
     : '0';

@@ -73,7 +73,7 @@ export interface KoboQuestion {
   name: string;
   'label::English (en)'?: string;
   roster_name: string | null;
-  list_name?: string;
+  list_name?: string | null;
   group_path?: string;
   group_relevant?: string[];
 }

@@ -34,6 +34,10 @@ const getFieldValueFromData = (submissionData: Record<string, any>, fieldName: s
   return undefined;
 };
 
+/** A dataset statistic for display; a missing one reads as a dash, not NaN. */
+const roundStat = (value: number | undefined): number | string =>
+  value === undefined ? '—' : Math.round(value);
+
 const getDurationMinutes = (config: SurveyConfig | null, data: Record<string, any>): number | null => {
   const v = data?.active_interview_time;
   if (v != null) try { return parseFloat(String(v)); } catch { return null; }
@@ -343,15 +347,16 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
     // Get sampling information - always show configured columns
     if (config.sampling_frame?.sampling_cols && config.sampling_frame.sampling_cols.length > 0) {
-      metadata.sampling = {};
+      const sampling: Record<string, any> = {};
+      metadata.sampling = sampling;
       config.sampling_frame.sampling_cols.forEach((col: string) => {
         const value = getFieldValue(col);
         // Show all configured columns, even if empty
         // Use formatValueForDisplay to show labels for select_one/select_multiple fields
         if (value !== undefined && value !== null && value !== '') {
-          metadata.sampling[col] = formatValueForDisplay(value, col, surveyConfig);
+          sampling[col] = formatValueForDisplay(value, col, surveyConfig);
         } else {
-          metadata.sampling[col] = 'N/A';
+          sampling[col] = 'N/A';
         }
       });
     }
@@ -550,7 +555,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
 
             {/* Validation dropdown */}
             <ValidationStatusDropdown 
-              currentStatus={kobo_validation_status}
+              currentStatus={kobo_validation_status ?? null}
               onChange={handleValidationStatusChange}
               isUpdating={isUpdatingValidation}
               disabled={isUpdatingValidation}
@@ -1280,8 +1285,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                                                 <div className="text-sm text-gray-600 dark:text-gray-400">
                                                     <span className="font-medium">Dataset stats: </span>
                                                     <span className="font-mono">
-                                                        mean={Math.round(outlierMetadata.statistics.mean)},
-                                                        median={Math.round(outlierMetadata.statistics.median)},
+                                                        mean={roundStat(outlierMetadata.statistics.mean)},
+                                                        median={roundStat(outlierMetadata.statistics.median)},
                                                         n={outlierMetadata.statistics.count}
                                                     </span>
                                                 </div>

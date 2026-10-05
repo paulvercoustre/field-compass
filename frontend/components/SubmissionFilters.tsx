@@ -236,11 +236,8 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
     return {
       enumerators: extractUniqueEnumerators(submissions, surveyConfig),
       samplingVariables: getSamplingVariables(surveyConfig),
-      samplingValues: activeFilters.samplingVariable
-        ? extractUniqueSamplingValues(submissions, activeFilters.samplingVariable, surveyConfig)
-        : [],
     };
-  }, [submissions, surveyConfig, activeFilters.samplingVariable]);
+  }, [submissions, surveyConfig]);
 
   // Handle filter changes with debouncing
   const handleFilterChange = useCallback((newFilters: Partial<FilterState>) => {
@@ -390,7 +387,7 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
 
                 {(activeFilters.qaStatuses || []).map((status) => (
                   <span key={`qa-${status}`} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
-                    {status === 'FLAGGED' || status === 'triage' ? 'Flagged' : status}
+                    {status === 'FLAGGED' ? 'Flagged' : status}
                     <button
                       onClick={() => {
                         const rest = (activeFilters.qaStatuses || []).filter((s) => s !== status);

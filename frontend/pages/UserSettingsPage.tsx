@@ -147,7 +147,7 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
   }
 
   return (
-    <SettingsLayout
+    <SettingsLayout<AccountTab>
       title="Account settings"
       items={user.can_view_usage ? USAGE_NAV_ITEMS : NAV_ITEMS}
       active={activeTab}
