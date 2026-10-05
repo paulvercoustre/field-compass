@@ -1,6 +1,7 @@
 """Celery application setup for asynchronous background jobs."""
 
 import os
+import random
 import sys
 
 from celery import Celery
@@ -80,3 +81,18 @@ if os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() in {"1", "true", "yes"
 
 # Keep autodiscovery for future conventional task modules.
 celery_app.autodiscover_tasks(["services"])
+
+
+# Waits between a task's attempts: 30 s, 60 s, 120 s, plus jitter so a pull's
+# worth of rate-limited calls does not retry in lockstep. A provider's own
+# Retry-After wins when it asks for longer; nothing waits beyond five minutes.
+_BACKOFF_BASE_SECONDS = 30
+_BACKOFF_CAP_SECONDS = 300
+
+
+def backoff_seconds(retries: int, retry_after: float | None = None) -> float:
+    """How long a task waits before its next attempt."""
+    wait = _BACKOFF_BASE_SECONDS * (2**retries) + random.uniform(0, 10)
+    if retry_after:
+        wait = max(wait, retry_after)
+    return min(wait, _BACKOFF_CAP_SECONDS)

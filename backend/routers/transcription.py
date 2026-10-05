@@ -126,9 +126,10 @@ def _counts(db: Session, survey_id: UUID) -> dict[str, Any]:
         "success": status.get("success", 0),
         "in_progress": status.get("pending", 0) + status.get("running", 0),
         "failed": status.get("failed", 0),
-        "not_run": status.get("not_run_allowance", 0)
-        + status.get("skipped", 0)
-        + status.get("cancelled", 0),
+        # Counted as translation counts them: work held back (allowance, a
+        # cancelled run) apart from recordings that cannot be transcribed.
+        "not_run": status.get("not_run_allowance", 0) + status.get("cancelled", 0),
+        "skipped": status.get("skipped", 0),
         "no_speech": no_speech or 0,
         "from_kobo": from_kobo or 0,
         "kobo": {

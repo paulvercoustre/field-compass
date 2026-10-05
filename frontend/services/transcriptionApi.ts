@@ -76,6 +76,8 @@ export interface TranscriptionOverview {
     in_progress: number;
     failed: number;
     not_run: number;
+    /** Recordings that cannot be transcribed: the file is missing, or too long. */
+    skipped: number;
     no_speech: number;
     /** Transcripts Kobo already had, typed or made there: never transcribed here. */
     from_kobo: number;

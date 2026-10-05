@@ -17,7 +17,7 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from database.models import SubmissionCurrent
-from services import ai_client, qualitative_worker, qualitative_worker_runtime
+from services import ai_client, job_queue, qualitative_worker, qualitative_worker_runtime
 from services.ai_client import AIClient
 from services.ai_errors import (
     AUTH,
@@ -338,14 +338,14 @@ class TestWorker:
 
 class TestBackoff:
     def test_waits_grow(self, monkeypatch):
-        monkeypatch.setattr(qualitative_worker.random, "uniform", lambda a, b: 0)
-        waits = [qualitative_worker._backoff_seconds(n) for n in range(3)]
+        monkeypatch.setattr(job_queue.random, "uniform", lambda a, b: 0)
+        waits = [job_queue.backoff_seconds(n) for n in range(3)]
         assert waits == [30, 60, 120]
 
     def test_retry_after_is_honoured_up_to_the_cap(self, monkeypatch):
-        monkeypatch.setattr(qualitative_worker.random, "uniform", lambda a, b: 0)
-        assert qualitative_worker._backoff_seconds(0, retry_after=90) == 90
-        assert qualitative_worker._backoff_seconds(5) == 300
+        monkeypatch.setattr(job_queue.random, "uniform", lambda a, b: 0)
+        assert job_queue.backoff_seconds(0, retry_after=90) == 90
+        assert job_queue.backoff_seconds(5) == 300
 
 
 class TestStalledSweep:

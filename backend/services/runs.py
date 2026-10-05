@@ -832,6 +832,46 @@ def revoke(job_ids: list[str]) -> None:
 
 # --- Sweeping ---------------------------------------------------------------------
 
+# Transcriptions and translations: one running this long has lost its worker,
+# one pending this long has lost its queue message, and a send to Kobo still
+# pending this long will not finish.
+STALLED_ITEM_RUNNING = timedelta(minutes=30)
+STALLED_ITEM_PENDING = timedelta(hours=6)
+STALLED_KOBO_SEND = timedelta(hours=6)
+
+
+def fail_stalled_items(db: Session, model, now: datetime, what: str) -> list:
+    """Fail the transcriptions or translations (``model``) that lost their worker.
+
+    ``what`` names the work in the error, e.g. "transcription". Not committed.
+    """
+    stalled = (
+        db.query(model)
+        .filter(
+            ((model.status == "running") & (model.started_at < now - STALLED_ITEM_RUNNING))
+            | ((model.status == "pending") & (model.queued_at < now - STALLED_ITEM_PENDING))
+        )
+        .all()
+    )
+    for row in stalled:
+        row.status = "failed"
+        row.last_error = f"timeout: The {what} did not finish."
+        row.finished_at = now
+    return stalled
+
+
+def fail_stalled_kobo_sends(db: Session, model, now: datetime) -> int:
+    """Fail sends of ``model`` rows to Kobo that never finished. Not committed."""
+    stalled = (
+        db.query(model)
+        .filter(model.kobo_status == "pending", model.updated_at < now - STALLED_KOBO_SEND)
+        .all()
+    )
+    for row in stalled:
+        row.kobo_status = "failed"
+        row.kobo_last_error = "timeout: Sending to Kobo did not finish."
+    return len(stalled)
+
 
 def sweep_runs(db: Session, now: datetime | None = None) -> dict[str, int]:
     """

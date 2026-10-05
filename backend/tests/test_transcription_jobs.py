@@ -368,6 +368,19 @@ class TestTranscriptsFromKobo:
         assert counts["from_kobo"] == 1
         assert counts["kobo"]["sent"] == 0 and counts["kobo"]["edited_in_kobo"] == 1
 
+    def test_skipped_is_counted_apart_from_not_run(self, test_db, survey, env):
+        """As translation counts them: held back is not the same as cannot run."""
+        from routers.transcription import _counts
+
+        statuses = ["skipped", "not_run_allowance", "cancelled", "failed"]
+        for _id, status in enumerate(statuses, start=1):
+            _, rows = _queue(test_db, survey, _submission(test_db, survey, _id=_id))
+            rows[0].status = status
+        test_db.commit()
+
+        counts = _counts(test_db, survey.survey_id)
+        assert (counts["skipped"], counts["not_run"], counts["failed"]) == (1, 2, 1)
+
     def test_kobos_transcript_is_what_the_built_in_checks_read(self, test_db, survey, env):
         submission = _submission(test_db, survey)
         _, rows = _queue(test_db, survey, submission)
