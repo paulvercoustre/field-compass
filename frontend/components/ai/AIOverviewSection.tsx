@@ -1,6 +1,6 @@
 import React from 'react';
-import { AccountAIUsage, KEY_KINDS } from '../../services/aiConnectionsApi';
-import { SparkleIcon } from '../ui/icons';
+import { AccountAIUsage, AI_FEATURES } from '../../services/aiConnectionsApi';
+import { SparkleIcon, TranslateIcon } from '../ui/icons';
 
 const MicIcon: React.FC<{ className?: string }> = ({ className = 'h-4 w-4' }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -20,6 +20,7 @@ interface AIOverviewSectionProps {
  */
 const AIOverviewSection: React.FC<AIOverviewSectionProps> = ({ usage }) => {
   const reviewLimit = usage?.included.reviews_per_survey_month ?? null;
+  const translationLimit = usage?.included.translations_per_survey_month ?? null;
   const minutesLimit = usage?.included.transcription_minutes_per_survey_month ?? null;
   const renews = usage
     ? new Date(usage.resets_at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', timeZone: 'UTC' })
@@ -27,13 +28,15 @@ const AIOverviewSection: React.FC<AIOverviewSectionProps> = ({ usage }) => {
   const rules = usage?.included.rule_requests_per_day ?? null;
   const figures = [
     reviewLimit ? { value: reviewLimit, unit: 'AI-reviewed submissions', per: 'per survey, per month' } : null,
+    translationLimit ? { value: translationLimit, unit: 'translated answers', per: 'per survey, per month' } : null,
     minutesLimit ? { value: minutesLimit, unit: 'minutes of transcription', per: 'per survey, per month' } : null,
     rules ? { value: rules, unit: 'AI rule requests', per: 'per day' } : null,
   ].filter((figure): figure is { value: number; unit: string; per: string } => figure !== null);
 
   const features = [
-    { icon: <SparkleIcon className="h-4 w-4" />, ...KEY_KINDS.review, runsOn: 'any OpenAI-compatible model' },
-    { icon: <MicIcon className="h-4 w-4" />, ...KEY_KINDS.transcription, runsOn: 'ElevenLabs Scribe' },
+    { icon: <SparkleIcon className="h-4 w-4" />, ...AI_FEATURES.review, runsOn: 'any OpenAI-compatible model' },
+    { icon: <TranslateIcon className="h-4 w-4" />, ...AI_FEATURES.translation, runsOn: 'any OpenAI-compatible model' },
+    { icon: <MicIcon className="h-4 w-4" />, ...AI_FEATURES.transcription, runsOn: 'ElevenLabs Scribe' },
   ];
 
   return (
@@ -60,7 +63,7 @@ const AIOverviewSection: React.FC<AIOverviewSectionProps> = ({ usage }) => {
       <div className="mt-2 border-t border-gray-100 pt-4 dark:border-gray-800">
         <h3 className="text-sm font-medium text-gray-900 dark:text-white">Included usage</h3>
         {figures.length > 0 ? (
-          <ul className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-gray-100 dark:sm:divide-gray-800">
+          <ul className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-0 sm:divide-x sm:divide-gray-100 dark:sm:divide-gray-800">
             {figures.map((figure, index) => (
               <li key={figure.unit} className={index > 0 ? 'sm:pl-5' : ''}>
                 <span className="tabular block text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
@@ -75,7 +78,8 @@ const AIOverviewSection: React.FC<AIOverviewSectionProps> = ({ usage }) => {
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">None on this server: AI runs on your own keys.</p>
         )}
         <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-          {renews && figures.length > 0 ? `Renews ${renews}. ` : ''}A survey with its own key has no limit.
+          {renews && figures.length > 0 ? `Renews ${renews}. ` : ''}Each counts on its own: translating doesn't use up AI
+          reviews. A survey with its own key for a feature has no limit for it.
         </p>
       </div>
     </section>

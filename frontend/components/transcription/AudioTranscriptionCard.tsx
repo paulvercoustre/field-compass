@@ -10,7 +10,6 @@ import {
   TranscriptionEstimate,
   TranscriptionOverview,
   TranscriptionSettingsInput,
-  translateNow,
 } from '../../services/transcriptionApi';
 import Banner from '../ui/Banner';
 import Button from '../ui/Button';
@@ -68,14 +67,12 @@ const toInput = (overview: TranscriptionOverview): TranscriptionSettingsInput =>
   language: overview.settings.language,
   multiple_speakers: overview.settings.multiple_speakers,
   send_to_kobo: overview.settings.send_to_kobo,
-  translate_to: overview.settings.translate_to,
 });
 
 /**
  * Survey Settings › Audio transcription. Shown only when the form has audio
  * questions, and lists only those. The language list puts the form's own
- * languages first, then every language Scribe v2 can transcribe. Transcripts
- * can also be translated into one language by the survey's AI provider.
+ * languages first, then every language Scribe v2 can transcribe.
  */
 const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyId, surveyName, formKey, onSettingsChange }) => {
   const { trackRun, setPanelOpen, navigate, version } = useActivity();
@@ -89,7 +86,6 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
   const [confirmConsent, setConfirmConsent] = useState(false);
   const [estimate, setEstimate] = useState<TranscriptionEstimate | null>(null);
   const [starting, setStarting] = useState(false);
-  const [translateAgain, setTranslateAgain] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -137,8 +133,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
     return null;
   }
 
-  const { settings, counts, allowance, translation } = overview;
-  const translations = counts.translations;
+  const { settings, counts, allowance } = overview;
   const canEdit = overview.can_edit && overview.available;
   const languageName = (code: string | null) =>
     code ? overview.languages.find((lang) => lang.code === code)?.name ?? code : 'Detect automatically';
@@ -202,29 +197,6 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
       setStarting(false);
     }
   };
-
-  const translate = async (mode: 'missing' | 'all') => {
-    setError(null);
-    setStarting(true);
-    try {
-      trackRun(await translateNow(surveyId, mode));
-      setTranslateAgain(false);
-      setPanelOpen(true);
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start translating.');
-      setTranslateAgain(false);
-    } finally {
-      setStarting(false);
-    }
-  };
-
-  const translationProvider =
-    translation.source === 'own'
-      ? `your AI provider \u201c${translation.label}\u201d`
-      : translation.source === 'operator'
-      ? `the included AI usage (each translated submission counts as one of this survey's ${translation.allowance?.limit ?? ''} AI reviews a month)`
-      : null;
 
   const resend = async () => {
     setError(null);
@@ -475,52 +447,13 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                 </p>
               </div>
             </div>
-
-            <div className="max-w-sm">
-              <FieldLabel
-                htmlFor="transcription-translate"
-                hint={
-                  translationProvider
-                    ? `Translated by ${translationProvider}. Answers already in this language are left as they are.`
-                    : 'Needs an AI provider: add one in Account settings › AI integration.'
-                }
-              >
-                Translate transcripts into
-              </FieldLabel>
-              {editable ? (
-                <select
-                  id="transcription-translate"
-                  value={draft.translate_to ?? ''}
-                  disabled={!draft.enabled || !translation.available}
-                  onChange={(e) => setDraft({ ...draft, translate_to: e.target.value || null })}
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
-                >
-                  <option value="">Don't translate</option>
-                  {overview.languages.map((lang) => (
-                    <option key={lang.code} value={lang.code}>
-                      {lang.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <p className="text-sm text-gray-900 dark:text-white">
-                  {settings.translate_to ? languageName(settings.translate_to) : "Don't translate"}
-                </p>
-              )}
-              {editable && draft.translate_to && draft.send_to_kobo && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Translations are sent to Kobo too, next to their transcript.
-                </p>
-              )}
-            </div>
           </div>
         )}
 
         {editing && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Recordings of the chosen questions are sent to ElevenLabs to be transcribed
-            {draft.translate_to ? ', and their transcripts to the AI provider to be translated' : ''}. Nothing else from the
-            submission is sent. Make sure respondents' consent covers this.
+            Recordings of the chosen questions are sent to ElevenLabs to be transcribed. Nothing else from the submission is
+            sent. Make sure respondents' consent covers this.
           </p>
         )}
 
@@ -563,18 +496,8 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
             <dd className="text-gray-900 dark:text-white">{languageName(settings.language)}</dd>
             <dt className="text-gray-500 dark:text-gray-400">Speakers</dt>
             <dd className="text-gray-900 dark:text-white">{settings.multiple_speakers ? 'Several' : 'One'}</dd>
-            <dt className="text-gray-500 dark:text-gray-400">Translation</dt>
-            <dd className="text-gray-900 dark:text-white">
-              {settings.translate_to ? `Into ${languageName(settings.translate_to)}` : 'Off'}
-            </dd>
             <dt className="text-gray-500 dark:text-gray-400">Kobo</dt>
-            <dd className="text-gray-900 dark:text-white">
-              {settings.send_to_kobo
-                ? settings.translate_to
-                  ? 'Transcripts and translations are sent to Kobo'
-                  : 'Transcripts are sent to Kobo'
-                : 'Kept in Field Compass only'}
-            </dd>
+            <dd className="text-gray-900 dark:text-white">{settings.send_to_kobo ? 'Transcripts are sent to Kobo' : 'Kept in Field Compass only'}</dd>
           </dl>
         )}
 
@@ -613,56 +536,19 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
               that already have a transcript in Kobo keep it.
             </p>
 
-            {settings.translate_to && translations && (
-              <div className="space-y-1">
-                {translation.paused && <Banner tone="warning">Translation paused: {translation.paused}</Banner>}
-                <p className="text-sm text-gray-700 dark:text-gray-300">
-                  {translations.success.toLocaleString()} translated into {languageName(settings.translate_to)}
-                  {translations.in_progress > 0 && <> · {translations.in_progress} in progress</>}
-                  {translations.failed > 0 && (
-                    <span className="text-amber-700 dark:text-amber-300"> · {translations.failed} failed</span>
-                  )}
-                  {translations.not_run > 0 && <> · {translations.not_run} not run</>}
-                  {translations.missing > 0 && <> · {translations.missing} not translated yet</>}
-                  {translations.skipped > 0 && <> · {translations.skipped} already in {languageName(settings.translate_to)} or silent</>}
-                  .
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {translation.source === 'own'
-                    ? `Translated by \u201c${translation.label}\u201d (${translation.model}).`
-                    : translation.source === 'operator' && translation.allowance
-                    ? `On the included AI usage: ${translation.allowance.remaining} of ${translation.allowance.limit} AI reviews left this month, shared with AI review.`
-                    : 'Needs an AI provider.'}
-                </p>
-              </div>
-            )}
-
             {settings.send_to_kobo && (
               <div className="space-y-2">
                 {pause ? (
                   <Banner tone="warning">{pause.message}</Banner>
                 ) : (
-                  <>
-                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                      {counts.kobo.sent.toLocaleString()} sent to Kobo
-                      {counts.kobo.edited_in_kobo > 0 && <> · {counts.kobo.edited_in_kobo} corrected in Kobo</>}
-                      {counts.kobo.failed > 0 && (
-                        <span className="text-amber-700 dark:text-amber-300"> · {counts.kobo.failed} couldn't be sent</span>
-                      )}
-                      {counts.kobo.pending > 0 && <> · {counts.kobo.pending} on the way</>}.
-                    </p>
-                    {settings.translate_to && translations && translations.success > 0 && (
-                      <p className="text-sm text-gray-700 dark:text-gray-300">
-                        {translations.kobo.sent.toLocaleString()}{' '}
-                        {translations.kobo.sent === 1 ? 'translation' : 'translations'} in Kobo
-                        {translations.kobo.edited_in_kobo > 0 && <> · {translations.kobo.edited_in_kobo} corrected in Kobo</>}
-                        {translations.kobo.failed > 0 && (
-                          <span className="text-amber-700 dark:text-amber-300"> · {translations.kobo.failed} couldn't be sent</span>
-                        )}
-                        {translations.kobo.pending > 0 && <> · {translations.kobo.pending} on the way</>}.
-                      </p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    {counts.kobo.sent.toLocaleString()} sent to Kobo
+                    {counts.kobo.edited_in_kobo > 0 && <> · {counts.kobo.edited_in_kobo} corrected in Kobo</>}
+                    {counts.kobo.failed > 0 && (
+                      <span className="text-amber-700 dark:text-amber-300"> · {counts.kobo.failed} couldn't be sent</span>
                     )}
-                  </>
+                    {counts.kobo.pending > 0 && <> · {counts.kobo.pending} on the way</>}.
+                  </p>
                 )}
               </div>
             )}
@@ -672,14 +558,9 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                 <Button size="sm" variant="secondary" onClick={() => openEstimate('missing')}>
                   Transcribe now
                 </Button>
-                {settings.translate_to && translation.available && translations && translations.missing + translations.failed + translations.not_run > 0 && (
-                  <Button size="sm" variant="secondary" onClick={() => translate('missing')} loading={starting && !translateAgain}>
-                    Translate {(translations.missing + translations.failed + translations.not_run).toLocaleString()} now
-                  </Button>
-                )}
-                {settings.send_to_kobo && !pause && counts.kobo.unsent + (translations?.kobo.unsent ?? 0) > 0 && (
+                {settings.send_to_kobo && !pause && counts.kobo.unsent > 0 && (
                   <Button size="sm" variant="secondary" onClick={resend}>
-                    Send {(counts.kobo.unsent + (translations?.kobo.unsent ?? 0)).toLocaleString()} to Kobo
+                    Send {counts.kobo.unsent} to Kobo
                   </Button>
                 )}
                 <button
@@ -689,15 +570,6 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                 >
                   Transcribe all again
                 </button>
-                {settings.translate_to && translation.available && translations && translations.success > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setTranslateAgain(true)}
-                    className="text-xs font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-                  >
-                    Translate all again
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -759,21 +631,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
           </>
         )}
       </ConfirmDialog>
-      <ConfirmDialog
-        open={translateAgain}
-        title="Translate every transcript again?"
-        confirmLabel="Translate all again"
-        tone="primary"
-        busy={starting}
-        onConfirm={() => translate('all')}
-        onCancel={() => setTranslateAgain(false)}
-      >
-        <p>
-          About {((translations?.success ?? 0) + (translations?.missing ?? 0)).toLocaleString()} transcripts are sent to{' '}
-          {translationProvider ?? 'the AI provider'} again.
-        </p>
-        <p>Translations already sent to Kobo are only replaced where nobody corrected them in Kobo.</p>
-      </ConfirmDialog>
+
     </section>
   );
 };

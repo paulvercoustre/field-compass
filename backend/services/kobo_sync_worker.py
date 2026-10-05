@@ -11,7 +11,7 @@ settings again resumes it. See docs/specs/audio-transcription.md, section 5.
 
 A translation is sent only once Kobo shows the transcript it was made from,
 under the same rules: a translation corrected in Kobo, or one Kobo made
-itself, is never overwritten. See docs/specs/transcript-translation.md.
+itself, is never overwritten. See docs/specs/translation.md.
 """
 
 from __future__ import annotations
@@ -22,18 +22,13 @@ from datetime import datetime
 from typing import Any
 
 from database.models import (
+    AnswerTranslation,
     AudioTranscript,
     SubmissionCurrent,
     SurveyConfig,
-    TranscriptTranslation,
     User,
 )
-from etl.audio import (
-    LANGUAGE_MISMATCH_PROBABILITY,
-    root_uuid,
-    transcription_settings,
-    translation_input_hash,
-)
+from etl.audio import LANGUAGE_MISMATCH_PROBABILITY, root_uuid, transcription_settings
 from etl.kobo_fetcher import KoboFetcher
 from services.auth import get_user_kobo_token
 from services.database import SessionLocal
@@ -60,7 +55,7 @@ PAUSE_AFTER_PERMISSION_FAILURES = 3
 
 
 def _fetcher(
-    db, row: AudioTranscript | TranscriptTranslation, survey: SurveyConfig
+    db, row: AudioTranscript | AnswerTranslation, survey: SurveyConfig
 ) -> KoboFetcher | None:
     for user_id in (row.requested_by_user_id, survey.user_id):
         if not user_id:
@@ -275,13 +270,13 @@ def _send_its_translation(db, transcript: AudioTranscript, run_id) -> None:
 def run_translation_kobo_send_job(
     payload: dict[str, Any], final_attempt: bool = True
 ) -> dict[str, Any]:
-    from services.translation_queue import in_kobo
+    from services.translation_queue import sendable, sending_to_kobo
 
     db = SessionLocal()
     try:
         row = (
-            db.query(TranscriptTranslation)
-            .filter(TranscriptTranslation.translation_id == int(payload["translation_id"]))
+            db.query(AnswerTranslation)
+            .filter(AnswerTranslation.translation_id == int(payload["translation_id"]))
             .with_for_update()
             .first()
         )
@@ -290,8 +285,7 @@ def run_translation_kobo_send_job(
             return {"status": "stale"}
         run_id = row.kobo_run_id
         survey = db.get(SurveyConfig, row.survey_id)
-        transcript = db.get(AudioTranscript, row.transcript_id)
-        settings = transcription_settings(survey.config_data if survey else None)
+        transcript = db.get(AudioTranscript, row.transcript_id) if row.transcript_id else None
 
         def done(status: str, error: str | None = None) -> dict[str, Any]:
             row.kobo_status = status
@@ -307,15 +301,12 @@ def run_translation_kobo_send_job(
             finish_if_done(db, run_id)
             return {"status": "not_sent"}
 
-        if survey is None or not survey.kobo_asset_id or not settings.sending_to_kobo:
+        if not sending_to_kobo(survey):
             return not_sent()
-        if row.status != "success" or not (row.text or "").strip() or transcript is None:
-            return not_sent()
-        if not in_kobo(transcript) or row.input_hash != translation_input_hash(
-            transcript.text, row.language
-        ):
-            # Kobo doesn't show the transcript this was made from (yet): sent
-            # once it does, or translated again from the one it shows.
+        if not sendable(row, transcript, kobo_statuses=("pending",)):
+            # Not ours, not a transcript's, or Kobo doesn't show the transcript
+            # it was made from (yet): sent once it does, or translated again
+            # from the one it shows.
             return not_sent()
 
         language = kobo_language_code(row.language)

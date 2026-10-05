@@ -4,16 +4,15 @@ import {
   AudioAnswer,
   getSubmissionTranscripts,
   loadRecording,
-  KoboStatus,
   SubmissionTranscripts,
   Transcript,
-  Translation,
 } from '../../services/transcriptionApi';
+import { Translation } from '../../services/translationApi';
 import { Spinner } from '../Spinner';
 import { QualityIssue } from '../../types';
 import { issueName } from '../../utils/issueNames';
-
-type Tone = 'busy' | 'ok' | 'warn' | 'muted';
+import { TranslationBlock } from '../translation/TranslationBlock';
+import { koboState, Tone, toneClass } from './koboState';
 
 /**
  * A transcript's state in plain words; `last_error` is "<category>: <message>".
@@ -57,75 +56,8 @@ export const describeTranscript = (transcript: Transcript | null, transcribed: b
   }
 };
 
-/** Where a transcript or a translation stands in Kobo, in words. */
-const koboState = (
-  item: { status: string; text: string | null; kobo_status: KoboStatus; kobo_last_error: string | null },
-  what: 'transcripts' | 'translations'
-): { tone: Tone; text: string } | null => {
-  switch (item.kobo_status) {
-    case 'sent':
-      return { tone: 'ok', text: 'In Kobo' };
-    case 'pending':
-      return { tone: 'busy', text: 'Sending to Kobo…' };
-    case 'edited_in_kobo':
-      return { tone: 'muted', text: 'Corrected in Kobo — the correction is kept' };
-    case 'unsupported':
-      return { tone: 'warn', text: `This Kobo server doesn't support adding ${what}` };
-    case 'failed': {
-      const [category, ...rest] = (item.kobo_last_error ?? '').split(': ');
-      if (category === 'kobo_permission') return { tone: 'warn', text: "Couldn't send to Kobo: your Kobo account can't edit this project's submissions" };
-      return { tone: 'warn', text: `Couldn't send to Kobo${rest.length ? `: ${rest.join(': ')}` : ''}` };
-    }
-    default:
-      if (item.status !== 'success') return null;
-      return {
-        tone: 'muted',
-        text: item.text?.trim() ? 'Not sent to Kobo' : 'Nothing to send to Kobo',
-      };
-  }
-};
-
 const koboLine = (transcript: Transcript): { tone: Tone; text: string } | null =>
-  transcript.source === 'kobo' ? null : koboState(transcript, 'transcripts'); // Kobo's own is already there
-
-/**
- * A translation's state in plain words. Null when there is nothing to say:
- * an answer already in the language, or with no speech, has none.
- */
-export const describeTranslation = (translation: Translation): { tone: Tone; text: string } | null => {
-  const language = translation.language_name ?? translation.language;
-  const [category, ...rest] = (translation.last_error ?? '').split(': ');
-  const message = rest.join(': ').replace(/ \(retrying\)$/, '');
-  switch (translation.status) {
-    case 'pending':
-    case 'running':
-      return { tone: 'busy', text: translation.last_error ? `Translating into ${language}… retrying after a temporary error.` : `Translating into ${language}…` };
-    case 'success':
-      return { tone: 'ok', text: `Translation · ${language}` };
-    case 'skipped':
-      return null;
-    case 'not_run_allowance':
-      return { tone: 'warn', text: message || "Not translated: this survey has used its included AI reviews for this month." };
-    case 'cancelled':
-      return { tone: 'muted', text: 'Translation stopped before it ran. It runs again on the next pull.' };
-    default: {
-      const reasons: Record<string, string> = {
-        auth: "Couldn't translate: the AI provider rejected the key.",
-        provider_quota: "Couldn't translate: the AI provider account is out of credit.",
-        not_configured: "Couldn't translate: no AI provider is set up for this survey.",
-        bad_request: `Couldn't translate${message ? `: ${message}` : '.'}`,
-      };
-      return { tone: 'warn', text: reasons[category] ?? "Couldn't translate this time. It will be retried on the next pull." };
-    }
-  }
-};
-
-const toneClass: Record<Tone, string> = {
-  busy: 'text-indigo-700 dark:text-indigo-300',
-  ok: 'text-gray-600 dark:text-gray-400',
-  warn: 'text-amber-700 dark:text-amber-300',
-  muted: 'text-gray-500 dark:text-gray-400',
-};
+  transcript.source === 'kobo' ? null : koboState(transcript, 'transcript'); // Kobo's own is already there
 
 const duration = (seconds: number | null) => {
   if (seconds == null) return null;
@@ -267,31 +199,34 @@ export const RecordingStatus: React.FC<RecordingProps> = ({ answer }) => {
 };
 
 /**
- * What goes under a recorded answer: its transcript, findings about the
- * recording, and whether the transcript is in Kobo. Null when there is none.
+ * What goes under a recorded answer: its transcript and whether it is in
+ * Kobo, findings about the recording, then its translation and whether that
+ * is in Kobo. Null when there is none.
  */
-export const RecordingDetails: React.FC<RecordingProps & { issues?: QualityIssue[] }> = ({
-  answer,
-  sendToKobo,
-  issues = [],
-}) => {
+export const RecordingDetails: React.FC<
+  RecordingProps & {
+    issues?: QualityIssue[];
+    translation?: Translation | null;
+    /** Whether the survey sends translated transcripts to Kobo. */
+    translationsToKobo?: boolean;
+  }
+> = ({ answer, sendToKobo, issues = [], translation = null, translationsToKobo = false }) => {
   const transcript = answer.transcript;
   const kobo = transcript && sendToKobo ? koboLine(transcript) : null;
   const findings = issues.filter((issue) => issue.field === answer.question_path && issue.check.startsWith('audio_'));
   const showText = transcript?.status === 'success';
   const earlier = transcript?.status !== 'success' && transcript?.text;
-  const translation = showText ? transcript?.translation ?? null : null;
-  const translationState = translation ? describeTranslation(translation) : null;
-  if (!showText && !earlier && findings.length === 0 && !kobo) return null;
+  const shownTranslation = showText ? translation : null;
+  if (!showText && !earlier && findings.length === 0 && !kobo && !shownTranslation) return null;
   return (
     <div className="space-y-2">
       {showText && transcript && (
-        <div className="rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900/60">
-          <TranscriptText transcript={transcript} />
+        <div className="space-y-1">
+          <div className="rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900/60">
+            <TranscriptText transcript={transcript} />
+          </div>
+          {kobo && <p className={`text-xs ${toneClass[kobo.tone]}`}>{kobo.text}</p>}
         </div>
-      )}
-      {translation && translationState && (
-        <TranslationBlock translation={translation} state={translationState} sendToKobo={sendToKobo} />
       )}
       {earlier && (
         <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -306,30 +241,8 @@ export const RecordingDetails: React.FC<RecordingProps & { issues?: QualityIssue
           <span className="font-medium">{issueName(issue.check)}:</span> {issue.message}
         </p>
       ))}
-      {kobo && <p className={`text-xs ${toneClass[kobo.tone]}`}>{kobo.text}</p>}
-    </div>
-  );
-};
-
-/** A transcript's translation, or where it stands while there is none. */
-const TranslationBlock: React.FC<{
-  translation: Translation;
-  state: { tone: Tone; text: string };
-  sendToKobo: boolean;
-}> = ({ translation, state, sendToKobo }) => {
-  const kobo = sendToKobo && translation.status === 'success' ? koboState(translation, 'translations') : null;
-  return (
-    <div className="space-y-1">
-      <p className={`flex items-center gap-1.5 text-xs ${toneClass[state.tone]}`} role="status">
-        {state.tone === 'busy' && <Spinner size="sm" />}
-        <span>{state.text}</span>
-      </p>
-      {translation.status === 'success' && translation.text && (
-        <div className="rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/40">
-          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{translation.text}</p>
-        </div>
-      )}
-      {kobo && <p className={`text-xs ${toneClass[kobo.tone]}`}>{kobo.text}</p>}
+      {!showText && kobo && <p className={`text-xs ${toneClass[kobo.tone]}`}>{kobo.text}</p>}
+      <TranslationBlock translation={shownTranslation} sendToKobo={translationsToKobo} />
     </div>
   );
 };

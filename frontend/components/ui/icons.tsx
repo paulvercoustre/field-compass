@@ -97,6 +97,14 @@ export const PencilIcon: React.FC<IconProps> = (p) => (
 );
 
 /** The one mark for anything AI does or decides, so it is recognisable everywhere. */
+/** Translation: a character and a letter. */
+export const TranslateIcon: React.FC<IconProps> = (p) => (
+  <Icon {...p}>
+    <path d="M4 5h9M8.5 3v2M11 5c-.8 3.6-3.2 6.6-6.5 8.2M6.5 9c1 1.8 2.6 3.3 4.5 4.2" />
+    <path d="m12 21 4.5-10 4.5 10M13.6 17.5h5.8" />
+  </Icon>
+);
+
 export const SparkleIcon: React.FC<IconProps> = (p) => (
   <Icon {...p}>
     <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />

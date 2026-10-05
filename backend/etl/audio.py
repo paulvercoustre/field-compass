@@ -42,6 +42,7 @@ class AudioQuestion:
     name: str
     label: str
     in_repeat: bool
+    type: str = AUDIO_TYPE
 
 
 @dataclass(frozen=True)
@@ -60,9 +61,6 @@ class TranscriptionSettings:
     language: str | None = None  # ISO 639-3, None = detect
     multiple_speakers: bool = False
     send_to_kobo: bool = False
-    # ISO 639-3: transcripts are translated into it by the survey's AI
-    # provider. None: not translated.
-    translate_to: str | None = None
     kobo_pause: dict[str, Any] | None = None
     acknowledged_at: str | None = None
     acknowledged_by: str | None = None
@@ -75,10 +73,6 @@ class TranscriptionSettings:
     @property
     def sending_to_kobo(self) -> bool:
         return self.active and self.send_to_kobo and not self.kobo_pause
-
-    @property
-    def translating(self) -> bool:
-        return self.active and self.translate_to is not None
 
 
 def transcription_settings(config_data: dict[str, Any] | None) -> TranscriptionSettings:
@@ -96,7 +90,6 @@ def transcription_settings(config_data: dict[str, Any] | None) -> TranscriptionS
         language=normalize_language(raw.get("language")),
         multiple_speakers=bool(raw.get("multiple_speakers")),
         send_to_kobo=bool(raw.get("send_to_kobo")),
-        translate_to=normalize_language(raw.get("translate_to")),
         kobo_pause=pause if isinstance(pause, dict) else None,
         acknowledged_at=raw.get("acknowledged_at"),
         acknowledged_by=raw.get("acknowledged_by"),
@@ -111,8 +104,15 @@ def _label(question, row: dict[str, Any], label_column: str | None) -> str:
 
 
 def audio_questions(config_data: dict[str, Any] | None) -> list[AudioQuestion]:
+    """The form's audio questions, in form order."""
+    return form_questions(config_data, (AUDIO_TYPE,))
+
+
+def form_questions(
+    config_data: dict[str, Any] | None, types: tuple[str, ...]
+) -> list[AudioQuestion]:
     """
-    The form's audio questions, in form order.
+    The form's questions of the given types, in form order.
 
     The stored form keeps no group rows when it came from Kobo, so the path is
     rebuilt from each row's ``group_path`` column; an uploaded XLSForm keeps its
@@ -126,7 +126,7 @@ def audio_questions(config_data: dict[str, Any] | None) -> list[AudioQuestion]:
     found: list[AudioQuestion] = []
     seen: set[str] = set()
     for question in schema.questions:
-        if question.type != AUDIO_TYPE or not question.name:
+        if question.type not in types or not question.name:
             continue
         row = question.raw or {}
         group_path = row.get("group_path")
@@ -142,6 +142,7 @@ def audio_questions(config_data: dict[str, Any] | None) -> list[AudioQuestion]:
                 name=question.name,
                 label=_label(question, row, label_column),
                 in_repeat=bool(question.repeat_name or row.get("roster_name")),
+                type=question.type,
             )
         )
     return found
@@ -264,16 +265,6 @@ def transcript_input_hash(question_path: str, attachment_uid: str | None) -> str
     re-runs older ones on purpose.
     """
     payload = f"transcript_v1:{question_path}:{attachment_uid or ''}"
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def translation_input_hash(text: str | None, language: str) -> str:
-    """
-    What a translation is of: one transcript text, into one language. A new
-    text (transcribed again, corrected in Kobo) or another language changes
-    the hash and is translated again.
-    """
-    payload = f"translation_v1:{language}:{(text or '').strip()}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

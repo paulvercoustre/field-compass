@@ -70,7 +70,7 @@ const segmentButton = (active: boolean) =>
   }`;
 
 /**
- * AI use over time: AI reviews or transcription minutes, daily for 30 days
+ * AI use over time: AI reviews, translations or transcription minutes, daily for 30 days
  * or monthly for 6 months, stacked by whose key paid for it.
  */
 const AIUsageChart: React.FC<AIUsageChartProps> = ({ surveys, refreshKey }) => {
@@ -105,7 +105,7 @@ const AIUsageChart: React.FC<AIUsageChartProps> = ({ surveys, refreshKey }) => {
   );
   const empty = history !== null && history.total_included === 0 && history.total_own === 0;
   const ticks = useMemo(
-    () => niceTicks(Math.max(0, ...data.map((d) => d.included + d.own)), metric === 'reviews'),
+    () => niceTicks(Math.max(0, ...data.map((d) => d.included + d.own)), metric !== 'minutes'),
     [data, metric]
   );
 
@@ -115,6 +115,9 @@ const AIUsageChart: React.FC<AIUsageChartProps> = ({ surveys, refreshKey }) => {
         <div className="inline-flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900" role="group" aria-label="What to show">
           <button type="button" className={segmentButton(metric === 'reviews')} onClick={() => setMetric('reviews')} aria-pressed={metric === 'reviews'}>
             AI reviews
+          </button>
+          <button type="button" className={segmentButton(metric === 'translations')} onClick={() => setMetric('translations')} aria-pressed={metric === 'translations'}>
+            Translations
           </button>
           <button type="button" className={segmentButton(metric === 'minutes')} onClick={() => setMetric('minutes')} aria-pressed={metric === 'minutes'}>
             Transcription minutes
@@ -190,7 +193,7 @@ const AIUsageChart: React.FC<AIUsageChartProps> = ({ surveys, refreshKey }) => {
         )}
         {!error && empty && (
           <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-            {metric === 'reviews' ? 'No AI reviews' : 'No transcription'} in this period.
+            {{ reviews: 'No AI reviews', translations: 'No translations', minutes: 'No transcription' }[metric]} in this period.
           </p>
         )}
       </div>

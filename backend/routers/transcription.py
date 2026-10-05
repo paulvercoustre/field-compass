@@ -1,9 +1,8 @@
 """
 Audio transcription: a survey's settings, starting and re-sending work, and a
-submission's transcripts, their translations, and recordings.
+submission's transcripts and recordings.
 
-See docs/specs/audio-transcription.md, part A, and
-docs/specs/transcript-translation.md.
+See docs/specs/audio-transcription.md, part A.
 """
 
 from __future__ import annotations
@@ -19,13 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import (
-    AudioTranscript,
-    SubmissionCurrent,
-    SurveyConfig,
-    TranscriptTranslation,
-    User,
-)
+from database.models import AudioTranscript, SubmissionCurrent, SurveyConfig, User
 from etl.audio import (
     SOURCE_KOBO,
     answer_filename,
@@ -36,15 +29,13 @@ from etl.audio import (
 )
 from etl.kobo_fetcher import KoboFetcher, KoboFetchError
 from forms.schema import load_form_schema
-from services.ai_allowance import checks_per_survey_month, checks_remaining, month_start
-from services.ai_providers import paused_error, survey_connection
+from services.ai_allowance import month_start
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
 from services.permissions import get_user_permission, require_survey_access
 from services.runs import (
     KOBO_RESEND,
     TRANSCRIPTION_RERUN,
-    TRANSLATION_RERUN,
     finish_if_done,
     iso,
     run_summary,
@@ -67,12 +58,6 @@ from services.transcription_queue import (
     TranscriptionQueuer,
     dispatch_kobo_send,
     queue_kobo_send,
-)
-from services.translation_queue import (
-    TranslationQueuer,
-    dispatch_translation_send,
-    in_kobo,
-    queue_translation_send,
 )
 
 logger = logging.getLogger(__name__)
@@ -157,98 +142,6 @@ def _counts(db: Session, survey_id: UUID) -> dict[str, Any]:
     }
 
 
-def _translation_counts(db: Session, survey: SurveyConfig) -> dict[str, Any] | None:
-    """How the survey's transcripts stand in its translation language."""
-    settings = transcription_settings(survey.config_data)
-    language = settings.translate_to
-    if not language:
-        return None
-    current = (TranscriptTranslation.survey_id == survey.survey_id) & (
-        TranscriptTranslation.language == language
-    )
-    status = dict(
-        db.query(TranscriptTranslation.status, func.count())
-        .filter(current)
-        .group_by(TranscriptTranslation.status)
-        .all()
-    )
-    kobo = dict(
-        db.query(TranscriptTranslation.kobo_status, func.count())
-        .filter(current, TranscriptTranslation.status == "success")
-        .group_by(TranscriptTranslation.kobo_status)
-        .all()
-    )
-    # Finished transcripts of the chosen questions with nothing in this language yet.
-    missing = (
-        db.query(func.count(AudioTranscript.transcript_id))
-        .outerjoin(
-            TranscriptTranslation,
-            (TranscriptTranslation.transcript_id == AudioTranscript.transcript_id)
-            & (TranscriptTranslation.language == language),
-        )
-        .filter(
-            AudioTranscript.survey_id == survey.survey_id,
-            AudioTranscript.status == "success",
-            AudioTranscript.question_path.in_(settings.questions or ("",)),
-            func.coalesce(func.trim(AudioTranscript.text), "") != "",
-            TranscriptTranslation.translation_id.is_(None),
-        )
-        .scalar()
-    )
-    return {
-        "total": sum(status.values()),
-        "success": status.get("success", 0),
-        "in_progress": status.get("pending", 0) + status.get("running", 0),
-        "failed": status.get("failed", 0),
-        "not_run": status.get("not_run_allowance", 0) + status.get("cancelled", 0),
-        "skipped": status.get("skipped", 0),
-        "missing": missing or 0,
-        "kobo": {
-            "sent": kobo.get("sent", 0),
-            "edited_in_kobo": kobo.get("edited_in_kobo", 0),
-            "failed": kobo.get("failed", 0),
-            "unsupported": kobo.get("unsupported", 0),
-            "pending": kobo.get("pending", 0),
-            "unsent": kobo.get("not_sent", 0) + kobo.get("failed", 0),
-        },
-    }
-
-
-def _translation_provider(db: Session, survey: SurveyConfig) -> dict[str, Any]:
-    """
-    Who translates: the survey's own AI provider, or Field Compass's within
-    the included AI reviews (a translated submission counts as a reviewed one).
-    """
-    from services.ai_service import AIService
-
-    connection = survey_connection(db, survey)
-    service = AIService()
-    if connection is not None:
-        paused = paused_error(db, survey)
-        return {
-            "available": True,
-            "source": "own",
-            "label": connection.label,
-            "model": connection.check_model,
-            "paused": paused.split(": ", 1)[-1] if paused else None,
-            "allowance": None,
-        }
-    available = service.is_available()
-    return {
-        "available": available,
-        "source": "operator" if available else None,
-        "label": None,
-        "model": service.translation_model if available else None,
-        "paused": None,
-        "allowance": {
-            "limit": checks_per_survey_month(),
-            "remaining": checks_remaining(db, survey.survey_id),
-        }
-        if available
-        else None,
-    }
-
-
 def _settings_payload(db: Session, survey: SurveyConfig, user: User) -> dict[str, Any]:
     settings = transcription_settings(survey.config_data)
     used = seconds_used(db, survey.survey_id)
@@ -276,11 +169,9 @@ def _settings_payload(db: Session, survey: SurveyConfig, user: User) -> dict[str
             "language": settings.language,
             "multiple_speakers": settings.multiple_speakers,
             "send_to_kobo": settings.send_to_kobo,
-            "translate_to": settings.translate_to,
             "acknowledged_at": settings.acknowledged_at,
             "kobo_pause": settings.kobo_pause,
         },
-        "translation": _translation_provider(db, survey),
         "audio_questions": [
             {"path": q.path, "name": q.name, "label": q.label, "in_repeat": q.in_repeat}
             for q in audio_questions(survey.config_data)
@@ -301,10 +192,7 @@ def _settings_payload(db: Session, survey: SurveyConfig, user: User) -> dict[str
             "remaining_minutes": round(max(0.0, limit * 60 - used) / 60, 1),
             "max_recording_minutes": max_recording_seconds() // 60,
         },
-        "counts": {
-            **_counts(db, survey.survey_id),
-            "translations": _translation_counts(db, survey),
-        },
+        "counts": _counts(db, survey.survey_id),
         "can_edit": permission in ("owner", "admin"),
     }
 
@@ -331,8 +219,6 @@ class TranscriptionSettingsUpdate(BaseModel):
     language: str | None = None
     multiple_speakers: bool = False
     send_to_kobo: bool = False
-    # ISO 639-3 (or 639-1); None: transcripts are not translated.
-    translate_to: str | None = None
     # Turning transcription on needs the owner to accept that recordings are
     # sent to ElevenLabs, once.
     acknowledge: bool = False
@@ -376,15 +262,6 @@ async def update_transcription_settings(
                 status_code=400, detail=f"Scribe can't transcribe “{body.language}”."
             )
 
-    translate_to = None
-    if body.translate_to:
-        translate_to = normalize_language(body.translate_to)
-        if translate_to is None:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Transcripts can't be translated into “{body.translate_to}”.",
-            )
-
     current = transcription_settings(survey.config_data)
     acknowledged_at, acknowledged_by = current.acknowledged_at, current.acknowledged_by
     if body.enabled and not acknowledged_at:
@@ -403,7 +280,6 @@ async def update_transcription_settings(
         "language": language,
         "multiple_speakers": body.multiple_speakers,
         "send_to_kobo": body.send_to_kobo,
-        "translate_to": translate_to,
         "acknowledged_at": acknowledged_at,
         "acknowledged_by": acknowledged_by,
         # Saving again is how the owner says a Kobo problem is fixed.
@@ -543,62 +419,13 @@ async def transcribe_now(
     return run_summary(db, run, survey)
 
 
-@router.post("/surveys/{survey_id}/translations/run", status_code=202)
-async def translate_now(
-    survey_id: str,
-    mode: str = Query("missing", pattern="^(missing|all)$"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-):
-    """
-    Translate transcripts already made, without waiting for the next pull
-    (owner). ``missing``: those with no translation in the survey's language
-    yet, or whose last attempt can be retried. ``all``: every transcript again.
-    """
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
-    settings = transcription_settings(survey.config_data)
-    if not settings.translating:
-        raise HTTPException(
-            status_code=400,
-            detail="Turn transcription on and choose a language to translate into first.",
-        )
-
-    run = start_background_run(db, survey, TRANSLATION_RERUN, current_user, stats={"mode": mode})
-    queuer = TranslationQueuer(db, survey, run_id=run.run_id, user_id=current_user.user_id)
-    transcripts = (
-        db.query(AudioTranscript)
-        .filter(
-            AudioTranscript.survey_id == survey.survey_id,
-            AudioTranscript.status == "success",
-            AudioTranscript.question_path.in_(settings.questions),
-        )
-        .order_by(AudioTranscript.submission_id.desc())
-        .all()
-    )
-    rows = [row for t in transcripts if (row := queuer.consider(t, force=mode == "all"))]
-    db.flush()
-    queuer.queue(rows)
-    from services.runs import update_stats
-
-    update_stats(run, **dict(queuer.stats))
-    db.commit()
-    queuer.dispatch()
-    finish_if_done(db, run.run_id)
-    db.refresh(run)
-    return run_summary(db, run, survey)
-
-
 @router.post("/surveys/{survey_id}/transcripts/send-to-kobo", status_code=202)
 async def send_transcripts_to_kobo(
     survey_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """
-    Send every transcript not yet in Kobo (or that failed to send) to Kobo,
-    and every translation whose transcript Kobo shows (owner). Translations
-    of transcripts sent now follow them.
-    """
+    """Send every transcript not yet in Kobo (or that failed to send) to Kobo (owner)."""
     survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     _require_kobo_token(current_user)
     settings = transcription_settings(survey.config_data)
@@ -622,41 +449,16 @@ async def send_transcripts_to_kobo(
         .all()
     )
     rows = [row for row in rows if (row.text or "").strip()]
-    translations = (
-        db.query(TranscriptTranslation, AudioTranscript)
-        .join(AudioTranscript, AudioTranscript.transcript_id == TranscriptTranslation.transcript_id)
-        .filter(
-            TranscriptTranslation.survey_id == survey.survey_id,
-            TranscriptTranslation.status == "success",
-            TranscriptTranslation.kobo_status.in_(("not_sent", "failed")),
-        )
-        .all()
-    )
-    translations = [
-        translation
-        for translation, transcript in translations
-        if in_kobo(transcript) and (translation.text or "").strip()
-    ]
     run = start_background_run(
-        db,
-        survey,
-        KOBO_RESEND,
-        current_user,
-        stats={"kobo_queued": len(rows) + len(translations)},
+        db, survey, KOBO_RESEND, current_user, stats={"kobo_queued": len(rows)}
     )
     jobs: list[tuple[AudioTranscript, str]] = []
     for row in rows:
         row.requested_by_user_id = current_user.user_id
         jobs.append((row, queue_kobo_send(db, row, run.run_id)))
-    translation_jobs: list[tuple[TranscriptTranslation, str]] = []
-    for translation in translations:
-        translation.requested_by_user_id = current_user.user_id
-        translation_jobs.append((translation, queue_translation_send(db, translation, run.run_id)))
     db.commit()
     for row, task_id in jobs:
         dispatch_kobo_send(db, row, task_id, run.run_id)
-    for translation, task_id in translation_jobs:
-        dispatch_translation_send(db, translation, task_id, run.run_id)
     finish_if_done(db, run.run_id)
     db.refresh(run)
     return run_summary(db, run, survey)
@@ -668,23 +470,6 @@ def _submission(db: Session, kobo_id: int, user: User) -> tuple[SubmissionCurren
         raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
     survey = require_survey_access(db, user, submission.survey_id, min_level="viewer")
     return submission, survey
-
-
-def _translation_view(row: TranscriptTranslation | None) -> dict[str, Any] | None:
-    if row is None:
-        return None
-    return {
-        "status": row.status,
-        "skip_reason": row.skip_reason,
-        "language": row.language,
-        "language_name": language_name(row.language),
-        "text": row.text,
-        "last_error": row.last_error,
-        "finished_at": iso(row.finished_at),
-        "kobo_status": row.kobo_status,
-        "kobo_last_error": row.kobo_last_error,
-        "kobo_sent_at": iso(row.kobo_sent_at),
-    }
 
 
 @router.get("/submissions/{kobo_id}/transcripts")
@@ -704,13 +489,6 @@ async def get_submission_transcripts(
         for row in db.query(AudioTranscript).filter(
             AudioTranscript.survey_id == survey.survey_id,
             AudioTranscript.submission_id == submission._id,
-        )
-    }
-    translations = {
-        row.transcript_id: row
-        for row in db.query(TranscriptTranslation).filter(
-            TranscriptTranslation.survey_id == survey.survey_id,
-            TranscriptTranslation.submission_id == submission._id,
         )
     }
     data = submission.submission_data or {}
@@ -750,15 +528,12 @@ async def get_submission_transcripts(
                     "kobo_status": row.kobo_status,
                     "kobo_last_error": row.kobo_last_error,
                     "kobo_sent_at": iso(row.kobo_sent_at),
-                    "translation": _translation_view(translations.get(row.transcript_id)),
                 },
             }
         )
     return {
         "enabled": settings.active,
         "send_to_kobo": settings.send_to_kobo,
-        "translate_to": settings.translate_to if settings.translating else None,
-        "translate_to_name": language_name(settings.translate_to) if settings.translating else None,
         "expected_language": settings.language,
         "answers": answers,
     }

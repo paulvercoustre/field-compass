@@ -172,8 +172,9 @@ class ETLPipeline:
             transcriptions = TranscriptionQueuer(
                 self.db, survey_config, run_id=run_id, user_id=self.started_by_user_id
             )
-            # Transcripts already made (or taken from Kobo) are translated
-            # here; new ones as soon as each is transcribed.
+            # Typed answers and transcripts already made (or taken from Kobo)
+            # are translated here, or Kobo's translations taken; new
+            # transcripts as soon as each is made.
             translations = TranslationQueuer(
                 self.db, survey_config, run_id=run_id, user_id=self.started_by_user_id
             )
@@ -336,9 +337,7 @@ class ETLPipeline:
                     if transcript_rows:
                         self.db.flush()
                         transcriptions.queue(transcript_rows)
-                    translation_rows = translations.consider_submission(
-                        survey_config.survey_id, submission._id
-                    )
+                    translation_rows = translations.consider_submission(submission)
                     if translation_rows:
                         self.db.flush()
                         translations.queue(translation_rows)

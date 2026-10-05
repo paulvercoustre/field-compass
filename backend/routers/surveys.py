@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # config_data keys saved through their own endpoint (and validated there).
-OWN_ENDPOINT_KEYS = ("audio_transcription",)
+OWN_ENDPOINT_KEYS = ("audio_transcription", "translation")
 
 
 def _ai_connection_summary(db: Session, survey: SurveyConfig) -> dict | None:

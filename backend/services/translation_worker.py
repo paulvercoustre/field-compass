@@ -1,4 +1,4 @@
-"""Background task entrypoint for translating one transcript."""
+"""Background task entrypoint for translating one answer."""
 
 from __future__ import annotations
 
@@ -21,10 +21,8 @@ def _backoff_seconds(retries: int, retry_after: float | None = None) -> float:
     return min(wait, _BACKOFF_CAP_SECONDS)
 
 
-@celery_app.task(
-    bind=True, name="services.translation_worker.translate_transcript_task", max_retries=3
-)
-def translate_transcript_task(self, payload: dict[str, Any]) -> dict[str, Any]:
+@celery_app.task(bind=True, name="services.translation_worker.translate_answer_task", max_retries=3)
+def translate_answer_task(self, payload: dict[str, Any]) -> dict[str, Any]:
     """
     Celery wrapper; the work is in services.translation_runtime so this
     module stays light at worker start.

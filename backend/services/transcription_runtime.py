@@ -27,6 +27,7 @@ from etl.audio import (
     transcription_settings,
 )
 from etl.kobo_fetcher import KoboFetcher, KoboFetchError
+from etl.translation import translation_settings
 from services.ai_errors import AUTH, NOT_CONFIGURED, PROVIDER_QUOTA, AIError
 from services.audio_files import AudioFile, prepare_for_upload, probe_duration
 from services.auth import get_user_kobo_token
@@ -134,7 +135,7 @@ def _after_success(db, row: AudioTranscript, survey: SurveyConfig) -> None:
         task_id = queue_kobo_send(db, row, row.run_id)
         db.commit()
         dispatch_kobo_send(db, row, task_id, row.run_id)
-    if settings.translating:
+    if translation_settings(survey.config_data).active:
         try:
             queue_translation(db, row, survey)
         except Exception:
@@ -147,7 +148,7 @@ def queue_translation(db, row: AudioTranscript, survey: SurveyConfig) -> None:
     from services.translation_queue import TranslationQueuer
 
     queuer = TranslationQueuer(db, survey, run_id=row.run_id, user_id=row.requested_by_user_id)
-    translation = queuer.consider(row)
+    translation = queuer.consider_transcript(row)
     if translation is None:
         return
     db.flush()

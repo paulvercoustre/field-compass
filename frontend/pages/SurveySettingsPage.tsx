@@ -23,9 +23,10 @@ import { readDkCodes, readDkValues, sameDkCodes, sameDkValues } from '../utils/d
 import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 import AudioTranscriptionCard from '../components/transcription/AudioTranscriptionCard';
+import TranslationCard from '../components/translation/TranslationCard';
 
-type SurveySettingsTab = 'settings' | 'access' | 'quality' | 'transcription';
-const SURVEY_SETTINGS_TABS: string[] = ['settings', 'access', 'quality', 'transcription'];
+type SurveySettingsTab = 'settings' | 'access' | 'quality' | 'transcription' | 'translation';
+const SURVEY_SETTINGS_TABS: string[] = ['settings', 'access', 'quality', 'transcription', 'translation'];
 
 interface SurveySettingsPageProps {
   /** A tab asked for by a link elsewhere in the app (a notification, the activity panel). */
@@ -1083,6 +1084,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     { id: 'access', label: 'Access' },
     { id: 'quality', label: 'Quality checks' },
     ...(hasAudioQuestions ? [{ id: 'transcription' as const, label: 'Audio transcription' }] : []),
+    { id: 'translation', label: 'Translation' },
   ];
 
   return (
@@ -2454,6 +2456,12 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             surveyName={selectedSurvey.survey_name}
             formKey={config?.updated_at}
             onSettingsChange={(paths, enabled) => setTranscribed({ paths, enabled })}
+          />
+        ) : activeTab === 'translation' && selectedSurvey ? (
+          <TranslationCard
+            key={`translation-${selectedSurvey.survey_id}`}
+            surveyId={selectedSurvey.survey_id}
+            formKey={config?.updated_at}
           />
         ) : null}
     </SettingsLayout>

@@ -69,10 +69,24 @@ def _capabilities(stored: dict[str, Any] | None) -> Capabilities:
 
 
 def survey_connection(db: Session, survey: SurveyConfig) -> AIConnection | None:
-    """The survey's own connection, if it has one its owner may use."""
-    if not survey.ai_connection_id:
+    """The survey's own connection for AI review, if it has one its owner may use."""
+    return _owned_review_connection(db, survey, survey.ai_connection_id)
+
+
+def translation_connection(db: Session, survey: SurveyConfig) -> AIConnection | None:
+    """
+    The survey's own connection for translation, if it has one its owner may
+    use: an OpenAI-compatible key, chosen apart from AI review's.
+    """
+    return _owned_review_connection(db, survey, survey.translation_connection_id)
+
+
+def _owned_review_connection(
+    db: Session, survey: SurveyConfig, connection_id
+) -> AIConnection | None:
+    if not connection_id:
         return None
-    connection = db.get(AIConnection, survey.ai_connection_id)
+    connection = db.get(AIConnection, connection_id)
     if connection is None or (connection.kind or "review") != "review":
         return None
     if connection.owner_user_id != survey.user_id:
@@ -130,11 +144,11 @@ def resolve_provider(db: Session, survey: SurveyConfig, purpose: str) -> Resolve
     return provider_for_connection(connection, purpose)
 
 
-def paused(connection: AIConnection) -> AIError:
+def paused(connection: AIConnection, feature: str = "AI review") -> AIError:
     category, _, message = (connection.last_error or "").partition(": ")
     if not message:
         category, message = BAD_REQUEST, connection.last_error or "The AI provider is failing."
-    return AIError(category, f"{message} AI review is paused until it is fixed.")
+    return AIError(category, f"{message} {feature} is paused until it is fixed.")
 
 
 def paused_error(db: Session, survey: SurveyConfig) -> str | None:
@@ -142,6 +156,27 @@ def paused_error(db: Session, survey: SurveyConfig) -> str | None:
     connection = survey_connection(db, survey)
     if connection is not None and connection.status == FAILING:
         return str(paused(connection))[:1000]
+    return None
+
+
+def resolve_translation_provider(db: Session, survey: SurveyConfig) -> ResolvedProvider | None:
+    """
+    The survey's own provider for translation, or None for the operator's key.
+    Raises AIError while that connection is paused.
+    """
+    connection = translation_connection(db, survey)
+    if connection is None:
+        return None
+    if connection.status == FAILING:
+        raise paused(connection, "Translation")
+    return provider_for_connection(connection, CHECKS)
+
+
+def translation_paused_error(db: Session, survey: SurveyConfig) -> str | None:
+    """The stored error for a survey whose own translation connection is paused, else None."""
+    connection = translation_connection(db, survey)
+    if connection is not None and connection.status == FAILING:
+        return str(paused(connection, "Translation"))[:1000]
     return None
 
 

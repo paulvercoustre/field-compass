@@ -15,6 +15,8 @@ export interface UsageLast30 extends UsagePeriod {
   ai_reviews: number;
   ai_cost_usd: number;
   operator_ai_spend_usd: number;
+  /** Answers translated, on any key. */
+  translations: number;
   transcriptions: number;
   audio_minutes: number;
 }

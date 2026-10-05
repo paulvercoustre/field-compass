@@ -101,7 +101,7 @@ const UsageTab: React.FC = () => {
 
       <div>
         <SectionLabel>All time, and the last 30 days</SectionLabel>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <Stat label="Accounts" value={usage.totals.users} hint={`${usage.totals.kobo_connected} connected to Kobo`} />
           <Stat
             label="Surveys"
@@ -111,8 +111,9 @@ const UsageTab: React.FC = () => {
           <Stat
             label="AI reviews (30 days)"
             value={month.ai_reviews.toLocaleString()}
-            hint={`$${month.operator_ai_spend_usd.toFixed(2)} on your key, incl. transcription`}
+            hint={`$${month.operator_ai_spend_usd.toFixed(2)} on your key, incl. translation and transcription`}
           />
+          <Stat label="Translations (30 days)" value={(month.translations ?? 0).toLocaleString()} hint="Answers translated" />
           <Stat
             label="Transcriptions (30 days)"
             value={month.transcriptions.toLocaleString()}

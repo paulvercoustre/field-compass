@@ -3,8 +3,10 @@ import React, { useState } from 'react';
 import { KoboQuestion, QualityIssue } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { AudioAnswer } from '../services/transcriptionApi';
+import { SubmissionTranslations, Translation } from '../services/translationApi';
 import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
 import { Player, RecordingDetails, RecordingStatus } from './transcription/AudioAnswers';
+import { TranslationBlock } from './translation/TranslationBlock';
 
 /** The submission's recorded answers, shown in place of their file names. */
 export interface Recordings {
@@ -19,16 +21,34 @@ interface SubmissionDataViewerProps {
   data: Record<string, any>;
   surveyConfig: SurveyConfig | null;
   recordings?: Recordings | null;
+  /** The submission's translations, shown under the answers they translate. */
+  translations?: SubmissionTranslations | null;
 }
+
+const questionPath = (question: KoboQuestion) =>
+  question.group_path ? `${question.group_path.replace(/^\/+|\/+$/g, '')}/${question.name}` : question.name;
 
 // The recorded answer to a question: matched on its group path ("voice/story"),
 // then on its name.
 const findRecording = (recordings: Recordings | null | undefined, question: KoboQuestion): AudioAnswer | undefined => {
   if (!recordings) return undefined;
-  const path = question.group_path ? `${question.group_path.replace(/^\/+|\/+$/g, '')}/${question.name}` : question.name;
+  const path = questionPath(question);
   return (
     recordings.answers.find((answer) => answer.question_path === path) ??
     recordings.answers.find((answer) => answer.question_path.split('/').pop() === question.name)
+  );
+};
+
+// An answer's translation: matched on its path, then on its name.
+const findTranslation = (
+  translations: SubmissionTranslations | null | undefined,
+  question: KoboQuestion | { name: string; group_path?: string }
+): Translation | undefined => {
+  if (!translations) return undefined;
+  const path = questionPath(question as KoboQuestion);
+  return (
+    translations.answers[path] ??
+    Object.entries(translations.answers).find(([key]) => key.split('/').pop() === question.name)?.[1]
   );
 };
 
@@ -64,9 +84,10 @@ interface QuestionRowProps {
   value: any;
   surveyConfig: SurveyConfig | null;
   isEven: boolean;
+  translation?: Translation;
 }
 
-const QuestionRow: React.FC<QuestionRowProps> = ({ question, value, surveyConfig, isEven }) => {
+const QuestionRow: React.FC<QuestionRowProps> = ({ question, value, surveyConfig, isEven, translation }) => {
   const label = getQuestionLabel(question.name, surveyConfig);
   const formatted = displayValue(value, question.name, surveyConfig);
   const isEmpty = value === null || value === undefined || value === '';
@@ -91,6 +112,11 @@ const QuestionRow: React.FC<QuestionRowProps> = ({ question, value, surveyConfig
       >
         {formatted}
       </span>
+      {translation && !isEmpty && (
+        <div className="col-span-2 empty:hidden">
+          <TranslationBlock translation={translation} />
+        </div>
+      )}
     </div>
   );
 };
@@ -100,11 +126,13 @@ interface RecordingRowProps {
   answer: AudioAnswer;
   recordings: Recordings;
   isEven: boolean;
+  translation?: Translation;
+  translationsToKobo?: boolean;
 }
 
 // An audio question: the player in place of the file name, and its
 // transcript across the full width underneath.
-const RecordingRow: React.FC<RecordingRowProps> = ({ label, answer, recordings, isEven }) => (
+const RecordingRow: React.FC<RecordingRowProps> = ({ label, answer, recordings, isEven, translation, translationsToKobo }) => (
   <div
     className={`grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-2.5 ${
       isEven ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900/20'
@@ -122,7 +150,13 @@ const RecordingRow: React.FC<RecordingRowProps> = ({ label, answer, recordings, 
       <Player koboId={recordings.koboId} answer={answer} />
     </div>
     <div className="col-span-2 empty:hidden">
-      <RecordingDetails answer={answer} sendToKobo={recordings.sendToKobo} issues={recordings.issues} />
+      <RecordingDetails
+        answer={answer}
+        sendToKobo={recordings.sendToKobo}
+        issues={recordings.issues}
+        translation={translation}
+        translationsToKobo={translationsToKobo}
+      />
     </div>
   </div>
 );
@@ -221,7 +255,7 @@ const RosterSection: React.FC<RosterSectionProps> = ({
   );
 };
 
-const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surveyConfig, recordings }) => {
+const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surveyConfig, recordings, translations }) => {
   const survey = surveyConfig?.config_data.kobo_tool?.survey ?? [];
 
   // Separate top-level and roster questions
@@ -248,10 +282,26 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surve
             {nonMeta.map(([key, val], idx) => {
               const question = { name: key, type: 'text', roster_name: null };
               const recording = findRecording(recordings, question);
+              const translation = findTranslation(translations, question);
               return recording && recordings ? (
-                <RecordingRow key={key} label={key} answer={recording} recordings={recordings} isEven={idx % 2 === 0} />
+                <RecordingRow
+                  key={key}
+                  label={key}
+                  answer={recording}
+                  recordings={recordings}
+                  isEven={idx % 2 === 0}
+                  translation={translation}
+                  translationsToKobo={translations?.send_to_kobo}
+                />
               ) : (
-                <QuestionRow key={key} question={question} value={val} surveyConfig={null} isEven={idx % 2 === 0} />
+                <QuestionRow
+                  key={key}
+                  question={question}
+                  value={val}
+                  surveyConfig={null}
+                  isEven={idx % 2 === 0}
+                  translation={translation}
+                />
               );
             })}
           </SectionCard>
@@ -279,6 +329,8 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surve
                   answer={recording}
                   recordings={recordings}
                   isEven={idx % 2 === 0}
+                  translation={findTranslation(translations, q)}
+                  translationsToKobo={translations?.send_to_kobo}
                 />
               );
             }
@@ -290,6 +342,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surve
                 value={value}
                 surveyConfig={surveyConfig}
                 isEven={idx % 2 === 0}
+                translation={q.type === 'text' ? findTranslation(translations, q) : undefined}
               />
             );
           })}

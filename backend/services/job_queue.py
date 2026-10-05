@@ -57,8 +57,8 @@ celery_app.conf.update(
         "services.transcription_worker.sweep_background_work": {"queue": "transcriptions"},
         "services.kobo_sync_worker.send_transcript_to_kobo_task": {"queue": "kobo_sync"},
         "services.kobo_sync_worker.send_translation_to_kobo_task": {"queue": "kobo_sync"},
-        # A translation is an AI call, like a review: same queue and provider.
-        "services.translation_worker.translate_transcript_task": {"queue": "qualitative_checks"},
+        # A translation is an AI call, like a review: the same queue.
+        "services.translation_worker.translate_answer_task": {"queue": "qualitative_checks"},
     },
     # Run by the worker's embedded beat (`-B`). The sweep is an idempotent
     # UPDATE, so a second beat from a scaled-out worker only repeats it.

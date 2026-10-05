@@ -16,6 +16,7 @@ import SuccessMessage from './ui/SuccessMessage';
 import ErrorMessage from './ui/ErrorMessage';
 import { inferSamplingMode } from '../utils/samplingMode';
 import { useSubmissionTranscripts } from './transcription/AudioAnswers';
+import { useSubmissionTranslations } from './translation/TranslationBlock';
 
 interface SubmissionDetailProps {
   submission: Submission | null;
@@ -255,6 +256,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
     submission?._id ?? null,
     submission ? `${submission.llm_check_status}:${submission.data_quality_issues.length}` : undefined
   );
+  // Translations, shown under the answers they translate.
+  const translations = useSubmissionTranslations(submission?._id ?? null);
 
   if (!submission) {
     return (
@@ -1322,6 +1325,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ submission, isLoadi
                           issues: data_quality_issues,
                         }
                       }
+                      translations={translations}
                     />
                 )}
             </div>

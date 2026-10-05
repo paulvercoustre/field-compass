@@ -80,6 +80,7 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
                   <tr>
                     <th className="py-2 pr-4 font-medium">Survey</th>
                     <th className="py-2 pr-4 font-medium">AI review</th>
+                    <th className="py-2 pr-4 font-medium">Translation</th>
                     <th className="py-2 font-medium">Transcription</th>
                   </tr>
                 </thead>
@@ -89,6 +90,7 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
                       .filter((row) => row.feature === 'qualitative_check')
                       .reduce((total, row) => total + row.calls - row.failed, 0);
                     const transcription = survey.transcription;
+                    const translation = survey.translation;
                     return (
                       <tr key={survey.survey_id} className="border-t border-gray-100 align-top dark:border-gray-800">
                         <td className="py-3 pr-4 font-medium text-gray-900 dark:text-white">{survey.survey_name}</td>
@@ -104,6 +106,23 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
                             <OwnKey label={survey.provider.label} amount={`${reviews.toLocaleString()} reviewed`} />
                           ) : (
                             <span className="text-xs text-gray-400 dark:text-gray-500">None</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4">
+                          {translation?.provider ? (
+                            <OwnKey
+                              label={translation.provider.label}
+                              amount={`${translation.own_key_translations.toLocaleString()} translated`}
+                            />
+                          ) : translation?.allowance ? (
+                            <Meter
+                              used={translation.allowance.used}
+                              inFlight={translation.allowance.in_flight}
+                              limit={translation.allowance.limit}
+                              label={`Included translations used in ${monthName} on ${survey.survey_name}`}
+                            />
+                          ) : (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">Off</span>
                           )}
                         </td>
                         <td className="py-3">

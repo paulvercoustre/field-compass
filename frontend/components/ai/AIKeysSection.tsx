@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  AI_FEATURES,
   AIConnection,
   AIKeyKind,
+  AIKeyUse,
   deleteAIConnection,
   describeAIError,
   KEY_KINDS,
@@ -29,9 +31,16 @@ export const AIStatusBadge: React.FC<{ status: AIConnection['status'] }> = ({ st
 
 const KIND_ORDER: AIKeyKind[] = ['review', 'transcription'];
 
-/** What a survey sends with a key of each kind, said where the surveys are chosen. */
-const SENT: Record<AIKeyKind, string> = {
-  review: 'the answers to the questions chosen for AI review, with their question labels',
+/** What a survey can use a key of each kind for: an AI model key serves two features, chosen apart. */
+const USES: Record<AIKeyKind, AIKeyUse[]> = {
+  review: ['review', 'translation'],
+  transcription: ['transcription'],
+};
+
+/** What a survey sends with a key for each feature, said where the surveys are chosen. */
+const SENT: Record<AIKeyUse, string> = {
+  review: 'the answers to the questions chosen for AI review',
+  translation: 'the answers chosen for translation',
   transcription: 'the recordings of the questions chosen for transcription',
 };
 
@@ -42,8 +51,10 @@ interface AIKeysSectionProps {
 
 /**
  * Account settings › AI integration › Your keys. Both kinds of key, in one
- * list with the same row, actions and survey picker. A survey uses at most
- * one key of each kind; without one it runs on the included usage.
+ * list with the same row, actions and survey picker. A survey picks at most
+ * one key per feature -- AI review, translation, transcription -- and an AI
+ * model key can serve a survey's AI review, its translation, or both. Without
+ * one, a feature runs on the included usage.
  */
 const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
   const [connections, setConnections] = useState<AIConnection[]>([]);
@@ -93,11 +104,11 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
     }
   };
 
-  /** Use (or stop using) a key for one survey; the survey leaves any other key of that kind. */
-  const toggleSurvey = async (connection: AIConnection, surveyId: string, use: boolean) => {
+  /** Use (or stop using) a key for one feature of one survey; it leaves any other key it used for that. */
+  const toggleSurvey = async (connection: AIConnection, surveyId: string, use: AIKeyUse, on: boolean) => {
     setBusyId(connection.connection_id);
     try {
-      await setSurveyAIConnection(surveyId, use ? connection.connection_id : null, connection.kind);
+      await setSurveyAIConnection(surveyId, on ? connection.connection_id : null, use);
       setConnections(await listAIConnections());
       onChange?.();
     } catch (err) {
@@ -123,8 +134,11 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
     }
   };
 
-  const keyFor = (kind: AIKeyKind, surveyId: string) =>
-    connections.find((c) => c.kind === kind && c.surveys.some((s) => s.survey_id === surveyId));
+  const keyFor = (use: AIKeyUse, surveyId: string) =>
+    connections.find(
+      (c) =>
+        c.kind === AI_FEATURES[use].kind && c.surveys.some((s) => s.survey_id === surveyId && s.uses.includes(use))
+    );
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-card dark:border-gray-800 dark:bg-gray-900">
@@ -132,7 +146,7 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
         <div>
           <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Your keys</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Choose which surveys use each key. Surveys without one run on the included usage.
+            Choose which surveys use each key, and for what. Without one, a feature runs on the included usage.
           </p>
         </div>
         <Button variant="secondary" icon={<PlusIcon />} onClick={() => setEditing({ kind: 'review' })}>
@@ -155,6 +169,9 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
             <div key={kind} className="mt-5">
               <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 {KEY_KINDS[kind].name}
+                <span className="ml-1.5 font-normal normal-case tracking-normal">
+                  · {USES[kind].map((use) => AI_FEATURES[use].name).join(', ')}
+                </span>
               </h3>
               {keys.length === 0 ? (
                 <div className="flex items-center justify-between gap-3 border-t border-gray-100 py-3 dark:border-gray-800">
@@ -168,13 +185,19 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
                   {keys.map((connection) => {
                     const busy = busyId === connection.connection_id;
                     const choosing = choosingSurveysFor === connection.connection_id;
+                    const usedFor = USES[kind]
+                      .map((use) => ({ use, count: connection.surveys.filter((survey) => survey.uses.includes(use)).length }))
+                      .filter(({ count }) => count > 0)
+                      .map(({ use, count }) =>
+                        USES[kind].length > 1
+                          ? `${AI_FEATURES[use].name}: ${count} ${count === 1 ? 'survey' : 'surveys'}`
+                          : `${count} ${count === 1 ? 'survey' : 'surveys'}`
+                      );
                     const detail = [
                       providerName(connection.preset),
                       connection.kind === 'review' ? connection.check_model : null,
                       connection.api_key_hint ? `••••${connection.api_key_hint}` : null,
-                      connection.surveys.length
-                        ? `${connection.surveys.length} ${connection.surveys.length === 1 ? 'survey' : 'surveys'}`
-                        : 'no surveys yet',
+                      usedFor.length ? usedFor.join(', ') : 'no surveys yet',
                     ].filter(Boolean);
                     return (
                       <li key={connection.connection_id} className="py-3">
@@ -224,30 +247,55 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
                             {ownedSurveys.length === 0 ? (
                               <p className="text-xs text-gray-500 dark:text-gray-400">You don't own any surveys yet.</p>
                             ) : (
-                              <div className="space-y-1.5">
-                                {ownedSurveys.map((survey) => {
-                                  const current = keyFor(kind, survey.survey_id);
-                                  const usesThis = current?.connection_id === connection.connection_id;
-                                  return (
-                                    <label key={survey.survey_id} className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
-                                      <input
-                                        type="checkbox"
-                                        checked={usesThis}
-                                        disabled={busy}
-                                        onChange={(e) => toggleSurvey(connection, survey.survey_id, e.target.checked)}
-                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                      />
-                                      {survey.survey_name}
-                                      {current && !usesThis && (
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">(uses {current.label})</span>
+                              <table className="w-full text-left text-sm">
+                                {USES[kind].length > 1 && (
+                                  <thead className="text-xs text-gray-500 dark:text-gray-400">
+                                    <tr>
+                                      <th className="pb-1 pr-3 font-medium">Survey</th>
+                                      {USES[kind].map((use) => (
+                                        <th key={use} className="pb-1 pr-3 font-medium">
+                                          {AI_FEATURES[use].name}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                )}
+                                <tbody>
+                                  {ownedSurveys.map((survey) => (
+                                    <tr key={survey.survey_id} className="align-top">
+                                      {USES[kind].length > 1 && (
+                                        <td className="py-1 pr-3 text-gray-900 dark:text-white">{survey.survey_name}</td>
                                       )}
-                                    </label>
-                                  );
-                                })}
-                              </div>
+                                      {USES[kind].map((use) => {
+                                        const current = keyFor(use, survey.survey_id);
+                                        const usesThis = current?.connection_id === connection.connection_id;
+                                        return (
+                                          <td key={use} className="py-1 pr-3">
+                                            <label className="flex items-center gap-2 text-gray-900 dark:text-white">
+                                              <input
+                                                type="checkbox"
+                                                checked={usesThis}
+                                                disabled={busy}
+                                                onChange={(e) => toggleSurvey(connection, survey.survey_id, use, e.target.checked)}
+                                                aria-label={`${survey.survey_name}: ${AI_FEATURES[use].name}`}
+                                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                              />
+                                              {USES[kind].length === 1 && survey.survey_name}
+                                              {current && !usesThis && (
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">(uses {current.label})</span>
+                                              )}
+                                            </label>
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
                             )}
                             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                              For these surveys, {SENT[kind]} are sent to {providerName(connection.preset)}.
+                              For these surveys, {USES[kind].map((use) => SENT[use]).join(', or ')} are sent to{' '}
+                              {providerName(connection.preset)}.
                             </p>
                           </fieldset>
                         )}

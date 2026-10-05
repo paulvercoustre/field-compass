@@ -102,8 +102,20 @@ async def get_usage(
             func.count(AIUsage.usage_id),
             func.coalesce(func.sum(AIUsage.cost_usd_micros), 0),
         )
-        .filter(AIUsage.created_at >= since_30, AIUsage.feature != "transcription")
+        .filter(
+            AIUsage.created_at >= since_30,
+            AIUsage.feature.notin_(("transcription", "translation")),
+        )
         .one()
+    )
+    translated_30 = (
+        db.query(func.count(AIUsage.usage_id))
+        .filter(
+            AIUsage.created_at >= since_30,
+            AIUsage.feature == "translation",
+            AIUsage.outcome == "ok",
+        )
+        .scalar()
     )
     # What the included allowance cost you: calls on the operator's key only
     operator_spend_30 = (
@@ -224,6 +236,7 @@ async def get_usage(
             "ai_reviews": ai_30[0],
             "ai_cost_usd": round(ai_30[1] / 1_000_000, 2),
             "operator_ai_spend_usd": round(operator_spend_30 / 1_000_000, 2),
+            "translations": translated_30 or 0,
             "transcriptions": transcribed_30[0],
             "audio_minutes": round(float(transcribed_30[1]) / 60, 1),
         },

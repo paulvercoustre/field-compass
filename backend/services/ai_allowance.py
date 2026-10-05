@@ -2,10 +2,9 @@
 Included AI usage: how much a survey may spend on the operator's key.
 
 Surveys without their own provider run AI checks on the operator's key, up
-to a monthly number of checked submissions per survey. Translating a
-submission's transcripts counts the same way, against the same number: a
-submission reviewed and translated counts once. AI rule writing on
-that key is limited per user per day. Both are counted from ``ai_usage``, so
+to a monthly number of checked submissions per survey, and translate answers
+up to a separate monthly number of translations per survey; AI rule writing on
+that key is limited per user per day. All are counted from ``ai_usage``, so
 the limit is what was actually spent, not an estimate. A survey with its own
 provider has no Field Compass limit -- its provider's apply.
 
@@ -25,7 +24,7 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import AIUsage, SubmissionCurrent, TranscriptTranslation
+from database.models import AIUsage, AnswerTranslation, SubmissionCurrent
 from services.ai_usage import QUALITATIVE_CHECK, RULE_GENERATION, RULE_SUGGESTION, TRANSLATION
 
 NOT_RUN_ALLOWANCE = "not_run_allowance"
@@ -33,10 +32,6 @@ NOT_RUN_ALLOWANCE = "not_run_allowance"
 # Outcomes that cost credit: the provider produced output. A bad_response
 # was still generated and billed.
 _SPENT = ("ok", "bad_response")
-
-# Work that counts a submission against the included AI reviews.
-_PER_SUBMISSION = (QUALITATIVE_CHECK, TRANSLATION)
-_OPEN = ("pending", "running")
 
 
 def _int_env(name: str, default: int) -> int:
@@ -48,6 +43,10 @@ def _int_env(name: str, default: int) -> int:
 
 def checks_per_survey_month() -> int:
     return _int_env("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", 200)
+
+
+def translations_per_survey_month() -> int:
+    return _int_env("AI_ALLOWANCE_TRANSLATIONS_PER_SURVEY_MONTH", 500)
 
 
 def rule_requests_per_user_day() -> int:
@@ -81,12 +80,12 @@ def _day_start(now: datetime | None = None) -> datetime:
 
 
 def _spent_submissions(db: Session, survey_id: UUID, now: datetime | None = None):
-    """Submissions with a check or translation this month that cost credit on the operator's key."""
+    """Submissions with a check this month that cost credit on the operator's key."""
     return (
         db.query(AIUsage.submission_id)
         .filter(
             AIUsage.survey_id == survey_id,
-            AIUsage.feature.in_(_PER_SUBMISSION),
+            AIUsage.feature == QUALITATIVE_CHECK,
             # Checks always name their submission; without this a NULL would
             # make the NOT IN below match nothing at all.
             AIUsage.submission_id.isnot(None),
@@ -115,31 +114,20 @@ def checks_used(db: Session, survey_id: UUID, now: datetime | None = None) -> in
 
 def checks_in_flight(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
     """
-    Submissions with a check or translation queued or running, not already
-    counted as used.
+    Checks queued or running that are not already counted as used.
 
     A submission retrying after a billed reply is both pending and spent;
-    it holds one allowance slot, not two. So does one being reviewed and
-    translated at once.
+    it holds one allowance slot, not two.
     """
-    return len(submissions_in_flight(db, survey_id) - counted_submission_ids(db, survey_id, now))
-
-
-def submissions_in_flight(db: Session, survey_id: UUID) -> set[int]:
-    """Submissions with a check or a translation queued or running."""
-    reviews = db.query(SubmissionCurrent._id).filter(
-        SubmissionCurrent.survey_id == survey_id,
-        SubmissionCurrent.llm_check_status.in_(_OPEN),
-    )
-    translations = (
-        db.query(TranscriptTranslation.submission_id)
+    return (
+        db.query(func.count(SubmissionCurrent._id))
         .filter(
-            TranscriptTranslation.survey_id == survey_id,
-            TranscriptTranslation.status.in_(_OPEN),
+            SubmissionCurrent.survey_id == survey_id,
+            SubmissionCurrent.llm_check_status.in_(("pending", "running")),
+            ~SubmissionCurrent._id.in_(_spent_submissions(db, survey_id, now)),
         )
-        .distinct()
+        .scalar()
     )
-    return {i for (i,) in reviews} | {i for (i,) in translations}
 
 
 def checks_remaining(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
@@ -174,4 +162,56 @@ def not_run_message(now: datetime | None = None) -> str:
     return (
         f"allowance: This survey has used its included AI reviews for {month}. They resume next "
         "month, or straight away with your own AI key."
+    )
+
+
+# --- Translations ---------------------------------------------------------------
+
+
+def translations_used(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
+    """
+    Answers this survey had translated on the operator's key this month.
+
+    Counted per call that cost credit: one answer, one translation (a retry
+    after a billed but unusable reply counts again: it was billed again).
+    """
+    return (
+        db.query(func.count(AIUsage.usage_id))
+        .filter(
+            AIUsage.survey_id == survey_id,
+            AIUsage.feature == TRANSLATION,
+            AIUsage.connection_id.is_(None),
+            AIUsage.outcome.in_(_SPENT),
+            AIUsage.created_at >= month_start(now),
+        )
+        .scalar()
+    ) or 0
+
+
+def translations_in_flight(db: Session, survey_id: UUID) -> int:
+    """Translations queued or running, each holding one allowance slot."""
+    return (
+        db.query(func.count(AnswerTranslation.translation_id))
+        .filter(
+            AnswerTranslation.survey_id == survey_id,
+            AnswerTranslation.status.in_(("pending", "running")),
+        )
+        .scalar()
+    ) or 0
+
+
+def translations_remaining(db: Session, survey_id: UUID, now: datetime | None = None) -> int:
+    """How many more answers this survey may have translated on the operator's key this month."""
+    if not allowance_enabled():
+        return 0
+    used = translations_used(db, survey_id, now) + translations_in_flight(db, survey_id)
+    return max(0, translations_per_survey_month() - used)
+
+
+def translation_not_run_message(now: datetime | None = None) -> str:
+    """Stored as last_error for a translation the allowance did not cover."""
+    month = month_start(now).strftime("%B")
+    return (
+        f"allowance: This survey has used its included translations for {month}. They resume "
+        "next month, or straight away with your own AI key for translation."
     )
