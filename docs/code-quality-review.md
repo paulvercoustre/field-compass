@@ -331,3 +331,30 @@ The optional mechanical-fix commit is empty, so I did not make one:
 - knip's unused exports are either a deliberate icon set (`components/ui/icons.tsx`) or would require deleting code rather than just dropping an `export`.
 
 The 3 hits from a newer ruff belong in step 3, together with the version bump, so that CI and local runs agree.
+
+## 6. Status on this branch
+
+All ten steps of §5 are implemented on `claude/eloquent-hamilton-w1wsb9`, one or more commits per step. Every commit leaves these green: ruff, pyright, pytest (865 passed, 3 skipped), the Postgres migration check (a fresh database and an upgraded one end with identical schemas), tsc, knip, Vitest and the Vite build.
+
+Choices made along the way:
+
+- **Missing answers under a sampling filter (F4).** A submission with no answer to a filtered question is now excluded, in `/quality/overview` and in `/submissions` alike. Before, only `/submissions` did this. The rule lives once, in `services/submission_filters.py`.
+- **B904** is enabled. The 14 sites left after F3 now give a cause: `from None` where bad input becomes a 4xx, and the caught exception where an upstream failure is translated.
+- **`SurveySettingsPage` (F8)** went from 2,477 lines to 1,488. These moved out:
+  - `useCollectionTargets` and `CollectionTargetsEditor`, shared with `CreateSurveyPage`
+  - `SurveyAccessTab`
+  - `useSectionEditor`, which replaces eleven edit/save flags and fourteen handlers
+  - `SectionActions` and `SectionEditButton`
+  - `OutlierChecksSection` and `AiReviewSection`
+
+  The general-checks card, the Kobo tool card and the custom checks stay in the page. They share enough state (form, collection dates, targets) that splitting them now would mostly add props.
+- **`xlsx`** is loaded on demand. The main bundle went from 1,512 kB to 1,156 kB.
+
+Not done, deliberately:
+
+- **FAST002 / `Annotated[...]`** (161 sites). It is mechanical, but it touches every route signature. It is better as its own PR, after which the B008 ignore can go.
+- **Settings read with `os.getenv` in 22 modules.** These should become one settings object. It is low risk to leave, and the change touches deployment configuration.
+- **Injecting the ETL/pipeline queuers** so tests stop patching module globals.
+- **`test_hfc_engine.py`** still calls private methods in places. `run_checks` covers the behaviour, but the private-method tests were kept rather than rewritten.
+- **Prettier.** Adopting a formatter for the frontend is the owner's call. It would reformat every file.
+- **`xlsx` from `cdn.sheetjs.com`.** This is unchanged. `npm ci` still needs that host.
