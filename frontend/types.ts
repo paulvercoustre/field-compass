@@ -157,9 +157,6 @@ export interface ProgressData {
   byColumn: Record<string, ProgressByColumn[]>;  // Key is column name, value is list of progress by column value
   detailed: DetailedProgress[];
   samplingColumns: string[];
-  // Legacy fields for backward compatibility
-  byDistrict?: ProgressByColumn[];
-  byLivelihood?: ProgressByColumn[];
 }
 
 export interface EnumeratorCollectionStats {

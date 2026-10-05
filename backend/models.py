@@ -246,14 +246,6 @@ class ProgressData(BaseModel):
         default_factory=list, description="Names of sampling columns used for disaggregation"
     )
 
-    # Legacy fields for backward compatibility (deprecated, use byColumn instead)
-    byDistrict: list[ProgressByColumn] = Field(
-        default_factory=list, description="Deprecated: Use byColumn instead"
-    )
-    byLivelihood: list[ProgressByColumn] = Field(
-        default_factory=list, description="Deprecated: Use byColumn instead"
-    )
-
 
 # ============================================================================
 # Enumerator Performance Models

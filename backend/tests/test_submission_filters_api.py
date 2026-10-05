@@ -182,3 +182,32 @@ class TestSubmissionsList:
         )
         body = response.json()
         assert (body["total"], len(body["submissions"]), body["page"]) == (3, 1, 2)
+
+
+class TestNoAnswerUnderAFilter:
+    """Both endpoints leave out a submission with no answer to a filtered
+    question. The overview used to compare str(None), so filtering on the
+    literal "None" matched every unanswered submission."""
+
+    @pytest.fixture
+    def unanswered(self, survey):
+        _add(survey, {"enumerator_id": "e1", "district": "north"})
+        _add(survey, {"enumerator_id": "e2"})
+        _add(survey, {"enumerator_id": "e3", "district": ""})
+        return survey
+
+    @pytest.mark.parametrize("values", ["north", "north,None", "None"])
+    def test_overview(self, client, unanswered, values):  # noqa: F811
+        body = client.get(
+            "/api/quality/overview",
+            params={"survey_id": unanswered, "sampling_filters": f"district={values}"},
+        ).json()
+        assert body["status_summary"]["total_submissions"] == (0 if values == "None" else 1)
+
+    @pytest.mark.parametrize("values", ["north", "north,None", "None"])
+    def test_submissions(self, client, unanswered, values):  # noqa: F811
+        body = client.get(
+            "/api/submissions",
+            params={"survey_id": unanswered, "sampling_filters": f"district={values}"},
+        ).json()
+        assert body["total"] == (0 if values == "None" else 1)

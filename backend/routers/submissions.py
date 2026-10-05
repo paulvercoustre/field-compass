@@ -16,7 +16,6 @@ from database.models import AudioTranscript, SubmissionCurrent, User
 from database.models import SubmissionHistory as SubmissionHistoryORM
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
-from forms.answers import answer_value
 from models import (
     JsonPatch,
     QualityIssue,
@@ -29,7 +28,8 @@ from models import (
 from services.auth import get_current_active_user, get_user_kobo_token
 from services.database import get_db
 from services.permissions import parse_uuid, require_survey_access
-from services.survey_config import get_enumerator_field
+from services.submission_filters import filter_by_answers, parse_list, parse_sampling_filters
+from services.survey_config import get_enumerator_field, get_sampling_cols
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -41,15 +41,17 @@ def _orm_to_pydantic_submission(orm_submission: SubmissionCurrent) -> Submission
     quality_issues = [QualityIssue(**issue) for issue in orm_submission.data_quality_issues or []]
 
     return Submission(
-        _id=orm_submission._id,  # validation_alias will handle the underscore
-        _uuid=orm_submission._uuid,
-        _submission_time=orm_submission._submission_time,
+        # Field names; the model serializes them as Kobo's _id, _uuid, ...
+        id=orm_submission._id,
+        uuid=orm_submission._uuid,
+        submission_time=orm_submission._submission_time,
         end=orm_submission.end,
         submission_data=orm_submission.submission_data,
-        is_edited=orm_submission.is_edited,
-        has_edit_history=orm_submission.has_edit_history,
+        # Nullable columns with defaults; a NULL reads as the default.
+        is_edited=bool(orm_submission.is_edited),
+        has_edit_history=bool(orm_submission.has_edit_history),
         data_quality_issues=quality_issues,
-        qa_status=orm_submission.qa_status,
+        qa_status=orm_submission.qa_status or "PENDING_APPROVAL",
         kobo_validation_status=orm_submission.kobo_validation_status,
         kobo_edit_url=orm_submission.kobo_edit_url,
         reviewer_notes=orm_submission.reviewer_notes,
@@ -108,7 +110,7 @@ def _transcript_summaries(
 
 
 @router.get("/submissions", response_model=SubmissionListResponse)
-async def get_submissions(  # noqa: C901 -- split pending, see docs/code-quality-review.md
+async def get_submissions(
     qa_status: str | None = Query(
         None, description="Filter by QA status (comma-separated for multiple)"
     ),
@@ -162,41 +164,16 @@ async def get_submissions(  # noqa: C901 -- split pending, see docs/code-quality
     # Build query
     query = db.query(SubmissionCurrent).filter(SubmissionCurrent.survey_id == survey_uuid)
 
-    # Apply qa_status filter
-    if qa_status:
-        qa_statuses = [s.strip() for s in qa_status.split(",") if s.strip()]
-        if len(qa_statuses) == 1:
-            query = query.filter(SubmissionCurrent.qa_status == qa_statuses[0])
-        else:
-            query = query.filter(SubmissionCurrent.qa_status.in_(qa_statuses))
+    if qa_statuses := parse_list(qa_status):
+        query = query.filter(SubmissionCurrent.qa_status.in_(qa_statuses))
 
-    # Apply validation_status filter
-    if validation_status:
-        validation_statuses = [s.strip() for s in validation_status.split(",") if s.strip()]
-        # Handle "Not Reviewed" as NULL
+    # "Not Reviewed" is a submission Kobo has no validation status for.
+    if validation_statuses := parse_list(validation_status):
+        reviewed = [v for v in validation_statuses if v != "Not Reviewed"]
+        conditions = [SubmissionCurrent.kobo_validation_status.in_(reviewed)] if reviewed else []
         if "Not Reviewed" in validation_statuses:
-            validation_statuses.remove("Not Reviewed")
-            if len(validation_statuses) == 0:
-                # Only "Not Reviewed" was specified
-                query = query.filter(SubmissionCurrent.kobo_validation_status.is_(None))
-            else:
-                # "Not Reviewed" plus other statuses
-                query = query.filter(
-                    or_(
-                        SubmissionCurrent.kobo_validation_status.is_(None),
-                        SubmissionCurrent.kobo_validation_status.in_(validation_statuses),
-                    )
-                )
-        else:
-            # No "Not Reviewed" specified
-            if len(validation_statuses) == 1:
-                query = query.filter(
-                    SubmissionCurrent.kobo_validation_status == validation_statuses[0]
-                )
-            else:
-                query = query.filter(
-                    SubmissionCurrent.kobo_validation_status.in_(validation_statuses)
-                )
+            conditions.append(SubmissionCurrent.kobo_validation_status.is_(None))
+        query = query.filter(or_(*conditions))
 
     if ai_review:
         statuses = {
@@ -228,55 +205,14 @@ async def get_submissions(  # noqa: C901 -- split pending, see docs/code-quality
     # in Python is more reliable for path-based field matching
     orm_submissions = query.order_by(SubmissionCurrent._submission_time.desc()).all()
 
-    # Get enumerator field name from survey config
-    enumerator_field = None
-    if survey_config and survey_config.config_data:
-        config = survey_config.config_data
-        enumerator_field = get_enumerator_field(config)
-
-    # Get sampling columns from survey config
-    sampling_cols = []
-    if survey_config and survey_config.config_data:
-        config = survey_config.config_data
-        sampling_frame_config = config.get("sampling_frame", {})
-        sampling_cols = sampling_frame_config.get("sampling_cols", [])
-
-    # Filter by enumerator if provided
-    if enumerator and enumerator_field:
-        enumerators = [e.strip() for e in enumerator.split(",") if e.strip()]
-        filtered_submissions = []
-        for sub in orm_submissions:
-            if sub.submission_data:
-                enum_value = answer_value(sub.submission_data, enumerator_field)
-                if enum_value and str(enum_value) in enumerators:
-                    filtered_submissions.append(sub)
-        orm_submissions = filtered_submissions
-
-    # Filter by sampling filters if provided
-    if sampling_filters:
-        # Parse sampling filters: "variable1=value1,value2;variable2=value3"
-        sampling_filter_parts = [
-            part.strip() for part in sampling_filters.split(";") if part.strip()
-        ]
-
-        for filter_part in sampling_filter_parts:
-            if "=" not in filter_part:
-                continue
-
-            variable, values_str = filter_part.split("=", 1)
-            variable = variable.strip()
-            values = [v.strip() for v in values_str.split(",") if v.strip()]
-
-            if not values or variable not in sampling_cols:
-                continue
-
-            filtered_submissions = []
-            for sub in orm_submissions:
-                if sub.submission_data:
-                    var_value = answer_value(sub.submission_data, variable)
-                    if var_value and str(var_value) in values:
-                        filtered_submissions.append(sub)
-            orm_submissions = filtered_submissions
+    config = survey_config.config_data or {}
+    orm_submissions = filter_by_answers(
+        orm_submissions,
+        enumerator_field=get_enumerator_field(config),
+        enumerators=parse_list(enumerator),
+        sampling_filters=parse_sampling_filters(sampling_filters),
+        sampling_cols=get_sampling_cols(config),
+    )
 
     # Get total count after JSONB filtering
     total = len(orm_submissions)
