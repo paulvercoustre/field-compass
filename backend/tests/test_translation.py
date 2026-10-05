@@ -221,7 +221,7 @@ class TestKobosTranslations:
 
 class TestTextAnswers:
     def test_a_typed_answer_is_translated(self, test_db, survey, ai):
-        queuer, rows = _consider(test_db, survey, _answered(test_db, survey))
+        _consider(test_db, survey, _answered(test_db, survey))
         row = _row(test_db, "village")
         assert (row.source, row.status, row.language) == ("text", "pending", "eng")
         assert len(ai["translation_tasks"].sent) == 1

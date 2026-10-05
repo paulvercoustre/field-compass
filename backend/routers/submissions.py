@@ -38,10 +38,7 @@ logger = logging.getLogger(__name__)
 def _orm_to_pydantic_submission(orm_submission: SubmissionCurrent) -> Submission:
     """Convert ORM model to Pydantic model."""
     # Convert JSONB quality issues to Pydantic models
-    quality_issues = []
-    if orm_submission.data_quality_issues:
-        for issue in orm_submission.data_quality_issues:
-            quality_issues.append(QualityIssue(**issue))
+    quality_issues = [QualityIssue(**issue) for issue in orm_submission.data_quality_issues or []]
 
     return Submission(
         _id=orm_submission._id,  # validation_alias will handle the underscore
@@ -68,10 +65,7 @@ def _orm_to_pydantic_submission(orm_submission: SubmissionCurrent) -> Submission
 def _orm_to_pydantic_history(orm_history: SubmissionHistoryORM) -> SubmissionHistory:
     """Convert ORM history model to Pydantic model."""
     # Convert JSONB data_delta to JsonPatch models
-    patches = []
-    if orm_history.data_delta:
-        for patch in orm_history.data_delta:
-            patches.append(JsonPatch(**patch))
+    patches = [JsonPatch(**patch) for patch in orm_history.data_delta or []]
 
     return SubmissionHistory(
         history_id=orm_history.history_id,
@@ -104,7 +98,7 @@ def _get_field_value_from_jsonb(submission_data: dict[str, Any], field_name: str
 
     # Search for fields that end with the field name (path-based)
     # e.g., 'enumerator_id' should match 'sampling_information/enumerator_id'
-    for key in submission_data.keys():
+    for key in submission_data:
         if key.endswith(f"/{field_name}") or key == field_name:
             return submission_data[key]
 
@@ -144,7 +138,7 @@ def _transcript_summaries(
 
 
 @router.get("/submissions", response_model=SubmissionListResponse)
-async def get_submissions(
+async def get_submissions(  # noqa: C901 -- split pending, see docs/code-quality-review.md
     qa_status: str | None = Query(
         None, description="Filter by QA status (comma-separated for multiple)"
     ),
@@ -396,10 +390,7 @@ async def get_submission_history(
         .all()
     )
 
-    # Convert to Pydantic models
-    history = [_orm_to_pydantic_history(h) for h in orm_history]
-
-    return history
+    return [_orm_to_pydantic_history(h) for h in orm_history]
 
 
 @router.get("/submissions/{kobo_id}/kobo-edit-url")
@@ -470,7 +461,7 @@ async def get_kobo_edit_url(
         return {"url": response["url"]}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get Kobo edit URL: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get Kobo edit URL: {e!s}")
 
 
 @router.patch("/submissions/{kobo_id}/validation-status", response_model=Submission)
@@ -547,10 +538,9 @@ async def update_submission_validation_status(
         hfc_engine = HFCEngine(db, survey_config)
 
         # Convert JSONB quality issues to QualityIssue objects
-        quality_issues = []
-        if submission.data_quality_issues:
-            for issue_dict in submission.data_quality_issues:
-                quality_issues.append(QualityIssue(**issue_dict))
+        quality_issues = [
+            QualityIssue(**issue_dict) for issue_dict in submission.data_quality_issues or []
+        ]
 
         # Determine new qa_status
         new_qa_status = hfc_engine.determine_qa_status(
@@ -579,12 +569,12 @@ async def update_submission_validation_status(
         if hasattr(e, "response") and e.response is not None:
             logger.error(f"Response: {e.response.text[:500]}")
         raise HTTPException(
-            status_code=502, detail=f"Failed to update validation status in Kobo: {str(e)}"
+            status_code=502, detail=f"Failed to update validation status in Kobo: {e!s}"
         )
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating validation status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update validation status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update validation status: {e!s}")
 
 
 @router.patch("/submissions/{kobo_id}/reviewer-notes", response_model=Submission)
@@ -632,4 +622,4 @@ async def update_submission_reviewer_notes(
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating reviewer notes: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update reviewer notes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update reviewer notes: {e!s}")

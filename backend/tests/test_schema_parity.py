@@ -36,8 +36,7 @@ def _strip_comments(sql: str) -> str:
     contain braces and commas; leaving them in would confuse the parser.
     """
     sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.DOTALL)
-    sql = re.sub(r"--[^\n]*", "", sql)
-    return sql
+    return re.sub(r"--[^\n]*", "", sql)
 
 
 def _split_top_level(body: str) -> list[str]:
@@ -103,8 +102,8 @@ def parse_schema_sql(sql: str) -> dict[str, set[str]]:
     for match in create_re.finditer(sql):
         table = match.group(1).lower()
         columns: set[str] = set()
-        for item in _split_top_level(_table_body(sql, match.start())):
-            item = item.strip()
+        for raw_item in _split_top_level(_table_body(sql, match.start())):
+            item = raw_item.strip()
             if not item:
                 continue
             # Split on whitespace OR "(", so an inline constraint written

@@ -165,15 +165,14 @@ def _to_python(expression: str, refs: dict[str, str]) -> str:
         return refs.setdefault(name, f"_ref{len(refs)}")
 
     parts = []
-    for index, part in enumerate(_LITERAL.split(expression)):
+    for index, piece in enumerate(_LITERAL.split(expression)):
         if index % 2:  # a quoted literal
-            parts.append(part)
+            parts.append(piece)
             continue
-        part = _REF.sub(ref_name, part)
-        part = _EQUALS.sub("==", part)
+        rewritten = _EQUALS.sub("==", _REF.sub(ref_name, piece))
         for pattern, replacement in _REWRITES:
-            part = pattern.sub(replacement, part)
-        parts.append(part)
+            rewritten = pattern.sub(replacement, rewritten)
+        parts.append(rewritten)
     return "".join(parts)
 
 

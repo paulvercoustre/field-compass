@@ -14,6 +14,13 @@ select = [
     "B",   # flake8-bugbear
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "PERF", # perflint
+    "RUF",  # ruff-specific
+    "PLE",  # pylint errors
+    "PLW",  # pylint warnings
+    "C90",  # mccabe complexity
 ]
 
 # Ignore specific rules
@@ -33,9 +40,19 @@ ignore = [
 fixable = ["ALL"]
 unfixable = []
 
+# Typographic characters used on purpose in user-facing text.
+allowed-confusables = ["–", "›", "ℹ", "×"]
+
+# A ceiling, not a target. The few functions above it carry a noqa until they
+# are split; lower the ceiling as they are.
+[lint.mccabe]
+max-complexity = 25
+
 [lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Allow unused imports in __init__.py
-"tests/**/*.py" = ["E501"]  # Allow long lines in tests
+# Long lines are fine in tests, and so are mutable class attributes: test
+# classes use them as fixture tables, never as shared state.
+"tests/**/*.py" = ["E501", "RUF012"]
 
 # Standalone CLI scripts must call sys.path.insert(0, ".") before they can
 # import the application packages, so their imports legitimately come after

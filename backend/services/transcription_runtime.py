@@ -179,7 +179,7 @@ def _after_any(db, row: AudioTranscript, survey: SurveyConfig | None) -> None:
     finish_if_done(db, row.run_id)
 
 
-def run_transcription_job(
+def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality-review.md
     payload: dict[str, Any], job_id: str, final_attempt: bool = True
 ) -> dict[str, Any]:
     """

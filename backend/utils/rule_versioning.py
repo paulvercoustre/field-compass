@@ -25,8 +25,7 @@ def _normalize_text(value: Any) -> str:
         return ""
 
     # Collapse repeated whitespace and normalize casing for trivial mismatches.
-    text = re.sub(r"\s+", " ", text)
-    return text
+    return re.sub(r"\s+", " ", text)
 
 
 def generate_llm_rules_hash(config_data: dict[str, Any], qualitative_model: str) -> str:

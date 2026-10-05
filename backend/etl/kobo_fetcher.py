@@ -102,6 +102,7 @@ class KoboFetcher:
                 else:
                     logger.error(f"Request failed after {max_retries} attempts: {e}")
                     raise
+        raise ValueError(f"max_retries must be at least 1, got {max_retries}")
 
     def get_asset_submissions(
         self,
@@ -390,29 +391,28 @@ class KoboFetcher:
             response.raise_for_status()
             # DELETE may return empty response
             return {} if not response.content else response.json()
-        else:
-            # Map labels to Kobo UIDs
-            uid_map = {
-                "Approved": "validation_status_approved",
-                "Not Approved": "validation_status_not_approved",
-                "On Hold": "validation_status_on_hold",
-            }
-            # Build the payload - Kobo expects dot notation key: "validation_status.uid"
-            payload = {"validation_status.uid": uid_map.get(validation_status)}
+        # Map labels to Kobo UIDs
+        uid_map = {
+            "Approved": "validation_status_approved",
+            "Not Approved": "validation_status_not_approved",
+            "On Hold": "validation_status_on_hold",
+        }
+        # Build the payload - Kobo expects dot notation key: "validation_status.uid"
+        payload = {"validation_status.uid": uid_map.get(validation_status)}
 
-            logger.debug(f"Sending validation status update to {url} with payload: {payload}")
+        logger.debug(f"Sending validation status update to {url} with payload: {payload}")
 
-            # Use PATCH to update the validation status
-            response = self.session.patch(url, json=payload, timeout=30)
+        # Use PATCH to update the validation status
+        response = self.session.patch(url, json=payload, timeout=30)
 
-            # Log response for debugging
-            if not response.ok:
-                logger.error(
-                    f"Kobo API error response: Status {response.status_code}, Body: {response.text[:1000]}"
-                )
+        # Log response for debugging
+        if not response.ok:
+            logger.error(
+                f"Kobo API error response: Status {response.status_code}, Body: {response.text[:1000]}"
+            )
 
-            response.raise_for_status()
-            return response.json()
+        response.raise_for_status()
+        return response.json()
 
 
 def create_fetcher_from_env() -> KoboFetcher:

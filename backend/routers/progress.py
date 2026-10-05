@@ -88,7 +88,7 @@ def _get_field_value(submission_data: dict[str, Any], field_name: str) -> Any:
 
     # Search for fields that end with the field name (path-based)
     # e.g., 'sampling_admin2' should match 'sampling_information/sampling_admin2'
-    for key in submission_data.keys():
+    for key in submission_data:
         if key.endswith(f"/{field_name}") or key == field_name:
             return submission_data[key]
 
@@ -434,7 +434,7 @@ async def get_progress_data(
 
 
 @router.get("/performance", response_model=PerformanceData)
-async def get_performance_data(
+async def get_performance_data(  # noqa: C901 -- split pending, see docs/code-quality-review.md
     survey_id: str = Query(..., description="Survey ID (UUID) - required"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),

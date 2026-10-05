@@ -316,7 +316,7 @@ async def delete_survey(
     except Exception as e:
         db.rollback()
         logger.error(f"Error deleting survey {survey_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to delete survey: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete survey: {e!s}")
 
 
 # =============================================================================

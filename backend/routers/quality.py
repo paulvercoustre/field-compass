@@ -3,6 +3,7 @@ Quality Overview API endpoints.
 Provides aggregated quality metrics for the quality dashboard.
 """
 
+import contextlib
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
@@ -45,7 +46,7 @@ def _get_field_value_from_jsonb(submission_data: dict[str, Any], field_name: str
         return submission_data[field_name]
 
     # Search for fields that end with the field name (path-based)
-    for key in submission_data.keys():
+    for key in submission_data:
         if key.endswith(f"/{field_name}") or key == field_name:
             return submission_data[key]
 
@@ -252,10 +253,8 @@ async def get_quality_overview(
 
         active_time = (sub.submission_data or {}).get("active_interview_time")
         if active_time is not None:
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 active_durations.append(float(active_time))
-            except (ValueError, TypeError):
-                pass
 
         # Count each issue type (track unique submissions per issue type)
         seen_checks = set()

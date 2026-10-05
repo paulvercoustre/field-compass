@@ -42,8 +42,7 @@ def create_test_engine():
         def load_dialect_impl(self, dialect):
             if dialect.name == "sqlite":
                 return dialect.type_descriptor(JSON())
-            else:
-                return dialect.type_descriptor(JSONB())
+            return dialect.type_descriptor(JSONB())
 
     class UUIDForSQLite(TypeDecorator):
         """UUID type that uses String for SQLite."""
@@ -54,8 +53,7 @@ def create_test_engine():
         def load_dialect_impl(self, dialect):
             if dialect.name == "sqlite":
                 return dialect.type_descriptor(String(36))
-            else:
-                return dialect.type_descriptor(PostgresUUID(as_uuid=True))
+            return dialect.type_descriptor(PostgresUUID(as_uuid=True))
 
         def process_bind_param(self, value, dialect):
             """Convert UUID to string for SQLite."""
@@ -924,7 +922,7 @@ class TestProgressByVariable:
         assert rows["south"]["target"] == 20
         assert rows["south"]["progress"] == 0.0
 
-        detailed = {tuple(row["values"].values())[0]: row for row in payload["detailed"]}
+        detailed = {next(iter(row["values"].values())): row for row in payload["detailed"]}
         assert detailed["south"]["conducted"] == 0
         assert detailed["south"]["target"] == 20
         assert "Unknown" not in detailed

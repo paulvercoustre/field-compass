@@ -322,7 +322,7 @@ class TestTranscriptsFromKobo:
 
     def test_a_queued_transcription_is_dropped_when_kobo_has_one(self, test_db, survey, env):
         submission = _submission(test_db, survey)
-        _, rows = _queue(test_db, survey, submission)
+        _queue(test_db, survey, submission)
         queued = test_db.query(AudioTranscript).one()
         job = {"transcript_id": queued.transcript_id, "input_hash": queued.input_hash}
         _in_kobo(submission, test_db)

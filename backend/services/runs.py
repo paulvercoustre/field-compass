@@ -178,7 +178,7 @@ def _eta(open_count: int, finished: int, recent: int) -> int | None:
     if open_count <= 0 or finished < _ETA_AFTER or recent <= 0:
         return None
     rate = recent / _RATE_WINDOW.total_seconds()
-    return int(round(open_count / rate))
+    return round(open_count / rate)
 
 
 def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, Any]:

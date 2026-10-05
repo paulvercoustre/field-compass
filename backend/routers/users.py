@@ -231,7 +231,7 @@ async def delete_current_user(
     app_events.record(db, app_events.ACCOUNT_DELETED)
     db.delete(current_user)
     db.commit()
-    return None
+    return
 
 
 # =============================================================================

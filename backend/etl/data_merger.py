@@ -177,10 +177,7 @@ def parse_kobo_submission(kobo_data: dict[str, Any]) -> dict[str, Any]:
     else:
         submission_time = submission_time.astimezone(UTC)
 
-    if end_time.tzinfo is None:
-        end_time = end_time.replace(tzinfo=UTC)
-    else:
-        end_time = end_time.astimezone(UTC)
+    end_time = end_time.replace(tzinfo=UTC) if end_time.tzinfo is None else end_time.astimezone(UTC)
 
     # Extract submission data - keep ALL fields (don't filter out metadata)
     # This ensures form fields like 'start' and 'end' are preserved in submission_data
@@ -431,34 +428,33 @@ def merge_submission(
         db.commit()
         db.refresh(existing)
         return existing, history_record, False  # False = not newly created
-    else:
-        # New submission - check if it has deprecatedID (unlikely but possible)
-        # If it has deprecatedID, it means it was edited before first import
-        is_edited_on_import = deprecated_id is not None
+    # New submission - check if it has deprecatedID (unlikely but possible)
+    # If it has deprecatedID, it means it was edited before first import
+    is_edited_on_import = deprecated_id is not None
 
-        new_submission = SubmissionCurrent(
-            _id=submission_id,
-            survey_id=survey_id,
-            _uuid=new_uuid,
-            _submission_time=parsed_submission["_submission_time"],
-            end=new_end,
-            submission_data=new_data,
-            is_edited=is_edited_on_import,  # Mark as edited if it has deprecatedID
-            data_quality_issues=[],
-            qa_status="PENDING_APPROVAL",  # Will be updated by HFC engine
-            kobo_validation_status=kobo_validation_status,
-            kobo_edit_url=kobo_edit_url,
+    new_submission = SubmissionCurrent(
+        _id=submission_id,
+        survey_id=survey_id,
+        _uuid=new_uuid,
+        _submission_time=parsed_submission["_submission_time"],
+        end=new_end,
+        submission_data=new_data,
+        is_edited=is_edited_on_import,  # Mark as edited if it has deprecatedID
+        data_quality_issues=[],
+        qa_status="PENDING_APPROVAL",  # Will be updated by HFC engine
+        kobo_validation_status=kobo_validation_status,
+        kobo_edit_url=kobo_edit_url,
+    )
+
+    db.add(new_submission)
+    db.commit()
+    db.refresh(new_submission)
+
+    if is_edited_on_import:
+        logger.info(
+            f"Created new submission {submission_id} (was edited before import, deprecatedID: {deprecated_id})"
         )
+    else:
+        logger.info(f"Created new submission {submission_id}")
 
-        db.add(new_submission)
-        db.commit()
-        db.refresh(new_submission)
-
-        if is_edited_on_import:
-            logger.info(
-                f"Created new submission {submission_id} (was edited before import, deprecatedID: {deprecated_id})"
-            )
-        else:
-            logger.info(f"Created new submission {submission_id}")
-
-        return new_submission, None, True  # True = newly created
+    return new_submission, None, True  # True = newly created

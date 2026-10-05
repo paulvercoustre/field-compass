@@ -386,8 +386,7 @@ class HFCEngine:
             float_val = float(value)
             if float_val == int(float_val):
                 return int(float_val)
-            else:
-                return float_val
+            return float_val
         except (ValueError, TypeError):
             # Not a numeric string, return original value
             return value
@@ -433,7 +432,7 @@ class HFCEngine:
 
         # Search for fields that end with the field name (path-based)
         # e.g., 'enumerator_id' should match 'sampling_information/enumerator_id'
-        for key in submission_data.keys():
+        for key in submission_data:
             if key.endswith(f"/{field_name}") or key == field_name:
                 return submission_data[key], key
 
@@ -642,7 +641,7 @@ class HFCEngine:
             current_input_hash=llm_input_hash,
         )
 
-    def _run_basic_checks(
+    def _run_basic_checks(  # noqa: C901 -- split pending, see docs/code-quality-review.md
         self,
         submission_data: dict[str, Any],
         submission_uuid: str,
@@ -1394,7 +1393,7 @@ class HFCEngine:
 
             return value < lower_bound or value > upper_bound
 
-        elif method == "mad":
+        if method == "mad":
             # Modified Z-score using MAD: outlier if |modified_z_score| > threshold
             # Formula: M = 0.6745 * (x - median) / MAD
             median = stats["median"]
@@ -1407,7 +1406,7 @@ class HFCEngine:
 
             return abs(modified_z_score) > threshold
 
-        elif method == "zscore":
+        if method == "zscore":
             # Z-score method: outlier if |z_score| > threshold
             mean = stats["mean"]
             std = stats["std"]
@@ -1419,9 +1418,8 @@ class HFCEngine:
 
             return abs(z_score) > threshold
 
-        else:
-            logger.warning(f"Unknown outlier method: {method}")
-            return False
+        logger.warning(f"Unknown outlier method: {method}")
+        return False
 
     def _get_outlier_bounds(
         self,

@@ -207,25 +207,23 @@ def run_qualitative_check_job(
 
         existing_issues = submission.data_quality_issues or []
         non_llm_issues = [issue for issue in existing_issues if not _is_llm_issue(issue)]
-        llm_issues = []
         checked_at = datetime.utcnow().isoformat()
-
-        for result in llm_results:
-            llm_issues.append(
-                {
-                    "check": f"qual_{result.get('check_type', 'unknown')}",
-                    "field": result.get("field", ""),
-                    "value": result.get("value"),
-                    "message": result.get("message", "Qualitative issue detected"),
-                    "metadata": {
-                        "source": LLM_ISSUE_SOURCE,
-                        "llm_checked_at": checked_at,
-                        "llm_rule_version": requested_rules_hash,
-                        "llm_model": model,
-                        "llm_reasoning": result.get("reasoning", ""),
-                    },
-                }
-            )
+        llm_issues = [
+            {
+                "check": f"qual_{result.get('check_type', 'unknown')}",
+                "field": result.get("field", ""),
+                "value": result.get("value"),
+                "message": result.get("message", "Qualitative issue detected"),
+                "metadata": {
+                    "source": LLM_ISSUE_SOURCE,
+                    "llm_checked_at": checked_at,
+                    "llm_rule_version": requested_rules_hash,
+                    "llm_model": model,
+                    "llm_reasoning": result.get("reasoning", ""),
+                },
+            }
+            for result in llm_results
+        ]
 
         # Idempotent update: replace all prior LLM issues with fresh set.
         submission.data_quality_issues = non_llm_issues + llm_issues

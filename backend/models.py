@@ -143,8 +143,8 @@ class SubmissionHistory(BaseModel):
     deprecated_uuid: str = Field(..., description="Previous UUID before edit")
     data_delta: list[JsonPatch] = Field(..., description="JSON patch array showing changes")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "history_id": 201,
                 "kobo_id": 1001,
@@ -153,6 +153,7 @@ class SubmissionHistory(BaseModel):
                 "data_delta": [{"op": "replace", "path": "/age", "value": 99}],
             }
         }
+    )
 
 
 # ============================================================================

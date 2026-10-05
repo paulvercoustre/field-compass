@@ -196,17 +196,17 @@ def get_survey_access_list(db: Session, survey_id: UUID) -> list[dict]:
     # Add shared access
     shared = db.query(SurveyAccess).filter(SurveyAccess.survey_id == survey_id).all()
 
-    for access in shared:
-        access_list.append(
-            {
-                "user_id": str(access.user_id),
-                "email": access.user.email,
-                "username": access.user.username,
-                "full_name": access.user.full_name,
-                "permission_level": access.permission_level,
-                "granted_at": access.granted_at,
-                "granted_by": str(access.granted_by) if access.granted_by else None,
-            }
-        )
+    access_list.extend(
+        {
+            "user_id": str(access.user_id),
+            "email": access.user.email,
+            "username": access.user.username,
+            "full_name": access.user.full_name,
+            "permission_level": access.permission_level,
+            "granted_at": access.granted_at,
+            "granted_by": str(access.granted_by) if access.granted_by else None,
+        }
+        for access in shared
+    )
 
     return access_list

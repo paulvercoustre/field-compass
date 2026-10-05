@@ -100,9 +100,13 @@ def enclosing_relevants(schema: FormSchema, question: Question) -> list[str]:
     if question.group_path:
         prefixes = set(_path_prefixes(question.group_path))
         for row in schema.questions:
-            if row.type in GROUP_OPEN_TYPES and row.path in prefixes and row.relevant:
-                if row.relevant not in relevants:
-                    relevants.append(row.relevant)
+            if (
+                row.type in GROUP_OPEN_TYPES
+                and row.path in prefixes
+                and row.relevant
+                and row.relevant not in relevants
+            ):
+                relevants.append(row.relevant)
     return relevants
 
 

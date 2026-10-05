@@ -51,8 +51,7 @@ def test_db():
         def load_dialect_impl(self, dialect):
             if dialect.name == "sqlite":
                 return dialect.type_descriptor(JSON())
-            else:
-                return dialect.type_descriptor(JSONB())
+            return dialect.type_descriptor(JSONB())
 
     class UUIDForSQLite(TypeDecorator):
         """UUID type that uses String for SQLite."""
@@ -63,8 +62,7 @@ def test_db():
         def load_dialect_impl(self, dialect):
             if dialect.name == "sqlite":
                 return dialect.type_descriptor(String(36))
-            else:
-                return dialect.type_descriptor(PostgresUUID(as_uuid=True))
+            return dialect.type_descriptor(PostgresUUID(as_uuid=True))
 
         def process_bind_param(self, value, dialect):
             """Convert UUID to string for SQLite."""
