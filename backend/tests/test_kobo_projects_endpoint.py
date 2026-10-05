@@ -76,8 +76,9 @@ def client():
 
 
 def _list(client, assets=ASSETS):
-    with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-        "routers.kobo.KoboFetcher.list_survey_assets", return_value=assets
+    with (
+        patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+        patch("routers.kobo.KoboFetcher.list_survey_assets", return_value=assets),
     ):
         return client.get("/api/kobo/assets")
 
@@ -153,8 +154,9 @@ class TestKoboProjectList:
 
     def test_rejected_key_says_so(self, client):
         rejected = requests.HTTPError(response=MagicMock(status_code=401))
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.list_survey_assets", side_effect=rejected
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch("routers.kobo.KoboFetcher.list_survey_assets", side_effect=rejected),
         ):
             response = client.get("/api/kobo/assets")
 
@@ -162,9 +164,12 @@ class TestKoboProjectList:
         assert "did not accept your API key" in response.json()["detail"]
 
     def test_kobo_failure_becomes_a_502_without_leaking_internals(self, client):
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.list_survey_assets",
-            side_effect=RuntimeError("token=secret123 connection refused"),
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch(
+                "routers.kobo.KoboFetcher.list_survey_assets",
+                side_effect=RuntimeError("token=secret123 connection refused"),
+            ),
         ):
             response = client.get("/api/kobo/assets")
 
@@ -193,8 +198,9 @@ class TestListSurveyAssets:
             "results": [{"uid": "a1"}],
             "next": "https://kf.kobotoolbox.org/api/v2/assets/?p=2",
         }
-        with patch.object(fetcher, "_make_request", return_value=first), patch.object(
-            fetcher.session, "get", return_value=_page([{"uid": "a2"}])
+        with (
+            patch.object(fetcher, "_make_request", return_value=first),
+            patch.object(fetcher.session, "get", return_value=_page([{"uid": "a2"}])),
         ):
             assets = fetcher.list_survey_assets()
 
@@ -203,9 +209,10 @@ class TestListSurveyAssets:
     def test_does_not_send_the_token_to_another_host(self):
         fetcher = KoboFetcher(api_token="tok", api_url="https://kf.kobotoolbox.org/api/v2")
         first = {"results": [{"uid": "a1"}], "next": "https://elsewhere.example/assets/?p=2"}
-        with patch.object(fetcher, "_make_request", return_value=first), patch.object(
-            fetcher.session, "get"
-        ) as get:
+        with (
+            patch.object(fetcher, "_make_request", return_value=first),
+            patch.object(fetcher.session, "get") as get,
+        ):
             assets = fetcher.list_survey_assets()
 
         get.assert_not_called()
@@ -215,9 +222,10 @@ class TestListSurveyAssets:
         fetcher = KoboFetcher(api_token="tok", api_url="https://kf.kobotoolbox.org/api/v2")
         more = "https://kf.kobotoolbox.org/api/v2/assets/?p=next"
         first = {"results": [{"uid": "a0"}], "next": more}
-        with patch.object(fetcher, "_make_request", return_value=first), patch.object(
-            fetcher.session, "get", return_value=_page([{"uid": "aN"}], more)
-        ) as get:
+        with (
+            patch.object(fetcher, "_make_request", return_value=first),
+            patch.object(fetcher.session, "get", return_value=_page([{"uid": "aN"}], more)) as get,
+        ):
             assets = fetcher.list_survey_assets(max_pages=3)
 
         assert get.call_count == 2

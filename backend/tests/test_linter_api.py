@@ -81,9 +81,10 @@ class TestLintEndpoints:
     def test_legacy_form_is_linted_from_kobo(self, client):
         survey = _create_survey(client, LEGACY_STORED)
         live = {"content": UNBOUNDED_AGE}
-        with patch("routers.lint.get_user_kobo_token", return_value="tok"), patch(
-            "routers.lint.KoboFetcher.get_asset_info", return_value=live
-        ) as fetch:
+        with (
+            patch("routers.lint.get_user_kobo_token", return_value="tok"),
+            patch("routers.lint.KoboFetcher.get_asset_info", return_value=live) as fetch,
+        ):
             body = client.get(f"/api/surveys/{survey['survey_id']}/lint").json()
         fetch.assert_called_once_with("aLintAsset1234567")
         assert body["form_logic_missing"] is False

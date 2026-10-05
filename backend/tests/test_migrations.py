@@ -10,7 +10,6 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
@@ -84,9 +83,9 @@ def test_alembic_ini_sets_no_database_url():
     would be migrated by any deploy whose environment was wrong.
     """
     config = Config(str(ALEMBIC_INI))
-    assert not (
-        config.get_main_option("sqlalchemy.url") or ""
-    ).strip(), "alembic.ini must not set sqlalchemy.url -- the URL comes from DATABASE_URL"
+    assert not (config.get_main_option("sqlalchemy.url") or "").strip(), (
+        "alembic.ini must not set sqlalchemy.url -- the URL comes from DATABASE_URL"
+    )
 
 
 def test_baseline_reconciliation_sql_exists(baseline_module):
@@ -96,8 +95,7 @@ def test_baseline_reconciliation_sql_exists(baseline_module):
     surface for the first time inside the migrate container, mid-deploy.
     """
     assert baseline_module.RECONCILIATION_SQL.is_file(), (
-        f"the baseline migration reads {baseline_module.RECONCILIATION_SQL}, "
-        "which does not exist"
+        f"the baseline migration reads {baseline_module.RECONCILIATION_SQL}, which does not exist"
     )
 
 

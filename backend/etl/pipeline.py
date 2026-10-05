@@ -214,9 +214,9 @@ class ETLPipeline:
                             )
                             if audit_metrics:
                                 # Add audit metrics to submission_data
-                                parsed["submission_data"][
-                                    "active_interview_time"
-                                ] = audit_metrics.get("active_interview_time")
+                                parsed["submission_data"]["active_interview_time"] = (
+                                    audit_metrics.get("active_interview_time")
+                                )
                                 parsed["submission_data"]["total_duration"] = audit_metrics.get(
                                     "total_duration"
                                 )

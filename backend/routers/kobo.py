@@ -136,7 +136,7 @@ async def get_kobo_asset_form(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Add your Kobo API key in user settings so Field Compass can read " "your project."
+                "Add your Kobo API key in user settings so Field Compass can read your project."
             ),
         )
 

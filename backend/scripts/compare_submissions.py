@@ -213,13 +213,13 @@ def compare_metadata(edited_sub: dict[str, Any], non_edited_sub: dict[str, Any],
     if isinstance(edited_submission_time, datetime) and isinstance(edited_end, datetime):
         edited_duration = (edited_end - edited_submission_time).total_seconds()
         print(
-            f"Edited submission duration: {edited_duration:.1f} seconds ({edited_duration/60:.1f} minutes)"
+            f"Edited submission duration: {edited_duration:.1f} seconds ({edited_duration / 60:.1f} minutes)"
         )
 
     if isinstance(non_edited_submission_time, datetime) and isinstance(non_edited_end, datetime):
         non_edited_duration = (non_edited_end - non_edited_submission_time).total_seconds()
         print(
-            f"Non-edited submission duration: {non_edited_duration:.1f} seconds ({non_edited_duration/60:.1f} minutes)"
+            f"Non-edited submission duration: {non_edited_duration:.1f} seconds ({non_edited_duration / 60:.1f} minutes)"
         )
 
     print()

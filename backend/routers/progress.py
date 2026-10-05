@@ -406,7 +406,7 @@ async def get_progress_data(
                 combo_values_map.get(combo_key)
                 or targets_combo_values.get(combo_key)
                 or by_variable_values
-                or {col: "Unknown" for col in sampling_cols}
+                or dict.fromkeys(sampling_cols, "Unknown")
             )
 
             detailed.append(

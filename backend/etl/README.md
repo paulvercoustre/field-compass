@@ -78,11 +78,7 @@ Main orchestrator that combines all components.
 from etl.pipeline import ETLPipeline
 
 pipeline = ETLPipeline(db)
-stats = pipeline.run_pipeline(
-    survey_id="uuid-here",
-    limit=1000,
-    start_date=datetime(2023, 1, 1)
-)
+stats = pipeline.run_pipeline(survey_id="uuid-here", limit=1000, start_date=datetime(2023, 1, 1))
 ```
 
 ## Running the Pipeline

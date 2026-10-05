@@ -178,8 +178,7 @@ def test_every_model_column_exists_in_schema_sql(table_name, schema_tables, mode
 
     missing = sorted(model_tables[table] - schema_tables[table])
     assert not missing, (
-        f"columns on '{table}' defined in models.py but missing from "
-        f"{SCHEMA_PATH.name}: {missing}"
+        f"columns on '{table}' defined in models.py but missing from {SCHEMA_PATH.name}: {missing}"
     )
 
 

@@ -28,7 +28,7 @@ pytest-cov==6.0.0
 httpx==0.27.2
 
 # Code Quality
-ruff==0.1.15
+ruff==0.16.10
 
 # Rate limiting
 slowapi==0.1.9

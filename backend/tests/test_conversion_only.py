@@ -38,9 +38,9 @@ class TestTypeConversion:
 
         for input_val, expected in test_cases:
             result = engine._convert_value_type(input_val)
-            assert (
-                result == expected
-            ), f"Expected {expected!r}, got {result!r} for input {input_val!r}"
+            assert result == expected, (
+                f"Expected {expected!r}, got {result!r} for input {input_val!r}"
+            )
 
     def test_simpleeval_compatibility(self, test_db, test_survey_config):
         """Test that converted values work with SimpleEval comparisons."""
@@ -64,9 +64,9 @@ class TestTypeConversion:
             # calls it, so the test exercises the real code path.
             evaluator = SimpleEval(names=names)
             result = evaluator.eval(expression)
-            assert (
-                result == expected
-            ), f"Expression '{expression}' with value {value} failed: expected {expected}, got {result}"
+            assert result == expected, (
+                f"Expression '{expression}' with value {value} failed: expected {expected}, got {result}"
+            )
 
     def test_string_vs_number_comparison_demonstration(self, test_db, test_survey_config):
         """Demonstrate that string comparisons fail and numeric comparisons work."""
