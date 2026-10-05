@@ -14,6 +14,7 @@ import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import FieldLabel from '../ui/FieldLabel';
 import { TranslateIcon } from '../ui/icons';
+import SurveyKeyPicker from '../ai/SurveyKeyPicker';
 
 interface TranslationCardProps {
   surveyId: string;
@@ -210,16 +211,26 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
         Answers to the questions you choose are translated into one language by AI, so everyone can read them: typed
         answers, and the transcripts of recorded ones. Translations already made in Kobo are kept, not redone.
       </p>
+      {key.viewer_is_owner && (
+        <div className="mb-4">
+          <SurveyKeyPicker
+            surveyId={surveyId}
+            use="translation"
+            included={overview.included_per_month ? plural(overview.included_per_month, 'translation') + ' a month' : null}
+            onChange={load}
+          />
+        </div>
+      )}
 
       {!overview.available && (
         <Banner tone="info" className="mb-4">
           {key.viewer_is_owner ? (
             <>
-              Translation needs an AI key: add one in Account settings ›{' '}
+              Translation needs an API key: add one in Account settings ›{' '}
               <button type="button" onClick={toAccountKeys} className="font-medium underline underline-offset-2">
                 AI integration
-              </button>{' '}
-              and choose this survey for translation.
+              </button>
+              , then choose it above.
             </>
           ) : (
             "Translation isn't set up for this survey: its owner needs to add an AI key in their Account settings and choose this survey for translation."

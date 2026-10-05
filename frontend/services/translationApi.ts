@@ -54,6 +54,8 @@ export interface TranslationOverview {
   settings: TranslationSettings;
   questions: TranslatableQuestion[];
   languages: TranscriptionLanguage[];
+  /** Translations the included usage gives a survey a month; 0 when this server includes none. */
+  included_per_month: number;
   /** Included translations this month; null on the survey's own key. */
   allowance: { month: string; limit: number; used: number; in_flight: number; remaining: number } | null;
   /** Sending to Kobo is paused (set by transcription). */

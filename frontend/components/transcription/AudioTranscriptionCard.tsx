@@ -22,6 +22,7 @@ import Banner from '../ui/Banner';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import FieldLabel from '../ui/FieldLabel';
+import SurveyKeyPicker from '../ai/SurveyKeyPicker';
 
 interface AudioTranscriptionCardProps {
   surveyId: string;
@@ -281,16 +282,26 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
       <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
         Recorded answers are transcribed with ElevenLabs Scribe, so you can read them here and AI review can check them.
       </p>
+      {overview.key.viewer_is_owner && (
+        <div className="mb-4">
+          <SurveyKeyPicker
+            surveyId={surveyId}
+            use="transcription"
+            included={allowance.limit_minutes ? `${allowance.limit_minutes} minutes a month` : null}
+            onChange={load}
+          />
+        </div>
+      )}
 
       {!overview.available && (
         <Banner tone="info" className="mb-4">
           {overview.key.viewer_is_owner ? (
             <>
-              To transcribe this survey's recordings, add an ElevenLabs key in Account settings ›{' '}
+              To transcribe this survey's recordings, add an ElevenLabs API key in Account settings ›{' '}
               <button type="button" onClick={toAccountKey} className="font-medium underline underline-offset-2">
                 AI integration
-              </button>{' '}
-              and choose this survey for it.
+              </button>
+              , then choose it above.
             </>
           ) : (
             "Transcription isn't set up for this survey: its owner needs to add an ElevenLabs key in their Account settings and choose this survey for it."

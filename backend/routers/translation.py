@@ -226,6 +226,8 @@ def _payload(db: Session, survey: SurveyConfig, user: User) -> dict[str, Any]:
             for q in translatable_questions(survey.config_data)
         ],
         "languages": scribe_languages(),
+        # What the included usage gives this survey a month, whoever pays now.
+        "included_per_month": translations_per_survey_month() if allowance_enabled() else 0,
         "allowance": {
             "month": month_start().strftime("%Y-%m"),
             "limit": limit,

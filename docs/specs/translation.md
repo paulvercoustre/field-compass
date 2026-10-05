@@ -113,6 +113,12 @@ Calls go to `ai_usage` with feature `translation` and the submission's id.
   why there is none yet). Kobo lines say what they are about: "Transcript in
   Kobo", "Translation in Kobo".
 - **Runs**: a "Translations" step, and problems in words.
+- **Choosing the key, per survey.** Each feature's settings (AI review,
+  Translation, Audio transcription) has a "Runs on" picker for the survey's
+  owner: the included usage (the default for a new survey), or one of their
+  API keys of the right kind. Account settings › AI integration shows the
+  same choice from the key's side, and unticking a survey there puts it back
+  on the included usage.
 - **Account settings › AI integration**: three features (AI review,
   Translation, Audio transcription); included usage shows translated answers
   per survey per month; "Your keys" lets an AI model key serve a survey's AI

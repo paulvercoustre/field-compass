@@ -78,8 +78,8 @@ const AIOverviewSection: React.FC<AIOverviewSectionProps> = ({ usage }) => {
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">None on this server: AI runs on your own keys.</p>
         )}
         <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-          {renews && figures.length > 0 ? `Renews ${renews}. ` : ''}Each counts on its own: translating doesn't use up AI
-          reviews. A survey with its own key for a feature has no limit for it.
+          {renews && figures.length > 0 ? `Renews ${renews}. ` : ''}A survey that uses your own API key for a feature has no
+          Field Compass limit for it: choose the key in the survey's settings, or below.
         </p>
       </div>
     </section>

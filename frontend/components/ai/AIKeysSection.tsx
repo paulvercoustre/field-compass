@@ -146,7 +146,8 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
         <div>
           <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Your keys</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Choose which surveys use each key, and for what. Without one, a feature runs on the included usage.
+            Which surveys use each key, and for what: untick one to put it back on the included usage. A survey's
+            owner can also pick the key in that survey's settings.
           </p>
         </div>
         <Button variant="secondary" icon={<PlusIcon />} onClick={() => setEditing({ kind: 'review' })}>
