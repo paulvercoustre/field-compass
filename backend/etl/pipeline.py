@@ -223,7 +223,7 @@ class ETLPipeline:
                                 logger.debug(
                                     f"Added audit metrics for {submission_uuid}: active_time={audit_metrics.get('active_interview_time')} min, total_duration={audit_metrics.get('total_duration')} min"
                                 )
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001 -- one bad audit log must not stop the pull
                             logger.warning(
                                 f"Failed to process audit log for {submission_uuid}: {e}"
                             )

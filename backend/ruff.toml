@@ -21,6 +21,7 @@ select = [
     "PLE",  # pylint errors
     "PLW",  # pylint warnings
     "C90",  # mccabe complexity
+    "BLE001",  # blind except: narrow it, or say why everything must be caught
 ]
 
 # Ignore specific rules
@@ -57,11 +58,11 @@ max-complexity = 25
 # Standalone CLI scripts must call sys.path.insert(0, ".") before they can
 # import the application packages, so their imports legitimately come after
 # executable statements.
-"scripts/**/*.py" = ["E402"]
+"scripts/**/*.py" = ["E402", "BLE001"]
 
 # This script's whole purpose is to verify that modules import cleanly, so the
 # imports are the assertion -- they are "unused" by design.
-"test_setup.py" = ["F401", "E402"]
+"test_setup.py" = ["F401", "E402", "BLE001"]
 
 [format]
 # Use double quotes for strings

@@ -373,7 +373,7 @@ def dispatch_kobo_send(
             task_id=task_id,
         )
         return True
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 -- broker down, or anything else: record it
         logger.error("Failed to enqueue Kobo send for %s: %s", row.transcript_id, error)
         row.kobo_status = "failed"
         row.kobo_last_error = f"unavailable: Could not queue sending to Kobo ({error})"[:1000]

@@ -193,7 +193,7 @@ def run_translation_job(
                 if failed is not None and failed.status in ("pending", "running"):
                     _finish(db, failed, "failed", f"internal: {exc}")
                     finish_if_done(db, failed.run_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 -- recording the failure must not mask it
                 db.rollback()
         raise
     finally:

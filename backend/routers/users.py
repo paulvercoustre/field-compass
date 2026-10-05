@@ -366,8 +366,8 @@ def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
                 "email": data.get("email"),
                 "organization": data.get("organization", ""),
             }
-    except Exception:
-        pass
+    except (requests.RequestException, ValueError):
+        return None
     return None
 
 

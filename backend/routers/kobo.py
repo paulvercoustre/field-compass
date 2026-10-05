@@ -71,7 +71,7 @@ async def list_kobo_projects(
     api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
     try:
         assets = KoboFetcher(api_token=kobo_token, api_url=api_url).list_survey_assets()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- any upstream failure becomes a message
         logger.warning("Kobo project list failed for user %s: %s", current_user.user_id, exc)
         status = getattr(getattr(exc, "response", None), "status_code", None)
         if status in (401, 403):
@@ -143,7 +143,7 @@ async def get_kobo_asset_form(
     api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
     try:
         asset = KoboFetcher(api_token=kobo_token, api_url=api_url).get_asset_info(asset_uid)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- any upstream failure becomes a message
         # The upstream failure is the interesting part and belongs in the log;
         # the caller gets something they can act on.
         logger.warning("Kobo asset fetch failed for %s: %s", asset_uid, exc)

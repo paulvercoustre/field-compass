@@ -9,7 +9,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -298,7 +298,8 @@ def get_user_kobo_token(user: User) -> str | None:
         return None
     try:
         return decrypt_api_key(user.kobo_api_token_encrypted)
-    except Exception:
+    except (InvalidToken, ValueError):
+        # Encrypted under a different key: as good as no token.
         return None
 
 

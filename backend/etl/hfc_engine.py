@@ -8,7 +8,7 @@ import math
 import re
 import statistics
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Any
 
 from simpleeval import DEFAULT_FUNCTIONS, SimpleEval
@@ -75,6 +75,47 @@ _STRING_LITERAL = re.compile(r"\"[^\"]*\"|'[^']*'")
 
 # The survey-sheet columns that decide which questions a submission was shown.
 _FORM_LOGIC_COLUMNS = ("name", "type", "relevant", "group_relevant", "roster_name", "group_path")
+
+
+_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y")
+
+
+def _parse_date(value: Any) -> date | None:
+    """A date from an answer or a setting: ISO 8601 first, then three common forms."""
+    if isinstance(value, datetime):
+        return value.date()
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+    except ValueError:
+        pass
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_time(value: Any) -> time | None:
+    """The time of day of an ISO 8601 timestamp (Kobo's `start`)."""
+    if isinstance(value, datetime):
+        return value.time()
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).time()
+    except ValueError:
+        return None
+
+
+def _parse_clock(value: Any) -> time | None:
+    """An office-hours setting, "HH:MM"."""
+    try:
+        return datetime.strptime(value, "%H:%M").time()
+    except (ValueError, TypeError):
+        return None
 
 
 def _float_or_none(value: Any) -> float | None:
@@ -172,12 +213,18 @@ class HFCEngine:
         self.min_survey_duration_minutes = _float_or_none(gp.min_survey_duration_minutes)
         self.max_survey_duration_minutes = _float_or_none(gp.max_survey_duration_minutes)
 
+        # Parsed once here rather than per submission; unreadable means unchecked.
+        self._period_start = _parse_date(self.data_collection_start_date)
+        self._period_end = _parse_date(self.data_collection_end_date)
+
         self.flag_out_of_period = qc.flag_out_of_period
         self.flag_weekend = qc.flag_weekend
         self.weekend_days = qc.weekend_days
         self.flag_office_hours = qc.flag_office_hours
         self.office_hours_start = qc.office_hours_start
         self.office_hours_end = qc.office_hours_end
+        self._office_start = _parse_clock(self.office_hours_start)
+        self._office_end = _parse_clock(self.office_hours_end)
         self.flag_sampling_frame = qc.flag_sampling_frame
 
         self.flag_outliers = qc.flag_outliers
@@ -394,8 +441,6 @@ class HFCEngine:
         self,
         submission_data: dict[str, Any],
         submission_uuid: str,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
     ) -> list[QualityIssue]:
         """
         Run all HFC checks on a submission.
@@ -403,8 +448,6 @@ class HFCEngine:
         Args:
             submission_data: Submission data dictionary
             submission_uuid: UUID of the submission
-            start_time: Submission start time (from metadata, optional, deprecated - not used)
-            end_time: Submission end time (from metadata, optional, deprecated - not used)
 
         Returns:
             List of QualityIssue objects
@@ -416,9 +459,7 @@ class HFCEngine:
         issues = []
 
         # Run basic checks
-        issues.extend(
-            self._run_basic_checks(submission_data, submission_uuid, start_time, end_time)
-        )
+        issues.extend(self._run_basic_checks(submission_data, submission_uuid))
 
         # Run custom validation rules from database
         issues.extend(self._run_custom_rules(submission_data, submission_uuid))
@@ -592,20 +633,12 @@ class HFCEngine:
             current_input_hash=llm_input_hash,
         )
 
-    def _run_basic_checks(  # noqa: C901 -- split pending, see docs/code-quality-review.md
+    def _run_basic_checks(
         self,
         submission_data: dict[str, Any],
         submission_uuid: str,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
     ) -> list[QualityIssue]:
-        """
-        Run basic HFC checks.
-
-        Note: start_time and end_time parameters are kept for API compatibility
-        but are NOT used for duration checks (only audit logs and form fields are used).
-        """
-        """Run basic built-in checks."""
+        """Run the built-in checks the survey's settings switch on."""
         issues = []
 
         # 1. Check for missing UUID
@@ -637,118 +670,57 @@ class HFCEngine:
                 )
             )
 
-        # 3. Check date range and time
+        # 3. Interview date: inside the collection period, and not on a weekend.
         date_value, date_field_path = find_answer(submission_data, self.date_interview_field)
+        interview_date = _parse_date(date_value)
+        date_field = date_field_path or self.date_interview_field
+        if interview_date and self.flag_out_of_period:
+            if self._period_start and interview_date < self._period_start:
+                issues.append(
+                    QualityIssue(
+                        check="date_out_of_range",
+                        field=date_field,
+                        value=str(interview_date),
+                        message=f"Interview date {interview_date} is before allowed start date {self._period_start}",
+                    )
+                )
+            if self._period_end and interview_date > self._period_end:
+                issues.append(
+                    QualityIssue(
+                        check="date_out_of_range",
+                        field=date_field,
+                        value=str(interview_date),
+                        message=f"Interview date {interview_date} is after allowed end date {self._period_end}",
+                    )
+                )
+        if interview_date and self.flag_weekend and interview_date.weekday() in self.weekend_days:
+            issues.append(
+                QualityIssue(
+                    check="interview_on_weekend",
+                    field=date_field,
+                    value=str(interview_date),
+                    message=f"Interview conducted on weekend: {interview_date.strftime('%A')}",
+                )
+            )
+
+        # Office hours, from the time the interview started.
         start_time_value, start_time_path = find_answer(submission_data, self.start_time_field)
-
-        if date_value:
-            try:
-                # Try to parse date (handle various formats)
-                if isinstance(date_value, str):
-                    # Try ISO format first
-                    try:
-                        interview_date = datetime.fromisoformat(
-                            date_value.replace("Z", "+00:00")
-                        ).date()
-                    except Exception:
-                        # Try other common formats
-                        for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]:
-                            try:
-                                interview_date = datetime.strptime(date_value, fmt).date()
-                                break
-                            except Exception:
-                                continue
-                        else:
-                            raise ValueError(f"Could not parse date: {date_value}")
-                elif isinstance(date_value, datetime):
-                    interview_date = date_value.date()
-                else:
-                    interview_date = None
-
-                if interview_date:
-                    # Check against allowed date range (if flag is enabled)
-                    if self.flag_out_of_period:
-                        if self.data_collection_start_date:
-                            try:
-                                start_date = datetime.fromisoformat(
-                                    self.data_collection_start_date
-                                ).date()
-                                if interview_date < start_date:
-                                    issues.append(
-                                        QualityIssue(
-                                            check="date_out_of_range",
-                                            field=date_field_path or self.date_interview_field,
-                                            value=str(interview_date),
-                                            message=f"Interview date {interview_date} is before allowed start date {start_date}",
-                                        )
-                                    )
-                            except Exception:
-                                pass
-
-                        if self.data_collection_end_date:
-                            try:
-                                end_date = datetime.fromisoformat(
-                                    self.data_collection_end_date
-                                ).date()
-                                if interview_date > end_date:
-                                    issues.append(
-                                        QualityIssue(
-                                            check="date_out_of_range",
-                                            field=date_field_path or self.date_interview_field,
-                                            value=str(interview_date),
-                                            message=f"Interview date {interview_date} is after allowed end date {end_date}",
-                                        )
-                                    )
-                            except Exception:
-                                pass
-
-                    # Check for weekend interviews (if flag is enabled)
-                    if self.flag_weekend:
-                        weekday = interview_date.weekday()  # 0=Monday, 6=Sunday
-                        if weekday in self.weekend_days:
-                            issues.append(
-                                QualityIssue(
-                                    check="interview_on_weekend",
-                                    field=date_field_path or self.date_interview_field,
-                                    value=str(interview_date),
-                                    message=f"Interview conducted on weekend: {interview_date.strftime('%A')}",
-                                )
-                            )
-
-            except Exception as e:
-                logger.debug(f"Could not parse date for validation: {e}")
-
-        # Check office hours
-        if self.flag_office_hours and start_time_value:
-            try:
-                # Try to extract time from start_time_value
-                submission_time = None
-                if isinstance(start_time_value, str):
-                    try:
-                        # Try ISO datetime
-                        dt = datetime.fromisoformat(start_time_value.replace("Z", "+00:00"))
-                        submission_time = dt.time()
-                    except Exception:
-                        # Try parsing as just time if possible (though unlikely for Kobo 'start')
-                        pass
-                elif isinstance(start_time_value, datetime):
-                    submission_time = start_time_value.time()
-
-                if submission_time:
-                    office_start = datetime.strptime(self.office_hours_start, "%H:%M").time()
-                    office_end = datetime.strptime(self.office_hours_end, "%H:%M").time()
-
-                    if submission_time < office_start or submission_time > office_end:
-                        issues.append(
-                            QualityIssue(
-                                check="interview_out_of_office_hours",
-                                field=start_time_path or self.start_time_field,
-                                value=str(submission_time),
-                                message=f"Interview started outside office hours ({self.office_hours_start} - {self.office_hours_end}): {submission_time}",
-                            )
-                        )
-            except Exception as e:
-                logger.debug(f"Could not parse time for office hours validation: {e}")
+        started = _parse_time(start_time_value)
+        if (
+            self.flag_office_hours
+            and started
+            and self._office_start
+            and self._office_end
+            and (started < self._office_start or started > self._office_end)
+        ):
+            issues.append(
+                QualityIssue(
+                    check="interview_out_of_office_hours",
+                    field=start_time_path or self.start_time_field,
+                    value=str(started),
+                    message=f"Interview started outside office hours ({self.office_hours_start} - {self.office_hours_end}): {started}",
+                )
+            )
 
         # 4. Check strata (if flag is enabled). Two different questions, each
         # answerable in only one mode: whether a combination was one we meant to
@@ -991,7 +963,7 @@ class HFCEngine:
                                 message=f"Survey duration too long ({duration_minutes:.2f} min > {self.max_survey_duration_minutes} min)",
                             )
                         )
-                except Exception as e:
+                except (ValueError, TypeError, AttributeError) as e:
                     logger.debug(f"Could not calculate duration from submission data fields: {e}")
             else:
                 logger.debug(
@@ -1116,7 +1088,7 @@ class HFCEngine:
 
         try:
             schema = load_form_schema(kobo_tool)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- any malformed stored form
             # A malformed stored form is a configuration problem, not evidence
             # about this submission. Say so and check nothing.
             logger.warning("Could not read the stored form for strata validity: %s", exc)
@@ -1624,7 +1596,7 @@ class HFCEngine:
             self._relevance_form_loaded = True
             try:
                 form = load_survey_form(self.survey_config, self._fetch_live_form)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- stored form or a live Kobo fetch
                 logger.warning("Could not read the form for skip logic: %s", exc)
                 form = None
             if form is not None and (form.logic_missing or form.schema.is_empty):

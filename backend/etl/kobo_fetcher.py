@@ -217,7 +217,7 @@ class KoboFetcher:
             logger.debug(f"Downloaded audit log to {output_path}")
             return True
 
-        except Exception as e:
+        except (requests.RequestException, OSError) as e:
             logger.error(f"Failed to download audit log from {audit_url}: {e}")
             return False
 
@@ -352,11 +352,8 @@ class KoboFetcher:
                 logger.error(f"Response status: {e.response.status_code}")
                 logger.error(f"Response body: {e.response.text[:500]}")
             return None
-        except Exception as e:
-            logger.error(f"Error fetching submission by UUID {submission_uuid}: {e}")
-            import traceback
-
-            logger.error(traceback.format_exc())
+        except (requests.RequestException, ValueError):
+            logger.exception(f"Error fetching submission by UUID {submission_uuid}")
             return None
 
     def update_validation_status(

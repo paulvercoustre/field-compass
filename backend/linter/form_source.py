@@ -72,7 +72,7 @@ def load_survey_form(
     if fetch_live is not None and survey.kobo_asset_id:
         try:
             live = schema_from_payload(fetch_live(survey.kobo_asset_id))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- a live fetch is best effort
             logger.warning("Live form fetch for lint failed (%s): %s", survey.kobo_asset_id, exc)
         else:
             if not live.is_empty:

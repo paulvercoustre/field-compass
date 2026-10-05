@@ -72,7 +72,7 @@ def download_audit_log(audit_url: str, uuid: str, kobo_token: str | None = None)
         logger.debug(f"Downloaded audit log for {uuid} to {file_path}")
         return file_path
 
-    except Exception as e:
+    except (requests.RequestException, OSError) as e:
         logger.warning(f"Failed to download audit log for {uuid}: {e}")
         return None
 

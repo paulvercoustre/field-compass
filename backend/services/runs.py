@@ -832,7 +832,7 @@ def revoke(job_ids: list[str]) -> None:
         from services.job_queue import celery_app
 
         celery_app.control.revoke(job_ids)
-    except Exception as exc:  # the cancelled status already stops them at start
+    except Exception as exc:  # noqa: BLE001 -- the cancelled status already stops them at start
         logger.warning("Could not revoke %s queued jobs: %s", len(job_ids), exc)
 
 

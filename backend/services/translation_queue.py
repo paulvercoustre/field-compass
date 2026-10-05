@@ -459,7 +459,7 @@ def dispatch_translation_send(
             task_id=task_id,
         )
         return True
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 -- broker down, or anything else: record it
         logger.error(
             "Failed to enqueue Kobo send for translation %s: %s", translation.translation_id, error
         )

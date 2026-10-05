@@ -68,7 +68,7 @@ def calculate_json_diff(old_data: dict[str, Any], new_data: dict[str, Any]) -> l
             patches.append(patch_dict)
 
         return patches
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- a diff of arbitrary JSON must not stop the merge
         logger.error(f"Error calculating JSON diff: {e}")
         return []
 
@@ -147,7 +147,7 @@ def parse_kobo_submission(kobo_data: dict[str, Any]) -> dict[str, Any]:
                     else:
                         # Both naive, assume UTC
                         submission_time = submission_time.replace(tzinfo=UTC)
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     submission_time = submission_time.replace(tzinfo=UTC)
             else:
                 # No end_time to infer from, assume UTC

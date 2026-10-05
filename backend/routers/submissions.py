@@ -338,28 +338,18 @@ async def get_kobo_edit_url(
             detail="You need to configure your Kobo API key in user settings to get edit URLs",
         )
 
+    kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+    fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
+    # Kobo answers {"url": "...", "version_uid": "..."}.
+    endpoint = f"/assets/{survey_config.kobo_asset_id}/data/{kobo_id}/enketo/edit/"
     try:
-        # Create Kobo fetcher with user's token
-        kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-        fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
-
-        # Call Kobo API to get edit URL
-        # Format: /assets/{asset_id}/data/{submission_id}/enketo/edit/?return_url=false
-        endpoint = f"/assets/{survey_config.kobo_asset_id}/data/{kobo_id}/enketo/edit/"
-        params = {"return_url": "false"}
-
-        response = fetcher._make_request(endpoint, params=params)
-
-        # Kobo API returns: {"url": "...", "version_uid": "..."}
-        if "url" not in response:
-            raise HTTPException(
-                status_code=500, detail="Kobo API did not return a URL in the response"
-            )
-
-        return {"url": response["url"]}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get Kobo edit URL: {e!s}")
+        response = fetcher._make_request(endpoint, params={"return_url": "false"})
+    except requests.RequestException as e:
+        logger.warning("Kobo edit link failed for submission %s: %s", kobo_id, e)
+        raise HTTPException(status_code=502, detail="Could not get the edit link from Kobo.") from e
+    if "url" not in response:
+        raise HTTPException(status_code=502, detail="Kobo did not return an edit link.")
+    return {"url": response["url"]}
 
 
 @router.patch("/submissions/{kobo_id}/validation-status", response_model=Submission)
@@ -417,62 +407,45 @@ async def update_submission_validation_status(
             status_code=400, detail=f"Invalid validation status. Must be one of: {valid_statuses}"
         )
 
+    kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+    fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
     try:
-        # Update validation status in Kobo
-        kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-        fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
-
         fetcher.update_validation_status(
             asset_uid=survey_config.kobo_asset_id,
             submission_id=kobo_id,
             validation_status=status_update.validation_status,
         )
-
-        # Update local database
-        submission.kobo_validation_status = status_update.validation_status
-
-        # Recalculate qa_status based on new validation status and existing quality issues
-        # This ensures the Quality Overview counters update immediately without needing ETL
-        hfc_engine = HFCEngine(db, survey_config)
-
-        # Convert JSONB quality issues to QualityIssue objects
-        quality_issues = [
-            QualityIssue(**issue_dict) for issue_dict in submission.data_quality_issues or []
-        ]
-
-        # Determine new qa_status
-        new_qa_status = hfc_engine.determine_qa_status(
-            quality_issues, status_update.validation_status
-        )
-
-        # Handle "On Hold" case (returns None to indicate no change)
-        if new_qa_status is not None:
-            submission.qa_status = new_qa_status
-
-        submission.updated_at = datetime.utcnow()
-        db.commit()
-        db.refresh(submission)
-
-        logger.info(
-            f"Updated validation status for submission {kobo_id} to '{status_update.validation_status}' "
-            f"and qa_status to '{submission.qa_status}' by user {current_user.email}"
-        )
-
-        # Return updated submission
-        return _orm_to_pydantic_submission(submission)
-
-    except requests.exceptions.HTTPError as e:
-        db.rollback()
+    except requests.RequestException as e:
         logger.error(f"Kobo API error updating validation status: {e}")
-        if hasattr(e, "response") and e.response is not None:
+        if e.response is not None:
             logger.error(f"Response: {e.response.text[:500]}")
         raise HTTPException(
             status_code=502, detail=f"Failed to update validation status in Kobo: {e!s}"
-        )
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error updating validation status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update validation status: {e!s}")
+        ) from e
+
+    submission.kobo_validation_status = status_update.validation_status
+
+    # Recalculate qa_status from the new validation status and the existing
+    # issues, so the quality overview moves without waiting for the next pull.
+    quality_issues = [
+        QualityIssue(**issue_dict) for issue_dict in submission.data_quality_issues or []
+    ]
+    new_qa_status = HFCEngine(db, survey_config).determine_qa_status(
+        quality_issues, status_update.validation_status
+    )
+    # "On Hold" answers None: no change.
+    if new_qa_status is not None:
+        submission.qa_status = new_qa_status
+
+    submission.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(submission)
+
+    logger.info(
+        f"Updated validation status for submission {kobo_id} to '{status_update.validation_status}' "
+        f"and qa_status to '{submission.qa_status}' by user {current_user.email}"
+    )
+    return _orm_to_pydantic_submission(submission)
 
 
 @router.patch("/submissions/{kobo_id}/reviewer-notes", response_model=Submission)
@@ -508,16 +481,10 @@ async def update_submission_reviewer_notes(
     # Check user has editor access
     require_survey_access(db, current_user, survey_id, min_level="editor")
 
-    try:
-        submission.reviewer_notes = notes_update.reviewer_notes
-        submission.updated_at = datetime.utcnow()
-        db.commit()
-        db.refresh(submission)
+    submission.reviewer_notes = notes_update.reviewer_notes
+    submission.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(submission)
 
-        logger.info(f"Updated reviewer notes for submission {kobo_id} by user {current_user.email}")
-
-        return _orm_to_pydantic_submission(submission)
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error updating reviewer notes: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update reviewer notes: {e!s}")
+    logger.info(f"Updated reviewer notes for submission {kobo_id} by user {current_user.email}")
+    return _orm_to_pydantic_submission(submission)

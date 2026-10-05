@@ -404,7 +404,7 @@ def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality
                 if failed is not None and failed.status in ("pending", "running"):
                     _finish(db, failed, "failed", error=f"internal: {exc}")
                     _after_any(db, failed, survey)
-            except Exception:
+            except Exception:  # noqa: BLE001 -- recording the failure must not mask it
                 db.rollback()
         raise
     finally:
@@ -432,6 +432,6 @@ def sweep_stalled_transcripts(db, now: datetime | None = None) -> int:
         if survey is not None and submission is not None:
             try:
                 resume_waiting_review(db, survey, submission)
-            except Exception:
+            except Exception:  # noqa: BLE001 -- one review must not stop the sweep
                 db.rollback()
     return len(stalled) + kobo_stalled

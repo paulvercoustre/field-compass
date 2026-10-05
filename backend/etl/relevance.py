@@ -191,7 +191,7 @@ def evaluate(expression: str, lookup: Lookup) -> bool | None:
 
     try:
         return bool(SimpleEval(names=names, functions=_FUNCTIONS).eval(python))
-    except Exception:
+    except Exception:  # noqa: BLE001 -- any expression it cannot evaluate is unknown
         return None
 
 
