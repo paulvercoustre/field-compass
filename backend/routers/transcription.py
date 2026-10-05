@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -30,9 +30,14 @@ from etl.audio import (
 from etl.kobo_fetcher import KoboFetcher, KoboFetchError
 from forms.schema import load_form_schema
 from services.ai_allowance import month_start
-from services.auth import get_current_active_user, get_user_kobo_token
-from services.database import get_db
-from services.permissions import get_user_permission, require_survey_access, survey_access
+from services.auth import CurrentUser, get_user_kobo_token
+from services.database import DbSession
+from services.permissions import (
+    OwnedSurvey,
+    ViewableSurvey,
+    get_user_permission,
+    require_survey_access,
+)
 from services.runs import (
     KOBO_RESEND,
     TRANSCRIPTION_RERUN,
@@ -184,9 +189,9 @@ def _settings_payload(db: Session, survey: SurveyConfig, user: User) -> dict[str
 
 @router.get("/surveys/{survey_id}/audio-transcription")
 async def get_transcription_settings(
-    survey: SurveyConfig = Depends(survey_access("viewer")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: ViewableSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     The survey's transcription settings and everything the settings card needs:
@@ -211,9 +216,9 @@ class TranscriptionSettingsUpdate(BaseModel):
 @router.put("/surveys/{survey_id}/audio-transcription")
 async def update_transcription_settings(
     body: TranscriptionSettingsUpdate,
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Save the survey's transcription settings (owner). Saving resumes a paused Kobo send."""
     questions = {q.path: q for q in audio_questions(survey.config_data)}
@@ -302,9 +307,9 @@ def _recording_count(db: Session, survey: SurveyConfig) -> int:
 
 @router.get("/surveys/{survey_id}/transcripts/estimate")
 async def estimate_transcription(
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    mode: str = Query("missing", pattern="^(missing|all)$"),
-    db: Session = Depends(get_db),
+    survey: OwnedSurvey,
+    db: DbSession,
+    mode: Annotated[str, Query(pattern="^(missing|all)$")] = "missing",
 ):
     """
     How much "Transcribe now" would send: recordings, minutes already known,
@@ -352,10 +357,10 @@ async def estimate_transcription(
 
 @router.post("/surveys/{survey_id}/transcripts/run", status_code=202)
 async def transcribe_now(
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    mode: str = Query("missing", pattern="^(missing|all)$"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
+    mode: Annotated[str, Query(pattern="^(missing|all)$")] = "missing",
 ):
     """
     Transcribe recordings already pulled, without waiting for the next pull
@@ -401,9 +406,9 @@ async def transcribe_now(
 
 @router.post("/surveys/{survey_id}/transcripts/send-to-kobo", status_code=202)
 async def send_transcripts_to_kobo(
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Send every transcript not yet in Kobo (or that failed to send) to Kobo (owner)."""
     _require_kobo_token(current_user)
@@ -454,8 +459,8 @@ def _submission(db: Session, kobo_id: int, user: User) -> tuple[SubmissionCurren
 @router.get("/submissions/{kobo_id}/transcripts")
 async def get_submission_transcripts(
     kobo_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Every answered audio question of a submission: whether it has a
@@ -521,10 +526,10 @@ async def get_submission_transcripts(
 @router.get("/submissions/{kobo_id}/audio")
 async def stream_submission_audio(
     kobo_id: int,
-    question: str = Query(..., description="The audio question's path"),
-    range_header: str | None = Header(None, alias="Range"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    question: Annotated[str, Query(description="The audio question's path")],
+    db: DbSession,
+    current_user: CurrentUser,
+    range_header: Annotated[str | None, Header(alias="Range")] = None,
 ):
     """
     Play a recording: streamed from Kobo with the viewer's own Kobo key, so

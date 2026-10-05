@@ -7,9 +7,8 @@ no respondent data.
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 
 from database.models import SurveyConfig, User, ValidationRule
 from etl.kobo_fetcher import KoboFetcher
@@ -19,9 +18,9 @@ from linter.dk import dont_know_codes
 from linter.engine import run_lint
 from linter.form_source import SurveyForm, load_survey_form, schema_from_payload
 from linter.models import LintContext, language_from_label_column
-from services.auth import get_current_active_user, get_user_kobo_token
-from services.database import get_db
-from services.permissions import survey_access
+from services.auth import CurrentUser, get_user_kobo_token
+from services.database import DbSession
+from services.permissions import EditableSurvey, ViewableSurvey
 
 router = APIRouter()
 
@@ -107,7 +106,7 @@ def _rule_payload(rule: ValidationRule, *, created: bool) -> dict[str, Any]:
 @router.post("/lint")
 def lint_form_payload(
     payload: LintFormRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUser,
 ):
     """Lint a form that is not (yet) attached to a survey — the create-survey path."""
     del current_user
@@ -122,7 +121,7 @@ def lint_form_payload(
 @router.post("/lint/dk-values")
 def dk_values_for_form(
     payload: DkValuesRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUser,
 ):
     """
     The form's don't-know codes, found the way the linter finds them.
@@ -142,9 +141,9 @@ def dk_values_for_form(
 
 @router.get("/surveys/{survey_id}/lint")
 def lint_survey(
-    survey: SurveyConfig = Depends(survey_access("viewer")),
+    survey: ViewableSurvey,
+    current_user: CurrentUser,
     label_column: str | None = None,
-    current_user: User = Depends(get_current_active_user),
 ):
     """Lint the form stored on this survey. Viewer access."""
     survey_form = _survey_form(survey, current_user)
@@ -161,9 +160,9 @@ def lint_survey(
 @router.post("/surveys/{survey_id}/lint/adopt-rules")
 def adopt_lint_rules(
     payload: AdoptRulesRequest,
-    survey: SurveyConfig = Depends(survey_access("editor")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: EditableSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Create HFC rules from selected lint findings. Editor access.

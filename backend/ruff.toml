@@ -22,12 +22,15 @@ select = [
     "PLW",  # pylint warnings
     "C90",  # mccabe complexity
     "BLE001",  # blind except: narrow it, or say why everything must be caught
+    "FAST",  # FastAPI: Annotated parameters, no redundant response_model
 ]
 
 # Ignore specific rules
 ignore = [
     "E501",  # line too long (handled by formatter)
-    "B008",  # do not perform function calls in argument defaults
+    # survey_access() reads survey_id from the path inside the ViewableSurvey,
+    # EditableSurvey and OwnedSurvey dependencies, which ruff cannot see.
+    "FAST003",
 ]
 
 # Allow autofix for all enabled rules

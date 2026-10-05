@@ -6,8 +6,10 @@ Provides SQLAlchemy session management and common database operations.
 import logging
 import os
 from collections.abc import Generator
+from typing import Annotated
 
 from dotenv import load_dotenv
+from fastapi import Depends
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -40,7 +42,7 @@ def get_db() -> Generator[Session, None, None]:
 
     Usage in FastAPI:
         @router.get("/endpoint")
-        async def endpoint(db: Session = Depends(get_db)):
+        async def endpoint(db: DbSession):
             # Use db session
             pass
     """
@@ -49,6 +51,10 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+# A route's database session: `db: DbSession`.
+DbSession = Annotated[Session, Depends(get_db)]
 
 
 def init_db():

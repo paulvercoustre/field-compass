@@ -10,16 +10,14 @@ itself -- the API token is encrypted server-side and never leaves the backend
 import logging
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Request
 
-from database.models import User
 from etl.kobo_fetcher import KoboFetcher
 from forms import load_form_schema
 from linter.questions import enclosing_relevants
 from schemas import KoboProject, SurveyFormResponse
-from services.auth import get_current_active_user, get_user_kobo_token
-from services.database import get_db
+from services.auth import CurrentUser, get_user_kobo_token
+from services.database import DbSession
 from services.permissions import get_accessible_surveys
 from services.rate_limit import limiter
 
@@ -53,8 +51,8 @@ def _project_status(asset: dict) -> str:
 @limiter.limit("30/minute")
 async def list_kobo_projects(
     request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     The survey projects in the user's Kobo account, for picking one by name.
@@ -113,8 +111,8 @@ async def list_kobo_projects(
 async def get_kobo_asset_form(
     request: Request,
     asset_uid: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Fetch a Kobo project's form structure, normalized for configuration UIs.

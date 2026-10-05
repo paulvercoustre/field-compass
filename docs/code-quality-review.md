@@ -339,6 +339,7 @@ All ten steps of §5 are implemented on `claude/eloquent-hamilton-w1wsb9`, one o
 Choices made along the way:
 
 - **Missing answers under a sampling filter (F4).** A submission with no answer to a filtered question is now excluded, in `/quality/overview` and in `/submissions` alike. Before, only `/submissions` did this. The rule lives once, in `services/submission_filters.py`.
+- **Route signatures use `Annotated[...]`** (FAST002, 182 sites). The common dependencies are named once: `DbSession`, `CurrentUser`, and `ViewableSurvey`/`EditableSurvey`/`OwnedSurvey`. The OpenAPI schema is identical before and after. FAST rules are on and the B008 ignore is gone. FAST003 is ignored because ruff cannot see that the survey aliases read `survey_id` from the path.
 - **B904** is enabled. The 14 sites left after F3 now give a cause: `from None` where bad input becomes a 4xx, and the caught exception where an upstream failure is translated.
 - **`SurveySettingsPage` (F8)** went from 2,477 lines to 1,488. These moved out:
   - `useCollectionTargets` and `CollectionTargetsEditor`, shared with `CreateSurveyPage`
@@ -352,7 +353,6 @@ Choices made along the way:
 
 Not done, deliberately:
 
-- **FAST002 / `Annotated[...]`** (161 sites). It is mechanical, but it touches every route signature. It is better as its own PR, after which the B008 ignore can go.
 - **Settings read with `os.getenv` in 22 modules.** These should become one settings object. It is low risk to leave, and the change touches deployment configuration.
 - **Injecting the ETL/pipeline queuers** so tests stop patching module globals.
 - **`test_hfc_engine.py`** still calls private methods in places. `run_checks` covers the behaviour, but the private-method tests were kept rather than rewritten.

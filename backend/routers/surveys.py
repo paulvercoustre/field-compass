@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
@@ -15,16 +15,17 @@ from database.models import SubmissionCurrent, SurveyConfig, User, ValidationRul
 from routers.ai_connections import connection_summary
 from services import app_events
 from services.ai_providers import survey_connection
-from services.auth import get_current_active_user
-from services.database import get_db
+from services.auth import CurrentUser
+from services.database import DbSession
 from services.permissions import (
+    OwnedSurvey,
+    ViewableSurvey,
     get_accessible_surveys,
     get_survey_access_list,
     get_user_permission,
     grant_survey_access,
     parse_uuid,
     revoke_survey_access,
-    survey_access,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,8 +74,8 @@ class UpdateAccessRequest(BaseModel):
 
 @router.get("/surveys")
 async def get_surveys(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Get list of surveys the user has access to.
@@ -102,9 +103,9 @@ async def get_surveys(
 
 @router.get("/surveys/{survey_id}")
 async def get_survey(
-    survey: SurveyConfig = Depends(survey_access("viewer")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: ViewableSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Get a specific survey by ID with full configuration.
@@ -130,8 +131,8 @@ async def get_survey(
 @router.post("/surveys", status_code=201)
 async def create_survey(
     survey_data: SurveyCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Create a new survey configuration.
@@ -178,9 +179,9 @@ async def create_survey(
 @router.put("/surveys/{survey_id}")
 async def update_survey(
     survey_update: SurveyConfigUpdate,
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Update an existing survey configuration.
@@ -236,9 +237,9 @@ async def update_survey(
 
 @router.delete("/surveys/{survey_id}")
 async def delete_survey(
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Delete a survey and all associated data.
@@ -305,8 +306,8 @@ async def delete_survey(
 
 @router.post("/surveys/{survey_id}/ai-checks/rerun")
 async def rerun_ai_checks(
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
+    survey: OwnedSurvey,
+    db: DbSession,
 ):
     """
     Make the next pull run every submission's AI check again.
@@ -330,8 +331,8 @@ async def rerun_ai_checks(
 
 @router.get("/surveys/{survey_id}/access")
 async def get_survey_access(
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
+    survey: OwnedSurvey,
+    db: DbSession,
 ):
     """
     Get list of users who have access to this survey.
@@ -344,9 +345,9 @@ async def get_survey_access(
 @router.post("/surveys/{survey_id}/access")
 async def share_survey(
     share_request: ShareSurveyRequest,
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Share survey with another user by email.
@@ -404,9 +405,9 @@ async def share_survey(
 async def update_survey_access(
     user_id: str,
     update_request: UpdateAccessRequest,
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Update a user's access level for a survey.
@@ -443,9 +444,9 @@ async def update_survey_access(
 @router.delete("/surveys/{survey_id}/access/{user_id}")
 async def revoke_survey_access_endpoint(
     user_id: str,
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Revoke a user's access to a survey.

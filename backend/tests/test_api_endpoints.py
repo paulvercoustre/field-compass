@@ -7,12 +7,11 @@ from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
 from database.models import Base, SubmissionCurrent, SubmissionHistory, SurveyConfig, ValidationRule
-from services.database import get_db as get_db_dependency
+from services.database import DbSession
 from tests.sqlite_compat import sqlite_engine
 
 # Create test database
@@ -60,7 +59,7 @@ def _ensure_test_user(db):
     return user
 
 
-def override_current_user(db=Depends(get_db_dependency)):
+def override_current_user(db: DbSession):
     """Stand in for the authenticated user.
 
     These endpoint tests predate the authentication system and were never

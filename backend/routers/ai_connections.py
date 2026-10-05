@@ -22,7 +22,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -53,9 +53,9 @@ from services.ai_providers import (
 from services.ai_usage import QUALITATIVE_CHECK
 from services.ai_usage import TRANSCRIPTION as TRANSCRIPTION_FEATURE
 from services.ai_usage import TRANSLATION as TRANSLATION_FEATURE
-from services.auth import encrypt_api_key, get_current_active_user
-from services.database import get_db
-from services.permissions import survey_access
+from services.auth import CurrentUser, encrypt_api_key
+from services.database import DbSession
+from services.permissions import OwnedSurvey
 from services.rate_limit import limiter
 from services.transcription_allowance import minutes_per_survey_month, seconds_on_own_key
 from services.transcription_allowance import seconds_used as transcription_seconds_used
@@ -199,8 +199,8 @@ def _set_key(connection: AIConnection, api_key: str | None) -> None:
 
 @router.get("/ai/connections")
 async def list_connections(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """The current user's AI providers. Keys are never included."""
     connections = (
@@ -217,8 +217,8 @@ async def list_connections(
 async def create_connection(
     request: Request,
     payload: ConnectionCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Save a key and test it. A review provider that fails its test is still
@@ -277,8 +277,8 @@ async def update_connection(
     request: Request,
     connection_id: str,
     payload: ConnectionUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Edit a provider. Changing where or how it connects re-runs the test."""
     connection = _owned_connection(db, current_user, connection_id)
@@ -329,8 +329,8 @@ async def update_connection(
 async def test_connection(
     request: Request,
     connection_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Test a key again. A pass resumes a paused one."""
     connection = _owned_connection(db, current_user, connection_id)
@@ -342,8 +342,8 @@ async def test_connection(
 @router.delete("/ai/connections/{connection_id}", status_code=204)
 async def delete_connection(
     connection_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Delete a provider. Surveys using it go back to the operator's key."""
     connection = _owned_connection(db, current_user, connection_id)
@@ -363,9 +363,9 @@ async def delete_connection(
 @router.put("/surveys/{survey_id}/ai-connection")
 async def set_survey_connection(
     payload: SurveyConnectionUpdate,
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Use one of the owner's keys for this survey, or the operator's key (null):
@@ -410,8 +410,8 @@ async def set_survey_connection(
 
 @router.get("/ai/usage")
 async def account_ai_usage(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     This month's AI use on every survey the current user owns, and their
@@ -567,11 +567,11 @@ async def account_ai_usage(
 
 @router.get("/ai/usage/history")
 async def account_ai_usage_history(
+    db: DbSession,
+    current_user: CurrentUser,
     metric: Literal["reviews", "translations", "minutes"] = "reviews",
     period: Literal["30d", "6m"] = "30d",
     survey_id: UUID | None = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
 ):
     """
     AI use over time on the surveys the caller owns, for the usage chart.

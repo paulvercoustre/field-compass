@@ -3,13 +3,14 @@ Progress tracking API endpoints.
 Provides data collection progress and enumerator performance metrics.
 """
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from typing import Annotated
 
-from database.models import SubmissionCurrent, SurveyConfig
+from fastapi import APIRouter, Query
+
+from database.models import SubmissionCurrent
 from schemas import PerformanceData, ProgressData
-from services.database import get_db
-from services.permissions import survey_access
+from services.database import DbSession
+from services.permissions import ViewableSurvey
 from services.progress import compute_performance, compute_progress, performance_unavailable
 from services.survey_config import get_enumerator_field
 
@@ -18,12 +19,11 @@ router = APIRouter()
 
 @router.get("/progress", response_model=ProgressData)
 async def get_progress_data(
-    survey_config: SurveyConfig = Depends(survey_access("viewer")),
-    approved_only: bool = Query(
-        False,
-        description="When true, only count submissions whose qa_status is APPROVED.",
-    ),
-    db: Session = Depends(get_db),
+    survey_config: ViewableSurvey,
+    db: DbSession,
+    approved_only: Annotated[
+        bool, Query(description="When true, only count submissions whose qa_status is APPROVED.")
+    ] = False,
 ):
     """
     Get data collection progress metrics for a specific survey.
@@ -59,8 +59,8 @@ async def get_progress_data(
 
 @router.get("/performance", response_model=PerformanceData)
 async def get_performance_data(
-    survey_config: SurveyConfig = Depends(survey_access("viewer")),
-    db: Session = Depends(get_db),
+    survey_config: ViewableSurvey,
+    db: DbSession,
 ):
     """
     Get enumerator performance metrics for a specific survey.

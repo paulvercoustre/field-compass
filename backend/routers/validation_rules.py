@@ -5,13 +5,12 @@ Provides CRUD operations for validation rules with permission checks.
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 
-from database.models import SurveyConfig, ValidationRule
-from services.database import get_db
-from services.permissions import parse_uuid, survey_access
+from database.models import ValidationRule
+from services.database import DbSession
+from services.permissions import OwnedSurvey, ViewableSurvey, parse_uuid
 
 router = APIRouter()
 
@@ -40,8 +39,8 @@ class ValidationRuleResponse(BaseModel):
 
 @router.get("/surveys/{survey_id}/rules", response_model=list[ValidationRuleResponse])
 async def get_validation_rules(
-    survey: SurveyConfig = Depends(survey_access("viewer")),
-    db: Session = Depends(get_db),
+    survey: ViewableSurvey,
+    db: DbSession,
 ):
     """
     Get all validation rules for a survey.
@@ -67,8 +66,8 @@ async def get_validation_rules(
 @router.get("/surveys/{survey_id}/rules/{rule_id}", response_model=ValidationRuleResponse)
 async def get_validation_rule(
     rule_id: str,
-    survey: SurveyConfig = Depends(survey_access("viewer")),
-    db: Session = Depends(get_db),
+    survey: ViewableSurvey,
+    db: DbSession,
 ):
     """
     Get a specific validation rule by ID.
@@ -99,8 +98,8 @@ async def get_validation_rule(
 @router.post("/surveys/{survey_id}/rules", status_code=201, response_model=ValidationRuleResponse)
 async def create_validation_rule(
     rule_data: ValidationRuleCreateModel,
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
+    survey: OwnedSurvey,
+    db: DbSession,
 ):
     """
     Create a new validation rule for a survey.
@@ -150,8 +149,8 @@ async def create_validation_rule(
 async def update_validation_rule(
     rule_id: str,
     rule_update: ValidationRuleUpdateModel,
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
+    survey: OwnedSurvey,
+    db: DbSession,
 ):
     """
     Update an existing validation rule.
@@ -210,8 +209,8 @@ async def update_validation_rule(
 @router.delete("/surveys/{survey_id}/rules/{rule_id}")
 async def delete_validation_rule(
     rule_id: str,
-    survey: SurveyConfig = Depends(survey_access("owner")),
-    db: Session = Depends(get_db),
+    survey: OwnedSurvey,
+    db: DbSession,
 ):
     """
     Delete a validation rule.

@@ -5,7 +5,7 @@ AI router for validation rule generation and suggestions.
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -16,8 +16,8 @@ from services.ai_errors import AIError
 from services.ai_providers import RULES, resolve_provider
 from services.ai_service import ai_service, rule_error_message
 from services.ai_usage import RULE_GENERATION, RULE_SUGGESTION, usage_recorder
-from services.auth import get_current_active_user
-from services.database import get_db
+from services.auth import CurrentUser
+from services.database import DbSession
 from services.permissions import parse_uuid, require_survey_access
 from services.rate_limit import limiter
 
@@ -76,8 +76,8 @@ def _provider_for(db: Session, survey_config: SurveyConfig, user: User) -> Resol
 async def generate_rule_from_natural_language(
     request: Request,
     payload: GenerateRuleRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Generate a validation rule from natural language description.
@@ -186,8 +186,8 @@ async def generate_rule_from_natural_language(
 async def suggest_validation_rules(
     request: Request,
     payload: SuggestRulesRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Suggest validation rules based on the survey form structure.

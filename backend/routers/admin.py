@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
-from sqlalchemy.orm import Session
 
 from database.models import (
     AIUsage,
@@ -27,8 +27,8 @@ from database.models import (
     User,
 )
 from services import app_events
-from services.auth import get_current_active_user
-from services.database import get_db
+from services.auth import CurrentUser
+from services.database import DbSession
 from services.runs import PULL
 
 router = APIRouter()
@@ -37,7 +37,7 @@ WEEKS = 12
 RECENT_SIGNUPS = 25
 
 
-def require_usage_viewer(current_user: User = Depends(get_current_active_user)) -> User:
+def require_usage_viewer(current_user: CurrentUser) -> User:
     if not app_events.can_view_usage(current_user):
         raise HTTPException(status_code=403, detail="Not available to this account")
     return current_user
@@ -63,8 +63,8 @@ def _source_label(details: dict | None) -> str:
 
 @router.get("/admin/usage")
 async def get_usage(
-    db: Session = Depends(get_db),
-    _viewer: User = Depends(require_usage_viewer),
+    db: DbSession,
+    _viewer: Annotated[User, Depends(require_usage_viewer)],
 ):
     now = datetime.utcnow()
     since_7 = now - timedelta(days=7)

@@ -4,14 +4,14 @@ Provides aggregated quality metrics for the quality dashboard.
 """
 
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Query
 
-from database.models import SubmissionCurrent, SurveyConfig
+from database.models import SubmissionCurrent
 from schemas import QualityOverviewResponse
-from services.database import get_db
-from services.permissions import survey_access
+from services.database import DbSession
+from services.permissions import ViewableSurvey
 from services.quality import quality_overview
 from services.submission_filters import filter_by_answers, parse_list, parse_sampling_filters
 from services.survey_config import get_enumerator_field, get_sampling_cols
@@ -30,16 +30,17 @@ def _parse_date(value: str, name: str) -> datetime:
 
 @router.get("/quality/overview", response_model=QualityOverviewResponse)
 async def get_quality_overview(
-    start_date: str | None = Query(None, description="Start date filter (YYYY-MM-DD)"),
-    end_date: str | None = Query(None, description="End date filter (YYYY-MM-DD)"),
-    enumerator: str | None = Query(
-        None, description="Filter by enumerator ID (comma-separated for multiple)"
-    ),
-    sampling_filters: str | None = Query(
-        None, description="Filter by sampling variables (format: var1=val1,val2;var2=val3)"
-    ),
-    survey_config: SurveyConfig = Depends(survey_access("viewer")),
-    db: Session = Depends(get_db),
+    survey_config: ViewableSurvey,
+    db: DbSession,
+    start_date: Annotated[str | None, Query(description="Start date filter (YYYY-MM-DD)")] = None,
+    end_date: Annotated[str | None, Query(description="End date filter (YYYY-MM-DD)")] = None,
+    enumerator: Annotated[
+        str | None, Query(description="Filter by enumerator ID (comma-separated for multiple)")
+    ] = None,
+    sampling_filters: Annotated[
+        str | None,
+        Query(description="Filter by sampling variables (format: var1=val1,val2;var2=val3)"),
+    ] = None,
 ):
     """
     Get quality overview data for the dashboard: submission status breakdown,

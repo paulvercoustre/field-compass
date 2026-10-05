@@ -8,6 +8,7 @@ import hashlib
 import logging
 import os
 from datetime import datetime, timedelta
+from typing import Annotated
 
 from cryptography.fernet import Fernet, InvalidToken
 from dotenv import load_dotenv
@@ -20,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from database.models import User
 from services.app_events import can_view_usage, mark_active
-from services.database import get_db
+from services.database import DbSession
 
 load_dotenv()
 
@@ -247,9 +248,7 @@ def get_user_by_username(db: Session, username: str) -> User | None:
 # =============================================================================
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
-) -> User:
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: DbSession) -> User:
     """
     FastAPI dependency to get the current authenticated user.
     Raises 401 if token is invalid or user not found.
@@ -274,7 +273,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """
     FastAPI dependency to get the current active user.
     Raises 400 if user is inactive.
@@ -287,6 +286,10 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 # =============================================================================
 # Kobo API key helpers
 # =============================================================================
+
+
+# The signed-in, active user: `current_user: CurrentUser`.
+CurrentUser = Annotated[User, Depends(get_current_active_user)]
 
 
 def get_user_kobo_token(user: User) -> str | None:

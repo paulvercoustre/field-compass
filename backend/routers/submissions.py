@@ -5,14 +5,15 @@ Handles CRUD operations for survey submissions with permission checks.
 
 import logging
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID as UUIDType
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from database.models import AI_REVIEW_OPEN, ITEM_OPEN, AudioTranscript, SubmissionCurrent, User
+from database.models import AI_REVIEW_OPEN, ITEM_OPEN, AudioTranscript, SubmissionCurrent
 from database.models import SubmissionHistory as SubmissionHistoryORM
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
@@ -25,8 +26,8 @@ from schemas import (
     SubmissionListResponse,
     ValidationStatusUpdate,
 )
-from services.auth import get_current_active_user, get_user_kobo_token
-from services.database import get_db
+from services.auth import CurrentUser, get_user_kobo_token
+from services.database import DbSession
 from services.permissions import parse_uuid, require_survey_access
 from services.submission_filters import filter_by_answers, parse_list, parse_sampling_filters
 from services.survey_config import get_enumerator_field, get_sampling_cols
@@ -111,33 +112,41 @@ def _transcript_summaries(
 
 @router.get("/submissions", response_model=SubmissionListResponse)
 async def get_submissions(
-    qa_status: str | None = Query(
-        None, description="Filter by QA status (comma-separated for multiple)"
-    ),
-    validation_status: str | None = Query(
-        None,
-        description="Filter by validation status (comma-separated: Approved,Not Approved,On Hold,Not Reviewed)",
-    ),
-    survey_id: str | None = Query(None, description="Filter by survey ID (UUID)"),
-    enumerator: str | None = Query(
-        None, description="Filter by enumerator ID/value (comma-separated for multiple)"
-    ),
-    sampling_filters: str | None = Query(
-        None,
-        description="Filter by sampling variables (format: variable1=value1,value2;variable2=value3)",
-    ),
-    ai_review: str | None = Query(
-        None, pattern="^(failed|in_progress|not_run)$", description="Filter by AI review state"
-    ),
-    transcript: str | None = Query(
-        None,
-        pattern="^(any|failed|no_speech|in_progress)$",
-        description="Filter by audio transcript state",
-    ),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
+    qa_status: Annotated[
+        str | None, Query(description="Filter by QA status (comma-separated for multiple)")
+    ] = None,
+    validation_status: Annotated[
+        str | None,
+        Query(
+            description="Filter by validation status (comma-separated: Approved,Not Approved,On Hold,Not Reviewed)"
+        ),
+    ] = None,
+    survey_id: Annotated[str | None, Query(description="Filter by survey ID (UUID)")] = None,
+    enumerator: Annotated[
+        str | None,
+        Query(description="Filter by enumerator ID/value (comma-separated for multiple)"),
+    ] = None,
+    sampling_filters: Annotated[
+        str | None,
+        Query(
+            description="Filter by sampling variables (format: variable1=value1,value2;variable2=value3)"
+        ),
+    ] = None,
+    ai_review: Annotated[
+        str | None,
+        Query(pattern="^(failed|in_progress|not_run)$", description="Filter by AI review state"),
+    ] = None,
+    transcript: Annotated[
+        str | None,
+        Query(
+            pattern="^(any|failed|no_speech|in_progress)$",
+            description="Filter by audio transcript state",
+        ),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
 ):
     """
     Get list of submissions with optional filtering and pagination.
@@ -240,8 +249,8 @@ async def get_submissions(
 @router.get("/submissions/{kobo_id}", response_model=Submission)
 async def get_submission(
     kobo_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Get a single submission by its KoboToolbox ID (_id).
@@ -263,8 +272,8 @@ async def get_submission(
 @router.get("/submissions/{kobo_id}/history", response_model=list[SubmissionHistory])
 async def get_submission_history(
     kobo_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Get edit history for a submission.
@@ -294,9 +303,9 @@ async def get_submission_history(
 @router.get("/submissions/{kobo_id}/kobo-edit-url")
 async def get_kobo_edit_url(
     kobo_id: int,
-    survey_id: UUIDType = Query(..., description="Survey ID to get the Kobo asset ID"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey_id: Annotated[UUIDType, Query(description="Survey ID to get the Kobo asset ID")],
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Get the Kobo edit URL for a submission.
@@ -356,9 +365,9 @@ async def get_kobo_edit_url(
 async def update_submission_validation_status(
     kobo_id: int,
     status_update: ValidationStatusUpdate,
-    survey_id: UUIDType = Query(..., description="Survey ID to get the Kobo asset ID"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey_id: Annotated[UUIDType, Query(description="Survey ID to get the Kobo asset ID")],
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Update the Kobo validation status for a submission.
@@ -452,9 +461,9 @@ async def update_submission_validation_status(
 async def update_submission_reviewer_notes(
     kobo_id: int,
     notes_update: ReviewerNotesUpdate,
-    survey_id: UUIDType = Query(..., description="Survey ID for access control"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey_id: Annotated[UUIDType, Query(description="Survey ID for access control")],
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Update reviewer notes for a submission.

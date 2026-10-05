@@ -4,7 +4,7 @@ Handles user-to-survey permissions including ownership and shared access.
 """
 
 from collections.abc import Callable
-from typing import Literal, cast
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -12,8 +12,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database.models import SurveyAccess, SurveyConfig, User
-from services.auth import get_current_active_user
-from services.database import get_db
+from services.auth import CurrentUser
+from services.database import DbSession
 
 # Permission level type
 PermissionLevel = Literal["owner", "editor", "viewer", "admin"]
@@ -237,14 +237,20 @@ def survey_access(min_level: AccessLevel = "viewer") -> Callable[..., SurveyConf
     the query string otherwise. A malformed id is a 400, an unknown survey a
     404 and too little access a 403, the same as ``require_survey_access``.
 
-        survey: SurveyConfig = Depends(survey_access("editor"))
+        survey: EditableSurvey  # = Annotated[SurveyConfig, Depends(survey_access("editor"))]
     """
 
     def dependency(
         survey_id: str,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_active_user),
+        db: DbSession,
+        current_user: CurrentUser,
     ) -> SurveyConfig:
         return require_survey_access(db, current_user, parse_uuid(survey_id), min_level)
 
     return dependency
+
+
+# The request's survey, once the user is known to hold that much access on it.
+ViewableSurvey = Annotated[SurveyConfig, Depends(survey_access("viewer"))]
+EditableSurvey = Annotated[SurveyConfig, Depends(survey_access("editor"))]
+OwnedSurvey = Annotated[SurveyConfig, Depends(survey_access("owner"))]
