@@ -35,7 +35,7 @@ class LintFormRequest(BaseModel):
     form: dict[str, Any] = Field(..., description="kobo_tool, asset content, or asset payload")
     enabled_checks: list[str] | None = None
     label_column: str | None = Field(
-        None, description="Label language as a sheet column, e.g. `label::French (fr)`"
+        default=None, description="Label language as a sheet column, e.g. `label::French (fr)`"
     )
 
 

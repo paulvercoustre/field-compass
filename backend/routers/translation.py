@@ -51,6 +51,7 @@ from services.permissions import get_user_permission, require_survey_access, sur
 from services.runs import (
     KOBO_RESEND,
     TRANSLATION_RERUN,
+    count_by,
     finish_if_done,
     iso,
     run_summary,
@@ -116,27 +117,19 @@ def _counts(db: Session, survey: SurveyConfig) -> dict[str, Any]:
     current = (AnswerTranslation.survey_id == survey.survey_id) & (
         AnswerTranslation.language == (settings.language or "")
     )
-    status = dict(
-        db.query(AnswerTranslation.status, func.count())
-        .filter(current, AnswerTranslation.origin == ORIGIN_AI)
-        .group_by(AnswerTranslation.status)
-        .all()
-    )
+    status = count_by(db, AnswerTranslation.status, current, AnswerTranslation.origin == ORIGIN_AI)
     from_kobo = (
         db.query(func.count(AnswerTranslation.translation_id))
         .filter(current, AnswerTranslation.origin == ORIGIN_KOBO)
         .scalar()
     )
-    kobo = dict(
-        db.query(AnswerTranslation.kobo_status, func.count())
-        .filter(
-            current,
-            AnswerTranslation.origin == ORIGIN_AI,
-            AnswerTranslation.source == "transcript",
-            AnswerTranslation.status == "success",
-        )
-        .group_by(AnswerTranslation.kobo_status)
-        .all()
+    kobo = count_by(
+        db,
+        AnswerTranslation.kobo_status,
+        current,
+        AnswerTranslation.origin == ORIGIN_AI,
+        AnswerTranslation.source == "transcript",
+        AnswerTranslation.status == "success",
     )
     return {
         "success": status.get("success", 0),

@@ -18,6 +18,7 @@ from services.auth import get_current_active_user
 from services.database import get_db
 from services.notifications import notification_payload
 from services.permissions import (
+    AccessLevel,
     get_accessible_surveys,
     get_user_permission,
     parse_uuid,
@@ -73,7 +74,7 @@ async def get_activity(
     }
 
 
-def _run_for(db: Session, run_id: str, user: User, min_level: str = "viewer") -> Run:
+def _run_for(db: Session, run_id: str, user: User, min_level: AccessLevel = "viewer") -> Run:
     run = db.query(Run).filter(Run.run_id == parse_uuid(run_id, "run_id")).first()
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")

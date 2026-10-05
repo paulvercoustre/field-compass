@@ -24,7 +24,7 @@ class QualityIssue(BaseModel):
     value: Any = Field(..., description="Value that triggered the issue")
     message: str = Field(..., description="Human-readable issue message")
     metadata: dict[str, Any] | None = Field(
-        None,
+        default=None,
         description="Additional metadata for the issue (e.g., statistical bounds for outliers)",
     )
 
@@ -64,22 +64,33 @@ class Submission(BaseModel):
     )
     qa_status: str = Field(..., description="Current QA status")
     kobo_validation_status: str | None = Field(
-        None, description="KoboToolbox validation status (Approved, Not Approved, On Hold, etc.)"
+        default=None,
+        description="KoboToolbox validation status (Approved, Not Approved, On Hold, etc.)",
     )
     kobo_edit_url: str | None = Field(
-        None, description="URL to view/edit this submission in KoboToolbox"
+        default=None, description="URL to view/edit this submission in KoboToolbox"
     )
     reviewer_notes: str | None = Field(
-        None, description="Optional reviewer notes for this submission"
+        default=None, description="Optional reviewer notes for this submission"
     )
-    llm_check_status: str | None = Field(None, description="Qualitative LLM check status")
-    llm_job_id: str | None = Field(None, description="Background job ID for qualitative checks")
-    llm_queued_at: datetime | None = Field(None, description="When qualitative checks were queued")
-    llm_started_at: datetime | None = Field(None, description="When qualitative checks started")
-    llm_checked_at: datetime | None = Field(None, description="When qualitative checks completed")
-    llm_last_error: str | None = Field(None, description="Last qualitative check error message")
+    llm_check_status: str | None = Field(default=None, description="Qualitative LLM check status")
+    llm_job_id: str | None = Field(
+        default=None, description="Background job ID for qualitative checks"
+    )
+    llm_queued_at: datetime | None = Field(
+        default=None, description="When qualitative checks were queued"
+    )
+    llm_started_at: datetime | None = Field(
+        default=None, description="When qualitative checks started"
+    )
+    llm_checked_at: datetime | None = Field(
+        default=None, description="When qualitative checks completed"
+    )
+    llm_last_error: str | None = Field(
+        default=None, description="Last qualitative check error message"
+    )
     transcript_summary: dict[str, int] | None = Field(
-        None,
+        default=None,
         description="Audio transcripts of this submission: count, success, failed, in_progress, no_speech",
     )
 
@@ -111,7 +122,7 @@ class ValidationStatusUpdate(BaseModel):
     """Request model for updating Kobo validation status."""
 
     validation_status: str | None = Field(
-        None,
+        default=None,
         description="Kobo validation status: 'Approved', 'Not Approved', 'On Hold', or null to clear",
     )
 
@@ -120,7 +131,7 @@ class ReviewerNotesUpdate(BaseModel):
     """Request model for updating reviewer notes."""
 
     reviewer_notes: str | None = Field(
-        None, description="Free-text reviewer notes, or null to clear"
+        default=None, description="Free-text reviewer notes, or null to clear"
     )
 
 
@@ -132,8 +143,10 @@ class ReviewerNotesUpdate(BaseModel):
 class JsonPatch(BaseModel):
     op: str = Field(..., description="Operation: add, remove, or replace")
     path: str = Field(..., description="JSON path to the field")
-    value: Any | None = Field(None, description="New value (for add/replace)")
-    from_: str | None = Field(None, alias="from", description="Source path (for move operations)")
+    value: Any | None = Field(default=None, description="New value (for add/replace)")
+    from_: str | None = Field(
+        default=None, alias="from", description="Source path (for move operations)"
+    )
 
 
 class SubmissionHistory(BaseModel):
@@ -173,16 +186,16 @@ class SubmissionHistory(BaseModel):
 class OverallProgress(BaseModel):
     conducted: int
     target: int | None = Field(
-        None, description="Planned interviews. Null when the survey sets no targets."
+        default=None, description="Planned interviews. Null when the survey sets no targets."
     )
     progress: float | None = Field(
-        None, description="Percent of target conducted. Null when there is no target."
+        default=None, description="Percent of target conducted. Null when there is no target."
     )
     days_active: int = Field(
-        0, description="Days from the first submission to the most recent, inclusive."
+        default=0, description="Days from the first submission to the most recent, inclusive."
     )
     submissions_per_day: float | None = Field(
-        None,
+        default=None,
         description="Mean submissions per active day. Null before any submission arrives.",
     )
 
@@ -195,7 +208,7 @@ class ProgressByColumn(BaseModel):
     target: int | None = None
     progress: float | None = None
     share: float | None = Field(
-        None,
+        default=None,
         description=(
             "Percent of all submissions falling in this value. Describes the observed "
             "distribution when there is no target to compare against."
@@ -390,10 +403,10 @@ class QualityMetricsSummary(BaseModel):
     )
     avg_issues_per_submission: float = Field(..., description="Average issues per submission")
     avg_dk_percentage: float | None = Field(
-        None, description="Average DK percentage across submissions"
+        default=None, description="Average DK percentage across submissions"
     )
     avg_active_duration_minutes: float | None = Field(
-        None, description="Average active interview duration in minutes (from audit logs)"
+        default=None, description="Average active interview duration in minutes (from audit logs)"
     )
 
 

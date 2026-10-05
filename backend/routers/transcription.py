@@ -36,6 +36,7 @@ from services.permissions import get_user_permission, require_survey_access, sur
 from services.runs import (
     KOBO_RESEND,
     TRANSCRIPTION_RERUN,
+    count_by,
     finish_if_done,
     iso,
     run_summary,
@@ -73,20 +74,12 @@ def _form_language_labels(config_data: dict[str, Any] | None) -> list[str]:
 
 
 def _counts(db: Session, survey_id: UUID) -> dict[str, Any]:
-    status = dict(
-        db.query(AudioTranscript.status, func.count())
-        .filter(AudioTranscript.survey_id == survey_id)
-        .group_by(AudioTranscript.status)
-        .all()
-    )
+    status = count_by(db, AudioTranscript.status, AudioTranscript.survey_id == survey_id)
     # Kobo's own transcripts (typed or made there) were never ours to send;
     # ours corrected in Kobo still count as "corrected in Kobo".
     kobos_own = (AudioTranscript.source == SOURCE_KOBO) & (AudioTranscript.kobo_status == "sent")
-    kobo = dict(
-        db.query(AudioTranscript.kobo_status, func.count())
-        .filter(AudioTranscript.survey_id == survey_id, ~kobos_own)
-        .group_by(AudioTranscript.kobo_status)
-        .all()
+    kobo = count_by(
+        db, AudioTranscript.kobo_status, AudioTranscript.survey_id == survey_id, ~kobos_own
     )
     from_kobo = (
         db.query(func.count(AudioTranscript.transcript_id))

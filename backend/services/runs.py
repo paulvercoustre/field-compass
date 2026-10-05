@@ -152,8 +152,12 @@ def stop_requested(db: Session, run_id: UUID) -> bool:
 # --- Counting -----------------------------------------------------------------
 
 
-def _group(db: Session, column, *filters) -> Counter:
-    return Counter(dict(db.query(column, func.count()).filter(*filters).group_by(column).all()))
+def count_by(db: Session, column, *filters) -> Counter[str]:
+    """How many rows have each value of ``column``, among those matching ``filters``."""
+    counts: Counter[str] = Counter()
+    for value, count in db.query(column, func.count()).filter(*filters).group_by(column):
+        counts[value] = count
+    return counts
 
 
 def _bucket(
@@ -186,13 +190,15 @@ def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, 
     since = now - _RATE_WINDOW
     stats = run.stats or {}
 
-    ai = _group(db, SubmissionCurrent.llm_check_status, SubmissionCurrent.llm_run_id == run.run_id)
-    transcripts = _group(db, AudioTranscript.status, AudioTranscript.run_id == run.run_id)
-    translations = _group(db, AnswerTranslation.status, AnswerTranslation.run_id == run.run_id)
+    ai = count_by(
+        db, SubmissionCurrent.llm_check_status, SubmissionCurrent.llm_run_id == run.run_id
+    )
+    transcripts = count_by(db, AudioTranscript.status, AudioTranscript.run_id == run.run_id)
+    translations = count_by(db, AnswerTranslation.status, AnswerTranslation.run_id == run.run_id)
     # Transcripts and translations sent to Kobo, together.
-    kobo = _group(
+    kobo = count_by(
         db, AudioTranscript.kobo_status, AudioTranscript.kobo_run_id == run.run_id
-    ) + _group(db, AnswerTranslation.kobo_status, AnswerTranslation.kobo_run_id == run.run_id)
+    ) + count_by(db, AnswerTranslation.kobo_status, AnswerTranslation.kobo_run_id == run.run_id)
 
     out: dict[str, Any] = {
         "ai_checks": None,
@@ -476,7 +482,7 @@ def run_problems(db: Session, run: Run, survey: SurveyConfig | None, counts: dic
                     "action": None,
                 }
             )
-        held = _group(
+        held = count_by(
             db,
             AudioTranscript.status,
             AudioTranscript.run_id == run.run_id,

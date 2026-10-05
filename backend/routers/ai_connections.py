@@ -95,20 +95,20 @@ class ConnectionCreate(BaseModel):
     label: str = Field(..., min_length=1, max_length=120)
     preset: Preset = "custom"
     # Review keys only: a transcription key always goes to ElevenLabs.
-    base_url: str | None = Field(None, min_length=1, max_length=500)
-    api_key: str | None = Field(None, max_length=500)
-    check_model: str | None = Field(None, min_length=1, max_length=128)
-    rule_model: str | None = Field(None, max_length=128)
+    base_url: str | None = Field(default=None, min_length=1, max_length=500)
+    api_key: str | None = Field(default=None, max_length=500)
+    check_model: str | None = Field(default=None, min_length=1, max_length=128)
+    rule_model: str | None = Field(default=None, max_length=128)
 
 
 class ConnectionUpdate(BaseModel):
-    label: str | None = Field(None, min_length=1, max_length=120)
+    label: str | None = Field(default=None, min_length=1, max_length=120)
     preset: Preset | None = None
-    base_url: str | None = Field(None, min_length=1, max_length=500)
+    base_url: str | None = Field(default=None, min_length=1, max_length=500)
     # Omitted or null keeps the stored key; a new value replaces it.
-    api_key: str | None = Field(None, max_length=500)
-    check_model: str | None = Field(None, min_length=1, max_length=128)
-    rule_model: str | None = Field(None, max_length=128)
+    api_key: str | None = Field(default=None, max_length=500)
+    check_model: str | None = Field(default=None, min_length=1, max_length=128)
+    rule_model: str | None = Field(default=None, max_length=128)
 
 
 class SurveyConnectionUpdate(BaseModel):

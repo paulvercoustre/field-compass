@@ -1,0 +1,41 @@
+{
+  // Basic-mode type checking. The files listed under "Baseline" still have
+  // errors (70 at the time of writing, most of them Optional values used
+  // without a check). Fix a file, delete its line, and CI keeps it clean from
+  // then on. New files are checked by default.
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.11",
+  "include": ["."],
+  "exclude": [
+    "**/__pycache__",
+    "alembic/versions",
+    "tests",
+    "scripts",
+    // Baseline
+    "etl/audio.py",
+    "etl/data_merger.py",
+    "etl/hfc_engine.py",
+    "etl/pipeline.py",
+    "etl/translation.py",
+    "linter/form_source.py",
+    "main.py",
+    "routers/admin.py",
+    "routers/kobo.py",
+    "routers/lint.py",
+    "routers/progress.py",
+    "routers/quality.py",
+    "routers/submissions.py",
+    "routers/surveys.py",
+    "services/ai_endpoints.py",
+    "services/ai_errors.py",
+    "services/auth.py",
+    "services/kobo_sync_worker.py",
+    "services/pull_worker.py",
+    "services/qualitative_worker.py",
+    "services/runs.py",
+    "services/transcription_allowance.py",
+    "services/transcription_client.py",
+    "services/transcription_runtime.py",
+    "services/translation_queue.py"
+  ]
+}

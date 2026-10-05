@@ -23,7 +23,7 @@ class ValidationRuleCreateModel(BaseModel):
 
 
 class ValidationRuleUpdateModel(BaseModel):
-    rule_name: str | None = Field(None, min_length=1, max_length=255)
+    rule_name: str | None = Field(default=None, min_length=1, max_length=255)
     rule_data: dict[str, Any] | None = None
     is_active: bool | None = None
 

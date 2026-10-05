@@ -4,7 +4,7 @@ Handles user-to-survey permissions including ownership and shared access.
 """
 
 from collections.abc import Callable
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -17,6 +17,8 @@ from services.database import get_db
 
 # Permission level type
 PermissionLevel = Literal["owner", "editor", "viewer", "admin"]
+# What an endpoint can require; an admin satisfies all of them.
+AccessLevel = Literal["viewer", "editor", "owner"]
 
 
 def get_user_permission(db: Session, user: User, survey_id: UUID) -> PermissionLevel | None:
@@ -51,7 +53,7 @@ def get_user_permission(db: Session, user: User, survey_id: UUID) -> PermissionL
     )
 
     if access:
-        return access.permission_level
+        return cast(PermissionLevel, access.permission_level)
 
     return None
 
@@ -83,7 +85,7 @@ def require_survey_access(
     db: Session,
     user: User,
     survey_id: UUID,
-    min_level: Literal["viewer", "editor", "owner"] = "viewer",
+    min_level: AccessLevel = "viewer",
 ) -> SurveyConfig:
     """
     Require user to have at least the specified access level to the survey.
@@ -213,9 +215,6 @@ def get_survey_access_list(db: Session, survey_id: UUID) -> list[dict]:
     )
 
     return access_list
-
-
-AccessLevel = Literal["viewer", "editor", "owner"]
 
 
 def parse_uuid(value: str, what: str = "survey_id") -> UUID:
