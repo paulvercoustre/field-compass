@@ -56,7 +56,7 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
   const monthName = usage
     ? new Date(`${usage.month}-01T00:00:00Z`).toLocaleString(undefined, { month: 'long', timeZone: 'UTC' })
     : '';
-  const rules = usage?.rule_requests_today;
+  const rules = usage?.rule_requests_this_month;
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-card dark:border-gray-800 dark:bg-gray-900">
@@ -149,9 +149,9 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
 
           {rules && rules.limit > 0 && (
             <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-gray-100 pt-4 dark:border-gray-800">
-              <span className="text-sm text-gray-700 dark:text-gray-300">AI rule requests today</span>
+              <span className="text-sm text-gray-700 dark:text-gray-300">AI rule requests this month</span>
               <div className="w-48">
-                <Meter used={rules.used} limit={rules.limit} label="Included AI rule requests used today" />
+                <Meter used={rules.used} limit={rules.limit} label="Included AI rule requests used this month" />
               </div>
             </div>
           )}

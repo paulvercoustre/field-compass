@@ -37,7 +37,7 @@ from services.ai_allowance import (
     checks_used,
     month_start,
     next_month_start,
-    rule_requests_per_user_day,
+    rule_requests_per_user_month,
     rule_requests_remaining,
     translations_in_flight,
     translations_per_survey_month,
@@ -421,7 +421,7 @@ async def account_ai_usage(
 ):
     """
     This month's AI use on every survey the current user owns, and their
-    free AI rule requests today.
+    free AI rule requests this month.
 
     Per survey: which provider it runs on, its free allowance when that is
     the operator's key, and calls, failures and tokens by feature. Tokens are
@@ -547,7 +547,7 @@ async def account_ai_usage(
             }
         )
 
-    rule_limit = rule_requests_per_user_day() if enabled else 0
+    rule_limit = rule_requests_per_user_month() if enabled else 0
     rule_left = rule_requests_remaining(db, current_user.user_id)
     return {
         "month": since.strftime("%Y-%m"),
@@ -560,9 +560,9 @@ async def account_ai_usage(
             "transcription_minutes_per_survey_month": minutes_per_survey_month()
             if (os.getenv("ELEVENLABS_API_KEY") or "").strip()
             else None,
-            "rule_requests_per_day": rule_limit,
+            "rule_requests_per_month": rule_limit,
         },
-        "rule_requests_today": {
+        "rule_requests_this_month": {
             "limit": rule_limit,
             "used": rule_limit - rule_left,
             "remaining": rule_left,

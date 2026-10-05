@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database.models import SurveyConfig, User
-from services.ai_allowance import rule_requests_per_user_day, rule_requests_remaining
+from services.ai_allowance import rule_requests_per_user_month, rule_requests_remaining
 from services.ai_client import ResolvedProvider
 from services.ai_errors import AIError
 from services.ai_providers import RULES, resolve_provider
@@ -60,7 +60,7 @@ def _provider_for(db: Session, survey_config: SurveyConfig, user: User) -> Resol
     """
     The survey's own AI provider, None for the operator key, or an HTTP error.
 
-    On the operator key, rule writing is limited per user per day; with the
+    On the operator key, rule writing is limited per user per month; with the
     survey's own provider there is no Field Compass limit.
     """
     try:
@@ -76,7 +76,7 @@ def _provider_for(db: Session, survey_config: SurveyConfig, user: User) -> Resol
         raise HTTPException(
             status_code=429,
             detail=(
-                f"You've used today's {rule_requests_per_user_day()} included AI rule requests. "
+                f"You've used this month's {rule_requests_per_user_month()} included AI rule requests. "
                 "They reset tomorrow, or add your own AI provider in Account Settings."
             ),
         )

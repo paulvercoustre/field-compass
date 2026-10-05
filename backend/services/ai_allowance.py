@@ -4,7 +4,7 @@ Included AI usage: how much a survey may spend on the operator's key.
 Surveys without their own provider run AI checks on the operator's key, up
 to a monthly number of checked submissions per survey, and translate answers
 up to a separate monthly number of translations per survey; AI rule writing on
-that key is limited per user per day. All are counted from ``ai_usage``, so
+that key is limited per user per month. All are counted from ``ai_usage``, so
 the limit is what was actually spent, not an estimate. A survey with its own
 provider has no Field Compass limit -- its provider's apply.
 
@@ -49,8 +49,8 @@ def translations_per_survey_month() -> int:
     return _int_env("AI_ALLOWANCE_TRANSLATIONS_PER_SURVEY_MONTH", 500)
 
 
-def rule_requests_per_user_day() -> int:
-    return _int_env("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_DAY", 30)
+def rule_requests_per_user_month() -> int:
+    return _int_env("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH", 30)
 
 
 def allowance_enabled() -> bool:
@@ -72,11 +72,6 @@ def next_month_start(now: datetime | None = None) -> datetime:
         if start.month == 12
         else start.replace(month=start.month + 1)
     )
-
-
-def _day_start(now: datetime | None = None) -> datetime:
-    now = now or datetime.utcnow()
-    return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _spent_submissions(db: Session, survey_id: UUID, now: datetime | None = None):
@@ -139,7 +134,7 @@ def checks_remaining(db: Session, survey_id: UUID, now: datetime | None = None) 
 
 
 def rule_requests_remaining(db: Session, user_id: UUID, now: datetime | None = None) -> int:
-    """How many more AI rule requests this user may make on the operator's key today."""
+    """How many more AI rule requests this user may make on the operator's key this month."""
     if not allowance_enabled():
         return 0
     used = (
@@ -149,11 +144,11 @@ def rule_requests_remaining(db: Session, user_id: UUID, now: datetime | None = N
             AIUsage.feature.in_((RULE_GENERATION, RULE_SUGGESTION)),
             AIUsage.connection_id.is_(None),
             AIUsage.outcome.in_(_SPENT),
-            AIUsage.created_at >= _day_start(now),
+            AIUsage.created_at >= month_start(now),
         )
         .scalar()
     )
-    return max(0, rule_requests_per_user_day() - used)
+    return max(0, rule_requests_per_user_month() - used)
 
 
 def not_run_message(now: datetime | None = None) -> str:

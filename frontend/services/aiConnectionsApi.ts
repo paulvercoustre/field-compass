@@ -195,10 +195,10 @@ export interface AccountAIUsage {
     /** Included translated answers per survey per month, apart from AI reviews. */
     translations_per_survey_month: number;
     transcription_minutes_per_survey_month: number | null;
-    rule_requests_per_day: number;
+    rule_requests_per_month: number;
   };
-  /** Included AI rule requests on the Field Compass key, today. */
-  rule_requests_today: { limit: number; used: number; remaining: number };
+  /** Included AI rule requests on the Field Compass key, this month. */
+  rule_requests_this_month: { limit: number; used: number; remaining: number };
   /** Every survey the user owns. */
   surveys: Array<{
     survey_id: string;
