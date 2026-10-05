@@ -3,7 +3,7 @@
  * survey uses. Keys are sent, never received: responses carry `api_key_hint`.
  */
 
-import { API_BASE_URL, apiFetch } from './apiBase';
+import { request } from './apiBase';
 
 export type AIPreset = 'openai' | 'azure' | 'anthropic' | 'openrouter' | 'mistral' | 'groq' | 'self_hosted' | 'custom';
 /** What a key is: an AI model (AI review, rule writing, translation), or ElevenLabs (audio transcription). */
@@ -122,24 +122,6 @@ export const AI_PRESETS: Record<AIPreset, { name: string; baseUrl: string; model
     note: 'Private addresses only work if your administrator has allowed them.',
   },
   custom: { name: 'Other OpenAI-compatible', baseUrl: '', modelHint: 'model name' },
-};
-
-const headers = (): HeadersInit => {
-  const token = localStorage.getItem('field_compass_token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-};
-
-const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const response = await apiFetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({ detail: response.statusText }));
-    const detail = typeof body.detail === 'string' ? body.detail : response.statusText;
-    throw new Error(detail || 'Request failed');
-  }
-  return (response.status === 204 ? undefined : await response.json()) as T;
 };
 
 export const listAIConnections = () => request<AIConnection[]>('/api/ai/connections');

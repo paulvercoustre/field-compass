@@ -5,6 +5,7 @@ import AIIntegrationTab from '../components/ai/AIIntegrationTab';
 import NotificationSettings from '../components/activity/NotificationSettings';
 import SettingsLayout, { SettingsNavItem } from '../components/ui/SettingsLayout';
 import UsageTab from '../components/admin/UsageTab';
+import { RequestedTab } from '../contexts/NavigationContext';
 
 type AccountTab = 'profile' | 'kobo' | 'ai' | 'notifications' | 'usage';
 
@@ -20,7 +21,7 @@ const USAGE_NAV_ITEMS: SettingsNavItem<AccountTab>[] = [...NAV_ITEMS, { id: 'usa
 
 interface UserSettingsPageProps {
   /** A tab asked for by a link elsewhere in the app. */
-  requestedTab?: { tab: string; at: number };
+  requestedTab?: RequestedTab;
 }
 
 const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => {

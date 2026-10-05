@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
-import { API_BASE_URL, apiFetch, setReauthHandler } from '../services/apiBase';
+import { API_BASE_URL, apiFetch, setReauthHandler, TOKEN_KEY } from '../services/apiBase';
 import SessionExpiredDialog from '../components/SessionExpiredDialog';
 import { forgetSurveyId } from '../utils/selectedSurveyStorage';
 import { readSignupSource } from '../utils/signupSource';
@@ -85,7 +85,6 @@ const errorDetail = async (response: Response, fallback: string): Promise<string
 
 // Local storage keys
 
-const TOKEN_KEY = 'field_compass_token';
 const USER_KEY = 'field_compass_user';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {

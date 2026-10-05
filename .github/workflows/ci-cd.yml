@@ -106,6 +106,9 @@ jobs:
     - name: Unused files, exports and dependencies
       run: npx knip
 
+    - name: Unit tests
+      run: npm test
+
     - name: Build
       run: npm run build
 

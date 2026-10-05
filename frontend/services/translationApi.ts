@@ -5,8 +5,8 @@
  * language. See docs/specs/translation.md.
  */
 
-import { API_BASE_URL, apiFetch } from './apiBase';
-import { ApiError, RunSummary } from './activityApi';
+import { request } from './apiBase';
+import { RunSummary } from './activityApi';
 import { KoboPause, KoboStatus, TranscriptionLanguage } from './transcriptionApi';
 
 export interface TranslatableQuestion {
@@ -102,24 +102,6 @@ export interface SubmissionTranslations {
   /** By question path. */
   answers: Record<string, Translation>;
 }
-
-const token = () => localStorage.getItem('field_compass_token');
-
-const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const response = await apiFetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
-    },
-  });
-  const body = await response.json().catch(() => ({ detail: response.statusText }));
-  if (!response.ok) {
-    const detail = typeof body?.detail === 'string' ? body.detail : response.statusText;
-    throw new ApiError(detail || 'Request failed', response.status, body);
-  }
-  return body as T;
-};
 
 export const getTranslationOverview = (surveyId: string) =>
   request<TranslationOverview>(`/api/surveys/${surveyId}/translation`);

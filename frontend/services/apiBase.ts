@@ -18,7 +18,8 @@ const configured = (import.meta.env.VITE_API_URL ?? '')
 export const API_BASE_URL =
   configured || (import.meta.env.DEV ? 'http://localhost:8000' : '');
 
-const TOKEN_KEY = 'field_compass_token';
+/** Where the signed-in session's token is kept. */
+export const TOKEN_KEY = 'field_compass_token';
 
 /**
  * Asked when a signed-in request comes back 401: resolves true once the
@@ -55,4 +56,59 @@ export const apiFetch = async (input: string, init: RequestInit = {}): Promise<R
   if (!token) return response;
   headers.set('Authorization', `Bearer ${token}`);
   return fetch(input, { ...init, headers });
+};
+
+/** An API error that keeps the status and body: a 409 from a pull carries the run under way. */
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public body: any) {
+    super(message);
+  }
+}
+
+/** The JSON and Authorization headers every signed-in request sends. */
+export const authHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
+/**
+ * A request to the API, through apiFetch (so an expired session can sign in
+ * again and retry). Resolves with the parsed JSON body, or undefined for an
+ * empty one (204). Rejects with ApiError carrying the server's `detail`.
+ */
+export const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+  const response = await apiFetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: { ...authHeaders(), ...(init.headers as Record<string, string> | undefined) },
+  });
+  const text = await response.text();
+  let body: any;
+  try {
+    body = text ? JSON.parse(text) : undefined;
+  } catch {
+    body = undefined;
+  }
+  if (!response.ok) {
+    const detail = typeof body?.detail === 'string' ? body.detail : response.statusText;
+    throw new ApiError(detail || 'Request failed', response.status, body ?? { detail: response.statusText });
+  }
+  return body as T;
+};
+
+/**
+ * The server's own `detail` when it gave one, otherwise `message`: for calls
+ * whose failures need wording a bare status text would not supply.
+ */
+export const orMessage = async <T>(pending: Promise<T>, message: string): Promise<T> => {
+  try {
+    return await pending;
+  } catch (error) {
+    if (error instanceof ApiError && typeof error.body?.detail !== 'string') {
+      throw new ApiError(message, error.status, error.body);
+    }
+    throw error;
+  }
 };

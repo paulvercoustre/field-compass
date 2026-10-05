@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
-import { createSurvey, SurveyCreate } from '../services/progressApi';
+import { useNavigation } from '../contexts/NavigationContext';
+import { createSurvey, Survey, SurveyCreate } from '../services/progressApi';
 import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from '../utils/samplingFrameParser';
 import { KoboToolData, SamplingMode } from '../types';
 import { Spinner } from '../components/Spinner';
@@ -20,12 +21,13 @@ import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 
 const CreateSurveyPage: React.FC = () => {
-  const { refreshSurveys, setSelectedSurvey, selectedSurvey } = useSurvey();
+  const { refreshSurveys, setSelectedSurvey } = useSurvey();
+  const { navigate } = useNavigation();
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showQualityCheckPrompt, setShowQualityCheckPrompt] = useState(false);
-  const [newlyCreatedSurveyId, setNewlyCreatedSurveyId] = useState<string | null>(null);
+  const [createdSurvey, setCreatedSurvey] = useState<Survey | null>(null);
 
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
@@ -336,18 +338,13 @@ const CreateSurveyPage: React.FC = () => {
       
       setSuccess('Survey created successfully!');
       
-      // Refresh surveys and select the new one
+      // Select the new survey, then ask whether to set up its checks now.
       const surveys = await refreshSurveys();
-      const createdSurvey = surveys.find(s => s.survey_id === newSurvey.survey_id);
-      if (createdSurvey) {
-        // Set the selected survey first
-        setSelectedSurvey(createdSurvey);
-        setNewlyCreatedSurveyId(newSurvey.survey_id);
-        // Show the quality check prompt modal
-        // Use a small delay to ensure context state is updated
-        setTimeout(() => {
-          setShowQualityCheckPrompt(true);
-        }, 50);
+      const created = surveys.find(s => s.survey_id === newSurvey.survey_id);
+      if (created) {
+        setSelectedSurvey(created);
+        setCreatedSurvey(created);
+        setShowQualityCheckPrompt(true);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create survey');
@@ -356,105 +353,17 @@ const CreateSurveyPage: React.FC = () => {
     }
   };
 
-  const handleConfigureNow = () => {
+  /** Leave for the new survey's quality checks, or for its submissions. */
+  const leaveFor = (view: 'settings' | 'dashboard') => {
     setShowQualityCheckPrompt(false);
-    // Set flag in localStorage to open quality tab in settings
-    // Also store the survey ID to ensure we're editing the correct survey
-    if (newlyCreatedSurveyId) {
-      localStorage.setItem('openQualityTab', 'true');
-      localStorage.setItem('openQualityTabForSurveyId', newlyCreatedSurveyId);
-
-      // Ensure the survey is properly selected and persisted
-      const ensureSurveySelected = async () => {
-        try {
-          // Refresh surveys to make sure we have the latest list
-          const surveyList = await refreshSurveys();
-          const targetSurvey = surveyList.find(s => s.survey_id === newlyCreatedSurveyId);
-
-          if (targetSurvey) {
-            // Force select the survey multiple times to ensure it sticks
-            setSelectedSurvey(targetSurvey);
-
-            // Wait a bit and verify the selection is still correct
-            await new Promise(resolve => setTimeout(resolve, 50));
-
-            // Double-check that the survey is still selected
-            if (!selectedSurvey || selectedSurvey.survey_id !== newlyCreatedSurveyId) {
-              setSelectedSurvey(targetSurvey);
-            }
-
-            // Navigate after ensuring selection is stable
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('navigateToSettings'));
-            }, 100);
-          } else {
-            console.warn('Newly created survey not found in refreshed list');
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('navigateToSettings'));
-            }, 100);
-          }
-        } catch (err) {
-          console.error('Error ensuring survey selection:', err);
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('navigateToSettings'));
-          }, 100);
-        }
-      };
-
-      ensureSurveySelected();
-    }
+    navigate({
+      view,
+      survey: createdSurvey ?? undefined,
+      tab: view === 'settings' ? 'quality' : undefined,
+    });
   };
-
-  const handleConfigureLater = () => {
-    setShowQualityCheckPrompt(false);
-
-    // Clear flags first
-    localStorage.removeItem('openQualityTab');
-    localStorage.removeItem('openQualityTabForSurveyId');
-
-    // Ensure the survey is selected before navigating to dashboard
-    if (newlyCreatedSurveyId) {
-      const ensureSurveySelected = async () => {
-        try {
-          const surveyList = await refreshSurveys();
-          const targetSurvey = surveyList.find(s => s.survey_id === newlyCreatedSurveyId);
-
-          if (targetSurvey) {
-            setSelectedSurvey(targetSurvey);
-
-            // Wait and verify
-            await new Promise(resolve => setTimeout(resolve, 50));
-
-            if (!selectedSurvey || selectedSurvey.survey_id !== newlyCreatedSurveyId) {
-              setSelectedSurvey(targetSurvey);
-            }
-
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('navigateToDashboard'));
-            }, 100);
-          } else {
-            console.warn('Newly created survey not found in list for dashboard navigation');
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('navigateToDashboard'));
-            }, 100);
-          }
-        } catch (err) {
-          console.error('Error ensuring survey selection for dashboard:', err);
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('navigateToDashboard'));
-          }, 100);
-        }
-      };
-
-      ensureSurveySelected();
-    } else {
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('navigateToDashboard'));
-      }, 100);
-    }
-
-    setNewlyCreatedSurveyId(null);
-  };
+  const handleConfigureNow = () => leaveFor('settings');
+  const handleConfigureLater = () => leaveFor('dashboard');
 
 
   return (

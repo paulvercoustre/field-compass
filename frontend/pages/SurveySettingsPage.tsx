@@ -24,13 +24,14 @@ import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 import AudioTranscriptionCard from '../components/transcription/AudioTranscriptionCard';
 import TranslationCard from '../components/translation/TranslationCard';
 import SurveyKeyPicker from '../components/ai/SurveyKeyPicker';
+import { RequestedTab } from '../contexts/NavigationContext';
 
 type SurveySettingsTab = 'settings' | 'access' | 'quality' | 'transcription' | 'translation';
 const SURVEY_SETTINGS_TABS: string[] = ['settings', 'access', 'quality', 'transcription', 'translation'];
 
 interface SurveySettingsPageProps {
   /** A tab asked for by a link elsewhere in the app (a notification, the activity panel). */
-  requestedTab?: { tab: string; at: number };
+  requestedTab?: RequestedTab;
 }
 
 /**
@@ -283,18 +284,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       setError(null);
       setSavedAt({});
       loadSurveyConfig();
-
-      // Check if we should open the quality tab (set from CreateSurveyPage)
-      const shouldOpenQualityTab = localStorage.getItem('openQualityTab');
-      const targetSurveyId = localStorage.getItem('openQualityTabForSurveyId');
-
-      // Only open quality tab if this is the survey we just created
-      if (shouldOpenQualityTab === 'true' && targetSurveyId === selectedSurvey.survey_id) {
-        setActiveTab('quality');
-        // Clear the flags so they don't persist
-        localStorage.removeItem('openQualityTab');
-        localStorage.removeItem('openQualityTabForSurveyId');
-      }
     } else {
       // Reset deletion state when no survey is selected (keep success message visible)
       setIsDeleting(false);

@@ -51,21 +51,6 @@ export interface Submission {
   transcript_summary?: { count: number; success: number; failed: number; in_progress: number; no_speech: number } | null;
 }
 
-export interface JsonPatch {
-  op: 'add' | 'remove' | 'replace';
-  path: string;
-  value?: any;
-  from?: string;
-}
-
-export interface SubmissionHistory {
-  history_id: number;
-  kobo_id: number;
-  timestamp: string;
-  deprecated_uuid: string;
-  data_delta: JsonPatch[];
-}
-
 // --- Rule Builder Types ---
 
 export interface KoboQuestion {

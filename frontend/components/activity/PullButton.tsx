@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useActivity } from '../../contexts/ActivityContext';
 import { useSurvey } from '../../contexts/SurveyContext';
-import { ApiError, RunSummary } from '../../services/activityApi';
+import { RunSummary } from '../../services/activityApi';
+import { ApiError } from '../../services/apiBase';
 import Button from '../ui/Button';
 import Banner from '../ui/Banner';
 import { RefreshIcon } from '../ui/icons';

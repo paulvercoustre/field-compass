@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { progressApi } from '../services/progressApi';
 import { useSurvey } from '../contexts/SurveyContext';
+import { useNavigation } from '../contexts/NavigationContext';
 import { PerformanceData } from '../types';
 import { Spinner } from '../components/Spinner';
 import PageHeader from '../components/ui/PageHeader';
@@ -20,6 +21,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
   onNavigateToSubmissions,
 }) => {
   const { selectedSurvey } = useSurvey();
+  const { navigate } = useNavigation();
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +100,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
           <CapabilityNotice
             title="Field team performance"
             message="Please set up the enumerator variable in the settings."
-            onOpenSettings={() => window.dispatchEvent(new Event('navigateToSettings'))}
+            onOpenSettings={() => navigate({ view: 'settings' })}
           />
         ) : performanceData ? (
           <div className="max-w-screen-2xl mx-auto space-y-6">

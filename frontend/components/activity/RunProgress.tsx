@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { isOpen, RunAction, RunSummary, stopRun, WorkBucket } from '../../services/activityApi';
-import { NavigationTarget, useActivity } from '../../contexts/ActivityContext';
+import { useActivity } from '../../contexts/ActivityContext';
+import { NavigationTarget } from '../../contexts/NavigationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
