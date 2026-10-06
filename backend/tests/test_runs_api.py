@@ -552,15 +552,16 @@ class TestTranslationApi:
 
     def test_included_translations_apart_from_reviews(self, client, survey, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-operator")
-        monkeypatch.setenv("AI_ALLOWANCE_TRANSLATIONS_PER_SURVEY_MONTH", "300")
+        monkeypatch.setenv("AI_ALLOWANCE_TRANSLATIONS_PER_USER_MONTH", "300")
         body = client.get(self.URL.format(survey.survey_id)).json()
         assert body["key"]["source"] == "operator"
         assert (body["allowance"]["limit"], body["allowance"]["remaining"]) == (300, 300)
         client.put(self.URL.format(survey.survey_id), json=self.ON)
         usage = client.get("/api/ai/usage").json()
-        assert usage["included"]["translations_per_survey_month"] == 300
+        assert usage["included"]["translations_per_month"] == 300
+        assert usage["included_usage"]["translations"]["limit"] == 300
         mine = next(s for s in usage["surveys"] if s["survey_id"] == str(survey.survey_id))
-        assert mine["translation"]["allowance"]["limit"] == 300
+        assert mine["translation"] == {"provider": None, "translations": 0}
         assert client.get("/api/ai/usage/history?metric=translations").status_code == 200
 
     def test_translate_now_needs_it_on(self, client, survey):

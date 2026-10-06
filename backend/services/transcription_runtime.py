@@ -299,11 +299,10 @@ def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality
             if key.counts_against_allowance:
                 reservation = reserve(
                     db,
-                    survey.survey_id,
+                    survey,
                     duration if duration is not None else _UNKNOWN_LENGTH_RESERVATION,
                     model=client.model,
                     submission_id=row.submission_id,
-                    billed_user_id=survey.user_id,
                 )
             if key.counts_against_allowance and reservation is None:
                 _finish(db, row, "not_run_allowance", error=not_run_message())

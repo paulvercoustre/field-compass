@@ -430,7 +430,7 @@ class TestTranscriptionJob:
         assert stored.qa_status == "FLAGGED"
 
     def test_allowance_used_up_sends_nothing(self, test_db, survey, env, monkeypatch):
-        monkeypatch.setenv("TRANSCRIPTION_ALLOWANCE_MINUTES_PER_SURVEY_MONTH", "0")
+        monkeypatch.setenv("TRANSCRIPTION_ALLOWANCE_MINUTES_PER_USER_MONTH", "0")
         submission = _submission(test_db, survey)
         _, rows = _queue(test_db, survey, submission)
         assert _run(test_db, rows[0])["status"] == "not_run_allowance"
@@ -858,13 +858,14 @@ class TestOwnKey:
     def test_the_surveys_key_is_used_and_not_counted(
         self, test_db, survey, env, own_key, monkeypatch
     ):
+        from services.ai_allowance import Account
         from services.transcription_allowance import seconds_used
 
         used_keys = []
         monkeypatch.setattr(
             runtime, "client_for", lambda key: used_keys.append(key) or _FakeClient()
         )
-        monkeypatch.setenv("TRANSCRIPTION_ALLOWANCE_MINUTES_PER_SURVEY_MONTH", "0")
+        monkeypatch.setenv("TRANSCRIPTION_ALLOWANCE_MINUTES_PER_USER_MONTH", "0")
         submission = _submission(test_db, survey)
         _, rows = _queue(test_db, survey, submission)
         assert _run(test_db, rows[0])["status"] == "success"
@@ -875,7 +876,7 @@ class TestOwnKey:
             "ok",
             30.0,
         )
-        assert seconds_used(test_db, survey.survey_id) == 0
+        assert seconds_used(test_db, Account.of(survey)) == 0
 
     def test_a_key_refused_again_and_again_is_paused(self, test_db, survey, env, own_key):
         own_key.consecutive_failures = 2  # the third rejection pauses it

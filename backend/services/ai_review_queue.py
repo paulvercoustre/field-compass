@@ -22,6 +22,7 @@ from database.models import AudioTranscript, SubmissionCurrent, SurveyConfig
 from etl.audio import TranscriptView, ai_audio_fields, review_data
 from services.ai_allowance import (
     NOT_RUN_ALLOWANCE,
+    Account,
     checks_remaining,
     counted_submission_ids,
     not_run_message,
@@ -75,7 +76,9 @@ class AIReviewQueuer:
         self.paused_error = paused_error(db, survey_config)
         # On the operator's key, how many reviews may still be queued; None
         # when the survey has its own provider (no Field Compass limit).
-        self.allowance_left = None if connection else checks_remaining(db, survey_config.survey_id)
+        self.allowance_left = (
+            None if connection else checks_remaining(db, Account.of(survey_config))
+        )
         # Submissions already counted this month: queueing one again is free.
         self.already_counted = (
             set() if connection else counted_submission_ids(db, survey_config.survey_id)

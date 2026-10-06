@@ -447,7 +447,7 @@ def _ai_problems(db: Session, run: Run, stats: dict, month: str) -> list[dict]:
         problems.append(
             _problem(
                 "ai_allowance",
-                f"{_plural(not_run, 'answer')} not reviewed: this survey has used its included AI reviews for {month}.",
+                f"{_plural(not_run, 'answer')} not reviewed: the included AI reviews for {month}, shared by all of the owner's surveys, are used up.",
                 "open_ai_usage",
             )
         )
@@ -455,7 +455,7 @@ def _ai_problems(db: Session, run: Run, stats: dict, month: str) -> list[dict]:
 
 
 def _transcription_problems(db: Session, run: Run, month: str) -> list[dict]:
-    from services.transcription_allowance import max_recording_seconds, minutes_per_survey_month
+    from services.transcription_allowance import max_recording_seconds, minutes_per_month
 
     failed = _categories(
         db.query(AudioTranscript.last_error).filter(
@@ -501,7 +501,7 @@ def _transcription_problems(db: Session, run: Run, month: str) -> list[dict]:
         problems.append(
             _problem(
                 "transcription_allowance",
-                f"{_plural(held, 'recording')} not transcribed: this survey has used its {minutes_per_survey_month()} included minutes for {month}.",
+                f"{_plural(held, 'recording')} not transcribed: the {minutes_per_month()} included minutes for {month}, shared by all of the owner's surveys, are used up.",
                 "open_ai_usage",
             )
         )
@@ -540,7 +540,7 @@ def _translation_problems(db: Session, run: Run, month: str) -> list[dict]:
         problems.append(
             _problem(
                 "translation_allowance",
-                f"{_plural(held, 'answer')} not translated: this survey has used its included translations for {month}.",
+                f"{_plural(held, 'answer')} not translated: the included translations for {month}, shared by all of the owner's surveys, are used up.",
                 "open_ai_usage",
             )
         )

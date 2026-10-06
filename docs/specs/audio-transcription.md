@@ -80,7 +80,7 @@ when it is done.
 - Send transcripts to Kobo through its supplement API, never overwriting a
   correction made in Kobo.
 - Meter transcription in `ai_usage` (in minutes) under a free monthly
-  allowance per survey.
+  allowance per account, shared by all the account's surveys.
 - A pull, and the background work it starts, has a visible, reload-safe
   progress view and a clear end.
 - Users are told, in the app, when work finishes or stops for a reason
@@ -271,14 +271,15 @@ the other features.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `TRANSCRIPTION_ALLOWANCE_MINUTES_PER_SURVEY_MONTH` | 120 | Minutes per survey per calendar month (UTC) on the operator key |
+| `TRANSCRIPTION_ALLOWANCE_MINUTES_PER_USER_MONTH` | 120 | Minutes per account per calendar month (UTC) on the operator key, shared by all the surveys the account owns. The older `..._PER_SURVEY_MONTH` name is still read |
 | `TRANSCRIPTION_MAX_SECONDS` | 1800 | Longest single recording sent |
 
-At the listed price, 120 minutes is under $1 per survey per month.
+At the listed price, 120 minutes is under $1 per account per month.
 
 Recording lengths are unknown until the file is downloaded, so the
-allowance is enforced at run time, not at queue time. Under a per-survey
-Postgres advisory lock, the worker sums this month's seconds (settled plus
+allowance is enforced at run time, not at queue time. Under a per-account
+Postgres advisory lock (so concurrent transcriptions on several of the
+owner's surveys cannot overshoot either), the worker sums this month's seconds (settled plus
 reserved) and adds a `reserved` usage row for this recording. If that would
 exceed the allowance, the transcript is stored as `not_run_allowance`. The
 row is settled to `ok` or the error category after the call. A failed call

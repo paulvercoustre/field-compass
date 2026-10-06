@@ -101,7 +101,7 @@ const describeAiCheck = (
       : { tone: 'ok', title: 'Reviewed — nothing flagged.' };
   }
   if (status === 'not_run_allowance') {
-    // Stored as "allowance: This survey has used its included AI reviews for October. ..."
+    // Stored as "allowance: The included AI reviews for October, shared by ... are used up. ..."
     return { tone: 'warn', title: providerMessage ?? 'Not reviewed: this survey has used its included AI reviews for this month.' };
   }
   if (status === 'failed') {

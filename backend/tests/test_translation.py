@@ -23,7 +23,7 @@ from etl.translation import (
     translation_input_hash,
     translation_settings,
 )
-from services.ai_allowance import checks_used, translations_used
+from services.ai_allowance import Account, checks_used, translations_used
 from services.ai_client import CallUsage
 from services.ai_errors import AIError
 from services.ai_service import AIService
@@ -445,7 +445,7 @@ class TestAllowance:
     def test_held_back_when_the_included_translations_are_used(
         self, test_db, survey, ai, monkeypatch
     ):
-        monkeypatch.setenv("AI_ALLOWANCE_TRANSLATIONS_PER_SURVEY_MONTH", "1")
+        monkeypatch.setenv("AI_ALLOWANCE_TRANSLATIONS_PER_USER_MONTH", "1")
         _consider(test_db, survey, _answered(test_db, survey, _id=1))
         _consider(test_db, survey, _answered(test_db, survey, _id=2))
         statuses = sorted(r.status for r in test_db.query(AnswerTranslation))
@@ -454,7 +454,7 @@ class TestAllowance:
         assert "included translations" in held.last_error
 
     def test_apart_from_ai_review(self, test_db, survey, ai, monkeypatch):
-        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "0")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "0")
         for feature in ("qualitative_check", "translation", "translation"):
             test_db.add(
                 AIUsage(
@@ -466,14 +466,14 @@ class TestAllowance:
                 )
             )
         test_db.commit()
-        assert checks_used(test_db, survey.survey_id) == 1
-        assert translations_used(test_db, survey.survey_id) == 2
+        assert checks_used(test_db, Account.of(survey)) == 1
+        assert translations_used(test_db, Account.of(survey)) == 2
         # Reviews used up: translation goes on.
         _consider(test_db, survey, _answered(test_db, survey, _id=2))
         assert _row(test_db, "village").status == "pending"
 
     def test_the_owners_key_for_translation_has_no_limit(self, test_db, survey, ai, monkeypatch):
-        monkeypatch.setenv("AI_ALLOWANCE_TRANSLATIONS_PER_SURVEY_MONTH", "0")
+        monkeypatch.setenv("AI_ALLOWANCE_TRANSLATIONS_PER_USER_MONTH", "0")
         monkeypatch.setattr(
             translation_queue,
             "translation_connection",

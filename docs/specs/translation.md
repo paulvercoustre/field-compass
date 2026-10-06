@@ -28,7 +28,7 @@ transcription:
 | Which answers | The questions the owner ticks: text questions, and audio questions (their transcript, ours or Kobo's). Repeats are not translated yet. |
 | When | Automatically: on each pull for every fetched submission, and right after each transcript is made. "Translate now" and "Translate all again" for the rest. |
 | Key | `survey_configs.translation_connection_id`: one of the owner's OpenAI-compatible keys, picked per survey in Account settings › AI integration, separately from AI review's `ai_connection_id`. |
-| Included usage | Counted in translated answers per survey per month (`AI_ALLOWANCE_TRANSLATIONS_PER_SURVEY_MONTH`, default 500), on top of and apart from AI reviews. One call that cost credit = one translation. |
+| Included usage | Counted in translated answers per account per month, shared by all the account's surveys (`AI_ALLOWANCE_TRANSLATIONS_PER_USER_MONTH`, default 500; the older `..._PER_SURVEY_MONTH` name is still read), on top of and apart from AI reviews. One call that cost credit = one translation. |
 | What AI review reads | The original answer, unchanged. |
 | Kobo's translations | Read from `_supplementalDetails` on pull. A translation Kobo shows in the survey's language is stored (origin `kobo`) and never translated here. |
 
@@ -121,7 +121,7 @@ Calls go to `ai_usage` with feature `translation` and the submission's id.
   on the included usage.
 - **Account settings › AI integration**: three features (AI review,
   Translation, Audio transcription); included usage shows translated answers
-  per survey per month; "Your keys" lets an AI model key serve a survey's AI
+  per month, shared by all the user's surveys; "Your keys" lets an AI model key serve a survey's AI
   review, its translation, or both; usage per survey has a Translation column
   and the chart a Translations view. The admin Usage tab counts translations
   apart from AI reviews.

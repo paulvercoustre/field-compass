@@ -1,11 +1,13 @@
 """
-Included transcription usage: minutes of audio per survey per month.
+Included transcription usage: minutes of audio per account per month, shared
+by all the surveys the account owns (see services/ai_allowance.py for whose
+usage counts where).
 
 Counted from ``ai_usage`` rows with ``feature = "transcription"``. A recording's
 length is only known once it is downloaded, so the worker reserves its seconds
-just before the call -- under a per-survey lock, so concurrent transcriptions
-cannot overshoot -- and settles the row once ElevenLabs answers. A failed call
-costs nothing and is not counted.
+just before the call -- under a per-account lock, so concurrent transcriptions,
+on one survey or several, cannot overshoot -- and settles the row once
+ElevenLabs answers. A failed call costs nothing and is not counted.
 
 See docs/specs/audio-transcription.md, section 4.6.
 """
@@ -18,8 +20,8 @@ from uuid import UUID
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from database.models import AIUsage
-from services.ai_allowance import month_start
+from database.models import AIUsage, SurveyConfig
+from services.ai_allowance import Account, month_start
 from services.ai_pricing import audio_cost_usd_micros
 from services.ai_usage import TRANSCRIPTION
 from settings import get_settings
@@ -31,7 +33,7 @@ _COUNTED = ("ok", RESERVED)
 STALE_RESERVATION = timedelta(hours=1)
 
 
-def minutes_per_survey_month() -> int:
+def minutes_per_month() -> int:
     return get_settings().transcription_allowance_minutes_per_user_month
 
 
@@ -39,12 +41,12 @@ def max_recording_seconds() -> int:
     return get_settings().transcription_max_seconds
 
 
-def seconds_used(db: Session, survey_id: UUID, now: datetime | None = None) -> float:
-    """Seconds transcribed (or reserved) on the operator's key this month."""
+def seconds_used(db: Session, account: Account, now: datetime | None = None) -> float:
+    """Seconds the account transcribed (or reserved) on the operator's key this month."""
     value = (
         db.query(func.coalesce(func.sum(AIUsage.audio_seconds), 0))
         .filter(
-            AIUsage.survey_id == survey_id,
+            account.usage(),
             AIUsage.feature == TRANSCRIPTION,
             AIUsage.connection_id.is_(None),
             AIUsage.outcome.in_(_COUNTED),
@@ -55,39 +57,39 @@ def seconds_used(db: Session, survey_id: UUID, now: datetime | None = None) -> f
     return float(value or 0)
 
 
-def seconds_remaining(db: Session, survey_id: UUID, now: datetime | None = None) -> float:
-    return max(0.0, minutes_per_survey_month() * 60 - seconds_used(db, survey_id, now))
+def seconds_remaining(db: Session, account: Account, now: datetime | None = None) -> float:
+    return max(0.0, minutes_per_month() * 60 - seconds_used(db, account, now))
 
 
-def _lock(db: Session, survey_id: UUID) -> None:
-    """Serialise reservations for one survey until the transaction ends."""
+def _lock(db: Session, account: Account) -> None:
+    """Serialise reservations for one account until the transaction ends."""
     if db.bind is not None and db.bind.dialect.name == "postgresql":
         db.execute(
             text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
-            {"key": f"transcription-allowance:{survey_id}"},
+            {"key": f"transcription-allowance:{account.key}"},
         )
 
 
 def reserve(
     db: Session,
-    survey_id: UUID,
+    survey: SurveyConfig,
     seconds: float,
     *,
     model: str,
     submission_id: int | None,
-    billed_user_id: UUID | None,
     user_id: UUID | None = None,
 ) -> AIUsage | None:
     """
-    Reserve ``seconds`` of this month's allowance, or None when it would be
-    exceeded. Commits either way (which releases the lock).
+    Reserve ``seconds`` of the survey owner's allowance for this month, or None
+    when it would be exceeded. Commits either way (which releases the lock).
     """
-    _lock(db, survey_id)
-    if seconds_used(db, survey_id) + seconds > minutes_per_survey_month() * 60:
+    account = Account.of(survey)
+    _lock(db, account)
+    if seconds_used(db, account) + seconds > minutes_per_month() * 60:
         db.commit()
         return None
     row = AIUsage(
-        survey_id=survey_id,
+        survey_id=survey.survey_id,
         feature=TRANSCRIPTION,
         submission_id=submission_id,
         model=model,
@@ -95,7 +97,7 @@ def reserve(
         audio_seconds=round(seconds, 2),
         cost_usd_micros=audio_cost_usd_micros(model, seconds),
         user_id=user_id,
-        billed_user_id=billed_user_id,
+        billed_user_id=survey.user_id,
     )
     db.add(row)
     db.commit()
@@ -132,9 +134,26 @@ def release_stale_reservations(db: Session, now: datetime | None = None) -> int:
 def not_run_message(now: datetime | None = None) -> str:
     month = month_start(now).strftime("%B")
     return (
-        f"allowance: This survey has used its {minutes_per_survey_month()} included transcription "
-        f"minutes for {month}. It resumes next month."
+        f"allowance: The {minutes_per_month()} included transcription minutes for {month}, "
+        "shared by all of the owner's surveys, are used up. It resumes next month, or straight "
+        "away with your own ElevenLabs key."
     )
+
+
+def seconds_on_survey(db: Session, survey_id: UUID, now: datetime | None = None) -> float:
+    """One survey's share of the included minutes this month."""
+    value = (
+        db.query(func.coalesce(func.sum(AIUsage.audio_seconds), 0))
+        .filter(
+            AIUsage.survey_id == survey_id,
+            AIUsage.feature == TRANSCRIPTION,
+            AIUsage.connection_id.is_(None),
+            AIUsage.outcome.in_(_COUNTED),
+            AIUsage.created_at >= month_start(now),
+        )
+        .scalar()
+    )
+    return float(value or 0)
 
 
 def seconds_on_own_key(db: Session, survey_id: UUID, now: datetime | None = None) -> float:
