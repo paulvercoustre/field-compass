@@ -14,8 +14,8 @@
     "@headlessui/react": "^2.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "recharts": "^3.5.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "read-excel-file": "^9.3.10",
+    "recharts": "^3.5.1"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.2",
