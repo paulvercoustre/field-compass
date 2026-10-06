@@ -4,25 +4,20 @@ Provides SQLAlchemy session management and common database operations.
 """
 
 import logging
-import os
 from collections.abc import Generator
 from typing import Annotated
 
-from dotenv import load_dotenv
 from fastapi import Depends
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
-load_dotenv()
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Database connection string from environment
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/field_compass"
-)
+DATABASE_URL = get_settings().database_url
 
 # Create SQLAlchemy engine
 engine: Engine = create_engine(

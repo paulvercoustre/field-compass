@@ -7,6 +7,8 @@ import sys
 from celery import Celery
 from celery.signals import worker_process_init
 
+from settings import get_settings
+
 # Celery puts the working directory on the import path only while it loads
 # the app, then takes it off again, so a task importing a top-level backend
 # package (etl, linter, forms) fails in the worker's processes. Put it back
@@ -20,8 +22,10 @@ def _backend_on_import_path(**_):
         sys.path.insert(0, _BACKEND_DIR)
 
 
-BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
-RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", BROKER_URL)
+# Read at import, so a malformed variable stops the worker on startup.
+_settings = get_settings()
+BROKER_URL = _settings.celery_broker_url
+RESULT_BACKEND = _settings.result_backend
 
 celery_app = Celery(
     "field_compass_jobs",
@@ -75,7 +79,7 @@ celery_app.conf.update(
     },
 )
 
-if os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() in {"1", "true", "yes"}:
+if _settings.celery_task_always_eager:
     celery_app.conf.task_always_eager = True
     celery_app.conf.task_eager_propagates = True
 

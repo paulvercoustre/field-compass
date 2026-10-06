@@ -12,7 +12,6 @@ See docs/specs/audio-transcription.md, section 4.6.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -23,6 +22,7 @@ from database.models import AIUsage
 from services.ai_allowance import month_start
 from services.ai_pricing import audio_cost_usd_micros
 from services.ai_usage import TRANSCRIPTION
+from settings import get_settings
 
 RESERVED = "reserved"
 # Outcomes that count against the allowance: billed, or about to be.
@@ -31,19 +31,12 @@ _COUNTED = ("ok", RESERVED)
 STALE_RESERVATION = timedelta(hours=1)
 
 
-def _int_env(name: str, default: int) -> int:
-    try:
-        return max(0, int(os.getenv(name, str(default))))
-    except ValueError:
-        return default
-
-
 def minutes_per_survey_month() -> int:
-    return _int_env("TRANSCRIPTION_ALLOWANCE_MINUTES_PER_SURVEY_MONTH", 120)
+    return get_settings().transcription_allowance_minutes_per_user_month
 
 
 def max_recording_seconds() -> int:
-    return _int_env("TRANSCRIPTION_MAX_SECONDS", 1800)
+    return get_settings().transcription_max_seconds
 
 
 def seconds_used(db: Session, survey_id: UUID, now: datetime | None = None) -> float:

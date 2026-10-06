@@ -10,6 +10,8 @@ from typing import Any
 
 import requests
 
+from settings import get_settings
+
 logger = logging.getLogger(__name__)
 
 # Default audit directory (relative to backend directory)
@@ -23,7 +25,7 @@ def get_audit_dir() -> str:
     Returns:
         Path to audit directory
     """
-    audit_dir = os.getenv("AUDIT_DIR", DEFAULT_AUDIT_DIR)
+    audit_dir = get_settings().audit_dir or DEFAULT_AUDIT_DIR
     # Create directory if it doesn't exist
     os.makedirs(audit_dir, exist_ok=True)
     return audit_dir

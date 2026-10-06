@@ -17,7 +17,6 @@ See docs/specs/ai-provider-overhaul.md, section 10.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from uuid import UUID
 
@@ -26,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from database.models import ITEM_OPEN, AIUsage, AnswerTranslation, SubmissionCurrent
 from services.ai_usage import QUALITATIVE_CHECK, RULE_GENERATION, RULE_SUGGESTION, TRANSLATION
+from settings import get_settings
 
 NOT_RUN_ALLOWANCE = "not_run_allowance"
 
@@ -34,30 +34,21 @@ NOT_RUN_ALLOWANCE = "not_run_allowance"
 _SPENT = ("ok", "bad_response")
 
 
-def _int_env(name: str, default: int) -> int:
-    try:
-        return max(0, int(os.getenv(name, str(default))))
-    except ValueError:
-        return default
-
-
 def checks_per_survey_month() -> int:
-    return _int_env("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", 200)
+    return get_settings().ai_allowance_checks_per_user_month
 
 
 def translations_per_survey_month() -> int:
-    return _int_env("AI_ALLOWANCE_TRANSLATIONS_PER_SURVEY_MONTH", 500)
+    return get_settings().ai_allowance_translations_per_user_month
 
 
 def rule_requests_per_user_month() -> int:
-    return _int_env("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH", 30)
+    return get_settings().ai_allowance_rule_requests_per_user_month
 
 
 def allowance_enabled() -> bool:
     """Off: AI features need the survey owner's own provider."""
-    if os.getenv("AI_ALLOWANCE_ENABLED", "true").lower() in {"0", "false", "no"}:
-        return False
-    return bool(os.getenv("OPENAI_API_KEY"))
+    return get_settings().allowance_enabled
 
 
 def month_start(now: datetime | None = None) -> datetime:

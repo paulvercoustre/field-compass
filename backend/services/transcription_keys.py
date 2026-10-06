@@ -12,7 +12,6 @@ for AI review.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,6 +32,7 @@ from services.transcription_client import (
     TranscriptionClient,
     error_detail,
 )
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -68,15 +68,11 @@ class TranscriptionKey:
 
 
 def base_url() -> str:
-    return (os.getenv("ELEVENLABS_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
+    return (get_settings().elevenlabs_base_url or DEFAULT_BASE_URL).rstrip("/")
 
 
 def model() -> str:
-    return os.getenv("TRANSCRIPTION_MODEL") or DEFAULT_MODEL
-
-
-def _env_flag(name: str) -> bool:
-    return os.getenv(name, "").strip().lower() in {"1", "true", "yes"}
+    return get_settings().transcription_model or DEFAULT_MODEL
 
 
 def client_for(key: TranscriptionKey) -> TranscriptionClient:
@@ -84,7 +80,7 @@ def client_for(key: TranscriptionKey) -> TranscriptionClient:
         api_key=key.api_key,
         base_url=base_url(),
         model=model(),
-        zero_retention=_env_flag("ELEVENLABS_ZERO_RETENTION"),
+        zero_retention=get_settings().elevenlabs_zero_retention,
     )
 
 
@@ -128,7 +124,7 @@ def resolve_transcription_key(db: Session, survey: SurveyConfig) -> Transcriptio
                 else None,
             )
 
-    operator = (os.getenv("ELEVENLABS_API_KEY") or "").strip()
+    operator = get_settings().operator_transcription_key
     if operator:
         from services.transcription_queue import transcription_paused_error
 

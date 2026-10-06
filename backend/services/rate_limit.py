@@ -11,11 +11,11 @@ endpoints were likewise unthrottled, letting any authenticated user burn the
 operator's OpenAI budget in a loop.
 """
 
-import os
-
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
+
+from settings import get_settings
 
 
 def _client_key(request: Request) -> str:
@@ -30,7 +30,7 @@ def _client_key(request: Request) -> str:
     must only be trusted when a proxy we control is guaranteed to overwrite
     it. Leave it unset when the app is exposed directly.
     """
-    if os.getenv("TRUST_PROXY_HEADERS", "").lower() in ("1", "true", "yes"):
+    if get_settings().trust_proxy_headers:
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
             return forwarded.split(",")[0].strip()
@@ -42,5 +42,5 @@ def _client_key(request: Request) -> str:
 # redis://redis:6379/1) if you ever scale to multiple workers.
 limiter = Limiter(
     key_func=_client_key,
-    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
+    storage_uri=get_settings().ratelimit_storage_uri,
 )

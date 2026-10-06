@@ -13,7 +13,6 @@ API: https://elevenlabs.io/docs/api-reference/speech-to-text/convert
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
@@ -34,6 +33,7 @@ from services.ai_errors import (
 )
 from services.audio_files import AudioFile
 from services.transcription_languages import normalize_language
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +72,6 @@ class TranscriptResult:
     segments: list[dict[str, Any]] | None = field(default=None)
 
 
-def _flag(name: str) -> bool:
-    return os.getenv(name, "").strip().lower() in {"1", "true", "yes"}
-
-
 def read_timeout(duration_seconds: float | None) -> float:
     """How long to wait for a transcript: 60 s plus half the recording, at most 15 min."""
     return min(60.0 + 0.5 * (duration_seconds or 120.0), 900.0)
@@ -98,11 +94,12 @@ class TranscriptionClient:
 
     @classmethod
     def from_env(cls) -> TranscriptionClient:
+        settings = get_settings()
         return cls(
-            api_key=os.getenv("ELEVENLABS_API_KEY"),
-            base_url=os.getenv("ELEVENLABS_BASE_URL") or None,
-            model=os.getenv("TRANSCRIPTION_MODEL") or None,
-            zero_retention=_flag("ELEVENLABS_ZERO_RETENTION"),
+            api_key=settings.elevenlabs_api_key,
+            base_url=settings.elevenlabs_base_url,
+            model=settings.transcription_model,
+            zero_retention=settings.elevenlabs_zero_retention,
         )
 
     @property

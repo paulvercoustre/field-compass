@@ -8,7 +8,6 @@ that was rolled back.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -16,6 +15,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from database.models import AppEvent, User
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +41,7 @@ def can_view_usage(user: User) -> bool:
     USAGE_ADMIN_EMAILS (comma-separated). Deliberately separate from
     is_admin, which also opens every survey on the instance.
     """
-    allowed = {
-        email.strip().lower()
-        for email in os.getenv("USAGE_ADMIN_EMAILS", "").split(",")
-        if email.strip()
-    }
-    return bool(user.email) and user.email.strip().lower() in allowed
+    return bool(user.email) and user.email.strip().lower() in get_settings().usage_admins
 
 
 def record(

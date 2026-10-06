@@ -16,7 +16,6 @@ See docs/specs/ai-provider-overhaul.md, sections 6.3 and 9.
 """
 
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import Literal
 from urllib.parse import urlsplit
@@ -68,6 +67,7 @@ from services.transcription_keys import (
 )
 from services.transcription_keys import base_url as transcription_base_url
 from services.transcription_keys import model as transcription_model
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -552,7 +552,7 @@ async def account_ai_usage(
             "reviews_per_survey_month": check_limit,
             "translations_per_survey_month": translation_limit,
             "transcription_minutes_per_survey_month": minutes_per_survey_month()
-            if (os.getenv("ELEVENLABS_API_KEY") or "").strip()
+            if get_settings().operator_transcription_key
             else None,
             "rule_requests_per_month": rule_limit,
         },

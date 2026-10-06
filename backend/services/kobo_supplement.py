@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import os
 import time
 from typing import Any
 
@@ -31,6 +30,7 @@ import requests
 
 from etl.kobo_fetcher import KoboFetcher
 from services.ai_errors import short_message
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ _feature_cache: dict[tuple[str, str, str, str, str], float] = {}
 
 
 def supplement_version() -> str:
-    return os.getenv("KOBO_SUPPLEMENT_VERSION") or DEFAULT_SUPPLEMENT_VERSION
+    return get_settings().kobo_supplement_version or DEFAULT_SUPPLEMENT_VERSION
 
 
 class KoboSupplementError(Exception):

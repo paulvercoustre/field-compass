@@ -18,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 
 from database.models import SubmissionCurrent
 from services import ai_client, job_queue, qualitative_worker, qualitative_worker_runtime
-from services.ai_client import AIClient
+from services.ai_client import AIClient, ResolvedProvider
 from services.ai_errors import (
     AUTH,
     BAD_REQUEST,
@@ -97,6 +97,7 @@ def _service_replying(content=None, raises=None, finish_reason="stop"):
     service.api_key = "sk-test"
     service.qual_check_model = "gpt-4o-mini"
     service.qual_check_max_completion_tokens = 500
+    service.qual_check_reasoning_effort = None
     service.temperature = 0.2
     service.timeout = 5
 
@@ -489,3 +490,53 @@ def test_prompt_names_dk_strings_not_a_python_list():
     prompt = " ".join(message["content"] for message in sent[0]["messages"])
     assert "['" not in prompt
     assert '"dk" or "dont_know"' in prompt
+
+
+class TestReviewLimits:
+    """On the operator's key a review gets room to think, and is told to think briefly."""
+
+    @staticmethod
+    def _service(monkeypatch, **env):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-operator")
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        service = AIService()
+        sent = {}
+
+        class _Client:
+            def complete_json(self, provider, **kwargs):
+                sent.update(kwargs, provider=provider)
+                return {"issues": []}
+
+        service.ai = _Client()
+        return service, sent
+
+    @staticmethod
+    def _review(service, provider=None):
+        return service.check_qualitative_responses(
+            field_values={"comment": "Fine."},
+            question_contexts={"comment": "Any comment?"},
+            dk_codes=[],
+            dk_string=None,
+            check_types=["content_quality"],
+            provider=provider,
+        )
+
+    def test_operator_key(self, monkeypatch):
+        service, sent = self._service(monkeypatch)
+        assert self._review(service) == []
+        assert sent["max_output"] == 8000
+        assert sent["reasoning_effort"] == "low"
+
+    def test_own_key_keeps_its_models_default(self, monkeypatch):
+        service, sent = self._service(monkeypatch)
+        self._review(service, provider=ResolvedProvider(api_key="sk-own", model="their-model"))
+        assert sent["reasoning_effort"] is None
+
+    def test_both_can_be_configured(self, monkeypatch):
+        service, sent = self._service(
+            monkeypatch, OPENAI_QUAL_CHECK_MAX_TOKENS="3000", OPENAI_QUAL_CHECK_REASONING_EFFORT=""
+        )
+        self._review(service)
+        assert sent["max_output"] == 3000
+        assert sent["reasoning_effort"] is None
