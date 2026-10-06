@@ -10,7 +10,7 @@ requests==2.32.3
 jsonpatch==1.33
 python-multipart==0.0.12
 simpleeval==0.9.13
-openai==1.54.0
+openai==1.109.1
 jsonschema==4.23.0
 celery==5.4.0
 redis==5.2.1
