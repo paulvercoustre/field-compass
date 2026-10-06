@@ -51,21 +51,6 @@ export interface Submission {
   transcript_summary?: { count: number; success: number; failed: number; in_progress: number; no_speech: number } | null;
 }
 
-export interface JsonPatch {
-  op: 'add' | 'remove' | 'replace';
-  path: string;
-  value?: any;
-  from?: string;
-}
-
-export interface SubmissionHistory {
-  history_id: number;
-  kobo_id: number;
-  timestamp: string;
-  deprecated_uuid: string;
-  data_delta: JsonPatch[];
-}
-
 // --- Rule Builder Types ---
 
 export interface KoboQuestion {
@@ -73,7 +58,7 @@ export interface KoboQuestion {
   name: string;
   'label::English (en)'?: string;
   roster_name: string | null;
-  list_name?: string;
+  list_name?: string | null;
   group_path?: string;
   group_relevant?: string[];
 }
@@ -119,13 +104,6 @@ export interface StagedRule {
     roster_name: string | null;
 }
 
-export interface GlobalParameters {
-    data_collection_start_date: string;
-    data_collection_end_date: string;
-    min_survey_duration_minutes: number | null;
-    max_survey_duration_minutes: number | null;
-}
-
 // --- Progress Tracker Types ---
 
 // How a survey expresses its collection targets. `none` is a supported choice,
@@ -164,9 +142,6 @@ export interface ProgressData {
   byColumn: Record<string, ProgressByColumn[]>;  // Key is column name, value is list of progress by column value
   detailed: DetailedProgress[];
   samplingColumns: string[];
-  // Legacy fields for backward compatibility
-  byDistrict?: ProgressByColumn[];
-  byLivelihood?: ProgressByColumn[];
 }
 
 export interface EnumeratorCollectionStats {

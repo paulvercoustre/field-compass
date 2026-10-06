@@ -5,94 +5,18 @@ Pytest configuration and fixtures for backend tests.
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, event
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-# Import database models and services
 from database.models import Base, SurveyConfig
-
-# Use in-memory SQLite for testing (faster than PostgreSQL)
-TEST_DATABASE_URL = "sqlite:///:memory:"
+from tests.sqlite_compat import sqlite_engine
 
 
 @pytest.fixture(scope="function")
 def test_db():
     """
-    Create a test database session with in-memory SQLite.
-    Each test gets a fresh database.
-    SQLite doesn't support JSONB, so we map JSONB to JSON for testing.
+    A session on a fresh in-memory SQLite database (see tests/sqlite_compat.py).
     """
-    engine = create_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    # Map JSONB to JSON for SQLite compatibility
-    @event.listens_for(engine, "connect", propagate=True)
-    def set_sqlite_pragma(dbapi_conn, connection_record):
-        """Set SQLite pragmas for better compatibility."""
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-    # Replace JSONB with JSON for SQLite and UUID with String
-    from sqlalchemy import JSON, String, TypeDecorator
-    from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
-
-    class JSONBForSQLite(TypeDecorator):
-        """JSONB type that uses JSON for SQLite."""
-
-        impl = JSON
-        cache_ok = True
-
-        def load_dialect_impl(self, dialect):
-            if dialect.name == "sqlite":
-                return dialect.type_descriptor(JSON())
-            else:
-                return dialect.type_descriptor(JSONB())
-
-    class UUIDForSQLite(TypeDecorator):
-        """UUID type that uses String for SQLite."""
-
-        impl = String(36)
-        cache_ok = True
-
-        def load_dialect_impl(self, dialect):
-            if dialect.name == "sqlite":
-                return dialect.type_descriptor(String(36))
-            else:
-                return dialect.type_descriptor(PostgresUUID(as_uuid=True))
-
-        def process_bind_param(self, value, dialect):
-            """Convert UUID to string for SQLite."""
-            if value is None:
-                return None
-            if dialect.name == "sqlite":
-                return str(value) if not isinstance(value, str) else value
-            return value
-
-        def process_result_value(self, value, dialect):
-            """Convert string back to UUID for PostgreSQL."""
-            if value is None:
-                return None
-            if dialect.name == "sqlite":
-                from uuid import UUID
-
-                return UUID(value) if isinstance(value, str) else value
-            return value
-
-    # Replace JSONB and UUID columns for SQLite compatibility
-
-    # Update column types for SQLite compatibility
-    for table in Base.metadata.tables.values():
-        for column in table.columns:
-            if isinstance(column.type, JSONB):
-                column.type = JSONBForSQLite()
-            elif isinstance(column.type, PostgresUUID):
-                column.type = UUIDForSQLite()
+    engine = sqlite_engine()
 
     # Create all tables
     Base.metadata.create_all(bind=engine)

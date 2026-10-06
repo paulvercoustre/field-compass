@@ -3,7 +3,7 @@ Survey instrument (XLSForm) introspection.
 
 Deliberately kept out of the ``etl`` package: ``etl/__init__.py`` eagerly
 imports the whole pipeline, so anything living there transitively pulls in
-requests, pandas, celery, and openai. This package is stdlib-only, so the
+requests, celery, and openai. This package is stdlib-only, so the
 linter and the config suggester can build on it without dragging the ETL
 stack -- or its dependencies -- into their tests.
 """

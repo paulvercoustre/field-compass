@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth, User } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import KoboConnection from '../components/kobo/KoboConnection';
 import AIIntegrationTab from '../components/ai/AIIntegrationTab';
 import NotificationSettings from '../components/activity/NotificationSettings';
 import SettingsLayout, { SettingsNavItem } from '../components/ui/SettingsLayout';
 import UsageTab from '../components/admin/UsageTab';
+import { RequestedTab } from '../contexts/NavigationContext';
 
 type AccountTab = 'profile' | 'kobo' | 'ai' | 'notifications' | 'usage';
 
@@ -20,7 +21,7 @@ const USAGE_NAV_ITEMS: SettingsNavItem<AccountTab>[] = [...NAV_ITEMS, { id: 'usa
 
 interface UserSettingsPageProps {
   /** A tab asked for by a link elsewhere in the app. */
-  requestedTab?: { tab: string; at: number };
+  requestedTab?: RequestedTab;
 }
 
 const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => {
@@ -147,7 +148,7 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
   }
 
   return (
-    <SettingsLayout
+    <SettingsLayout<AccountTab>
       title="Account settings"
       items={user.can_view_usage ? USAGE_NAV_ITEMS : NAV_ITEMS}
       active={activeTab}

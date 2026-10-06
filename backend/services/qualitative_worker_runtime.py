@@ -17,10 +17,11 @@ from database.models import SubmissionCurrent, SurveyConfig
 from etl.audio import ai_audio_fields, review_data
 from etl.dk_utils import is_dk_value
 from etl.hfc_engine import HFCEngine
-from services.ai_errors import NOT_CONFIGURED, AIError
+from forms.answers import find_answer
+from services.ai_errors import AIError
 from services.ai_providers import CHECKS, resolve_provider
 from services.ai_review_queue import transcript_views
-from services.ai_service import AIService
+from services.ai_service import AIService, not_configured
 from services.ai_usage import QUALITATIVE_CHECK, usage_recorder
 from services.database import SessionLocal
 from services.runs import finish_if_done
@@ -140,9 +141,7 @@ def run_qualitative_check_job(
         model = provider.model if provider else ai_service.qual_check_model
         if provider is None and not ai_service.is_available():
             submission.llm_check_status = "failed"
-            submission.llm_last_error = str(
-                AIError(NOT_CONFIGURED, "No AI provider is configured (OPENAI_API_KEY).")
-            )
+            submission.llm_last_error = str(not_configured())
             submission.llm_checked_at = datetime.utcnow()
             db.commit()
             return {"status": "ai_unavailable", "submission_id": submission_id}
@@ -158,7 +157,7 @@ def run_qualitative_check_job(
         )
         field_values: dict[str, str] = {}
         for field in llm_fields:
-            value, _ = engine._get_field_value(review_input, field)
+            value, _ = find_answer(review_input, field)
             if not isinstance(value, str):
                 continue
             text = value.strip()
@@ -207,25 +206,23 @@ def run_qualitative_check_job(
 
         existing_issues = submission.data_quality_issues or []
         non_llm_issues = [issue for issue in existing_issues if not _is_llm_issue(issue)]
-        llm_issues = []
         checked_at = datetime.utcnow().isoformat()
-
-        for result in llm_results:
-            llm_issues.append(
-                {
-                    "check": f"qual_{result.get('check_type', 'unknown')}",
-                    "field": result.get("field", ""),
-                    "value": result.get("value"),
-                    "message": result.get("message", "Qualitative issue detected"),
-                    "metadata": {
-                        "source": LLM_ISSUE_SOURCE,
-                        "llm_checked_at": checked_at,
-                        "llm_rule_version": requested_rules_hash,
-                        "llm_model": model,
-                        "llm_reasoning": result.get("reasoning", ""),
-                    },
-                }
-            )
+        llm_issues = [
+            {
+                "check": f"qual_{result.get('check_type', 'unknown')}",
+                "field": result.get("field", ""),
+                "value": result.get("value"),
+                "message": result.get("message", "Qualitative issue detected"),
+                "metadata": {
+                    "source": LLM_ISSUE_SOURCE,
+                    "llm_checked_at": checked_at,
+                    "llm_rule_version": requested_rules_hash,
+                    "llm_model": model,
+                    "llm_reasoning": result.get("reasoning", ""),
+                },
+            }
+            for result in llm_results
+        ]
 
         # Idempotent update: replace all prior LLM issues with fresh set.
         submission.data_quality_issues = non_llm_issues + llm_issues
@@ -262,7 +259,7 @@ def run_qualitative_check_job(
                 failed_submission.llm_last_error = f"internal: {exc}"[:1000]
                 failed_submission.llm_checked_at = datetime.utcnow()
                 db.commit()
-        except Exception:
+        except Exception:  # noqa: BLE001 -- recording the failure must not mask it
             db.rollback()
         raise
     finally:

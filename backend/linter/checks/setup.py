@@ -223,7 +223,7 @@ def check_no_interview_date(schema: FormSchema, ctx: LintContext) -> Iterable[Li
                 "submission. Without one, those checks never run."
             ),
             suggested_fix=(
-                "Add a `today` metadata row, or a `date` question for the " "interview date."
+                "Add a `today` metadata row, or a `date` question for the interview date."
             ),
         )
     ]

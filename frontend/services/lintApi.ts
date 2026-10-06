@@ -5,19 +5,7 @@
  * answers are sent, and no model is called.
  */
 
-import { API_BASE_URL, apiFetch } from './apiBase';
-
-const authHeaders = (): HeadersInit => {
-  const headers: HeadersInit = { 'Content-Type': 'application/json' };
-  const token = localStorage.getItem('field_compass_token');
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
-};
-
-const readError = async (response: Response, fallback: string): Promise<string> => {
-  const data = await response.json().catch(() => ({ detail: fallback }));
-  return data.detail || fallback;
-};
+import { orMessage, request } from './apiBase';
 
 export interface LintFinding {
   check_id: string;
@@ -44,7 +32,7 @@ export interface LintReport {
   form_logic_missing?: boolean;
 }
 
-export interface AdoptedRule {
+interface AdoptedRule {
   rule_id: string;
   rule_name: string;
   rule_data: Record<string, unknown>;
@@ -60,22 +48,18 @@ export async function lintForm(
   form: Record<string, unknown>,
   labelColumn?: string | null
 ): Promise<LintReport> {
-  const response = await apiFetch(`${API_BASE_URL}/api/lint`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ form, label_column: labelColumn || null }),
-  });
-  if (!response.ok) throw new Error(await readError(response, 'Could not lint this form.'));
-  return response.json();
+  return orMessage(
+    request<LintReport>('/api/lint', {
+      method: 'POST',
+      body: JSON.stringify({ form, label_column: labelColumn || null }),
+    }),
+    'Could not lint this form.'
+  );
 }
 
 export async function lintSurvey(surveyId: string, labelColumn?: string | null): Promise<LintReport> {
   const query = labelColumn ? `?label_column=${encodeURIComponent(labelColumn)}` : '';
-  const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/lint${query}`, {
-    headers: authHeaders(),
-  });
-  if (!response.ok) throw new Error(await readError(response, 'Could not lint this survey.'));
-  return response.json();
+  return orMessage(request<LintReport>(`/api/surveys/${surveyId}/lint${query}`), 'Could not lint this survey.');
 }
 
 export async function adoptLintRules(
@@ -84,13 +68,13 @@ export async function adoptLintRules(
   isActive = true,
   labelColumn?: string | null
 ): Promise<AdoptedRule[]> {
-  const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/lint/adopt-rules`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ items, is_active: isActive, label_column: labelColumn || null }),
-  });
-  if (!response.ok) throw new Error(await readError(response, 'Could not add those quality checks.'));
-  return response.json();
+  return orMessage(
+    request<AdoptedRule[]>(`/api/surveys/${surveyId}/lint/adopt-rules`, {
+      method: 'POST',
+      body: JSON.stringify({ items, is_active: isActive, label_column: labelColumn || null }),
+    }),
+    'Could not add those quality checks.'
+  );
 }
 
 export interface DkValue {
@@ -112,14 +96,14 @@ export async function findDkValues(
   survey: Array<Record<string, unknown>>,
   choices: Array<Record<string, unknown>>
 ): Promise<DkValue[]> {
-  const response = await apiFetch(`${API_BASE_URL}/api/lint/dk-values`, {
-    method: 'POST',
-    headers: authHeaders(),
-    // The survey rows matter: only lists a question uses are read, exactly
-    // as the form check reads them.
-    body: JSON.stringify({ form: { survey, choices } }),
-  });
-  if (!response.ok) throw new Error(await readError(response, "Could not find the form's don't-know options."));
-  const body = await response.json();
+  const body = await orMessage(
+    request<{ values?: DkValue[] }>('/api/lint/dk-values', {
+      method: 'POST',
+      // The survey rows matter: only lists a question uses are read, exactly
+      // as the form check reads them.
+      body: JSON.stringify({ form: { survey, choices } }),
+    }),
+    "Could not find the form's don't-know options."
+  );
   return body.values || [];
 }

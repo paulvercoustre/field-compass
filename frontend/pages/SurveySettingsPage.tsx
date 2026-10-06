@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
-import { getSurveyConfig, updateSurvey, deleteSurvey, rerunAiChecks, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule, ValidationRule, getSurveyAccess, shareSurvey, updateSurveyAccess, revokeSurveyAccess, SurveyAccessEntry } from '../services/progressApi';
-import { KoboToolData } from '../services/koboParser';
-import { parseSamplingFrame, validateSamplingFrameColumns, isTargetColumn } from '../utils/samplingFrameParser';
+import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule } from '../services/progressApi';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
 import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
-import { StagedRule, SamplingMode } from '../types';
+import { KoboToolData, StagedRule } from '../types';
 import CustomChecks from '../components/rule-builder/CustomChecks';
 import { Spinner } from '../components/Spinner';
 import SettingsLayout from '../components/ui/SettingsLayout';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
-import { SparkleIcon } from '../components/ui/icons';
 import { getKoboProjectForm } from '../services/api';
 import { labelColumnFor } from '../utils/koboUrl';
-import CollectionTargets, { totalFromFrameRows } from '../components/ui/CollectionTargets';
-import { inferSamplingMode } from '../utils/samplingMode';
+import CollectionTargets from '../components/ui/CollectionTargets';
+import CollectionTargetsEditor from '../components/ui/CollectionTargetsEditor';
+import { useCollectionTargets } from '../hooks/useCollectionTargets';
+import { useSectionEditor } from '../hooks/useSectionEditor';
+import { DEFAULT_QUALITY_CHECKS, GENERAL_FLAG_KEYS, LLM_KEYS, OUTLIER_KEYS, pick, sameSetting } from '../utils/qualityCheckSettings';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
 import DkNumericCodes from '../components/ui/DkNumericCodes';
@@ -24,14 +24,18 @@ import FormLintPanel from '../components/linter/FormLintPanel';
 import { koboToolPayload, projectFormToKoboTool } from '../utils/koboForm';
 import AudioTranscriptionCard from '../components/transcription/AudioTranscriptionCard';
 import TranslationCard from '../components/translation/TranslationCard';
-import SurveyKeyPicker from '../components/ai/SurveyKeyPicker';
+import SurveyAccessTab from '../components/settings/SurveyAccessTab';
+import OutlierChecksSection from '../components/settings/OutlierChecksSection';
+import AiReviewSection from '../components/settings/AiReviewSection';
+import { SavedNote, SectionActions, SectionEditButton } from '../components/settings/SectionControls';
+import { RequestedTab } from '../contexts/NavigationContext';
 
 type SurveySettingsTab = 'settings' | 'access' | 'quality' | 'transcription' | 'translation';
 const SURVEY_SETTINGS_TABS: string[] = ['settings', 'access', 'quality', 'transcription', 'translation'];
 
 interface SurveySettingsPageProps {
   /** A tab asked for by a link elsewhere in the app (a notification, the activity panel). */
-  requestedTab?: { tab: string; at: number };
+  requestedTab?: RequestedTab;
 }
 
 /**
@@ -41,71 +45,23 @@ interface SurveySettingsPageProps {
  */
 type SettingsSection = 'basicInfo' | 'coreIdentifiers' | 'koboTool' | 'samplingFrame' | 'generalFlags' | 'outlier' | 'llm';
 
-const GENERAL_FLAG_KEYS = [
-  'flag_out_of_period', 'flag_weekend', 'weekend_days', 'flag_office_hours', 'office_hours_start', 'office_hours_end',
-  'flag_sampling_frame', 'flag_dk_percentage', 'dk_percentage_threshold', 'flag_empty_percentage', 'empty_percentage_threshold',
-] as const;
-const OUTLIER_KEYS = ['flag_outliers', 'outlier_variables', 'outlier_log_transform_variables', 'outlier_method', 'outlier_threshold'] as const;
-const LLM_KEYS = ['flag_llm_qualitative', 'llm_qualitative_fields', 'llm_check_types'] as const;
-
-/** A new survey's quality checks; also what an unsaved key falls back to. */
-const DEFAULT_QUALITY_CHECKS = {
-  flag_out_of_period: false,
-  flag_weekend: false,
-  weekend_days: [5, 6], // Default to Sat, Sun
-  flag_office_hours: false,
-  office_hours_start: '08:00',
-  office_hours_end: '17:00',
-  flag_sampling_frame: false,
-  flag_outliers: false,
-  outlier_variables: [] as string[],
-  outlier_log_transform_variables: [] as string[],
-  outlier_method: 'iqr' as 'iqr' | 'mad' | 'zscore',
-  outlier_threshold: 1.5,
-  flag_dk_percentage: false,
-  dk_percentage_threshold: 50,
-  flag_empty_percentage: false,
-  empty_percentage_threshold: 50,
-  flag_llm_qualitative: false,
-  llm_qualitative_fields: [] as string[],
-  llm_check_types: ['content_quality', 'relevance', 'completeness'] as Array<'content_quality' | 'relevance' | 'completeness'>,
-};
-
-const pick = <T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Pick<T, K> =>
-  Object.fromEntries(keys.map((key) => [key, obj[key]])) as Pick<T, K>;
-
-/** "Saved 14:32", inside the section, until it is edited again. */
-const SavedNote: React.FC<{ at?: Date; className?: string }> = ({ at, className = '' }) =>
-  at ? (
-    <span role="status" className={`inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-400 ${className}`}>
-      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="m5 12.5 4.5 4.5L19 7" />
-      </svg>
-      Saved {at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-    </span>
-  ) : null;
-
 const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab }) => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEditingOutlier, setIsEditingOutlier] = useState(false);
-  const [isSavingGeneralFlags, setIsSavingGeneralFlags] = useState(false);
-  const [isEditingLLM, setIsEditingLLM] = useState(false);
-  const [isSavingOutlier, setIsSavingOutlier] = useState(false);
-  const [isSavingLLM, setIsSavingLLM] = useState(false);
-  const [isEditingKoboTool, setIsEditingKoboTool] = useState(false);
-  const [isEditingSamplingFrame, setIsEditingSamplingFrame] = useState(false);
-  const [isSavingBasicInfo, setIsSavingBasicInfo] = useState(false);
-  const [isSavingCoreIdentifiers, setIsSavingCoreIdentifiers] = useState(false);
-  const [isSavingKoboTool, setIsSavingKoboTool] = useState(false);
-  const [isSavingSamplingFrame, setIsSavingSamplingFrame] = useState(false);
+
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // Wrapped so the handlers can be the ones defined further down.
+  const sections = useSectionEditor<SettingsSection>({
+    save: (section) => saveSection(section),
+    restore: (section) => restoreSection(section),
+    onError: setError,
+  });
   const [savedAt, setSavedAt] = useState<Partial<Record<SettingsSection, Date>>>({});
   // Saves run one at a time, each on the config as the previous one left it.
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -130,21 +86,13 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const canEditSurvey = userPermission === 'owner' || userPermission === 'admin';
   const canDeleteSurvey = userPermission === 'owner' || userPermission === 'admin';
 
-  // Access management state
-  const [accessList, setAccessList] = useState<SurveyAccessEntry[]>([]);
-  const [isLoadingAccess, setIsLoadingAccess] = useState(false);
-  const [shareEmail, setShareEmail] = useState('');
-  const [sharePermission, setSharePermission] = useState<'editor' | 'viewer'>('viewer');
-  const [isSharing, setIsSharing] = useState(false);
-  const [canManageAccess, setCanManageAccess] = useState(false);
-
   // Validation rules state
-  const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
   const [stagedRules, setStagedRules] = useState<StagedRule[]>([]);
   const [isLoadingRules, setIsLoadingRules] = useState(false);
 
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
+  const targets = useCollectionTargets(koboToolData);
   // A survey whose form has no audio questions has no transcription tab.
   useEffect(() => {
     if (activeTab === 'transcription' && koboToolData && !koboToolData.survey?.some((row) => row.type === 'audio')) {
@@ -186,12 +134,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const [labelColumnChoices, setLabelColumnChoices] = useState<string>('label::English (en)');
 
   // Sampling frame CSV state
-  const [samplingFrameData, setSamplingFrameData] = useState<Record<string, any>[] | null>(null);
-  const [samplingFrameFileName, setSamplingFrameFileName] = useState<string>('');
-  const [isLoadingFrame, setIsLoadingFrame] = useState(false);
-  const [frameValidationError, setFrameValidationError] = useState<string | null>(null);
-  const [frameValidationNote, setFrameValidationNote] = useState<string | null>(null);
-  const [showSamplingFrameHelp, setShowSamplingFrameHelp] = useState(false);
 
   // Form state
   const [surveyName, setSurveyName] = useState('');
@@ -211,15 +153,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     start_time: '',
     end_time: '',
     consent: '',
-  });
-  const [samplingFrame, setSamplingFrame] = useState({
-    mode: null as SamplingMode | null,
-    sampling_cols: [] as string[],
-    admin_level_for_label: '',
-    admin_level_choice_name: '',
-    total_target: null as number | null,
-    variable: null as string | null,
-    targets_by_value: {} as Record<string, number>,
   });
   const [specialValues, setSpecialValues] = useState({
     dk_value: readDkCodes(undefined),
@@ -263,17 +196,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   // Dirty flag for General Quality Checks section only (Save/Cancel when user edits)
   const savedQc = config?.config_data?.quality_checks;
   const isGeneralFlagsDirty = savedQc ? (
-    qualityChecks.flag_out_of_period !== (savedQc.flag_out_of_period ?? false) ||
-    qualityChecks.flag_weekend !== (savedQc.flag_weekend ?? false) ||
-    JSON.stringify([...(qualityChecks.weekend_days || [])].sort()) !== JSON.stringify([...(savedQc.weekend_days ?? [5, 6])].sort()) ||
-    qualityChecks.flag_office_hours !== (savedQc.flag_office_hours ?? false) ||
-    qualityChecks.office_hours_start !== (savedQc.office_hours_start ?? '08:00') ||
-    qualityChecks.office_hours_end !== (savedQc.office_hours_end ?? '17:00') ||
-    qualityChecks.flag_sampling_frame !== (savedQc.flag_sampling_frame ?? false) ||
-    qualityChecks.flag_dk_percentage !== (savedQc.flag_dk_percentage ?? false) ||
-    qualityChecks.dk_percentage_threshold !== (savedQc.dk_percentage_threshold ?? 50) ||
-    qualityChecks.flag_empty_percentage !== (savedQc.flag_empty_percentage ?? false) ||
-    qualityChecks.empty_percentage_threshold !== (savedQc.empty_percentage_threshold ?? 50) ||
+    GENERAL_FLAG_KEYS.some((key) => !sameSetting(qualityChecks[key], savedQc[key] ?? DEFAULT_QUALITY_CHECKS[key])) ||
     globalParameters.min_survey_duration_minutes !== (config?.config_data?.global_parameters?.min_survey_duration_minutes ?? null) ||
     globalParameters.max_survey_duration_minutes !== (config?.config_data?.global_parameters?.max_survey_duration_minutes ?? null)
   ) : false;
@@ -285,25 +208,12 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       setError(null);
       setSavedAt({});
       loadSurveyConfig();
-
-      // Check if we should open the quality tab (set from CreateSurveyPage)
-      const shouldOpenQualityTab = localStorage.getItem('openQualityTab');
-      const targetSurveyId = localStorage.getItem('openQualityTabForSurveyId');
-
-      // Only open quality tab if this is the survey we just created
-      if (shouldOpenQualityTab === 'true' && targetSurveyId === selectedSurvey.survey_id) {
-        setActiveTab('quality');
-        // Clear the flags so they don't persist
-        localStorage.removeItem('openQualityTab');
-        localStorage.removeItem('openQualityTabForSurveyId');
-      }
     } else {
       // Reset deletion state when no survey is selected (keep success message visible)
       setIsDeleting(false);
       setShowDeleteConfirm(false);
       setError(null);
-      setIsEditingKoboTool(false);
-      setIsEditingSamplingFrame(false);
+      sections.closeAll();
     }
     // Keyed on the id, not the object.
     //
@@ -325,13 +235,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       setIsDeleting(false);
     }
   }, [showDeleteConfirm]);
-
-  // Load access list when Access tab is selected
-  useEffect(() => {
-    if (activeTab === 'access' && selectedSurvey) {
-      loadAccessList();
-    }
-  }, [activeTab, selectedSurvey]);
 
   useEffect(() => {
     if (koboToolData && koboToolData.variableMap) {
@@ -373,27 +276,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   }, [koboToolData]);
 
   /** Show a config's collection targets, or none; drops any unsaved file. */
-  const applySamplingFrame = (cd: SurveyConfig['config_data']) => {
-    setSamplingFrameData(null);
-    setSamplingFrameFileName('');
-    setFrameValidationError(null);
-    setFrameValidationNote(null);
-    const frame = cd.sampling_frame;
-    setSamplingFrame({
-      // A config stored before `mode` existed carries none. Infer it the
-      // way get_sampling_mode() does rather than defaulting to a constant,
-      // so an existing survey shows the mode it actually behaves as.
-      mode: frame ? inferSamplingMode(frame) : null,
-      sampling_cols: frame?.sampling_cols || [],
-      admin_level_for_label: frame?.admin_level_for_label || '',
-      admin_level_choice_name: frame?.admin_level_choice_name || '',
-      total_target: frame?.total_target ?? null,
-      variable: frame?.variable ?? null,
-      targets_by_value: frame?.targets_by_value || {},
-    });
-    if (frame?.frame_data) setSamplingFrameData(frame.frame_data);
-  };
-
   /** Show a config's stored Kobo form and label language, or none. */
   const applyKoboTool = (cd: SurveyConfig['config_data']) => {
     setKoboToolFileName('');
@@ -431,7 +313,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     
     // Reset all state before loading new survey config to prevent stale data
     // from previous survey.
-    applySamplingFrame({} as SurveyConfig['config_data']);
+    targets.load(undefined);
     setKoboToolData(null);
     setKoboToolFileName('');
     setAvailableVariables([]);
@@ -451,7 +333,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       if (cd.core_identifiers) {
         setCoreIdentifiers({ ...coreIdentifiers, ...cd.core_identifiers });
       }
-      applySamplingFrame(cd);
+      targets.load(cd.sampling_frame);
       if (cd.special_values) {
         // Stored configs hold `dk_value` as one number and `dk_string_value`
         // as one string; new ones hold lists. Old ones are never rewritten, so
@@ -522,8 +404,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     setIsLoadingRules(true);
     try {
       const rules = await getValidationRules(selectedSurvey.survey_id);
-      setValidationRules(rules);
-      
       // Convert to StagedRule format for display/editing
       const staged = rules.map(rule => 
         dbFormatToStagedRule(rule.rule_id, rule.rule_name, rule.rule_data)
@@ -534,69 +414,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       // Don't show error to user, just log it
     } finally {
       setIsLoadingRules(false);
-    }
-  };
-
-  const loadAccessList = async () => {
-    if (!selectedSurvey) return;
-    
-    setIsLoadingAccess(true);
-    try {
-      const access = await getSurveyAccess(selectedSurvey.survey_id);
-      setAccessList(access);
-      setCanManageAccess(true);
-    } catch (err: any) {
-      // If 403, user doesn't have permission to manage access
-      if (err.message?.includes('403') || err.message?.includes('owner')) {
-        setCanManageAccess(false);
-      } else {
-        console.error('Error loading access list:', err);
-      }
-    } finally {
-      setIsLoadingAccess(false);
-    }
-  };
-
-  const handleShare = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedSurvey || !shareEmail.trim()) return;
-
-    setIsSharing(true);
-    setError(null);
-
-    try {
-      await shareSurvey(selectedSurvey.survey_id, shareEmail.trim(), sharePermission);
-      setSuccess(`Survey shared with ${shareEmail}`);
-      setShareEmail('');
-      loadAccessList();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to share survey');
-    } finally {
-      setIsSharing(false);
-    }
-  };
-
-  const handleUpdateAccess = async (userId: string, newLevel: 'editor' | 'viewer') => {
-    if (!selectedSurvey) return;
-    setError(null);
-    try {
-      await updateSurveyAccess(selectedSurvey.survey_id, userId, newLevel);
-      loadAccessList();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update access');
-    }
-  };
-
-  const handleRevokeAccess = async (userId: string, userEmail: string) => {
-    if (!selectedSurvey) return;
-    if (!confirm(`Are you sure you want to revoke ${userEmail}'s access?`)) return;
-
-    setError(null);
-    try {
-      await revokeSurveyAccess(selectedSurvey.survey_id, userId);
-      loadAccessList();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke access');
     }
   };
 
@@ -617,8 +434,8 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const [formCheckRunKey, setFormCheckRunKey] = useState(0);
   // Until it is saved, the refreshed form is what the check reads.
   const refreshedFormPayload = useMemo(
-    () => (formCheckRunKey > 0 && isEditingKoboTool ? koboToolPayload(koboToolData) : null),
-    [formCheckRunKey, isEditingKoboTool, koboToolData]
+    () => (formCheckRunKey > 0 && sections.isEditing('koboTool') ? koboToolPayload(koboToolData) : null),
+    [formCheckRunKey, sections.isEditing('koboTool'), koboToolData]
   );
 
   const handleRefreshFormFromProject = async () => {
@@ -651,96 +468,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     } finally {
       setIsLoadingTool(false);
     }
-  };
-
-  const handleSamplingFrameUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsLoadingFrame(true);
-    setFrameValidationError(null);
-    setFrameValidationNote(null);
-    setSamplingFrameFileName('');
-    
-    try {
-      const { headers, rows } = await parseSamplingFrame(file);
-      const headerList = headers as string[];
-      
-      if (!koboToolData || !koboToolData.variableMap) {
-        throw new Error('Read the form from your Kobo project first, so its columns can be checked against your questions');
-      }
-      
-      const toolVars: string[] = Array.from(koboToolData.variableMap.keys());
-      const validation = validateSamplingFrameColumns(headerList, toolVars);
-      
-      if (!validation.isValid) {
-        throw new Error(
-          'None of the columns in this file match a question in your form. It needs at least one column named after a question, so targets can be matched to submissions.'
-        );
-      }
-      
-      setSamplingFrameData(rows);
-      setSamplingFrameFileName(file.name);
-      
-      // Lead with what worked. A real targets file carried `Region / AO`,
-      // `sampling_admin_1_label` and `sampling_livelihood_label` alongside the
-      // columns the app uses; ignoring those is correct behaviour, and saying
-      // so in the register of a problem told the user their file was wrong.
-      if (validation.hasUnmatchedColumns) {
-        const targetInfo = validation.targetColumn
-          ? ` "${validation.targetColumn}" is being read as the target column.`
-          : '';
-        setFrameValidationNote(
-          `Using ${validation.matchingColumns.join(', ')} from this file.${targetInfo} Other columns are ignored: ${validation.unmatchedColumns.join(', ')}.`
-        );
-      }
-      
-      // Auto-populate sampling_cols with only matching columns
-      setSamplingFrame(prev => ({
-        ...prev,
-        sampling_cols: validation.matchingColumns,
-        admin_level_for_label: validation.matchingColumns[0] || prev.admin_level_for_label,
-      }));
-    } catch (err) {
-      setFrameValidationError(err instanceof Error ? err.message : 'Could not read that targets file');
-    } finally {
-      setIsLoadingFrame(false);
-      event.target.value = '';
-    }
-  };
-
-  /**
-   * Switching mode discards the settings that belonged to the old one.
-   *
-   * Each mode owns its own settings and they mean nothing under another --
-   * per-answer targets name a question the new mode does not use, an uploaded
-   * file describes groupings nobody reads. Leaving them behind produces a
-   * config that claims to be `total` while still carrying a frame, which the
-   * next reader has to guess at. Nothing is written until Save, so Cancel
-   * still restores.
-   */
-  const handleTargetsModeChange = (mode: SamplingMode) => {
-    if (mode !== 'uploaded') {
-      setSamplingFrameData(null);
-      setSamplingFrameFileName('');
-      setFrameValidationError(null);
-      setFrameValidationNote(null);
-    }
-    setSamplingFrame((prev) => ({
-      ...prev,
-      mode,
-      total_target: mode === 'total' ? prev.total_target : null,
-      variable: mode === 'by_variable' ? prev.variable : null,
-      targets_by_value: mode === 'by_variable' ? prev.targets_by_value : {},
-      // sampling_cols is the uploaded file's matched columns, or the chosen
-      // variable, depending on the mode.
-      sampling_cols:
-        mode === 'uploaded'
-          ? prev.sampling_cols
-          : mode === 'by_variable' && prev.variable
-            ? [prev.variable]
-            : [],
-    }));
   };
 
   currentSurveyId.current = selectedSurvey?.survey_id;
@@ -783,7 +510,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
           } : undefined;
           break;
         case 'samplingFrame':
-          cd.sampling_frame = { ...samplingFrame, frame_data: samplingFrameData };
+          cd.sampling_frame = targets.toConfig();
           break;
         case 'generalFlags':
           cd.quality_checks = { ...cd.quality_checks, ...pick(qc, GENERAL_FLAG_KEYS) };
@@ -826,107 +553,54 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     setSavedAt((prev) => ({ ...prev, [section]: new Date() }));
   };
 
-  /** Run a section's save with its busy flag; errors stay on screen until dismissed. */
-  const handleSectionSave = async (
-    section: SettingsSection,
-    setBusy?: (busy: boolean) => void,
-    onSaved?: () => void
-  ) => {
-    setBusy?.(true);
-    setError(null);
-    try {
-      await saveSection(section);
-      onSaved?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setBusy?.(false);
+  /** Put a section's fields back as last saved: the counterpart of sectionUpdate. */
+  const restoreSection = (section: SettingsSection) => {
+    if (!config) return;
+    const cd = config.config_data;
+    switch (section) {
+      case 'basicInfo':
+        setSurveyName(config.survey_name);
+        setKoboAssetId(config.kobo_asset_id || '');
+        setGlobalParameters((prev) => ({
+          ...prev,
+          data_collection_start_date: cd?.global_parameters?.data_collection_start_date || '',
+          data_collection_end_date: cd?.global_parameters?.data_collection_end_date || '',
+        }));
+        break;
+      case 'coreIdentifiers': {
+        if (cd?.core_identifiers) setCoreIdentifiers((prev) => ({ ...prev, ...cd.core_identifiers }));
+        const savedSpecialValues = cd?.special_values;
+        if (savedSpecialValues) {
+          setSpecialValues((prev) => ({
+            ...prev,
+            ...savedSpecialValues,
+            dk_value: readDkCodes(savedSpecialValues.dk_value),
+            dk_string_value: readDkValues(savedSpecialValues.dk_string_value),
+          }));
+        }
+        break;
+      }
+      case 'koboTool':
+        applyKoboTool(cd);
+        break;
+      case 'samplingFrame':
+        targets.load(cd.sampling_frame);
+        break;
+      case 'generalFlags':
+        restoreQualityChecks(GENERAL_FLAG_KEYS);
+        setGlobalParameters((prev) => ({
+          ...prev,
+          min_survey_duration_minutes: cd?.global_parameters?.min_survey_duration_minutes ?? null,
+          max_survey_duration_minutes: cd?.global_parameters?.max_survey_duration_minutes ?? null,
+        }));
+        break;
+      case 'outlier':
+        restoreQualityChecks(OUTLIER_KEYS);
+        break;
+      case 'llm':
+        restoreQualityChecks(LLM_KEYS);
+        break;
     }
-  };
-
-  const handleSaveBasicInfo = () => handleSectionSave('basicInfo', setIsSavingBasicInfo);
-
-  const handleCancelBasicInfo = () => {
-    if (config) {
-      setSurveyName(config.survey_name);
-      setKoboAssetId(config.kobo_asset_id || '');
-      setGlobalParameters(prev => ({
-        ...prev,
-        data_collection_start_date: config.config_data?.global_parameters?.data_collection_start_date || '',
-        data_collection_end_date: config.config_data?.global_parameters?.data_collection_end_date || '',
-      }));
-    }
-  };
-
-  const handleSaveCoreIdentifiers = () => handleSectionSave('coreIdentifiers', setIsSavingCoreIdentifiers);
-
-  const handleCancelCoreIdentifiers = () => {
-    if (config?.config_data?.core_identifiers) {
-      setCoreIdentifiers(prev => ({ ...prev, ...config.config_data.core_identifiers }));
-    }
-    if (config?.config_data?.special_values) {
-      setSpecialValues(prev => ({
-        ...prev,
-        ...config.config_data.special_values,
-        dk_value: readDkCodes(config.config_data.special_values.dk_value),
-        dk_string_value: readDkValues(config.config_data.special_values.dk_string_value),
-      }));
-    }
-  };
-
-  const handleSaveKoboTool = () => handleSectionSave('koboTool', setIsSavingKoboTool, () => setIsEditingKoboTool(false));
-
-  const handleCancelKoboTool = () => {
-    setIsEditingKoboTool(false);
-    if (config) applyKoboTool(config.config_data);
-  };
-
-  const handleSaveSamplingFrame = () => handleSectionSave('samplingFrame', setIsSavingSamplingFrame, () => setIsEditingSamplingFrame(false));
-
-  const handleCancelSamplingFrame = () => {
-    setIsEditingSamplingFrame(false);
-    if (config) applySamplingFrame(config.config_data);
-  };
-
-  const handleSaveGeneralFlags = () => handleSectionSave('generalFlags', setIsSavingGeneralFlags);
-
-  const handleCancelGeneralFlags = () => {
-    restoreQualityChecks(GENERAL_FLAG_KEYS);
-    const saved = config?.config_data?.global_parameters;
-    setGlobalParameters((prev) => ({
-      ...prev,
-      min_survey_duration_minutes: saved?.min_survey_duration_minutes ?? null,
-      max_survey_duration_minutes: saved?.max_survey_duration_minutes ?? null,
-    }));
-  };
-
-  const handleSaveOutlier = () => handleSectionSave('outlier', setIsSavingOutlier, () => setIsEditingOutlier(false));
-
-  const handleCancelOutlier = () => {
-    setIsEditingOutlier(false);
-    restoreQualityChecks(OUTLIER_KEYS);
-  };
-
-  const handleSaveLLM = () => handleSectionSave('llm', setIsSavingLLM, () => setIsEditingLLM(false));
-
-  const [isRerunningAI, setIsRerunningAI] = useState(false);
-  const handleRerunAI = async () => {
-    if (!selectedSurvey) return;
-    setIsRerunningAI(true);
-    setError(null);
-    try {
-      const count = await rerunAiChecks(selectedSurvey.survey_id);
-      setSuccess(`${count} submissions will be reviewed again on the next pull.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not schedule the review');
-    } finally {
-      setIsRerunningAI(false);
-    }
-  };
-
-  const handleCancelLLM = () => {
-    setIsEditingLLM(false);
-    restoreQualityChecks(LLM_KEYS);
   };
 
   const handleDeleteClick = () => {
@@ -1089,7 +763,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   ];
 
   return (
-    <SettingsLayout
+    <SettingsLayout<SurveySettingsTab>
       title="Survey settings"
       items={navItems}
       active={activeTab}
@@ -1245,22 +919,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 </div>
                 {!isBasicInfoDirty && <SavedNote at={savedAt.basicInfo} className="pt-2" />}
                 {canEditSurvey && isBasicInfoDirty && (
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      onClick={handleSaveBasicInfo}
-                      disabled={isSavingBasicInfo}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {isSavingBasicInfo ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={handleCancelBasicInfo}
-                      disabled={isSavingBasicInfo}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <SectionActions controls={sections.controls('basicInfo')} className="pt-2" />
                 )}
               </div>
             </section>
@@ -1269,17 +928,12 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Kobo form</h2>
-                {!isEditingKoboTool && <SavedNote at={savedAt.koboTool} className="ml-auto mr-2" />}
-                {canEditSurvey && !isEditingKoboTool && (
-                  <button
-                    onClick={() => setIsEditingKoboTool(true)}
-                    className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                  >
-                    Edit
-                  </button>
+                {!sections.isEditing('koboTool') && <SavedNote at={savedAt.koboTool} className="ml-auto mr-2" />}
+                {canEditSurvey && !sections.isEditing('koboTool') && (
+                  <SectionEditButton onClick={() => sections.edit('koboTool')} />
                 )}
               </div>
-              {isEditingKoboTool ? (
+              {sections.isEditing('koboTool') ? (
                 <div className="space-y-2">
                   {koboToolData && (
                     <div className="mb-3">
@@ -1342,22 +996,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                       </div>
                     );
                   })()}
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={handleSaveKoboTool}
-                      disabled={isSavingKoboTool}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {isSavingKoboTool ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={handleCancelKoboTool}
-                      disabled={isSavingKoboTool}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <SectionActions controls={sections.controls('koboTool')} className="mt-4" />
                 </div>
               ) : (
                 <div className="text-gray-700 dark:text-gray-300">
@@ -1390,161 +1029,40 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Data collection targets</h2>
-                {!isEditingSamplingFrame && <SavedNote at={savedAt.samplingFrame} className="ml-auto mr-2" />}
-                {canEditSurvey && !isEditingSamplingFrame && (
-                  <button
-                    onClick={() => setIsEditingSamplingFrame(true)}
-                    className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                  >
-                    Edit
-                  </button>
+                {!sections.isEditing('samplingFrame') && <SavedNote at={savedAt.samplingFrame} className="ml-auto mr-2" />}
+                {canEditSurvey && !sections.isEditing('samplingFrame') && (
+                  <SectionEditButton onClick={() => sections.edit('samplingFrame')} />
                 )}
               </div>
-              {isEditingSamplingFrame ? (
+              {sections.isEditing('samplingFrame') ? (
                 <div className="space-y-4">
-                  <CollectionTargets
-                    mode={samplingFrame.mode}
-                    onModeChange={handleTargetsModeChange}
-                    totalTarget={samplingFrame.total_target}
-                    onTotalTargetChange={(total_target) =>
-                      setSamplingFrame((prev) => ({ ...prev, total_target }))
-                    }
-                    variable={samplingFrame.variable}
-                    onVariableChange={(variable) =>
-                      setSamplingFrame((prev) => ({
-                        ...prev,
-                        variable,
-                        // sampling_cols mirrors the chosen question, so every
-                        // consumer keeps reading one field.
-                        sampling_cols: variable ? [variable] : [],
-                      }))
-                    }
-                    targetsByValue={samplingFrame.targets_by_value}
-                    onTargetsByValueChange={(targets_by_value) =>
-                      setSamplingFrame((prev) => ({ ...prev, targets_by_value }))
-                    }
+                  <CollectionTargetsEditor
+                    targets={targets}
                     koboToolData={koboToolData}
                     labelColumnChoices={labelColumnChoices}
-                    editable={true}
-                    uploadedSlot={
-                      <>
-                  {samplingFrameData && (
-                    <div className="mb-3">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{samplingFrameFileName || 'Targets file'}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {[
-                          `${samplingFrameData.length} rows`,
-                          samplingFrame.sampling_cols.length > 0 && `grouped by ${samplingFrame.sampling_cols.join(', ')}`,
-                          totalFromFrameRows(samplingFrameData, isTargetColumn) !== null &&
-                            `${totalFromFrameRows(samplingFrameData, isTargetColumn)} interviews planned`,
-                        ].filter(Boolean).join(' · ')}
-                      </p>
-                    </div>
-                  )}
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
-                        Upload a file of targets (CSV or XLSX)
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setShowSamplingFrameHelp(!showSamplingFrameHelp)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        File format
-                      </button>
-                    </div>
-                    {showSamplingFrameHelp && (
-                      <div className="mb-3 p-3 bg-blue-50 dark:bg-gray-800/50 border border-blue-200 dark:border-gray-700 rounded-md text-xs text-gray-700 dark:text-gray-300 space-y-2">
-                        <ul className="list-disc list-inside space-y-1.5 ml-2">
-                          <li><strong>Format:</strong> CSV or Excel (.xlsx, .xls)</li>
-                          <li><strong>Column Headers:</strong> Must match variable names from your Kobo tool (e.g., <code className="bg-white dark:bg-gray-900 px-1 rounded">district</code>, <code className="bg-white dark:bg-gray-900 px-1 rounded">village</code>, <code className="bg-white dark:bg-gray-900 px-1 rounded">sector</code>)</li>
-                          <li>
-                            <strong>Target Column (Optional):</strong> A column for interview targets/sample size that doesn't need to match Kobo variables. Recognized names: target, target_interviews, sample_size, interview_target, expected_interviews, etc.
-                          </li>
-                        </ul>
-                        <div className="mt-2 pt-2 border-t border-blue-200 dark:border-gray-700">
-                          <p className="font-medium text-gray-900 dark:text-gray-200 mb-1">Example file structure:</p>
-                          <div className="bg-white dark:bg-gray-900 p-2 rounded text-xs overflow-x-auto font-mono">
-                            <div>region,district,village,target</div>
-                            <div>North,District A,Village 1,50</div>
-                            <div>North,District A,Village 2,45</div>
-                            <div>South,District B,Village 3,60</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      onChange={handleSamplingFrameUpload}
-                      className="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
-                      disabled={isLoadingFrame || !koboToolData}
-                    />
-                    {frameValidationError && (
-                      <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/50 border border-red-200 dark:border-red-700 rounded-md text-red-800 dark:text-red-200 text-sm">
-                        {frameValidationError}
-                      </div>
-                    )}
-                    {frameValidationNote && !frameValidationError && (
-                      <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300 text-sm">
-                        {frameValidationNote}
-                      </div>
-                    )}
-                    {samplingFrameFileName && !frameValidationError && !samplingFrameData && (
-                      <div className="mt-2 text-sm text-green-600 dark:text-green-400">
-                        ✓ {samplingFrameFileName}
-                      </div>
-                    )}
-                    {!koboToolData && (
-                      <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-                        Read the form from your Kobo project first.
-                      </p>
-                    )}
-                  </div>
-                      </>
-                    }
                   />
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={handleSaveSamplingFrame}
-                      disabled={isSavingSamplingFrame}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {isSavingSamplingFrame ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={handleCancelSamplingFrame}
-                      disabled={isSavingSamplingFrame}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <SectionActions controls={sections.controls('samplingFrame')} className="mt-4" />
                 </div>
               ) : (
                 <div className="space-y-2">
                   <CollectionTargets
-                    mode={samplingFrame.mode}
+                    mode={targets.settings.mode}
                     onModeChange={() => {}}
-                    totalTarget={samplingFrame.total_target}
+                    totalTarget={targets.settings.total_target}
                     onTotalTargetChange={() => {}}
-                    variable={samplingFrame.variable}
+                    variable={targets.settings.variable}
                     onVariableChange={() => {}}
-                    targetsByValue={samplingFrame.targets_by_value}
+                    targetsByValue={targets.settings.targets_by_value}
                     onTargetsByValueChange={() => {}}
                     koboToolData={koboToolData}
                     labelColumnChoices={labelColumnChoices}
                     editable={false}
                   />
-                  {samplingFrame.mode === 'uploaded' && samplingFrameData ? (
+                  {targets.settings.mode === 'uploaded' && targets.frameData ? (
                     <div className="text-sm text-gray-700 dark:text-gray-300">
-                      {samplingFrameData.length} rows,{' '}
-                      {samplingFrame.sampling_cols.length > 0
-                        ? `grouped by ${samplingFrame.sampling_cols.join(', ')}`
+                      {targets.frameData.length} rows,{' '}
+                      {targets.settings.sampling_cols.length > 0
+                        ? `grouped by ${targets.settings.sampling_cols.join(', ')}`
                         : 'no grouping columns matched'}
                     </div>
                   ) : null}
@@ -1587,22 +1105,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               </div>
               {!isCoreIdentifiersDirty && <SavedNote at={savedAt.coreIdentifiers} className="pt-4" />}
               {canEditSurvey && isCoreIdentifiersDirty && (
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={handleSaveCoreIdentifiers}
-                    disabled={isSavingCoreIdentifiers}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                  >
-                    {isSavingCoreIdentifiers ? 'Saving...' : 'Save changes'}
-                  </button>
-                  <button
-                    onClick={handleCancelCoreIdentifiers}
-                    disabled={isSavingCoreIdentifiers}
-                    className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <SectionActions controls={sections.controls('coreIdentifiers')} className="pt-4" />
               )}
             </section>
 
@@ -1626,132 +1129,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             )}
           </div>
         {activeTab === 'access' ? (
-          <div className="space-y-6">
-            {/* Who has access */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Who has access</h2>
-              
-              {isLoadingAccess ? (
-                <div className="flex items-center justify-center py-8">
-                  <Spinner />
-                </div>
-              ) : accessList.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400 text-sm py-4">
-                  {canManageAccess 
-                    ? "No one else has access to this survey yet." 
-                    : "Unable to load access list."}
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {accessList.map((access) => (
-                    <div
-                      key={access.user_id}
-                      className="flex items-center justify-between py-3 px-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
-                          {access.username?.charAt(0).toUpperCase() || access.email?.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {access.full_name || access.username}
-                          </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {access.email}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        {access.permission_level === 'owner' ? (
-                          <span className="px-3 py-1 text-sm font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 rounded-full">
-                            Owner
-                          </span>
-                        ) : canManageAccess ? (
-                          <>
-                            <select
-                              value={access.permission_level}
-                              onChange={(e) => handleUpdateAccess(access.user_id, e.target.value as 'editor' | 'viewer')}
-                              className="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
-                            >
-                              <option value="viewer">Viewer</option>
-                              <option value="editor">Editor</option>
-                            </select>
-                            <button
-                              onClick={() => handleRevokeAccess(access.user_id, access.email)}
-                              className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                              title="Revoke access"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </>
-                        ) : (
-                          <span className={`px-3 py-1 text-sm font-medium rounded-full ${
-                            access.permission_level === 'editor' 
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                              : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                          }`}>
-                            {access.permission_level === 'editor' ? 'Editor' : 'Viewer'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Share Survey */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Share survey</h2>
-              
-              {!canManageAccess ? (
-                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md">
-                  <p className="text-yellow-800 dark:text-yellow-200 text-sm">
-                    Only the survey owner can manage access permissions.
-                  </p>
-                </div>
-              ) : (
-                <form onSubmit={handleShare} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Invite by email
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="email"
-                        value={shareEmail}
-                        onChange={(e) => setShareEmail(e.target.value)}
-                        placeholder="user@example.com"
-                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
-                        required
-                      />
-                      <select
-                        value={sharePermission}
-                        onChange={(e) => setSharePermission(e.target.value as 'editor' | 'viewer')}
-                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
-                      >
-                        <option value="viewer">Viewer</option>
-                        <option value="editor">Editor</option>
-                      </select>
-                      <button
-                        type="submit"
-                        disabled={isSharing || !shareEmail.trim()}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                      >
-                        {isSharing ? 'Sharing...' : 'Share'}
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    <strong>Viewer:</strong> Can view data and reports. <strong>Editor:</strong> Can also run ETL and resolve flags.
-                  </p>
-                </form>
-              )}
-            </section>
-          </div>
+          <SurveyAccessTab surveyId={selectedSurvey.survey_id} onError={setError} onSuccess={setSuccess} />
         ) : activeTab === 'quality' ? (
           <div className="space-y-6">
             {/* General Quality Checks - dirty pattern like Survey Profile */}
@@ -2045,400 +1423,33 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 </div>
                 {!isGeneralFlagsDirty && <SavedNote at={savedAt.generalFlags} className="pt-4" />}
                 {canEditSurvey && isGeneralFlagsDirty && (
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={handleSaveGeneralFlags}
-                      disabled={isSavingGeneralFlags}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {isSavingGeneralFlags ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={handleCancelGeneralFlags}
-                      disabled={isSavingGeneralFlags}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                  <SectionActions controls={sections.controls('generalFlags')} className="pt-4" />
                 )}
               </div>
             </section>
 
-            {/* Outlier Checks Settings */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Outlier checks</h2>
-                {!isEditingOutlier && <SavedNote at={savedAt.outlier} className="ml-auto mr-2" />}
-                {canEditSurvey && !isEditingOutlier && (
-                  <button
-                    onClick={() => setIsEditingOutlier(true)}
-                    className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-              <div className="space-y-6">
-                {/* Outlier Checks Flag */}
-                <div className="space-y-2">
-                  <div className="flex items-start">
-                    <div className="flex h-5 items-center">
-                      <input
-                        type="checkbox"
-                        disabled={!isEditingOutlier}
-                        checked={qualityChecks.flag_outliers}
-                        onChange={(e) => setQualityChecks({ ...qualityChecks, flag_outliers: e.target.checked })}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                      />
-                    </div>
-                    <div className="ml-3">
-                      <label className="text-sm font-medium text-gray-900 dark:text-white">
-                        Flag outlier values
-                      </label>
-                    </div>
-                  </div>
+            <OutlierChecksSection
+              checks={qualityChecks}
+              setChecks={setQualityChecks}
+              numericVariables={numericVariables}
+              questionLabel={questionLabel}
+              canEdit={canEditSurvey}
+              controls={sections.controls('outlier')}
+              savedAt={savedAt.outlier}
+            />
 
-                  {qualityChecks.flag_outliers && (
-                    <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 space-y-4">
-                      {/* Variable Selection */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Variables to check
-                        </label>
-                        {isEditingOutlier ? (
-                          <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
-                            {numericVariables.length > 0 ? (
-                              numericVariables.map((variable) => (
-                                <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
-                                  <input
-                                    type="checkbox"
-                                    checked={qualityChecks.outlier_variables.includes(variable)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setQualityChecks({
-                                          ...qualityChecks,
-                                          outlier_variables: [...qualityChecks.outlier_variables, variable],
-                                        });
-                                      } else {
-                                        setQualityChecks({
-                                          ...qualityChecks,
-                                          outlier_variables: qualityChecks.outlier_variables.filter((v) => v !== variable),
-                                          outlier_log_transform_variables: qualityChecks.outlier_log_transform_variables.filter((v) => v !== variable),
-                                        });
-                                      }
-                                    }}
-                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                  />
-                                  <span className="text-sm text-gray-700 dark:text-gray-300">{questionLabel(variable) || variable}</span>
-                                  {questionLabel(variable) && (
-                                    <span className="text-xs text-gray-500">({variable})</span>
-                                  )}
-                                </label>
-                              ))
-                            ) : (
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                No variables available. Please upload a Kobo tool first.
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            {qualityChecks.outlier_variables.length > 0 ? (
-                              qualityChecks.outlier_variables.map((variable) => (
-                                <span
-                                  key={variable}
-                                  className="inline-block mr-2 mb-1 px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded dark:bg-indigo-900 dark:text-indigo-200"
-                                >
-                                  {questionLabel(variable) || variable}
-                                  {questionLabel(variable) && <span className="opacity-70"> ({variable})</span>}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">No variables selected</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Log transform per variable */}
-                      {qualityChecks.outlier_variables.length > 0 && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Log transform (signed)
-                          </label>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                            Use signed log transform for skewed or mixed-sign variables: sign(x) × log(1 + |x|)
-                          </p>
-                          {isEditingOutlier ? (
-                            <div className="space-y-2">
-                              {qualityChecks.outlier_variables.map((variable) => (
-                                <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
-                                  <input
-                                    type="checkbox"
-                                    checked={qualityChecks.outlier_log_transform_variables.includes(variable)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setQualityChecks({
-                                          ...qualityChecks,
-                                          outlier_log_transform_variables: [...qualityChecks.outlier_log_transform_variables, variable],
-                                        });
-                                      } else {
-                                        setQualityChecks({
-                                          ...qualityChecks,
-                                          outlier_log_transform_variables: qualityChecks.outlier_log_transform_variables.filter((v) => v !== variable),
-                                        });
-                                      }
-                                    }}
-                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                  />
-                                  <span className="text-sm text-gray-700 dark:text-gray-300">{questionLabel(variable) || variable}</span>
-                                  {questionLabel(variable) && (
-                                    <span className="text-xs text-gray-500">({variable})</span>
-                                  )}
-                                </label>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              {qualityChecks.outlier_log_transform_variables.length > 0 ? (
-                                qualityChecks.outlier_log_transform_variables.map((variable) => (
-                                  <span
-                                    key={variable}
-                                    className="inline-block mr-2 mb-1 px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded dark:bg-amber-900 dark:text-amber-200"
-                                  >
-                                    {questionLabel(variable) || variable}
-                                    {questionLabel(variable) && <span className="opacity-70"> ({variable})</span>} (log)
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-xs text-gray-500 dark:text-gray-400">None</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Method Selection */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Detection method
-                        </label>
-                        {isEditingOutlier ? (
-                          <select
-                            value={qualityChecks.outlier_method}
-                            onChange={(e) => {
-                              const newMethod = e.target.value as 'iqr' | 'mad' | 'zscore';
-                              // Update threshold based on method
-                              const defaultThresholds = {
-                                iqr: 1.5,
-                                mad: 3.0,
-                                zscore: 2.0,
-                              };
-                              setQualityChecks({
-                                ...qualityChecks,
-                                outlier_method: newMethod,
-                                outlier_threshold: defaultThresholds[newMethod],
-                              });
-                            }}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          >
-                            <option value="iqr">IQR (Interquartile Range)</option>
-                            <option value="mad">MAD (Median Absolute Deviation)</option>
-                            <option value="zscore">Z-Score</option>
-                          </select>
-                        ) : (
-                          <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {qualityChecks.outlier_method === 'iqr'
-                              ? 'IQR (Interquartile Range)'
-                              : qualityChecks.outlier_method === 'mad'
-                              ? 'MAD (Median Absolute Deviation)'
-                              : 'Z-Score'}
-                          </span>
-                        )}
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {qualityChecks.outlier_method === 'iqr'
-                            ? 'Uses quartiles and IQR. Standard threshold: 1.5'
-                            : qualityChecks.outlier_method === 'mad'
-                            ? 'Robust method using median and MAD. Standard threshold: 3.0'
-                            : 'Uses mean and standard deviation. Standard threshold: 2.0 (moderate) or 3.0 (strict)'}
-                        </p>
-                      </div>
-
-                      {/* Threshold */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                          Threshold
-                        </label>
-                        {isEditingOutlier ? (
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0.1"
-                            value={qualityChecks.outlier_threshold}
-                            onChange={(e) =>
-                              setQualityChecks({
-                                ...qualityChecks,
-                                outlier_threshold: parseFloat(e.target.value) || 1.5,
-                              })
-                            }
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        ) : (
-                          <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {qualityChecks.outlier_threshold}
-                          </span>
-                        )}
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {qualityChecks.outlier_method === 'iqr'
-                            ? 'IQR multiplier (e.g., 1.5 = standard, 3.0 = more conservative)'
-                            : qualityChecks.outlier_method === 'mad'
-                            ? 'Modified Z-score threshold (e.g., 3.0 = standard)'
-                            : 'Z-score threshold (e.g., 2.0 = moderate, 3.0 = strict)'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {isEditingOutlier && (
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={handleSaveOutlier}
-                      disabled={isSavingOutlier}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {isSavingOutlier ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={handleCancelOutlier}
-                      disabled={isSavingOutlier}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* AI review of open-text answers */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white"><SparkleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />AI review</h2>
-                {!isEditingLLM && <SavedNote at={savedAt.llm} className="ml-auto mr-2" />}
-                {canEditSurvey && !isEditingLLM && (
-                  <button
-                    onClick={() => setIsEditingLLM(true)}
-                    className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-              {userPermission === 'owner' && selectedSurvey && (
-                <div className="mb-4">
-                  <SurveyKeyPicker surveyId={selectedSurvey.survey_id} use="review" />
-                </div>
-              )}
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <div className="flex h-5 items-center">
-                    <input
-                      type="checkbox"
-                      disabled={!isEditingLLM}
-                      checked={qualityChecks.flag_llm_qualitative}
-                      onChange={(e) =>
-                        setQualityChecks({
-                          ...qualityChecks,
-                          flag_llm_qualitative: e.target.checked,
-                        })
-                      }
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                    />
-                  </div>
-                  <div className="ml-3">
-                    <label className="text-sm font-medium text-gray-900 dark:text-white">
-                      Flag weak open-text answers
-                    </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Unreadable, off-topic or too vague answers to the questions you pick. Counts toward the included usage, unless it runs on your own API key.
-                    </p>
-                  </div>
-                </div>
-
-                {qualityChecks.flag_llm_qualitative && (
-                  <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                    <h3 className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Questions to review</h3>
-                    {reviewableVariables.length === 0 ? (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        This form has no open-text questions.
-                      </p>
-                    ) : (
-                      <div className="max-h-48 overflow-y-auto space-y-1">
-                        {reviewableVariables.map((variable) => (
-                          <label key={variable.name} className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              disabled={!isEditingLLM}
-                              checked={qualityChecks.llm_qualitative_fields.includes(variable.name)}
-                              onChange={(e) => {
-                                const selected = qualityChecks.llm_qualitative_fields;
-                                if (e.target.checked) {
-                                  setQualityChecks({
-                                    ...qualityChecks,
-                                    llm_qualitative_fields: [...selected, variable.name],
-                                  });
-                                } else {
-                                  setQualityChecks({
-                                    ...qualityChecks,
-                                    llm_qualitative_fields: selected.filter((name) => name !== variable.name),
-                                  });
-                                }
-                              }}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                            />
-                            <span className="text-gray-900 dark:text-white">{variable.label}</span>
-                            <span className="text-xs text-gray-500">({variable.name})</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {canEditSurvey && !isEditingLLM && qualityChecks.flag_llm_qualitative && (
-                  <div className="ml-7 flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={handleRerunAI}
-                      disabled={isRerunningAI}
-                      className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md disabled:opacity-50"
-                    >
-                      {isRerunningAI ? 'Scheduling…' : 'Review all answers again'}
-                    </button>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      On the next pull, including answers already reviewed. Counts toward the included usage, unless it runs on your own API key.
-                    </p>
-                  </div>
-                )}
-                {isEditingLLM && (
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={handleSaveLLM}
-                      disabled={isSavingLLM}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium"
-                    >
-                      {isSavingLLM ? 'Saving...' : 'Save changes'}
-                    </button>
-                    <button
-                      onClick={handleCancelLLM}
-                      disabled={isSavingLLM}
-                      className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            </section>
+            <AiReviewSection
+              surveyId={selectedSurvey.survey_id}
+              isOwner={userPermission === 'owner'}
+              checks={qualityChecks}
+              setChecks={setQualityChecks}
+              reviewableVariables={reviewableVariables}
+              canEdit={canEditSurvey}
+              controls={sections.controls('llm')}
+              savedAt={savedAt.llm}
+              onError={setError}
+              onSuccess={setSuccess}
+            />
 
             {/* Custom checks */}
             {selectedSurvey && (

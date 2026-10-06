@@ -19,6 +19,12 @@ from services.ai_errors import AUTH, BAD_RESPONSE, NOT_CONFIGURED, PROVIDER_QUOT
 logger = logging.getLogger(__name__)
 
 
+def not_configured() -> AIError:
+    """The one "no AI provider" error: rule writing reports it in words,
+    review and translation raise it."""
+    return AIError(NOT_CONFIGURED, "No AI provider is configured (OPENAI_API_KEY).")
+
+
 def rule_error_message(error: AIError) -> str:
     """What the rule builder shows when the AI call behind it fails."""
     if error.category == AUTH:
@@ -111,7 +117,7 @@ class AIService:
             ValueError: If AI service is not available or generation fails
         """
         if provider is None and not self.is_available():
-            raise ValueError("AI service is not available. Please configure OPENAI_API_KEY.")
+            raise ValueError(rule_error_message(not_configured()))
 
         # Build variable context for the prompt
         variables_context = self._format_variables_context(kobo_variables)
@@ -319,7 +325,7 @@ Generate a validation rule matching the exact JSON schema."""
             ValueError: If AI service is not available or generation fails
         """
         if provider is None and not self.is_available():
-            raise ValueError("AI service is not available. Please configure OPENAI_API_KEY.")
+            raise ValueError(rule_error_message(not_configured()))
 
         # Build variable context
         variables_context = self._format_variables_context(kobo_variables)
@@ -519,7 +525,8 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
             try:
                 self._validate_rule_structure(rule)
                 validated_rules.append(rule)
-            except Exception as e:
+            except (ValueError, KeyError, TypeError, AttributeError) as e:
+                # Model output: a malformed rule is skipped, not fatal.
                 logger.warning(f"Skipping invalid suggested rule: {e}")
 
         logger.info(f"Successfully generated {len(validated_rules)} rule suggestions")
@@ -589,7 +596,7 @@ Analyze this survey form and suggest 5-10 validation rules. Each suggested rule 
                 not check".
         """
         if provider is None and not self.is_available():
-            raise AIError(NOT_CONFIGURED, "No AI provider is configured (OPENAI_API_KEY).")
+            raise not_configured()
 
         if not field_values:
             return []
@@ -713,7 +720,7 @@ Return only clear issues. If no clear issue exists, return an empty list.{dk_rem
                 returns the original text in place of a translation.
         """
         if provider is None and not self.is_available():
-            raise AIError(NOT_CONFIGURED, "No AI provider is configured (OPENAI_API_KEY).")
+            raise not_configured()
 
         what = "transcripts of recorded answers" if transcript else "answers"
         system_prompt = f"""You translate {what} to survey questions into {target_language}.

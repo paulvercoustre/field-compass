@@ -8,8 +8,9 @@ import hashlib
 import logging
 import os
 from datetime import datetime, timedelta
+from typing import Annotated
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -20,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from database.models import User
 from services.app_events import can_view_usage, mark_active
-from services.database import get_db
+from services.database import DbSession
 
 load_dotenv()
 
@@ -180,8 +181,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> TokenData | None:
@@ -248,9 +248,7 @@ def get_user_by_username(db: Session, username: str) -> User | None:
 # =============================================================================
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
-) -> User:
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: DbSession) -> User:
     """
     FastAPI dependency to get the current authenticated user.
     Raises 401 if token is invalid or user not found.
@@ -275,7 +273,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """
     FastAPI dependency to get the current active user.
     Raises 400 if user is inactive.
@@ -285,27 +283,13 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
     return current_user
 
 
-async def get_optional_current_user(
-    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
-) -> User | None:
-    """
-    FastAPI dependency to optionally get the current user.
-    Returns None if no valid token is provided (instead of raising an error).
-    Useful for endpoints that work with or without authentication.
-    """
-    if not token:
-        return None
-
-    token_data = decode_access_token(token)
-    if token_data is None:
-        return None
-
-    return get_user_by_id(db, token_data.user_id)
-
-
 # =============================================================================
 # Kobo API key helpers
 # =============================================================================
+
+
+# The signed-in, active user: `current_user: CurrentUser`.
+CurrentUser = Annotated[User, Depends(get_current_active_user)]
 
 
 def get_user_kobo_token(user: User) -> str | None:
@@ -317,14 +301,9 @@ def get_user_kobo_token(user: User) -> str | None:
         return None
     try:
         return decrypt_api_key(user.kobo_api_token_encrypted)
-    except Exception:
+    except (InvalidToken, ValueError):
+        # Encrypted under a different key: as good as no token.
         return None
-
-
-def set_user_kobo_token(db: Session, user: User, api_token: str) -> None:
-    """Set the Kobo API token for a user (encrypts before storing)."""
-    user.kobo_api_token_encrypted = encrypt_api_key(api_token)
-    db.commit()
 
 
 def user_to_response(user: User) -> dict:

@@ -181,8 +181,8 @@ const AIUsageChart: React.FC<AIUsageChartProps> = ({ surveys, refreshKey }) => {
               />
               <Tooltip
                 {...tooltipProps}
-                formatter={(value: number, name: string) => [
-                  formatValue(value, metric),
+                formatter={(value, name) => [
+                  formatValue(Number(value), metric),
                   name === 'own' ? 'Your keys' : 'Included usage',
                 ]}
               />

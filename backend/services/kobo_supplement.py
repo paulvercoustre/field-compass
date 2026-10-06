@@ -21,6 +21,7 @@ docs/specs/audio-transcription.md, section 5.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import time
@@ -123,10 +124,8 @@ def _call(
         raise KoboSupplementError(NOT_FOUND, "Kobo could not find this submission.")
     if status == 429 or status >= 500:
         retry_after = None
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             retry_after = float(response.headers.get("retry-after", ""))
-        except (TypeError, ValueError):
-            pass
         raise KoboSupplementError(RETRYABLE, _message(response), retry_after=retry_after)
     raise KoboSupplementError(BAD_REQUEST, _message(response))
 

@@ -4,70 +4,14 @@
 
 import { QualityOverviewResponse, QualityOverviewFilters } from '../types';
 
-import { API_BASE_URL, apiFetch } from './apiBase';
+import { request } from './apiBase';
 
-// Helper to get auth token from localStorage
-const getAuthToken = (): string | null => {
-  return localStorage.getItem('field_compass_token');
-};
-
-// Helper to create headers with auth
-const createHeaders = (): HeadersInit => {
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  
-  const token = getAuthToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  return headers;
-};
-
-/**
- * Fetch quality overview data for a survey
- * @param surveyId The survey ID (required)
- * @param filters Optional filters (date range, enumerator, sampling variables)
- */
-export const fetchQualityOverview = async (
-  surveyId: string,
-  filters?: QualityOverviewFilters
-): Promise<QualityOverviewResponse> => {
-  try {
-    const params = new URLSearchParams({
-      survey_id: surveyId,
-    });
-
-    if (filters?.startDate) {
-      params.append('start_date', filters.startDate);
-    }
-    if (filters?.endDate) {
-      params.append('end_date', filters.endDate);
-    }
-    if (filters?.enumerator) {
-      params.append('enumerator', filters.enumerator);
-    }
-    if (filters?.samplingFilters) {
-      params.append('sampling_filters', filters.samplingFilters);
-    }
-
-    const response = await apiFetch(`${API_BASE_URL}/api/quality/overview?${params}`, {
-      headers: createHeaders(),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      const errorMessage = typeof errorData.detail === 'string' 
-        ? errorData.detail 
-        : JSON.stringify(errorData.detail) || `Failed to fetch quality overview: ${response.statusText}`;
-      throw new Error(errorMessage);
-    }
-
-    const data: QualityOverviewResponse = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching quality overview:', error);
-    throw error;
-  }
+/** The quality dashboard's figures for a survey, narrowed by the filters. */
+export const fetchQualityOverview = (surveyId: string, filters?: QualityOverviewFilters) => {
+  const params = new URLSearchParams({ survey_id: surveyId });
+  if (filters?.startDate) params.append('start_date', filters.startDate);
+  if (filters?.endDate) params.append('end_date', filters.endDate);
+  if (filters?.enumerator) params.append('enumerator', filters.enumerator);
+  if (filters?.samplingFilters) params.append('sampling_filters', filters.samplingFilters);
+  return request<QualityOverviewResponse>(`/api/quality/overview?${params}`);
 };

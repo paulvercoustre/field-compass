@@ -13,6 +13,7 @@ import posixpath
 from dataclasses import dataclass, field
 from typing import Any
 
+from database.models import ITEM_OPEN
 from forms.schema import load_form_schema
 from services.transcription_languages import normalize_language
 
@@ -297,9 +298,6 @@ class TranscriptView:
     audio_seconds: float | None = None
 
 
-OPEN_TRANSCRIPT_STATUSES = frozenset({"pending", "running"})
-
-
 def ai_audio_fields(
     config_data: dict[str, Any] | None, llm_fields: list[str]
 ) -> dict[str, AudioQuestion]:
@@ -343,7 +341,7 @@ def review_data(
         if key is None:
             continue
         transcript = transcripts.get(question.path)
-        if transcript is not None and transcript.status in OPEN_TRANSCRIPT_STATUSES:
+        if transcript is not None and transcript.status in ITEM_OPEN:
             waiting = True
         text = transcript.text if transcript is not None and transcript.status == "success" else ""
         data[key] = (text or "").strip()

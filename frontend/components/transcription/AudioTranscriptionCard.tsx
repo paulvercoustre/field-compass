@@ -639,6 +639,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                   </button>
                 </>
               )}
+              {counts.not_run > 0 && <> · {counts.not_run} not run</>}
               {counts.no_speech > 0 && (
                 <>
                   {' · '}
@@ -647,6 +648,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                   </button>
                 </>
               )}
+              {counts.skipped > 0 && <> · {counts.skipped} skipped (recording missing or too long)</>}
               .
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">

@@ -10,16 +10,14 @@ itself -- the API token is encrypted server-side and never leaves the backend
 import logging
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Request
 
-from database.models import User
 from etl.kobo_fetcher import KoboFetcher
 from forms import load_form_schema
 from linter.questions import enclosing_relevants
-from models import KoboProject, SurveyFormResponse
-from services.auth import get_current_active_user, get_user_kobo_token
-from services.database import get_db
+from schemas import KoboProject, SurveyFormResponse
+from services.auth import CurrentUser, get_user_kobo_token
+from services.database import DbSession
 from services.permissions import get_accessible_surveys
 from services.rate_limit import limiter
 
@@ -53,8 +51,8 @@ def _project_status(asset: dict) -> str:
 @limiter.limit("30/minute")
 async def list_kobo_projects(
     request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     The survey projects in the user's Kobo account, for picking one by name.
@@ -71,7 +69,7 @@ async def list_kobo_projects(
     api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
     try:
         assets = KoboFetcher(api_token=kobo_token, api_url=api_url).list_survey_assets()
-    except Exception as exc:
+    except Exception as exc:  # any upstream failure becomes a message
         logger.warning("Kobo project list failed for user %s: %s", current_user.user_id, exc)
         status = getattr(getattr(exc, "response", None), "status_code", None)
         if status in (401, 403):
@@ -81,7 +79,7 @@ async def list_kobo_projects(
             )
         else:
             detail = "Could not load your projects from Kobo. Try again, or paste a project link instead."
-        raise HTTPException(status_code=502, detail=detail)
+        raise HTTPException(status_code=502, detail=detail) from exc
 
     existing = {
         survey.kobo_asset_id: survey.survey_name
@@ -113,8 +111,8 @@ async def list_kobo_projects(
 async def get_kobo_asset_form(
     request: Request,
     asset_uid: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Fetch a Kobo project's form structure, normalized for configuration UIs.
@@ -136,14 +134,14 @@ async def get_kobo_asset_form(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Add your Kobo API key in user settings so Field Compass can read " "your project."
+                "Add your Kobo API key in user settings so Field Compass can read your project."
             ),
         )
 
     api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
     try:
         asset = KoboFetcher(api_token=kobo_token, api_url=api_url).get_asset_info(asset_uid)
-    except Exception as exc:
+    except Exception as exc:  # any upstream failure becomes a message
         # The upstream failure is the interesting part and belongs in the log;
         # the caller gets something they can act on.
         logger.warning("Kobo asset fetch failed for %s: %s", asset_uid, exc)
@@ -153,7 +151,7 @@ async def get_kobo_asset_form(
                 "Could not read that project from Kobo. Check the project ID, and that "
                 "your Kobo account has access to it."
             ),
-        )
+        ) from exc
 
     schema = load_form_schema(asset)
     if schema.is_empty:

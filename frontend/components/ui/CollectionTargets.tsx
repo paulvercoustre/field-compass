@@ -14,7 +14,7 @@ import { KoboToolData, SamplingMode } from '../../types';
  * want the second rung: one number.
  */
 
-export interface CollectionTargetsProps {
+interface CollectionTargetsProps {
   /**
    * null when the user has not chosen yet, which is the initial state on a new
    * survey. Nothing is preselected: a checked radio is a claim the user made,

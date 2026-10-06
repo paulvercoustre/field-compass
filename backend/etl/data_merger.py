@@ -68,7 +68,7 @@ def calculate_json_diff(old_data: dict[str, Any], new_data: dict[str, Any]) -> l
             patches.append(patch_dict)
 
         return patches
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- a diff of arbitrary JSON must not stop the merge
         logger.error(f"Error calculating JSON diff: {e}")
         return []
 
@@ -147,7 +147,7 @@ def parse_kobo_submission(kobo_data: dict[str, Any]) -> dict[str, Any]:
                     else:
                         # Both naive, assume UTC
                         submission_time = submission_time.replace(tzinfo=UTC)
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     submission_time = submission_time.replace(tzinfo=UTC)
             else:
                 # No end_time to infer from, assume UTC
@@ -177,10 +177,7 @@ def parse_kobo_submission(kobo_data: dict[str, Any]) -> dict[str, Any]:
     else:
         submission_time = submission_time.astimezone(UTC)
 
-    if end_time.tzinfo is None:
-        end_time = end_time.replace(tzinfo=UTC)
-    else:
-        end_time = end_time.astimezone(UTC)
+    end_time = end_time.replace(tzinfo=UTC) if end_time.tzinfo is None else end_time.astimezone(UTC)
 
     # Extract submission data - keep ALL fields (don't filter out metadata)
     # This ensures form fields like 'start' and 'end' are preserved in submission_data
@@ -431,82 +428,33 @@ def merge_submission(
         db.commit()
         db.refresh(existing)
         return existing, history_record, False  # False = not newly created
-    else:
-        # New submission - check if it has deprecatedID (unlikely but possible)
-        # If it has deprecatedID, it means it was edited before first import
-        is_edited_on_import = deprecated_id is not None
+    # New submission - check if it has deprecatedID (unlikely but possible)
+    # If it has deprecatedID, it means it was edited before first import
+    is_edited_on_import = deprecated_id is not None
 
-        new_submission = SubmissionCurrent(
-            _id=submission_id,
-            survey_id=survey_id,
-            _uuid=new_uuid,
-            _submission_time=parsed_submission["_submission_time"],
-            end=new_end,
-            submission_data=new_data,
-            is_edited=is_edited_on_import,  # Mark as edited if it has deprecatedID
-            data_quality_issues=[],
-            qa_status="PENDING_APPROVAL",  # Will be updated by HFC engine
-            kobo_validation_status=kobo_validation_status,
-            kobo_edit_url=kobo_edit_url,
+    new_submission = SubmissionCurrent(
+        _id=submission_id,
+        survey_id=survey_id,
+        _uuid=new_uuid,
+        _submission_time=parsed_submission["_submission_time"],
+        end=new_end,
+        submission_data=new_data,
+        is_edited=is_edited_on_import,  # Mark as edited if it has deprecatedID
+        data_quality_issues=[],
+        qa_status="PENDING_APPROVAL",  # Will be updated by HFC engine
+        kobo_validation_status=kobo_validation_status,
+        kobo_edit_url=kobo_edit_url,
+    )
+
+    db.add(new_submission)
+    db.commit()
+    db.refresh(new_submission)
+
+    if is_edited_on_import:
+        logger.info(
+            f"Created new submission {submission_id} (was edited before import, deprecatedID: {deprecated_id})"
         )
+    else:
+        logger.info(f"Created new submission {submission_id}")
 
-        db.add(new_submission)
-        db.commit()
-        db.refresh(new_submission)
-
-        if is_edited_on_import:
-            logger.info(
-                f"Created new submission {submission_id} (was edited before import, deprecatedID: {deprecated_id})"
-            )
-        else:
-            logger.info(f"Created new submission {submission_id}")
-
-        return new_submission, None, True  # True = newly created
-
-
-def merge_submissions_batch(
-    db: Session,
-    kobo_submissions: list[dict[str, Any]],
-    survey_id: str,
-    kobo_asset_id: str | None = None,
-) -> dict[str, int]:
-    """
-    Merge a batch of submissions.
-
-    Args:
-        db: Database session
-        kobo_submissions: List of raw Kobo submission dictionaries
-        survey_id: UUID of the survey configuration
-        kobo_asset_id: Optional Kobo asset ID for constructing edit URLs
-
-    Returns:
-        Dictionary with statistics: {'created': int, 'updated': int, 'edited': int, 'errors': int}
-    """
-    stats = {"created": 0, "updated": 0, "edited": 0, "errors": 0}
-
-    for kobo_sub in kobo_submissions:
-        try:
-            parsed = parse_kobo_submission(kobo_sub)
-            existing, history, is_new = merge_submission(
-                db,
-                parsed,
-                survey_id,
-                kobo_asset_id=kobo_asset_id,
-                kobo_data=kobo_sub,  # Pass raw Kobo data for deprecatedID detection
-            )
-
-            if is_new:
-                stats["created"] += 1
-            elif history:
-                stats["edited"] += 1
-                stats["updated"] += 1
-            else:
-                stats["updated"] += 1
-
-        except Exception as e:
-            logger.error(f"Error merging submission: {e}")
-            stats["errors"] += 1
-            db.rollback()
-            continue
-
-    return stats
+    return new_submission, None, True  # True = newly created

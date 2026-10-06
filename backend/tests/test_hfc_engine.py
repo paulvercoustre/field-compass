@@ -743,16 +743,6 @@ class TestOptionalCoreIdentifiers:
         assert clean == []
         assert [i.check for i in missing_enum] == ["missing_enumerator"]
 
-    def test_field_lookup_with_no_field_name_finds_nothing(self, test_db, test_survey_config):
-        """
-        Guards the suffix search: without this, an unset identifier makes the
-        lookup hunt for the literal "/None".
-        """
-        engine = HFCEngine(test_db, test_survey_config)
-
-        assert engine._get_field_value({"a/None": "trap", "x": 1}, None) == (None, None)
-        assert engine._get_field_value({"a/None": "trap", "x": 1}, "") == (None, None)
-
 
 class TestSamplingFrameCheck:
     """`_check_sampling_frame` had no tests at all before collection targets

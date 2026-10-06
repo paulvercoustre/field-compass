@@ -45,10 +45,6 @@ _REWRITES = (
 )
 
 
-class _Unknown(Exception):
-    """The expression reads something this evaluator cannot."""
-
-
 def _as_number(value: Any) -> float:
     """XPath number(): NaN for anything that is not one, so comparisons are false."""
     if isinstance(value, Answer):
@@ -169,15 +165,14 @@ def _to_python(expression: str, refs: dict[str, str]) -> str:
         return refs.setdefault(name, f"_ref{len(refs)}")
 
     parts = []
-    for index, part in enumerate(_LITERAL.split(expression)):
+    for index, piece in enumerate(_LITERAL.split(expression)):
         if index % 2:  # a quoted literal
-            parts.append(part)
+            parts.append(piece)
             continue
-        part = _REF.sub(ref_name, part)
-        part = _EQUALS.sub("==", part)
+        rewritten = _EQUALS.sub("==", _REF.sub(ref_name, piece))
         for pattern, replacement in _REWRITES:
-            part = pattern.sub(replacement, part)
-        parts.append(part)
+            rewritten = pattern.sub(replacement, rewritten)
+        parts.append(rewritten)
     return "".join(parts)
 
 
@@ -196,7 +191,7 @@ def evaluate(expression: str, lookup: Lookup) -> bool | None:
 
     try:
         return bool(SimpleEval(names=names, functions=_FUNCTIONS).eval(python))
-    except Exception:
+    except Exception:  # noqa: BLE001 -- any expression it cannot evaluate is unknown
         return None
 
 

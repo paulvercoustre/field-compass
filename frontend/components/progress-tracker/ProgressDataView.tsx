@@ -11,7 +11,6 @@ export type ProgressSubTab = 'overall' | string; // string will be column name f
 interface ProgressDataViewProps {
     data: ProgressData;
     surveyConfig: SurveyConfig | null;
-    approvedOnly?: boolean;
     activeSubTab: ProgressSubTab;
     setActiveSubTab: (tab: ProgressSubTab) => void;
     filter: string;
@@ -21,7 +20,6 @@ interface ProgressDataViewProps {
 const ProgressDataView: React.FC<ProgressDataViewProps> = ({ 
     data,
     surveyConfig,
-    approvedOnly = false,
     activeSubTab,
     setActiveSubTab,
     filter,
@@ -41,7 +39,6 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
     const columnNames = data.samplingColumns || [];
     
     // Determine which tabs have data
-    const hasColumnTabs = Object.keys(data.byColumn || {}).length > 0;
     const hasDetailed = data.detailed.length > 0;
 
     /**

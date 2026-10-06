@@ -26,6 +26,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database.models import (
+    AI_REVIEW_OPEN,
+    ITEM_OPEN,
+    KOBO_SEND_OPEN,
     RUN_ACTIVE,
     RUN_OPEN,
     AnswerTranslation,
@@ -45,10 +48,6 @@ PULL = "pull"
 TRANSCRIPTION_RERUN = "transcription_rerun"
 TRANSLATION_RERUN = "translation_rerun"
 KOBO_RESEND = "kobo_resend"
-
-OPEN_AI_STATUSES = ("pending", "running", "waiting")
-OPEN_TRANSCRIPT_STATUSES = ("pending", "running")
-OPEN_KOBO_STATUSES = ("pending",)
 
 # Time left is estimated from what finished in this window, once this many
 # items are done -- earlier guesses swing too much to be worth showing.
@@ -152,8 +151,12 @@ def stop_requested(db: Session, run_id: UUID) -> bool:
 # --- Counting -----------------------------------------------------------------
 
 
-def _group(db: Session, column, *filters) -> Counter:
-    return Counter(dict(db.query(column, func.count()).filter(*filters).group_by(column).all()))
+def count_by(db: Session, column, *filters) -> Counter[str]:
+    """How many rows have each value of ``column``, among those matching ``filters``."""
+    counts: Counter[str] = Counter()
+    for value, count in db.query(column, func.count()).filter(*filters).group_by(column):
+        counts[value] = count
+    return counts
 
 
 def _bucket(
@@ -178,7 +181,7 @@ def _eta(open_count: int, finished: int, recent: int) -> int | None:
     if open_count <= 0 or finished < _ETA_AFTER or recent <= 0:
         return None
     rate = recent / _RATE_WINDOW.total_seconds()
-    return int(round(open_count / rate))
+    return round(open_count / rate)
 
 
 def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, Any]:
@@ -186,13 +189,15 @@ def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, 
     since = now - _RATE_WINDOW
     stats = run.stats or {}
 
-    ai = _group(db, SubmissionCurrent.llm_check_status, SubmissionCurrent.llm_run_id == run.run_id)
-    transcripts = _group(db, AudioTranscript.status, AudioTranscript.run_id == run.run_id)
-    translations = _group(db, AnswerTranslation.status, AnswerTranslation.run_id == run.run_id)
+    ai = count_by(
+        db, SubmissionCurrent.llm_check_status, SubmissionCurrent.llm_run_id == run.run_id
+    )
+    transcripts = count_by(db, AudioTranscript.status, AudioTranscript.run_id == run.run_id)
+    translations = count_by(db, AnswerTranslation.status, AnswerTranslation.run_id == run.run_id)
     # Transcripts and translations sent to Kobo, together.
-    kobo = _group(
+    kobo = count_by(
         db, AudioTranscript.kobo_status, AudioTranscript.kobo_run_id == run.run_id
-    ) + _group(db, AnswerTranslation.kobo_status, AnswerTranslation.kobo_run_id == run.run_id)
+    ) + count_by(db, AnswerTranslation.kobo_status, AnswerTranslation.kobo_run_id == run.run_id)
 
     out: dict[str, Any] = {
         "ai_checks": None,
@@ -205,7 +210,7 @@ def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, 
         bucket = _bucket(
             ai,
             (stats.get("llm_queued") or 0) + (stats.get("llm_waiting") or 0),
-            OPEN_AI_STATUSES,
+            AI_REVIEW_OPEN,
             ("success",),
             ("failed",),
         )
@@ -224,7 +229,7 @@ def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, 
         bucket = _bucket(
             transcripts,
             stats.get("transcripts_queued"),
-            OPEN_TRANSCRIPT_STATUSES,
+            ITEM_OPEN,
             ("success",),
             ("failed",),
         )
@@ -247,7 +252,7 @@ def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, 
         bucket = _bucket(
             translations,
             stats.get("translations_queued"),
-            OPEN_TRANSCRIPT_STATUSES,
+            ITEM_OPEN,
             ("success",),
             ("failed",),
         )
@@ -266,7 +271,7 @@ def run_counts(db: Session, run: Run, now: datetime | None = None) -> dict[str, 
         out["kobo"] = _bucket(
             kobo,
             None,
-            OPEN_KOBO_STATUSES,
+            KOBO_SEND_OPEN,
             ("sent",),
             ("failed", "unsupported"),
         )
@@ -296,7 +301,7 @@ def has_open_items(db: Session, run_id: UUID) -> bool:
         db.query(SubmissionCurrent._id)
         .filter(
             SubmissionCurrent.llm_run_id == run_id,
-            SubmissionCurrent.llm_check_status.in_(OPEN_AI_STATUSES),
+            SubmissionCurrent.llm_check_status.in_(AI_REVIEW_OPEN),
         )
         .first()
     )
@@ -306,7 +311,7 @@ def has_open_items(db: Session, run_id: UUID) -> bool:
         db.query(AudioTranscript.transcript_id)
         .filter(
             AudioTranscript.run_id == run_id,
-            AudioTranscript.status.in_(OPEN_TRANSCRIPT_STATUSES),
+            AudioTranscript.status.in_(ITEM_OPEN),
         )
         .first()
     )
@@ -316,7 +321,7 @@ def has_open_items(db: Session, run_id: UUID) -> bool:
         db.query(AudioTranscript.transcript_id)
         .filter(
             AudioTranscript.kobo_run_id == run_id,
-            AudioTranscript.kobo_status.in_(OPEN_KOBO_STATUSES),
+            AudioTranscript.kobo_status.in_(KOBO_SEND_OPEN),
         )
         .first()
     )
@@ -325,13 +330,10 @@ def has_open_items(db: Session, run_id: UUID) -> bool:
     translation = (
         db.query(AnswerTranslation.translation_id)
         .filter(
-            (
-                (AnswerTranslation.run_id == run_id)
-                & AnswerTranslation.status.in_(OPEN_TRANSCRIPT_STATUSES)
-            )
+            ((AnswerTranslation.run_id == run_id) & AnswerTranslation.status.in_(ITEM_OPEN))
             | (
                 (AnswerTranslation.kobo_run_id == run_id)
-                & AnswerTranslation.kobo_status.in_(OPEN_KOBO_STATUSES)
+                & AnswerTranslation.kobo_status.in_(KOBO_SEND_OPEN)
             )
         )
         .first()
@@ -353,229 +355,237 @@ def _plural(count: int, one: str, many: str | None = None) -> str:
     return f"{count} {one if count == 1 else (many or one + 's')}"
 
 
+# A failure that stops a whole kind of work, by the error category its rows
+# record: (category, problem kind, what to tell the user, what to offer).
+_AI_FAILURES = (
+    (
+        "auth",
+        "ai_auth",
+        "AI review stopped: the AI provider rejected the key.",
+        "open_ai_providers",
+    ),
+    (
+        "provider_quota",
+        "ai_quota",
+        "AI review stopped: the AI provider account is out of credit.",
+        "open_ai_providers",
+    ),
+    ("not_configured", "ai_not_configured", "AI review is not set up on this server.", None),
+)
+# Transcription's "auth" depends on whose key it was: see _transcription_problems.
+_TRANSCRIPTION_FAILURES = (
+    (
+        "provider_quota",
+        "transcription_quota",
+        "Transcription stopped: the ElevenLabs account is out of credit.",
+        None,
+    ),
+    (
+        "not_configured",
+        "transcription_not_configured",
+        "Transcription is not set up on this server.",
+        None,
+    ),
+    (
+        "kobo_auth",
+        "transcription_kobo_auth",
+        "Couldn't download recordings: Kobo rejected the API key of the person who started this pull.",
+        "open_kobo_settings",
+    ),
+)
+_TRANSLATION_FAILURES = (
+    (
+        "auth",
+        "translation_auth",
+        "Translation stopped: the AI provider rejected the key.",
+        "open_ai_providers",
+    ),
+    (
+        "provider_quota",
+        "translation_quota",
+        "Translation stopped: the AI provider account is out of credit.",
+        "open_ai_providers",
+    ),
+    (
+        "not_configured",
+        "translation_not_configured",
+        "Translation needs an AI key: none is set up for this survey.",
+        "open_ai_providers",
+    ),
+)
+
+
+def _problem(kind: str, text: str, action: str | None = None) -> dict:
+    return {"kind": kind, "text": text, "action": action}
+
+
+def _failures(failed: Counter, table) -> list[dict]:
+    return [
+        _problem(kind, text, action)
+        for category, kind, text, action in table
+        if failed.get(category)
+    ]
+
+
+def _ai_problems(db: Session, run: Run, stats: dict, month: str) -> list[dict]:
+    failed = _categories(
+        db.query(SubmissionCurrent.llm_last_error).filter(
+            SubmissionCurrent.llm_run_id == run.run_id,
+            SubmissionCurrent.llm_check_status == "failed",
+        )
+    )
+    problems = _failures(failed, _AI_FAILURES)
+    not_run = (
+        db.query(func.count(SubmissionCurrent._id))
+        .filter(
+            SubmissionCurrent.llm_run_id == run.run_id,
+            SubmissionCurrent.llm_check_status == "not_run_allowance",
+        )
+        .scalar()
+    ) or (stats.get("llm_not_run_allowance") or 0)
+    if not_run:
+        problems.append(
+            _problem(
+                "ai_allowance",
+                f"{_plural(not_run, 'answer')} not reviewed: this survey has used its included AI reviews for {month}.",
+                "open_ai_usage",
+            )
+        )
+    return problems
+
+
+def _transcription_problems(db: Session, run: Run, month: str) -> list[dict]:
+    from services.transcription_allowance import max_recording_seconds, minutes_per_survey_month
+
+    failed = _categories(
+        db.query(AudioTranscript.last_error).filter(
+            AudioTranscript.run_id == run.run_id, AudioTranscript.status == "failed"
+        )
+    )
+    problems = []
+    if failed.get("auth"):
+        own = (
+            db.query(AudioTranscript.transcript_id)
+            .filter(
+                AudioTranscript.run_id == run.run_id,
+                AudioTranscript.status == "failed",
+                AudioTranscript.last_error.like("%your key%"),
+            )
+            .first()
+            is not None
+        )
+        problems.append(
+            _problem(
+                "transcription_auth",
+                "Transcription stopped: ElevenLabs refused your key."
+                if own
+                else "Transcription stopped: ElevenLabs rejected the API key.",
+                "open_ai_providers" if own else None,
+            )
+        )
+    problems += _failures(failed, _TRANSCRIPTION_FAILURES)
+    if bad_files := failed.get("bad_request"):
+        problems.append(
+            _problem(
+                "transcription_bad_file",
+                f"{_plural(bad_files, 'recording')} couldn't be transcribed: the file format isn't supported or the file is damaged.",
+            )
+        )
+    held = count_by(
+        db,
+        AudioTranscript.status,
+        AudioTranscript.run_id == run.run_id,
+        AudioTranscript.status == "not_run_allowance",
+    ).get("not_run_allowance", 0)
+    if held:
+        problems.append(
+            _problem(
+                "transcription_allowance",
+                f"{_plural(held, 'recording')} not transcribed: this survey has used its {minutes_per_survey_month()} included minutes for {month}.",
+                "open_ai_usage",
+            )
+        )
+    too_long = (
+        db.query(func.count(AudioTranscript.transcript_id))
+        .filter(AudioTranscript.run_id == run.run_id, AudioTranscript.skip_reason == "too_long")
+        .scalar()
+    )
+    if too_long:
+        problems.append(
+            _problem(
+                "transcription_too_long",
+                f"{_plural(too_long, 'recording')} skipped: longer than {max_recording_seconds() // 60} minutes.",
+            )
+        )
+    return problems
+
+
+def _translation_problems(db: Session, run: Run, month: str) -> list[dict]:
+    failed = _categories(
+        db.query(AnswerTranslation.last_error).filter(
+            AnswerTranslation.run_id == run.run_id,
+            AnswerTranslation.status == "failed",
+        )
+    )
+    problems = _failures(failed, _TRANSLATION_FAILURES)
+    held = (
+        db.query(func.count(AnswerTranslation.translation_id))
+        .filter(
+            AnswerTranslation.run_id == run.run_id,
+            AnswerTranslation.status == "not_run_allowance",
+        )
+        .scalar()
+    )
+    if held:
+        problems.append(
+            _problem(
+                "translation_allowance",
+                f"{_plural(held, 'answer')} not translated: this survey has used its included translations for {month}.",
+                "open_ai_usage",
+            )
+        )
+    return problems
+
+
 def run_problems(db: Session, run: Run, survey: SurveyConfig | None, counts: dict) -> list[dict]:
     """What went wrong or was held back, in words, with what to do about it."""
-    problems: list[dict] = []
     month = month_start().strftime("%B")
     stats = run.stats or {}
+    problems: list[dict] = []
 
     if stats.get("llm_paused"):
         problems.append(
-            {
-                "kind": "ai_paused",
-                "text": "AI review paused: your AI provider is not working.",
-                "action": "open_ai_providers",
-            }
-        )
-    ai = counts.get("ai_checks")
-    if ai:
-        failed = _categories(
-            db.query(SubmissionCurrent.llm_last_error).filter(
-                SubmissionCurrent.llm_run_id == run.run_id,
-                SubmissionCurrent.llm_check_status == "failed",
+            _problem(
+                "ai_paused",
+                "AI review paused: your AI provider is not working.",
+                "open_ai_providers",
             )
         )
-        if failed.get("auth"):
-            problems.append(
-                {
-                    "kind": "ai_auth",
-                    "text": "AI review stopped: the AI provider rejected the key.",
-                    "action": "open_ai_providers",
-                }
-            )
-        if failed.get("provider_quota"):
-            problems.append(
-                {
-                    "kind": "ai_quota",
-                    "text": "AI review stopped: the AI provider account is out of credit.",
-                    "action": "open_ai_providers",
-                }
-            )
-        if failed.get("not_configured"):
-            problems.append(
-                {
-                    "kind": "ai_not_configured",
-                    "text": "AI review is not set up on this server.",
-                    "action": None,
-                }
-            )
-        not_run = (
-            db.query(func.count(SubmissionCurrent._id))
-            .filter(
-                SubmissionCurrent.llm_run_id == run.run_id,
-                SubmissionCurrent.llm_check_status == "not_run_allowance",
-            )
-            .scalar()
-        ) or (stats.get("llm_not_run_allowance") or 0)
-        if not_run:
-            problems.append(
-                {
-                    "kind": "ai_allowance",
-                    "text": f"{_plural(not_run, 'answer')} not reviewed: this survey has used its included AI reviews for {month}.",
-                    "action": "open_ai_usage",
-                }
-            )
-
-    transcripts = counts.get("transcripts")
-    if transcripts:
-        failed = _categories(
-            db.query(AudioTranscript.last_error).filter(
-                AudioTranscript.run_id == run.run_id, AudioTranscript.status == "failed"
-            )
-        )
-        if failed.get("auth"):
-            own = (
-                db.query(AudioTranscript.transcript_id)
-                .filter(
-                    AudioTranscript.run_id == run.run_id,
-                    AudioTranscript.status == "failed",
-                    AudioTranscript.last_error.like("%your key%"),
-                )
-                .first()
-                is not None
-            )
-            problems.append(
-                {
-                    "kind": "transcription_auth",
-                    "text": "Transcription stopped: ElevenLabs refused your key."
-                    if own
-                    else "Transcription stopped: ElevenLabs rejected the API key.",
-                    "action": "open_ai_providers" if own else None,
-                }
-            )
-        if failed.get("provider_quota"):
-            problems.append(
-                {
-                    "kind": "transcription_quota",
-                    "text": "Transcription stopped: the ElevenLabs account is out of credit.",
-                    "action": None,
-                }
-            )
-        if failed.get("not_configured"):
-            problems.append(
-                {
-                    "kind": "transcription_not_configured",
-                    "text": "Transcription is not set up on this server.",
-                    "action": None,
-                }
-            )
-        if failed.get("kobo_auth"):
-            problems.append(
-                {
-                    "kind": "transcription_kobo_auth",
-                    "text": "Couldn't download recordings: Kobo rejected the API key of the person who started this pull.",
-                    "action": "open_kobo_settings",
-                }
-            )
-        if failed.get("bad_request"):
-            count = failed["bad_request"]
-            problems.append(
-                {
-                    "kind": "transcription_bad_file",
-                    "text": f"{_plural(count, 'recording')} couldn't be transcribed: the file format isn't supported or the file is damaged.",
-                    "action": None,
-                }
-            )
-        held = _group(
-            db,
-            AudioTranscript.status,
-            AudioTranscript.run_id == run.run_id,
-            AudioTranscript.status.in_(("not_run_allowance",)),
-        ).get("not_run_allowance", 0)
-        if held:
-            from services.transcription_allowance import minutes_per_survey_month
-
-            problems.append(
-                {
-                    "kind": "transcription_allowance",
-                    "text": f"{_plural(held, 'recording')} not transcribed: this survey has used its {minutes_per_survey_month()} included minutes for {month}.",
-                    "action": "open_ai_usage",
-                }
-            )
-        too_long = (
-            db.query(func.count(AudioTranscript.transcript_id))
-            .filter(AudioTranscript.run_id == run.run_id, AudioTranscript.skip_reason == "too_long")
-            .scalar()
-        )
-        if too_long:
-            from services.transcription_allowance import max_recording_seconds
-
-            problems.append(
-                {
-                    "kind": "transcription_too_long",
-                    "text": f"{_plural(too_long, 'recording')} skipped: longer than {max_recording_seconds() // 60} minutes.",
-                    "action": None,
-                }
-            )
-
+    if counts.get("ai_checks"):
+        problems += _ai_problems(db, run, stats, month)
+    if counts.get("transcripts"):
+        problems += _transcription_problems(db, run, month)
     if counts.get("translations"):
-        failed = _categories(
-            db.query(AnswerTranslation.last_error).filter(
-                AnswerTranslation.run_id == run.run_id,
-                AnswerTranslation.status == "failed",
-            )
-        )
-        if failed.get("auth"):
-            problems.append(
-                {
-                    "kind": "translation_auth",
-                    "text": "Translation stopped: the AI provider rejected the key.",
-                    "action": "open_ai_providers",
-                }
-            )
-        if failed.get("provider_quota"):
-            problems.append(
-                {
-                    "kind": "translation_quota",
-                    "text": "Translation stopped: the AI provider account is out of credit.",
-                    "action": "open_ai_providers",
-                }
-            )
-        if failed.get("not_configured"):
-            problems.append(
-                {
-                    "kind": "translation_not_configured",
-                    "text": "Translation needs an AI key: none is set up for this survey.",
-                    "action": "open_ai_providers",
-                }
-            )
-        held = (
-            db.query(func.count(AnswerTranslation.translation_id))
-            .filter(
-                AnswerTranslation.run_id == run.run_id,
-                AnswerTranslation.status == "not_run_allowance",
-            )
-            .scalar()
-        )
-        if held:
-            problems.append(
-                {
-                    "kind": "translation_allowance",
-                    "text": f"{_plural(held, 'answer')} not translated: this survey has used its included translations for {month}.",
-                    "action": "open_ai_usage",
-                }
-            )
+        problems += _translation_problems(db, run, month)
 
     if survey is not None and (counts.get("kobo") or counts.get("transcripts")):
         settings = transcription_settings(survey.config_data)
         pause = settings.kobo_pause if settings.send_to_kobo else None
         if pause:
             problems.append(
-                {
-                    "kind": f"kobo_{pause.get('reason', 'paused')}",
-                    "text": pause.get("message") or "Sending transcripts to Kobo is paused.",
-                    "action": "open_transcription_settings",
-                }
+                _problem(
+                    f"kobo_{pause.get('reason', 'paused')}",
+                    pause.get("message") or "Sending transcripts to Kobo is paused.",
+                    "open_transcription_settings",
+                )
             )
 
-    if stats.get("errors"):
-        count = stats["errors"]
+    if errors := stats.get("errors"):
         problems.append(
-            {
-                "kind": "pull_errors",
-                "text": f"{_plural(count, 'submission')} couldn't be processed; the rest of the pull went through.",
-                "action": None,
-            }
+            _problem(
+                "pull_errors",
+                f"{_plural(errors, 'submission')} couldn't be processed; the rest of the pull went through.",
+            )
         )
     return problems
 
@@ -826,11 +836,51 @@ def revoke(job_ids: list[str]) -> None:
         from services.job_queue import celery_app
 
         celery_app.control.revoke(job_ids)
-    except Exception as exc:  # the cancelled status already stops them at start
+    except Exception as exc:  # noqa: BLE001 -- the cancelled status already stops them at start
         logger.warning("Could not revoke %s queued jobs: %s", len(job_ids), exc)
 
 
 # --- Sweeping ---------------------------------------------------------------------
+
+# Transcriptions and translations: one running this long has lost its worker,
+# one pending this long has lost its queue message, and a send to Kobo still
+# pending this long will not finish.
+STALLED_ITEM_RUNNING = timedelta(minutes=30)
+STALLED_ITEM_PENDING = timedelta(hours=6)
+STALLED_KOBO_SEND = timedelta(hours=6)
+
+
+def fail_stalled_items(db: Session, model, now: datetime, what: str) -> list:
+    """Fail the transcriptions or translations (``model``) that lost their worker.
+
+    ``what`` names the work in the error, e.g. "transcription". Not committed.
+    """
+    stalled = (
+        db.query(model)
+        .filter(
+            ((model.status == "running") & (model.started_at < now - STALLED_ITEM_RUNNING))
+            | ((model.status == "pending") & (model.queued_at < now - STALLED_ITEM_PENDING))
+        )
+        .all()
+    )
+    for row in stalled:
+        row.status = "failed"
+        row.last_error = f"timeout: The {what} did not finish."
+        row.finished_at = now
+    return stalled
+
+
+def fail_stalled_kobo_sends(db: Session, model, now: datetime) -> int:
+    """Fail sends of ``model`` rows to Kobo that never finished. Not committed."""
+    stalled = (
+        db.query(model)
+        .filter(model.kobo_status == "pending", model.updated_at < now - STALLED_KOBO_SEND)
+        .all()
+    )
+    for row in stalled:
+        row.kobo_status = "failed"
+        row.kobo_last_error = "timeout: Sending to Kobo did not finish."
+    return len(stalled)
 
 
 def sweep_runs(db: Session, now: datetime | None = None) -> dict[str, int]:

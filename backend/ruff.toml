@@ -14,37 +14,51 @@ select = [
     "B",   # flake8-bugbear
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
+    "SIM",  # flake8-simplify
+    "RET",  # flake8-return
+    "PERF", # perflint
+    "RUF",  # ruff-specific
+    "PLE",  # pylint errors
+    "PLW",  # pylint warnings
+    "C90",  # mccabe complexity
+    "BLE001",  # blind except: narrow it, or say why everything must be caught
+    "FAST",  # FastAPI: Annotated parameters, no redundant response_model
 ]
 
 # Ignore specific rules
 ignore = [
     "E501",  # line too long (handled by formatter)
-    "B008",  # do not perform function calls in argument defaults
-
-    # DEFERRED, not dismissed. 44 call sites raise HTTPException inside an
-    # except block without `from err`. Fixing it is a genuine improvement but
-    # is not auto-fixable and needs a judgement per site, so it is tracked
-    # separately rather than bundled into a mechanical formatting sweep.
-    # Re-enable and work through the list when there is appetite for it.
-    "B904",  # raise ... from err inside except
+    # survey_access() reads survey_id from the path inside the ViewableSurvey,
+    # EditableSurvey and OwnedSurvey dependencies, which ruff cannot see.
+    "FAST003",
 ]
 
 # Allow autofix for all enabled rules
 fixable = ["ALL"]
 unfixable = []
 
+# Typographic characters used on purpose in user-facing text.
+allowed-confusables = ["–", "›", "ℹ", "×"]
+
+# A ceiling, not a target. The few functions above it carry a noqa until they
+# are split; lower the ceiling as they are.
+[lint.mccabe]
+max-complexity = 25
+
 [lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Allow unused imports in __init__.py
-"tests/**/*.py" = ["E501"]  # Allow long lines in tests
+# Long lines are fine in tests, and so are mutable class attributes: test
+# classes use them as fixture tables, never as shared state.
+"tests/**/*.py" = ["E501", "RUF012"]
 
 # Standalone CLI scripts must call sys.path.insert(0, ".") before they can
 # import the application packages, so their imports legitimately come after
 # executable statements.
-"scripts/**/*.py" = ["E402"]
+"scripts/**/*.py" = ["E402", "BLE001"]
 
 # This script's whole purpose is to verify that modules import cleanly, so the
 # imports are the assertion -- they are "unused" by design.
-"test_setup.py" = ["F401", "E402"]
+"test_setup.py" = ["F401", "E402", "BLE001"]
 
 [format]
 # Use double quotes for strings

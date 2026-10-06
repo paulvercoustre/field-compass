@@ -8,7 +8,7 @@ import math
 import re
 import statistics
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Any
 
 from simpleeval import DEFAULT_FUNCTIONS, SimpleEval
@@ -27,15 +27,19 @@ from etl.dk_utils import (
     compute_dk_metrics as compute_submission_dk_metrics,
 )
 from etl.relevance import is_shown
+from forms.answers import find_answer
 from forms.schema import Question, load_form_schema
 from linter.form_source import SurveyForm, load_survey_form
 from linter.questions import iter_answerable
-from models import QualityIssue
+from schemas import QualityIssue
 from services.survey_config import (
+    DEFAULT_LLM_CHECK_TYPES,
     SAMPLING_MODE_BY_VARIABLE,
     SAMPLING_MODE_UPLOADED,
     get_core_identifier,
     get_frame_data,
+    get_global_parameters,
+    get_quality_checks,
     get_sampling_cols,
     get_sampling_mode,
     get_sampling_variable,
@@ -71,6 +75,54 @@ _STRING_LITERAL = re.compile(r"\"[^\"]*\"|'[^']*'")
 
 # The survey-sheet columns that decide which questions a submission was shown.
 _FORM_LOGIC_COLUMNS = ("name", "type", "relevant", "group_relevant", "roster_name", "group_path")
+
+
+_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y")
+
+
+def _parse_date(value: Any) -> date | None:
+    """A date from an answer or a setting: ISO 8601 first, then three common forms."""
+    if isinstance(value, datetime):
+        return value.date()
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+    except ValueError:
+        pass
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_time(value: Any) -> time | None:
+    """The time of day of an ISO 8601 timestamp (Kobo's `start`)."""
+    if isinstance(value, datetime):
+        return value.time()
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).time()
+    except ValueError:
+        return None
+
+
+def _parse_clock(value: Any) -> time | None:
+    """An office-hours setting, "HH:MM"."""
+    try:
+        return datetime.strptime(value, "%H:%M").time()
+    except (ValueError, TypeError):
+        return None
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value) if value is not None else None
+    except (ValueError, TypeError):
+        return None
 
 
 def _is_empty(value: Any) -> bool:
@@ -134,8 +186,6 @@ class HFCEngine:
         # Extract configuration - handle nested structure
         core_identifiers = self.config_data.get("core_identifiers", {})
         special_values = self.config_data.get("special_values", {})
-        global_parameters = self.config_data.get("global_parameters", {})
-        quality_checks = self.config_data.get("quality_checks", {})
 
         # Core identifiers
         self.uuid_field = core_identifiers.get("uuid", "_uuid")
@@ -153,58 +203,44 @@ class HFCEngine:
         # `dk_string_value` may be one string or a list; compare against this.
         self.dk_tokens = dk_string_tokens({"dk_string_value": self.dk_string_value})
 
-        # Global parameters - date range
-        self.data_collection_start_date = global_parameters.get("data_collection_start_date")
-        self.data_collection_end_date = global_parameters.get("data_collection_end_date")
+        # Defaults and types: services/survey_config.py.
+        gp = get_global_parameters(self.config_data)
+        qc = get_quality_checks(self.config_data)
 
-        # Global parameters - duration limits - ensure they're numbers or None
-        min_duration = global_parameters.get("min_survey_duration_minutes")
-        max_duration = global_parameters.get("max_survey_duration_minutes")
-        try:
-            self.min_survey_duration_minutes = (
-                float(min_duration) if min_duration is not None else None
-            )
-        except (ValueError, TypeError):
-            self.min_survey_duration_minutes = None
-        try:
-            self.max_survey_duration_minutes = (
-                float(max_duration) if max_duration is not None else None
-            )
-        except (ValueError, TypeError):
-            self.max_survey_duration_minutes = None
+        self.data_collection_start_date = gp.data_collection_start_date
+        self.data_collection_end_date = gp.data_collection_end_date
+        # Numbers or None: an unreadable limit is no limit.
+        self.min_survey_duration_minutes = _float_or_none(gp.min_survey_duration_minutes)
+        self.max_survey_duration_minutes = _float_or_none(gp.max_survey_duration_minutes)
 
-        # Quality checks configuration
-        self.flag_out_of_period = quality_checks.get("flag_out_of_period", False)
-        self.flag_weekend = quality_checks.get("flag_weekend", False)
-        self.weekend_days = quality_checks.get("weekend_days", [5, 6])  # Default to Sat(5), Sun(6)
-        self.flag_office_hours = quality_checks.get("flag_office_hours", False)
-        self.office_hours_start = quality_checks.get("office_hours_start", "08:00")
-        self.office_hours_end = quality_checks.get("office_hours_end", "17:00")
-        self.flag_sampling_frame = quality_checks.get("flag_sampling_frame", False)
+        # Parsed once here rather than per submission; unreadable means unchecked.
+        self._period_start = _parse_date(self.data_collection_start_date)
+        self._period_end = _parse_date(self.data_collection_end_date)
 
-        # Outlier detection configuration
-        self.flag_outliers = quality_checks.get("flag_outliers", False)
-        self.outlier_variables = quality_checks.get("outlier_variables", [])
-        outlier_log_transform_raw = quality_checks.get("outlier_log_transform_variables", []) or []
+        self.flag_out_of_period = qc.flag_out_of_period
+        self.flag_weekend = qc.flag_weekend
+        self.weekend_days = qc.weekend_days
+        self.flag_office_hours = qc.flag_office_hours
+        self.office_hours_start = qc.office_hours_start
+        self.office_hours_end = qc.office_hours_end
+        self._office_start = _parse_clock(self.office_hours_start)
+        self._office_end = _parse_clock(self.office_hours_end)
+        self.flag_sampling_frame = qc.flag_sampling_frame
+
+        self.flag_outliers = qc.flag_outliers
+        self.outlier_variables = qc.outlier_variables
         self.outlier_log_transform_variables = [
-            v for v in outlier_log_transform_raw if v in self.outlier_variables
+            v for v in qc.outlier_log_transform_variables or [] if v in self.outlier_variables
         ]
-        self.outlier_method = quality_checks.get(
-            "outlier_method", "iqr"
-        )  # 'iqr', 'mad', or 'zscore'
-        self.outlier_threshold = quality_checks.get(
-            "outlier_threshold", 1.5
-        )  # For IQR multiplier or Z-score threshold
-        self.flag_dk_percentage = quality_checks.get("flag_dk_percentage", False)
-        self.dk_percentage_threshold = quality_checks.get("dk_percentage_threshold", 50.0)
-        self.flag_empty_percentage = quality_checks.get("flag_empty_percentage", False)
-        self.empty_percentage_threshold = quality_checks.get("empty_percentage_threshold", 50.0)
-        self.flag_llm_qualitative = quality_checks.get("flag_llm_qualitative", False)
-        self.llm_qualitative_fields = quality_checks.get("llm_qualitative_fields", []) or []
-        self.llm_check_types = quality_checks.get(
-            "llm_check_types",
-            ["content_quality", "relevance", "completeness"],
-        ) or ["content_quality", "relevance", "completeness"]
+        self.outlier_method = qc.outlier_method
+        self.outlier_threshold = qc.outlier_threshold
+        self.flag_dk_percentage = qc.flag_dk_percentage
+        self.dk_percentage_threshold = qc.dk_percentage_threshold
+        self.flag_empty_percentage = qc.flag_empty_percentage
+        self.empty_percentage_threshold = qc.empty_percentage_threshold
+        self.flag_llm_qualitative = qc.flag_llm_qualitative
+        self.llm_qualitative_fields = qc.llm_qualitative_fields or []
+        self.llm_check_types = qc.llm_check_types or DEFAULT_LLM_CHECK_TYPES
 
         # Statistics cache for outlier detection - computed once per ETL run
         self._outlier_stats_cache: dict[str, dict[str, float]] = {}
@@ -255,7 +291,7 @@ class HFCEngine:
                 # Extract raw values for this variable from all submissions
                 raw_values: list[float] = []
                 for submission in submissions:
-                    value, _ = self._get_field_value(submission.submission_data, variable)
+                    value, _ = find_answer(submission.submission_data, variable)
                     if value is None:
                         continue
 
@@ -386,8 +422,7 @@ class HFCEngine:
             float_val = float(value)
             if float_val == int(float_val):
                 return int(float_val)
-            else:
-                return float_val
+            return float_val
         except (ValueError, TypeError):
             # Not a numeric string, return original value
             return value
@@ -402,50 +437,10 @@ class HFCEngine:
             return math.exp(y) - 1
         return 1 - math.exp(-y)
 
-    def _get_field_value(
-        self, submission_data: dict[str, Any], field_name: str | None
-    ) -> tuple[Any, str | None]:
-        """
-        Get field value from submission data, handling Kobo path-based field names.
-
-        Kobo stores fields with full paths like 'module/variable' or 'module1/module2/variable',
-        but config may only specify 'variable'. This function searches for the field by:
-        1. Direct lookup (exact match)
-        2. Path-based search (field name at end of path, e.g., 'module/variable' matches 'variable')
-
-        Args:
-            submission_data: Submission data dictionary
-            field_name: Field name from config (may be just the variable name)
-
-        Returns:
-            Tuple of (value, actual_field_path) where actual_field_path is the full path found
-        """
-        # Core identifiers are optional, so the field name may be unset. Bail
-        # out explicitly: otherwise the suffix search below looks for the
-        # literal "/None", which is not found by accident rather than by
-        # intent.
-        if not field_name:
-            return None, None
-
-        # First try direct lookup
-        if field_name in submission_data:
-            return submission_data[field_name], field_name
-
-        # Search for fields that end with the field name (path-based)
-        # e.g., 'enumerator_id' should match 'sampling_information/enumerator_id'
-        for key in submission_data.keys():
-            if key.endswith(f"/{field_name}") or key == field_name:
-                return submission_data[key], key
-
-        # Not found
-        return None, None
-
     def run_checks(
         self,
         submission_data: dict[str, Any],
         submission_uuid: str,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
     ) -> list[QualityIssue]:
         """
         Run all HFC checks on a submission.
@@ -453,8 +448,6 @@ class HFCEngine:
         Args:
             submission_data: Submission data dictionary
             submission_uuid: UUID of the submission
-            start_time: Submission start time (from metadata, optional, deprecated - not used)
-            end_time: Submission end time (from metadata, optional, deprecated - not used)
 
         Returns:
             List of QualityIssue objects
@@ -466,9 +459,7 @@ class HFCEngine:
         issues = []
 
         # Run basic checks
-        issues.extend(
-            self._run_basic_checks(submission_data, submission_uuid, start_time, end_time)
-        )
+        issues.extend(self._run_basic_checks(submission_data, submission_uuid))
 
         # Run custom validation rules from database
         issues.extend(self._run_custom_rules(submission_data, submission_uuid))
@@ -646,16 +637,8 @@ class HFCEngine:
         self,
         submission_data: dict[str, Any],
         submission_uuid: str,
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
     ) -> list[QualityIssue]:
-        """
-        Run basic HFC checks.
-
-        Note: start_time and end_time parameters are kept for API compatibility
-        but are NOT used for duration checks (only audit logs and form fields are used).
-        """
-        """Run basic built-in checks."""
+        """Run the built-in checks the survey's settings switch on."""
         issues = []
 
         # 1. Check for missing UUID
@@ -671,7 +654,7 @@ class HFCEngine:
         # enumerator configured every submission would otherwise be flagged,
         # which is the app telling a new user that all of their data is bad.
         enumerator_id, enumerator_field_path = (
-            self._get_field_value(submission_data, self.enumerator_field)
+            find_answer(submission_data, self.enumerator_field)
             if self.enumerator_field
             else (None, None)
         )
@@ -687,122 +670,57 @@ class HFCEngine:
                 )
             )
 
-        # 3. Check date range and time
-        date_value, date_field_path = self._get_field_value(
-            submission_data, self.date_interview_field
-        )
-        start_time_value, start_time_path = self._get_field_value(
-            submission_data, self.start_time_field
-        )
+        # 3. Interview date: inside the collection period, and not on a weekend.
+        date_value, date_field_path = find_answer(submission_data, self.date_interview_field)
+        interview_date = _parse_date(date_value)
+        date_field = date_field_path or self.date_interview_field
+        if interview_date and self.flag_out_of_period:
+            if self._period_start and interview_date < self._period_start:
+                issues.append(
+                    QualityIssue(
+                        check="date_out_of_range",
+                        field=date_field,
+                        value=str(interview_date),
+                        message=f"Interview date {interview_date} is before allowed start date {self._period_start}",
+                    )
+                )
+            if self._period_end and interview_date > self._period_end:
+                issues.append(
+                    QualityIssue(
+                        check="date_out_of_range",
+                        field=date_field,
+                        value=str(interview_date),
+                        message=f"Interview date {interview_date} is after allowed end date {self._period_end}",
+                    )
+                )
+        if interview_date and self.flag_weekend and interview_date.weekday() in self.weekend_days:
+            issues.append(
+                QualityIssue(
+                    check="interview_on_weekend",
+                    field=date_field,
+                    value=str(interview_date),
+                    message=f"Interview conducted on weekend: {interview_date.strftime('%A')}",
+                )
+            )
 
-        if date_value:
-            try:
-                # Try to parse date (handle various formats)
-                if isinstance(date_value, str):
-                    # Try ISO format first
-                    try:
-                        interview_date = datetime.fromisoformat(
-                            date_value.replace("Z", "+00:00")
-                        ).date()
-                    except Exception:
-                        # Try other common formats
-                        for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]:
-                            try:
-                                interview_date = datetime.strptime(date_value, fmt).date()
-                                break
-                            except Exception:
-                                continue
-                        else:
-                            raise ValueError(f"Could not parse date: {date_value}")
-                elif isinstance(date_value, datetime):
-                    interview_date = date_value.date()
-                else:
-                    interview_date = None
-
-                if interview_date:
-                    # Check against allowed date range (if flag is enabled)
-                    if self.flag_out_of_period:
-                        if self.data_collection_start_date:
-                            try:
-                                start_date = datetime.fromisoformat(
-                                    self.data_collection_start_date
-                                ).date()
-                                if interview_date < start_date:
-                                    issues.append(
-                                        QualityIssue(
-                                            check="date_out_of_range",
-                                            field=date_field_path or self.date_interview_field,
-                                            value=str(interview_date),
-                                            message=f"Interview date {interview_date} is before allowed start date {start_date}",
-                                        )
-                                    )
-                            except Exception:
-                                pass
-
-                        if self.data_collection_end_date:
-                            try:
-                                end_date = datetime.fromisoformat(
-                                    self.data_collection_end_date
-                                ).date()
-                                if interview_date > end_date:
-                                    issues.append(
-                                        QualityIssue(
-                                            check="date_out_of_range",
-                                            field=date_field_path or self.date_interview_field,
-                                            value=str(interview_date),
-                                            message=f"Interview date {interview_date} is after allowed end date {end_date}",
-                                        )
-                                    )
-                            except Exception:
-                                pass
-
-                    # Check for weekend interviews (if flag is enabled)
-                    if self.flag_weekend:
-                        weekday = interview_date.weekday()  # 0=Monday, 6=Sunday
-                        if weekday in self.weekend_days:
-                            issues.append(
-                                QualityIssue(
-                                    check="interview_on_weekend",
-                                    field=date_field_path or self.date_interview_field,
-                                    value=str(interview_date),
-                                    message=f"Interview conducted on weekend: {interview_date.strftime('%A')}",
-                                )
-                            )
-
-            except Exception as e:
-                logger.debug(f"Could not parse date for validation: {e}")
-
-        # Check office hours
-        if self.flag_office_hours and start_time_value:
-            try:
-                # Try to extract time from start_time_value
-                submission_time = None
-                if isinstance(start_time_value, str):
-                    try:
-                        # Try ISO datetime
-                        dt = datetime.fromisoformat(start_time_value.replace("Z", "+00:00"))
-                        submission_time = dt.time()
-                    except Exception:
-                        # Try parsing as just time if possible (though unlikely for Kobo 'start')
-                        pass
-                elif isinstance(start_time_value, datetime):
-                    submission_time = start_time_value.time()
-
-                if submission_time:
-                    office_start = datetime.strptime(self.office_hours_start, "%H:%M").time()
-                    office_end = datetime.strptime(self.office_hours_end, "%H:%M").time()
-
-                    if submission_time < office_start or submission_time > office_end:
-                        issues.append(
-                            QualityIssue(
-                                check="interview_out_of_office_hours",
-                                field=start_time_path or self.start_time_field,
-                                value=str(submission_time),
-                                message=f"Interview started outside office hours ({self.office_hours_start} - {self.office_hours_end}): {submission_time}",
-                            )
-                        )
-            except Exception as e:
-                logger.debug(f"Could not parse time for office hours validation: {e}")
+        # Office hours, from the time the interview started.
+        start_time_value, start_time_path = find_answer(submission_data, self.start_time_field)
+        started = _parse_time(start_time_value)
+        if (
+            self.flag_office_hours
+            and started
+            and self._office_start
+            and self._office_end
+            and (started < self._office_start or started > self._office_end)
+        ):
+            issues.append(
+                QualityIssue(
+                    check="interview_out_of_office_hours",
+                    field=start_time_path or self.start_time_field,
+                    value=str(started),
+                    message=f"Interview started outside office hours ({self.office_hours_start} - {self.office_hours_end}): {started}",
+                )
+            )
 
         # 4. Check strata (if flag is enabled). Two different questions, each
         # answerable in only one mode: whether a combination was one we meant to
@@ -897,7 +815,7 @@ class HFCEngine:
             return (0, 0, None)
 
         def lookup(name: str) -> Any:
-            return self._get_field_value(submission_data, name)[0]
+            return find_answer(submission_data, name)[0]
 
         empty_count = shown_count = 0
         for question in self._empty_eligible_questions():
@@ -999,12 +917,8 @@ class HFCEngine:
                 f"Using submission data fields: {self.start_time_field}, {self.end_time_field}"
             )
             logger.debug(f"Submission data keys (sample): {list(submission_data.keys())[:20]}")
-            start_time_data, start_field_path = self._get_field_value(
-                submission_data, self.start_time_field
-            )
-            end_time_data, end_field_path = self._get_field_value(
-                submission_data, self.end_time_field
-            )
+            start_time_data, start_field_path = find_answer(submission_data, self.start_time_field)
+            end_time_data, end_field_path = find_answer(submission_data, self.end_time_field)
             logger.debug(
                 f"Found in submission data: start={start_time_data} (path={start_field_path}), end={end_time_data} (path={end_field_path})"
             )
@@ -1049,7 +963,7 @@ class HFCEngine:
                                 message=f"Survey duration too long ({duration_minutes:.2f} min > {self.max_survey_duration_minutes} min)",
                             )
                         )
-                except Exception as e:
+                except (ValueError, TypeError, AttributeError) as e:
                     logger.debug(f"Could not calculate duration from submission data fields: {e}")
             else:
                 logger.debug(
@@ -1099,7 +1013,7 @@ class HFCEngine:
         missing_cols = []
 
         for col in self.sampling_cols:
-            value, field_path = self._get_field_value(submission_data, col)
+            value, field_path = find_answer(submission_data, col)
             if value is None and field_path is None:
                 missing_cols.append(col)
             else:
@@ -1174,7 +1088,7 @@ class HFCEngine:
 
         try:
             schema = load_form_schema(kobo_tool)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- any malformed stored form
             # A malformed stored form is a configuration problem, not evidence
             # about this submission. Say so and check nothing.
             logger.warning("Could not read the stored form for strata validity: %s", exc)
@@ -1221,7 +1135,7 @@ class HFCEngine:
             )
             return issues
 
-        value, field_path = self._get_field_value(submission_data, self.sampling_variable)
+        value, field_path = find_answer(submission_data, self.sampling_variable)
         if value is None and field_path is None:
             # The submission never answered. That is a missing answer, not an
             # illegal one, and blaming the enumerator for it would be wrong.
@@ -1266,7 +1180,7 @@ class HFCEngine:
         for variable in self.outlier_variables:
             try:
                 # Get value for this variable from current submission
-                value, field_path = self._get_field_value(submission_data, variable)
+                value, field_path = find_answer(submission_data, variable)
 
                 # Skip if value is missing or is a special value (DK/NA)
                 if value is None:
@@ -1365,97 +1279,6 @@ class HFCEngine:
 
         return issues
 
-    def _compute_variable_statistics(
-        self, variable: str, exclude_uuid: str | None = None
-    ) -> dict[str, float] | None:
-        """
-        Compute statistics for a variable from all submissions in the survey.
-
-        Args:
-            variable: Variable name to compute statistics for
-            exclude_uuid: Optional UUID to exclude from computation (current submission)
-
-        Returns:
-            Dictionary with statistics (mean, median, std, q1, q3, mad) or None if insufficient data
-        """
-        # Query all submissions for this survey
-        query = self.db.query(SubmissionCurrent).filter(
-            SubmissionCurrent.survey_id == self.survey_config.survey_id
-        )
-
-        # Exclude current submission if provided
-        if exclude_uuid:
-            query = query.filter(SubmissionCurrent._uuid != exclude_uuid)
-
-        submissions = query.all()
-
-        # Extract values for this variable
-        values = []
-        for submission in submissions:
-            value, _ = self._get_field_value(submission.submission_data, variable)
-            if value is None:
-                continue
-
-            # Convert to numeric
-            numeric_value = self._convert_value_type(value)
-            if not isinstance(numeric_value, int | float):
-                continue
-
-            # Skip DK values
-            if numeric_value in self.dk_codes:
-                continue
-
-            values.append(float(numeric_value))
-
-        # Handle small datasets - need at least 2 values, but provide warnings for very small datasets
-        if len(values) < 2:
-            return None  # Can't compute meaningful statistics with less than 2 values
-
-        # Compute statistics
-        try:
-            values_sorted = sorted(values)
-            n = len(values_sorted)
-
-            # Basic statistics
-            mean = statistics.mean(values)
-            median = statistics.median(values)
-
-            # Standard deviation
-            if n > 1:
-                std = statistics.stdev(values) if n > 1 else 0.0
-            else:
-                std = 0.0
-
-            # Quartiles for IQR
-            q1_idx = int(n * 0.25)
-            q3_idx = int(n * 0.75)
-            q1 = values_sorted[q1_idx] if q1_idx < n else values_sorted[0]
-            q3 = values_sorted[q3_idx] if q3_idx < n else values_sorted[-1]
-            iqr = q3 - q1 if q3 > q1 else 0.0
-
-            # Median Absolute Deviation (MAD) for robust outlier detection
-            deviations = [abs(v - median) for v in values]
-            mad = statistics.median(deviations) if deviations else 0.0
-            # Modified Z-score uses 1.4826 * MAD to approximate standard deviation
-            mad_std = 1.4826 * mad if mad > 0 else 0.0
-
-            return {
-                "mean": mean,
-                "median": median,
-                "std": std,
-                "q1": q1,
-                "q3": q3,
-                "iqr": iqr,
-                "mad": mad,
-                "mad_std": mad_std,
-                "count": n,
-            }
-        except Exception as e:
-            logger.warning(
-                f"Error computing statistics for variable '{variable}': {e}", exc_info=True
-            )
-            return None
-
     def _is_outlier(
         self, value: float, stats: dict[str, float], method: str, threshold: float
     ) -> bool:
@@ -1485,7 +1308,7 @@ class HFCEngine:
 
             return value < lower_bound or value > upper_bound
 
-        elif method == "mad":
+        if method == "mad":
             # Modified Z-score using MAD: outlier if |modified_z_score| > threshold
             # Formula: M = 0.6745 * (x - median) / MAD
             median = stats["median"]
@@ -1498,7 +1321,7 @@ class HFCEngine:
 
             return abs(modified_z_score) > threshold
 
-        elif method == "zscore":
+        if method == "zscore":
             # Z-score method: outlier if |z_score| > threshold
             mean = stats["mean"]
             std = stats["std"]
@@ -1510,9 +1333,8 @@ class HFCEngine:
 
             return abs(z_score) > threshold
 
-        else:
-            logger.warning(f"Unknown outlier method: {method}")
-            return False
+        logger.warning(f"Unknown outlier method: {method}")
+        return False
 
     def _get_outlier_bounds(
         self,
@@ -1665,7 +1487,7 @@ class HFCEngine:
         missing_vars = []
         var_values = {}
         for var in variables_involved:
-            value, field_path = self._get_field_value(submission_data, var)
+            value, field_path = find_answer(submission_data, var)
             if value is None and field_path is None and var not in blank_checked:
                 missing_vars.append(var)
             else:
@@ -1774,7 +1596,7 @@ class HFCEngine:
             self._relevance_form_loaded = True
             try:
                 form = load_survey_form(self.survey_config, self._fetch_live_form)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- stored form or a live Kobo fetch
                 logger.warning("Could not read the form for skip logic: %s", exc)
                 form = None
             if form is not None and (form.logic_missing or form.schema.is_empty):
@@ -1804,7 +1626,7 @@ class HFCEngine:
             return False
 
         def lookup(name: str) -> Any:
-            return self._get_field_value(submission_data, name)[0]
+            return find_answer(submission_data, name)[0]
 
         return is_shown(form.schema, question, lookup) is True
 

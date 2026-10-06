@@ -186,6 +186,63 @@ class TestRequestShape:
         assert captured == ["https://api.openai.com/v1/"]
 
 
+class TestRealSdk:
+    """Requests built by the installed openai SDK, not the fake endpoint.
+
+    The fake accepts any keyword, so it never noticed that openai 1.54 had no
+    reasoning_effort: every rule written on the operator key failed with a
+    TypeError inside the SDK, reported as "AI generated an invalid response".
+    """
+
+    @staticmethod
+    def _sdk_with_transport(sent):
+        def handler(request: httpx.Request) -> httpx.Response:
+            sent.append(json.loads(request.content))
+            return httpx.Response(
+                200,
+                json={
+                    "id": "chatcmpl-1",
+                    "object": "chat.completion",
+                    "created": 0,
+                    "model": "gpt-5",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "finish_reason": "stop",
+                            "message": {"role": "assistant", "content": '{"answer": "yes"}'},
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                },
+            )
+
+        def factory(**kwargs):
+            kwargs["http_client"] = httpx.Client(transport=httpx.MockTransport(handler))
+            return openai.OpenAI(**kwargs)
+
+        return factory
+
+    def test_every_option_the_client_sends_is_accepted(self):
+        sent = []
+        data = AIClient(client_factory=self._sdk_with_transport(sent)).complete_json(
+            ResolvedProvider(api_key="sk-test", model="gpt-5"),
+            name="answer",
+            system="s",
+            user="u",
+            schema=SCHEMA,
+            max_output=400,
+            end_user="user-1",
+            reasoning_effort="low",
+        )
+
+        assert data == {"answer": "yes"}
+        body = sent[0]
+        assert body["reasoning_effort"] == "low"
+        assert body["max_completion_tokens"] == 400
+        assert body["response_format"]["type"] == "json_schema"
+        assert "safety_identifier" in body
+
+
 class TestSteppingDown:
     def test_temperature_rejected_by_a_reasoning_model(self):
         endpoint = FakeEndpoint(

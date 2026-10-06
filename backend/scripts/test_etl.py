@@ -41,8 +41,7 @@ def check_environment():
         print("  1. Get your API token from: https://kf.kobotoolbox.org/token/")
         print("  2. Add to .env file: KOBO_API_TOKEN=your_token_here")
         return False
-    else:
-        print(f"✓ KOBO_API_TOKEN is set (length: {len(api_token)})")
+    print(f"✓ KOBO_API_TOKEN is set (length: {len(api_token)})")
 
     print(f"✓ KOBO_API_URL: {api_url}")
     print("=" * 60)

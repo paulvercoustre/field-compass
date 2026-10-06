@@ -4,8 +4,8 @@
  * See docs/specs/audio-transcription.md, part A.
  */
 
-import { API_BASE_URL, apiFetch } from './apiBase';
-import { ApiError, RunSummary } from './activityApi';
+import { API_BASE_URL, apiFetch, authHeaders, request } from './apiBase';
+import { RunSummary } from './activityApi';
 
 export interface AudioQuestion {
   path: string;
@@ -76,6 +76,8 @@ export interface TranscriptionOverview {
     in_progress: number;
     failed: number;
     not_run: number;
+    /** Recordings that cannot be transcribed: the file is missing, or too long. */
+    skipped: number;
     no_speech: number;
     /** Transcripts Kobo already had, typed or made there: never transcribed here. */
     from_kobo: number;
@@ -143,23 +145,6 @@ export interface SubmissionTranscripts {
   answers: AudioAnswer[];
 }
 
-const token = () => localStorage.getItem('field_compass_token');
-
-const headers = (): HeadersInit => ({
-  'Content-Type': 'application/json',
-  ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
-});
-
-const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const response = await apiFetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
-  const body = await response.json().catch(() => ({ detail: response.statusText }));
-  if (!response.ok) {
-    const detail = typeof body?.detail === 'string' ? body.detail : response.statusText;
-    throw new ApiError(detail || 'Request failed', response.status, body);
-  }
-  return body as T;
-};
-
 export const getTranscriptionOverview = (surveyId: string) =>
   request<TranscriptionOverview>(`/api/surveys/${surveyId}/audio-transcription`);
 
@@ -189,7 +174,7 @@ export const getSubmissionTranscripts = (koboId: number) =>
 export const loadRecording = async (koboId: number, questionPath: string): Promise<string> => {
   const response = await apiFetch(
     `${API_BASE_URL}/api/submissions/${koboId}/audio?question=${encodeURIComponent(questionPath)}`,
-    { headers: token() ? { Authorization: `Bearer ${token()}` } : {} }
+    { headers: authHeaders() }
   );
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: response.statusText }));

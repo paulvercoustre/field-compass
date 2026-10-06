@@ -238,3 +238,46 @@ class TestByVariableTargets:
 
         assert get_sampling_mode(config) == "by_variable"
         assert has_targets(config) is False
+
+
+class TestSettingsSections:
+    """Typed, but faithful: nothing stored is rewritten (see test_config_hashes)."""
+
+    def test_defaults_fill_what_is_missing(self):
+        from services.survey_config import get_global_parameters, get_quality_checks
+
+        qc = get_quality_checks({})
+        assert (qc.weekend_days, qc.outlier_threshold, qc.office_hours_start) == (
+            [5, 6],
+            1.5,
+            "08:00",
+        )
+        assert get_global_parameters(None).min_survey_duration_minutes is None
+
+    def test_values_keep_their_stored_type_and_nulls_stay_null(self):
+        from services.survey_config import get_quality_checks
+
+        qc = get_quality_checks(
+            {"quality_checks": {"dk_percentage_threshold": 40, "outlier_threshold": None}}
+        )
+        assert qc.dk_percentage_threshold == 40 and isinstance(qc.dk_percentage_threshold, int)
+        assert qc.outlier_threshold is None
+
+    def test_a_wrong_type_passes_through_as_stored(self):
+        from services.survey_config import get_quality_checks
+
+        qc = get_quality_checks(
+            {
+                "quality_checks": {
+                    "flag_outliers": 1,
+                    "outlier_variables": "income",
+                    "flag_weekend": True,
+                }
+            }
+        )
+        assert (qc.flag_outliers, qc.outlier_variables, qc.flag_weekend) == (1, "income", True)
+
+    def test_a_section_that_is_not_an_object_reads_as_empty(self):
+        from services.survey_config import get_quality_checks
+
+        assert get_quality_checks({"quality_checks": None}).flag_weekend is False

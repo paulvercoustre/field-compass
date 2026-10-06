@@ -3,15 +3,21 @@ Database connection and query helpers.
 Provides SQLAlchemy session management and common database operations.
 """
 
+import logging
 import os
 from collections.abc import Generator
+from typing import Annotated
 
 from dotenv import load_dotenv
-from sqlalchemy import Engine, create_engine
+from fastapi import Depends
+from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # Database connection string from environment
 DATABASE_URL = os.getenv(
@@ -36,7 +42,7 @@ def get_db() -> Generator[Session, None, None]:
 
     Usage in FastAPI:
         @router.get("/endpoint")
-        async def endpoint(db: Session = Depends(get_db)):
+        async def endpoint(db: DbSession):
             # Use db session
             pass
     """
@@ -47,17 +53,19 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+# A route's database session: `db: DbSession`.
+DbSession = Annotated[Session, Depends(get_db)]
+
+
 def init_db():
     """
     Initialize database connection.
     Can be used to verify connectivity at startup.
     """
     try:
-        from sqlalchemy import text
-
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
-    except Exception as e:
-        print(f"Database connection failed: {e}")
+    except SQLAlchemyError as e:
+        logger.error("Database connection failed: %s", e)
         return False

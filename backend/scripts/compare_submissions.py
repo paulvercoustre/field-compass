@@ -22,13 +22,12 @@ def format_datetime(dt: Any) -> str:
     """Format datetime for display."""
     if isinstance(dt, datetime):
         return dt.isoformat()
-    elif isinstance(dt, str):
+    if isinstance(dt, str):
         return dt
-    else:
-        return str(dt)
+    return str(dt)
 
 
-def compare_metadata(edited_sub: dict[str, Any], non_edited_sub: dict[str, Any], asset_uid: str):
+def compare_metadata(edited_sub: dict[str, Any], non_edited_sub: dict[str, Any], asset_uid: str):  # noqa: C901 -- split pending, see docs/code-quality-review.md
     """Compare metadata between edited and non-edited submissions."""
 
     print("=" * 80)
@@ -213,13 +212,13 @@ def compare_metadata(edited_sub: dict[str, Any], non_edited_sub: dict[str, Any],
     if isinstance(edited_submission_time, datetime) and isinstance(edited_end, datetime):
         edited_duration = (edited_end - edited_submission_time).total_seconds()
         print(
-            f"Edited submission duration: {edited_duration:.1f} seconds ({edited_duration/60:.1f} minutes)"
+            f"Edited submission duration: {edited_duration:.1f} seconds ({edited_duration / 60:.1f} minutes)"
         )
 
     if isinstance(non_edited_submission_time, datetime) and isinstance(non_edited_end, datetime):
         non_edited_duration = (non_edited_end - non_edited_submission_time).total_seconds()
         print(
-            f"Non-edited submission duration: {non_edited_duration:.1f} seconds ({non_edited_duration/60:.1f} minutes)"
+            f"Non-edited submission duration: {non_edited_duration:.1f} seconds ({non_edited_duration / 60:.1f} minutes)"
         )
 
     print()
@@ -284,16 +283,15 @@ def compare_metadata(edited_sub: dict[str, Any], non_edited_sub: dict[str, Any],
     print()
 
     # Find fields with different values
-    data_differences = []
-    for key in common_keys:
-        if edited_data_clean[key] != non_edited_data_clean[key]:
-            data_differences.append(
-                {
-                    "field": key,
-                    "edited": edited_data_clean[key],
-                    "non_edited": non_edited_data_clean[key],
-                }
-            )
+    data_differences = [
+        {
+            "field": key,
+            "edited": edited_data_clean[key],
+            "non_edited": non_edited_data_clean[key],
+        }
+        for key in common_keys
+        if edited_data_clean[key] != non_edited_data_clean[key]
+    ]
 
     if data_differences:
         print(f"Data fields with different values: {len(data_differences)}")

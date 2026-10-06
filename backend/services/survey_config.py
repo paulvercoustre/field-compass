@@ -13,7 +13,12 @@ submission as `missing_enumerator` and produced a phantom enumerator named
 "Unknown" holding the entire dataset.
 """
 
-from typing import Any
+import logging
+from typing import Any, Self
+
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+logger = logging.getLogger(__name__)
 
 # Capability identifiers, so the client can branch on a stable string rather
 # than parse prose.
@@ -224,3 +229,74 @@ def get_targets_by_value(config_data: dict[str, Any] | None) -> dict[str, int]:
         if parsed is not None:
             targets[str(value)] = parsed
     return targets
+
+
+# --- Global parameters and quality checks ---------------------------------------
+#
+# Typed views of two config sections, with every default in one place. They are
+# faithful rather than corrective: a value of the right type is kept exactly as
+# stored (50 stays 50, never 50.0), an explicit null stays null, and a value of
+# the wrong type is passed through as it was. The validation hash is built from
+# these values, and a hash that moved would revalidate every submission of every
+# survey on its next pull (tests/test_config_hashes.py holds them still).
+
+Number = int | float
+
+
+class _Section(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    @classmethod
+    def of(cls, config_data: dict[str, Any] | None, key: str) -> Self:
+        raw = (config_data or {}).get(key)
+        raw = raw if isinstance(raw, dict) else {}
+        try:
+            return cls.model_validate(raw)
+        except ValidationError as exc:
+            bad = {err["loc"][0] for err in exc.errors() if err["loc"]}
+            logger.warning("Survey config %s: unexpected types for %s", key, sorted(map(str, bad)))
+            valid = cls.model_validate({k: v for k, v in raw.items() if k not in bad})
+            return valid.model_copy(update={k: raw[k] for k in bad if isinstance(k, str)})
+
+
+class GlobalParameters(_Section):
+    data_collection_start_date: str | None = None
+    data_collection_end_date: str | None = None
+    min_survey_duration_minutes: Number | None = None
+    max_survey_duration_minutes: Number | None = None
+
+
+DEFAULT_LLM_CHECK_TYPES = ["content_quality", "relevance", "completeness"]
+
+
+class QualityChecks(_Section):
+    flag_out_of_period: bool | None = False
+    flag_weekend: bool | None = False
+    weekend_days: list[int] | None = [5, 6]  # Saturday, Sunday
+    flag_office_hours: bool | None = False
+    office_hours_start: str | None = "08:00"
+    office_hours_end: str | None = "17:00"
+    flag_sampling_frame: bool | None = False
+    flag_outliers: bool | None = False
+    outlier_variables: list[str] | None = []
+    outlier_log_transform_variables: list[str] | None = []
+    outlier_method: str | None = "iqr"  # 'iqr', 'mad' or 'zscore'
+    outlier_threshold: Number | None = 1.5  # IQR/MAD multiplier, or z-score
+    flag_dk_percentage: bool | None = False
+    dk_percentage_threshold: Number | None = 50.0
+    flag_empty_percentage: bool | None = False
+    empty_percentage_threshold: Number | None = 50.0
+    flag_llm_qualitative: bool | None = False
+    llm_qualitative_fields: list[str] | None = []
+    llm_check_types: list[str] | None = DEFAULT_LLM_CHECK_TYPES
+    llm_prompt_template_version: str | None = "v1"
+    llm_response_schema_version: str | None = "v1"
+    llm_dk_policy_version: str | None = "v1"
+
+
+def get_global_parameters(config_data: dict[str, Any] | None) -> GlobalParameters:
+    return GlobalParameters.of(config_data, "global_parameters")
+
+
+def get_quality_checks(config_data: dict[str, Any] | None) -> QualityChecks:
+    return QualityChecks.of(config_data, "quality_checks")

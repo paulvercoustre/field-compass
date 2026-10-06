@@ -75,8 +75,8 @@ def test_imports():
 
         print("✓ Database models imported successfully")
 
-        from models import Submission
-        from models import SubmissionHistory as SubmissionHistoryPydantic
+        from schemas import Submission
+        from schemas import SubmissionHistory as SubmissionHistoryPydantic
 
         print("✓ Pydantic models imported successfully")
 

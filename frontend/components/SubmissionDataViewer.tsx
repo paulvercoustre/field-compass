@@ -9,7 +9,7 @@ import { Player, RecordingDetails, RecordingStatus } from './transcription/Audio
 import { TranslationBlock } from './translation/TranslationBlock';
 
 /** The submission's recorded answers, shown in place of their file names. */
-export interface Recordings {
+interface Recordings {
   koboId: number;
   answers: AudioAnswer[];
   sendToKobo: boolean;

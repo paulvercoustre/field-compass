@@ -3,7 +3,7 @@
  * in-app notifications. See docs/specs/audio-transcription.md, part B.
  */
 
-import { API_BASE_URL, apiFetch } from './apiBase';
+import { request } from './apiBase';
 
 export type RunStatus = 'queued' | 'running' | 'background' | 'finished' | 'failed' | 'stopped';
 export type RunKind = 'pull' | 'ai_rerun' | 'transcription_rerun' | 'translation_rerun' | 'kobo_resend';
@@ -91,34 +91,7 @@ export interface AppNotification {
   read: boolean;
 }
 
-const headers = (): HeadersInit => {
-  const token = localStorage.getItem('field_compass_token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-};
-
-/** An API error that keeps the response body: a 409 carries the run already under way. */
-export class ApiError extends Error {
-  constructor(message: string, public status: number, public body: any) {
-    super(message);
-  }
-}
-
-export const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const response = await apiFetch(`${API_BASE_URL}${path}`, { ...init, headers: headers() });
-  const body = await response.json().catch(() => ({ detail: response.statusText }));
-  if (!response.ok) {
-    const detail = typeof body?.detail === 'string' ? body.detail : response.statusText;
-    throw new ApiError(detail || 'Request failed', response.status, body);
-  }
-  return body as T;
-};
-
 export const getActivity = () => request<Activity>('/api/activity');
-
-export const getRun = (runId: string) => request<RunSummary>(`/api/runs/${runId}`);
 
 export const getSurveyRuns = (surveyId: string, limit = 10) =>
   request<{ runs: RunSummary[] }>(`/api/surveys/${surveyId}/runs?limit=${limit}`);

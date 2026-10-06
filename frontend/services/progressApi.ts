@@ -1,26 +1,6 @@
-
 import { ProgressData, PerformanceData, SamplingMode } from '../types';
 
-import { API_BASE_URL, apiFetch } from './apiBase';
-
-// Helper to get auth token from localStorage
-const getAuthToken = (): string | null => {
-  return localStorage.getItem('field_compass_token');
-};
-
-// Helper to create headers with optional auth
-const createAuthHeaders = (): HeadersInit => {
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  
-  const token = getAuthToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  return headers;
-};
+import { request } from './apiBase';
 
 export interface Survey {
   survey_id: string;
@@ -59,7 +39,7 @@ export interface SurveyConfig {
       // How this survey expresses targets. Absent on configs stored before the
       // field existed, which are inferred rather than defaulted -- see
       // get_sampling_mode() in backend/services/survey_config.py.
-      mode?: SamplingMode;
+      mode?: SamplingMode | null;
       sampling_cols?: string[];
       admin_level_for_label?: string;
       admin_level_choice_name?: string;
@@ -138,186 +118,38 @@ export interface SurveyCreate {
   config_data: SurveyConfig['config_data'];
 }
 
-/**
- * Fetch list of surveys (only surveys user has access to)
- */
-export const getSurveys = async (): Promise<Survey[]> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys`, {
-      headers: createAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch surveys: ${response.statusText}`);
-    }
 
-    const data: Survey[] = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching surveys:', error);
-    throw error;
-  }
-};
+/** Surveys the user can open. */
+export const getSurveys = () => request<Survey[]>('/api/surveys');
 
-/**
- * Fetch progress data from the API
- * @param surveyId Optional survey ID to filter by (UUID string)
- */
-export interface ProgressQueryOptions {
+interface ProgressQueryOptions {
   approvedOnly?: boolean;
 }
 
 export const progressApi = {
-  getProgressData: async (surveyId: string, options: ProgressQueryOptions = {}): Promise<ProgressData> => {
-    if (!surveyId) {
-      throw new Error('surveyId is required');
-    }
-    
-    try {
-      const params = new URLSearchParams();
-      params.append('survey_id', surveyId);
-      if (options.approvedOnly) {
-        params.append('approved_only', 'true');
-      }
-
-      const url = `${API_BASE_URL}/api/progress?${params.toString()}`;
-      const response = await apiFetch(url, {
-        headers: createAuthHeaders(),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch progress data: ${response.statusText}`);
-      }
-
-      const data: ProgressData = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error fetching progress data:', error);
-      throw error;
-    }
+  getProgressData: (surveyId: string, options: ProgressQueryOptions = {}) => {
+    const params = new URLSearchParams({ survey_id: surveyId });
+    if (options.approvedOnly) params.append('approved_only', 'true');
+    return request<ProgressData>(`/api/progress?${params}`);
   },
 
-  /**
-   * Fetch performance data from the API
-   * @param surveyId Required survey ID (UUID string)
-   */
-  getPerformanceData: async (surveyId: string): Promise<PerformanceData> => {
-    if (!surveyId) {
-      throw new Error('surveyId is required');
-    }
-    
-    try {
-      const params = new URLSearchParams();
-      params.append('survey_id', surveyId);
-
-      const url = `${API_BASE_URL}/api/performance?${params.toString()}`;
-      const response = await apiFetch(url, {
-        headers: createAuthHeaders(),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch performance data: ${response.statusText}`);
-      }
-
-      const data: PerformanceData = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error fetching performance data:', error);
-      throw error;
-    }
-  }
+  getPerformanceData: (surveyId: string) =>
+    request<PerformanceData>(`/api/performance?${new URLSearchParams({ survey_id: surveyId })}`),
 };
 
-/**
- * Fetch full survey configuration by ID
- */
-export const getSurveyConfig = async (surveyId: string): Promise<SurveyConfig & { permission?: string; is_owner?: boolean }> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
-      headers: createAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch survey config: ${response.statusText}`);
-    }
+/** A survey's full configuration, with the caller's permission on it. */
+export const getSurveyConfig = (surveyId: string) =>
+  request<SurveyConfig & { permission?: string; is_owner?: boolean }>(`/api/surveys/${surveyId}`);
 
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching survey config:', error);
-    throw error;
-  }
-};
+export const createSurvey = (surveyData: SurveyCreate) =>
+  request<SurveyConfig>('/api/surveys', { method: 'POST', body: JSON.stringify(surveyData) });
 
-/**
- * Create a new survey configuration
- */
-export const createSurvey = async (surveyData: SurveyCreate): Promise<SurveyConfig> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys`, {
-      method: 'POST',
-      headers: createAuthHeaders(),
-      body: JSON.stringify(surveyData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to create survey: ${response.statusText}`);
-    }
+export const updateSurvey = (surveyId: string, updates: Partial<SurveyCreate>) =>
+  request<SurveyConfig>(`/api/surveys/${surveyId}`, { method: 'PUT', body: JSON.stringify(updates) });
 
-    const data: SurveyConfig = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error creating survey:', error);
-    throw error;
-  }
-};
-
-/**
- * Update an existing survey configuration
- */
-export const updateSurvey = async (
-  surveyId: string,
-  updates: Partial<SurveyCreate>
-): Promise<SurveyConfig> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
-      method: 'PUT',
-      headers: createAuthHeaders(),
-      body: JSON.stringify(updates),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to update survey: ${response.statusText}`);
-    }
-
-    const data: SurveyConfig = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error updating survey:', error);
-    throw error;
-  }
-};
-
-/**
- * Delete a survey and all associated data
- */
+/** Deletes the survey and all its data. */
 export const deleteSurvey = async (surveyId: string): Promise<void> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}`, {
-      method: 'DELETE',
-      headers: createAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to delete survey: ${response.statusText}`);
-    }
-  } catch (error) {
-    console.error('Error deleting survey:', error);
-    throw error;
-  }
+  await request(`/api/surveys/${surveyId}`, { method: 'DELETE' });
 };
 
 /**
@@ -325,119 +157,42 @@ export const deleteSurvey = async (surveyId: string): Promise<void> => {
  * Returns how many submissions will be re-checked.
  */
 export const rerunAiChecks = async (surveyId: string): Promise<number> => {
-  const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/ai-checks/rerun`, {
+  const data = await request<{ submissions: number }>(`/api/surveys/${surveyId}/ai-checks/rerun`, {
     method: 'POST',
-    headers: createAuthHeaders(),
   });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(errorData.detail || `Could not schedule the review: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return data.submissions as number;
+  return data.submissions;
 };
 
 // ============================================================================
-// Survey Sharing API
+// Survey sharing
 // ============================================================================
 
-/**
- * Get list of users with access to a survey
- */
-export const getSurveyAccess = async (surveyId: string): Promise<SurveyAccessEntry[]> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/access`, {
-      headers: createAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to fetch survey access: ${response.statusText}`);
-    }
+export const getSurveyAccess = (surveyId: string) =>
+  request<SurveyAccessEntry[]>(`/api/surveys/${surveyId}/access`);
 
-    const data: SurveyAccessEntry[] = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching survey access:', error);
-    throw error;
-  }
-};
+export const shareSurvey = (surveyId: string, email: string, permissionLevel: 'editor' | 'viewer') =>
+  request<SurveyAccessEntry>(`/api/surveys/${surveyId}/access`, {
+    method: 'POST',
+    body: JSON.stringify({ email, permission_level: permissionLevel }),
+  });
 
-/**
- * Share a survey with another user
- */
-export const shareSurvey = async (
-  surveyId: string,
-  email: string,
-  permissionLevel: 'editor' | 'viewer'
-): Promise<SurveyAccessEntry> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/access`, {
-      method: 'POST',
-      headers: createAuthHeaders(),
-      body: JSON.stringify({ email, permission_level: permissionLevel }),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to share survey: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error sharing survey:', error);
-    throw error;
-  }
-};
-
-/**
- * Update a user's access level for a survey
- */
 export const updateSurveyAccess = async (
   surveyId: string,
   userId: string,
   permissionLevel: 'editor' | 'viewer'
 ): Promise<void> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/access/${userId}`, {
-      method: 'PUT',
-      headers: createAuthHeaders(),
-      body: JSON.stringify({ permission_level: permissionLevel }),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to update access: ${response.statusText}`);
-    }
-  } catch (error) {
-    console.error('Error updating survey access:', error);
-    throw error;
-  }
+  await request(`/api/surveys/${surveyId}/access/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ permission_level: permissionLevel }),
+  });
 };
 
-/**
- * Revoke a user's access to a survey
- */
 export const revokeSurveyAccess = async (surveyId: string, userId: string): Promise<void> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/access/${userId}`, {
-      method: 'DELETE',
-      headers: createAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to revoke access: ${response.statusText}`);
-    }
-  } catch (error) {
-    console.error('Error revoking survey access:', error);
-    throw error;
-  }
+  await request(`/api/surveys/${surveyId}/access/${userId}`, { method: 'DELETE' });
 };
 
 // ============================================================================
-// Validation Rules API
+// Validation rules
 // ============================================================================
 
 export interface ValidationRule {
@@ -456,7 +211,7 @@ export interface ValidationRule {
   updated_at?: string;
 }
 
-export interface ValidationRuleCreate {
+interface ValidationRuleCreate {
   rule_name: string;
   rule_data: {
     check_id: string;
@@ -468,7 +223,7 @@ export interface ValidationRuleCreate {
   is_active?: boolean;
 }
 
-export interface ValidationRuleUpdate {
+interface ValidationRuleUpdate {
   rule_name?: string;
   rule_data?: {
     check_id?: string;
@@ -480,98 +235,22 @@ export interface ValidationRuleUpdate {
   is_active?: boolean;
 }
 
-/**
- * Get all validation rules for a survey
- */
-export const getValidationRules = async (surveyId: string): Promise<ValidationRule[]> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules`, {
-      headers: createAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch validation rules: ${response.statusText}`);
-    }
 
-    const data: ValidationRule[] = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching validation rules:', error);
-    throw error;
-  }
-};
+export const getValidationRules = (surveyId: string) =>
+  request<ValidationRule[]>(`/api/surveys/${surveyId}/rules`);
 
-/**
- * Create a new validation rule
- */
-export const createValidationRule = async (
-  surveyId: string,
-  ruleData: ValidationRuleCreate
-): Promise<ValidationRule> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules`, {
-      method: 'POST',
-      headers: createAuthHeaders(),
-      body: JSON.stringify(ruleData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to create validation rule: ${response.statusText}`);
-    }
+export const createValidationRule = (surveyId: string, ruleData: ValidationRuleCreate) =>
+  request<ValidationRule>(`/api/surveys/${surveyId}/rules`, {
+    method: 'POST',
+    body: JSON.stringify(ruleData),
+  });
 
-    const data: ValidationRule = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error creating validation rule:', error);
-    throw error;
-  }
-};
+export const updateValidationRule = (surveyId: string, ruleId: string, updates: ValidationRuleUpdate) =>
+  request<ValidationRule>(`/api/surveys/${surveyId}/rules/${ruleId}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
 
-/**
- * Update an existing validation rule
- */
-export const updateValidationRule = async (
-  surveyId: string,
-  ruleId: string,
-  updates: ValidationRuleUpdate
-): Promise<ValidationRule> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules/${ruleId}`, {
-      method: 'PUT',
-      headers: createAuthHeaders(),
-      body: JSON.stringify(updates),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to update validation rule: ${response.statusText}`);
-    }
-
-    const data: ValidationRule = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error updating validation rule:', error);
-    throw error;
-  }
-};
-
-/**
- * Delete a validation rule
- */
 export const deleteValidationRule = async (surveyId: string, ruleId: string): Promise<void> => {
-  try {
-    const response = await apiFetch(`${API_BASE_URL}/api/surveys/${surveyId}/rules/${ruleId}`, {
-      method: 'DELETE',
-      headers: createAuthHeaders(),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `Failed to delete validation rule: ${response.statusText}`);
-    }
-  } catch (error) {
-    console.error('Error deleting validation rule:', error);
-    throw error;
-  }
+  await request(`/api/surveys/${surveyId}/rules/${ruleId}`, { method: 'DELETE' });
 };

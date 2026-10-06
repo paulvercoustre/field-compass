@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
-import { API_BASE_URL, apiFetch, setReauthHandler } from '../services/apiBase';
+import { API_BASE_URL, apiFetch, setReauthHandler, TOKEN_KEY } from '../services/apiBase';
 import SessionExpiredDialog from '../components/SessionExpiredDialog';
 import { forgetSurveyId } from '../utils/selectedSurveyStorage';
 import { readSignupSource } from '../utils/signupSource';
 
 // User type
-export interface User {
+interface User {
   user_id: string;
   email: string;
   username: string;
@@ -85,7 +85,6 @@ const errorDetail = async (response: Response, fallback: string): Promise<string
 
 // Local storage keys
 
-const TOKEN_KEY = 'field_compass_token';
 const USER_KEY = 'field_compass_user';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -157,9 +156,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Helper to make authenticated API requests. A 401 opens the sign-in
   // dialog (see apiFetch); one that remains means the person signed out.
   const authFetch = async (endpoint: string, options: RequestInit = {}) => {
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(options.headers || {}),
+      ...(options.headers as Record<string, string> | undefined),
     };
 
     if (token) {

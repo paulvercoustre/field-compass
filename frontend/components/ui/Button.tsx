@@ -39,7 +39,7 @@ const sizes: Record<Size, string> = {
  * The app's one button. Variants follow the usual hierarchy: one primary
  * action per view, secondary for the rest, ghost for toolbar-like actions.
  */
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = 'secondary', size = 'md', loading = false, icon, className = '', children, disabled, type = 'button', ...rest }, ref) => (
     <button
       ref={ref}

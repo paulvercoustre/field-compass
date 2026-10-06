@@ -72,7 +72,7 @@ def download_audit_log(audit_url: str, uuid: str, kobo_token: str | None = None)
         logger.debug(f"Downloaded audit log for {uuid} to {file_path}")
         return file_path
 
-    except Exception as e:
+    except (requests.RequestException, OSError) as e:
         logger.warning(f"Failed to download audit log for {uuid}: {e}")
         return None
 
@@ -204,43 +204,3 @@ def download_and_process_audit(
 
     # Process audit log
     return process_audit_log(file_path, uuid)
-
-
-def process_all_audits(audit_dir: str | None = None) -> dict[str, dict[str, Any]]:
-    """
-    Process all audit log CSV files in a directory.
-
-    Args:
-        audit_dir: Directory containing audit CSV files (defaults to get_audit_dir())
-
-    Returns:
-        Dictionary mapping UUID to metrics: {uuid: {active_interview_time, total_duration, ...}}
-    """
-    if audit_dir is None:
-        audit_dir = get_audit_dir()
-
-    if not os.path.exists(audit_dir):
-        logger.debug(f"Audit directory does not exist: {audit_dir}")
-        return {}
-
-    all_metrics = {}
-
-    # Find all CSV files
-    csv_files = [f for f in os.listdir(audit_dir) if f.endswith(".csv")]
-
-    if not csv_files:
-        logger.debug(f"No audit files found in {audit_dir}")
-        return {}
-
-    logger.info(f"Processing {len(csv_files)} audit files...")
-
-    for filename in csv_files:
-        uuid = filename.replace(".csv", "")
-        file_path = os.path.join(audit_dir, filename)
-
-        metrics = process_audit_log(file_path, uuid)
-        if metrics:
-            all_metrics[uuid] = metrics
-
-    logger.info(f"Processed {len(all_metrics)} audit files successfully")
-    return all_metrics

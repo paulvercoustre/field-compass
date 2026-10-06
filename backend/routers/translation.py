@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any
-from uuid import UUID
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -46,12 +45,18 @@ from services.ai_allowance import (
     translations_used,
 )
 from services.ai_providers import translation_connection, translation_paused_error
-from services.auth import get_current_active_user
-from services.database import get_db
-from services.permissions import get_user_permission, require_survey_access
+from services.auth import CurrentUser
+from services.database import DbSession
+from services.permissions import (
+    OwnedSurvey,
+    ViewableSurvey,
+    get_user_permission,
+    require_survey_access,
+)
 from services.runs import (
     KOBO_RESEND,
     TRANSLATION_RERUN,
+    count_by,
     finish_if_done,
     iso,
     run_summary,
@@ -70,15 +75,6 @@ from services.translation_queue import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def _uuid(value: str) -> UUID:
-    try:
-        return UUID(value)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {value}. Must be a valid UUID."
-        ) from None
 
 
 def _missing(db: Session, survey: SurveyConfig) -> int:
@@ -126,27 +122,19 @@ def _counts(db: Session, survey: SurveyConfig) -> dict[str, Any]:
     current = (AnswerTranslation.survey_id == survey.survey_id) & (
         AnswerTranslation.language == (settings.language or "")
     )
-    status = dict(
-        db.query(AnswerTranslation.status, func.count())
-        .filter(current, AnswerTranslation.origin == ORIGIN_AI)
-        .group_by(AnswerTranslation.status)
-        .all()
-    )
+    status = count_by(db, AnswerTranslation.status, current, AnswerTranslation.origin == ORIGIN_AI)
     from_kobo = (
         db.query(func.count(AnswerTranslation.translation_id))
         .filter(current, AnswerTranslation.origin == ORIGIN_KOBO)
         .scalar()
     )
-    kobo = dict(
-        db.query(AnswerTranslation.kobo_status, func.count())
-        .filter(
-            current,
-            AnswerTranslation.origin == ORIGIN_AI,
-            AnswerTranslation.source == "transcript",
-            AnswerTranslation.status == "success",
-        )
-        .group_by(AnswerTranslation.kobo_status)
-        .all()
+    kobo = count_by(
+        db,
+        AnswerTranslation.kobo_status,
+        current,
+        AnswerTranslation.origin == ORIGIN_AI,
+        AnswerTranslation.source == "transcript",
+        AnswerTranslation.status == "success",
     )
     return {
         "success": status.get("success", 0),
@@ -246,16 +234,15 @@ def _payload(db: Session, survey: SurveyConfig, user: User) -> dict[str, Any]:
 
 @router.get("/surveys/{survey_id}/translation")
 async def get_translation_settings(
-    survey_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: ViewableSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     The survey's translation settings and everything the settings tab needs:
     the form's text and audio questions, the languages, who translates and
     this month's included translations, and how many answers are translated.
     """
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="viewer")
     return _payload(db, survey, current_user)
 
 
@@ -268,13 +255,12 @@ class TranslationSettingsUpdate(BaseModel):
 
 @router.put("/surveys/{survey_id}/translation")
 async def update_translation_settings(
-    survey_id: str,
     body: TranslationSettingsUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Save the survey's translation settings (owner)."""
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     questions = {q.path: q for q in translatable_questions(survey.config_data)}
 
     chosen: list[str] = []
@@ -320,10 +306,10 @@ async def update_translation_settings(
 
 @router.post("/surveys/{survey_id}/translations/run", status_code=202)
 async def translate_now(
-    survey_id: str,
-    mode: str = Query("missing", pattern="^(missing|all)$"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
+    mode: Annotated[str, Query(pattern="^(missing|all)$")] = "missing",
 ):
     """
     Translate answers already pulled, without waiting for the next pull
@@ -331,7 +317,6 @@ async def translate_now(
     yet, or whose last attempt can be retried. ``all``: every answer again,
     except translations Kobo has.
     """
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     if not translation_settings(survey.config_data).active:
         raise HTTPException(
             status_code=400,
@@ -361,12 +346,11 @@ async def translate_now(
 
 @router.post("/surveys/{survey_id}/translations/send-to-kobo", status_code=202)
 async def send_translations_to_kobo(
-    survey_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Send every translated transcript not yet in Kobo whose transcript Kobo shows (owner)."""
-    survey = require_survey_access(db, current_user, _uuid(survey_id), min_level="owner")
     if not translation_settings(survey.config_data).send_to_kobo:
         raise HTTPException(status_code=400, detail="Turn on “Send translations to Kobo” first.")
     pause = transcription_settings(survey.config_data).kobo_pause
@@ -427,8 +411,8 @@ def translation_view(row: AnswerTranslation | None) -> dict[str, Any] | None:
 @router.get("/submissions/{kobo_id}/translations")
 async def get_submission_translations(
     kobo_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """A submission's translations in the survey's language, by question path."""
     submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()

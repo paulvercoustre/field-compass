@@ -28,7 +28,13 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from database.models import AnswerTranslation, AudioTranscript, SubmissionCurrent, SurveyConfig
+from database.models import (
+    ITEM_OPEN,
+    AnswerTranslation,
+    AudioTranscript,
+    SubmissionCurrent,
+    SurveyConfig,
+)
 from etl.audio import SOURCE_KOBO, transcription_settings
 from etl.translation import (
     ORIGIN_AI,
@@ -51,7 +57,6 @@ from services.transcription_languages import normalize_language
 logger = logging.getLogger(__name__)
 
 NOT_RUN_ALLOWANCE = "not_run_allowance"
-OPEN_STATUSES = ("pending", "running")
 # Failures not worth retrying on every pull: the AI refused this text.
 _FINAL_CATEGORIES = ("bad_request",)
 
@@ -229,7 +234,7 @@ class TranslationQueuer:
             return None  # Kobo's translation stands
         if row is None:
             row = self._new_row(submission_id, question)
-        elif row.status in OPEN_STATUSES and row.input_hash == input_hash:
+        elif row.status in ITEM_OPEN and row.input_hash == input_hash:
             return None  # already on its way
         elif not force and not self._needs(row, input_hash):
             return None
@@ -362,7 +367,7 @@ class TranslationQueuer:
             text = text_answer(data, question)
             row = self._row(submission._id, question.path)
             if text is None:
-                if row is not None and row.status not in OPEN_STATUSES:
+                if row is not None and row.status not in ITEM_OPEN:
                     self.db.delete(row)  # the answer was removed
                 continue
             row = self._consider(row, submission._id, question, text, force=force)
@@ -459,7 +464,7 @@ def dispatch_translation_send(
             task_id=task_id,
         )
         return True
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 -- broker down, or anything else: record it
         logger.error(
             "Failed to enqueue Kobo send for translation %s: %s", translation.translation_id, error
         )

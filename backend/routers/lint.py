@@ -6,11 +6,9 @@ no respondent data.
 """
 
 from typing import Any
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 
 from database.models import SurveyConfig, User, ValidationRule
 from etl.kobo_fetcher import KoboFetcher
@@ -20,9 +18,9 @@ from linter.dk import dont_know_codes
 from linter.engine import run_lint
 from linter.form_source import SurveyForm, load_survey_form, schema_from_payload
 from linter.models import LintContext, language_from_label_column
-from services.auth import get_current_active_user, get_user_kobo_token
-from services.database import get_db
-from services.permissions import require_survey_access
+from services.auth import CurrentUser, get_user_kobo_token
+from services.database import DbSession
+from services.permissions import EditableSurvey, ViewableSurvey
 
 router = APIRouter()
 
@@ -36,7 +34,7 @@ class LintFormRequest(BaseModel):
     form: dict[str, Any] = Field(..., description="kobo_tool, asset content, or asset payload")
     enabled_checks: list[str] | None = None
     label_column: str | None = Field(
-        None, description="Label language as a sheet column, e.g. `label::French (fr)`"
+        default=None, description="Label language as a sheet column, e.g. `label::French (fr)`"
     )
 
 
@@ -59,16 +57,6 @@ def _survey_language(survey: SurveyConfig, label_column: str | None) -> str | No
     """The label language the screen asked for, else the survey's saved one."""
     saved = ((survey.config_data or {}).get("kobo_tool") or {}).get("label_column_survey")
     return language_from_label_column(label_column) or language_from_label_column(saved)
-
-
-def _parse_survey_id(survey_id: str) -> UUID:
-    try:
-        return UUID(survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID.",
-        )
 
 
 def _require_form(schema: FormSchema) -> FormSchema:
@@ -118,7 +106,7 @@ def _rule_payload(rule: ValidationRule, *, created: bool) -> dict[str, Any]:
 @router.post("/lint")
 def lint_form_payload(
     payload: LintFormRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUser,
 ):
     """Lint a form that is not (yet) attached to a survey — the create-survey path."""
     del current_user
@@ -133,7 +121,7 @@ def lint_form_payload(
 @router.post("/lint/dk-values")
 def dk_values_for_form(
     payload: DkValuesRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUser,
 ):
     """
     The form's don't-know codes, found the way the linter finds them.
@@ -153,14 +141,11 @@ def dk_values_for_form(
 
 @router.get("/surveys/{survey_id}/lint")
 def lint_survey(
-    survey_id: str,
+    survey: ViewableSurvey,
+    current_user: CurrentUser,
     label_column: str | None = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
 ):
     """Lint the form stored on this survey. Viewer access."""
-    survey_uuid = _parse_survey_id(survey_id)
-    survey = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
     survey_form = _survey_form(survey, current_user)
     return run_lint(
         survey_form.schema,
@@ -174,10 +159,10 @@ def lint_survey(
 
 @router.post("/surveys/{survey_id}/lint/adopt-rules")
 def adopt_lint_rules(
-    survey_id: str,
     payload: AdoptRulesRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: EditableSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Create HFC rules from selected lint findings. Editor access.
@@ -185,8 +170,6 @@ def adopt_lint_rules(
     Idempotent: adopting the same finding twice returns the existing rule.
     Findings without a runtime twin (no auto_rule) are skipped.
     """
-    survey_uuid = _parse_survey_id(survey_id)
-    survey = require_survey_access(db, current_user, survey_uuid, min_level="editor")
     survey_form = _survey_form(survey, current_user)
     # Same language as the findings the user saw, so an adopted rule's issue
     # text quotes the label they read.
@@ -204,7 +187,9 @@ def adopt_lint_rules(
     )
     existing_names = {
         rule.rule_name
-        for rule in db.query(ValidationRule).filter(ValidationRule.survey_id == survey_uuid).all()
+        for rule in db.query(ValidationRule)
+        .filter(ValidationRule.survey_id == survey.survey_id)
+        .all()
     }
-    rules = adopt_findings(db, survey_uuid, selected, is_active=payload.is_active)
+    rules = adopt_findings(db, survey.survey_id, selected, is_active=payload.is_active)
     return [_rule_payload(rule, created=rule.rule_name not in existing_names) for rule in rules]

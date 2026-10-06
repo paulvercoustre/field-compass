@@ -19,7 +19,7 @@ from typing import Any
 if "/app" not in sys.path and os.path.isdir("/app"):
     sys.path.insert(0, "/app")
 
-from database.models import AudioTranscript, SubmissionCurrent, SurveyConfig, User
+from database.models import ITEM_OPEN, AudioTranscript, SubmissionCurrent, SurveyConfig, User
 from etl.audio import (
     audio_questions,
     is_transcription_issue,
@@ -32,7 +32,12 @@ from services.ai_errors import AUTH, NOT_CONFIGURED, PROVIDER_QUOTA, AIError
 from services.audio_files import AudioFile, prepare_for_upload, probe_duration
 from services.auth import get_user_kobo_token
 from services.database import SessionLocal
-from services.runs import finish_if_done, notify_pause
+from services.runs import (
+    fail_stalled_items,
+    fail_stalled_kobo_sends,
+    finish_if_done,
+    notify_pause,
+)
 from services.transcription_allowance import (
     max_recording_seconds,
     not_run_message,
@@ -179,7 +184,7 @@ def _after_any(db, row: AudioTranscript, survey: SurveyConfig | None) -> None:
     finish_if_done(db, row.run_id)
 
 
-def run_transcription_job(
+def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality-review.md
     payload: dict[str, Any], job_id: str, final_attempt: bool = True
 ) -> dict[str, Any]:
     """
@@ -200,7 +205,7 @@ def run_transcription_job(
         if row is None:
             db.commit()
             return {"status": "missing"}
-        if row.input_hash != payload.get("input_hash") or row.status not in ("pending", "running"):
+        if row.input_hash != payload.get("input_hash") or row.status not in ITEM_OPEN:
             db.commit()
             return {"status": "stale", "transcript_id": transcript_id}
 
@@ -396,10 +401,10 @@ def run_transcription_job(
                     .filter(AudioTranscript.transcript_id == row.transcript_id)
                     .first()
                 )
-                if failed is not None and failed.status in ("pending", "running"):
+                if failed is not None and failed.status in ITEM_OPEN:
                     _finish(db, failed, "failed", error=f"internal: {exc}")
                     _after_any(db, failed, survey)
-            except Exception:
+            except Exception:  # noqa: BLE001 -- recording the failure must not mask it
                 db.rollback()
         raise
     finally:
@@ -408,38 +413,9 @@ def run_transcription_job(
 
 def sweep_stalled_transcripts(db, now: datetime | None = None) -> int:
     """Fail transcriptions that lost their worker, and their Kobo sends."""
-    from datetime import timedelta
-
     now = now or datetime.utcnow()
-    stalled = (
-        db.query(AudioTranscript)
-        .filter(
-            (
-                (AudioTranscript.status == "running")
-                & (AudioTranscript.started_at < now - timedelta(minutes=30))
-            )
-            | (
-                (AudioTranscript.status == "pending")
-                & (AudioTranscript.queued_at < now - timedelta(hours=6))
-            )
-        )
-        .all()
-    )
-    for row in stalled:
-        row.status = "failed"
-        row.last_error = "timeout: The transcription did not finish."
-        row.finished_at = now
-    kobo_stalled = (
-        db.query(AudioTranscript)
-        .filter(
-            AudioTranscript.kobo_status == "pending",
-            AudioTranscript.updated_at < now - timedelta(hours=6),
-        )
-        .all()
-    )
-    for row in kobo_stalled:
-        row.kobo_status = "failed"
-        row.kobo_last_error = "timeout: Sending to Kobo did not finish."
+    stalled = fail_stalled_items(db, AudioTranscript, now, "transcription")
+    kobo_stalled = fail_stalled_kobo_sends(db, AudioTranscript, now)
     db.commit()
 
     # A review waiting on a transcript that just failed can go now, without it.
@@ -456,6 +432,6 @@ def sweep_stalled_transcripts(db, now: datetime | None = None) -> int:
         if survey is not None and submission is not None:
             try:
                 resume_waiting_review(db, survey, submission)
-            except Exception:
+            except Exception:  # noqa: BLE001 -- one review must not stop the sweep
                 db.rollback()
-    return len(stalled) + len(kobo_stalled)
+    return len(stalled) + kobo_stalled

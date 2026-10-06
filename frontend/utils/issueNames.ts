@@ -6,10 +6,10 @@
  * "AI review" so the source of a flag is always visible.
  */
 
-export const AI_REVIEW = 'AI review';
+const AI_REVIEW = 'AI review';
 
 /** What each AI review finding type means (see ai_service.py for the definitions given to the model). */
-export const AI_FINDING_NAMES: Record<string, string> = {
+const AI_FINDING_NAMES: Record<string, string> = {
   content_quality: 'Unreadable answer',
   relevance: 'Off-topic answer',
   completeness: 'Too vague to use',
@@ -36,7 +36,7 @@ const humanize = (id: string): string => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
-export const isAiReviewCheck = (check: string): boolean => check.startsWith('qual_');
+const isAiReviewCheck = (check: string): boolean => check.startsWith('qual_');
 
 /** The finding's own name, without the "AI review" source, for use inside the AI review section. */
 export const aiFindingName = (check: string): string => {

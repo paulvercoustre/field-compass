@@ -1,33 +1,21 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
-  ApiError,
   getActivity,
   isOpen,
   NotificationLink,
   RunSummary,
   startPull as startPullRequest,
 } from '../services/activityApi';
+import { ApiError } from '../services/apiBase';
 import { useAuth } from './AuthContext';
-import { useSurvey } from './SurveyContext';
+import { NavigationTarget, useNavigation } from './NavigationContext';
 
 /** Polling: often while something runs, rarely otherwise, and on focus. */
 const ACTIVE_POLL_MS = 4000;
 const IDLE_POLL_MS = 60000;
 
 export const BROWSER_NOTIFICATIONS_KEY = 'fc_browser_notifications';
-
-/** Where a link in a notification or a problem should take the user. */
-export interface NavigationTarget {
-  view: 'dashboard' | 'settings' | 'userSettings';
-  survey_id?: string | null;
-  /** Survey settings: 'settings' | 'access' | 'quality'; account: 'profile' | 'kobo' | 'ai' | 'notifications'. */
-  tab?: string;
-  filters?: Record<string, unknown>;
-}
-
-/** Fired on window for App to switch views; the survey is selected here first. */
-export const NAVIGATE_EVENT = 'fc:navigate';
 
 interface ActivityContextValue {
   runs: RunSummary[];
@@ -44,6 +32,7 @@ interface ActivityContextValue {
   isSurveyBusy: (surveyId: string) => boolean;
   panelOpen: boolean;
   setPanelOpen: (open: boolean) => void;
+  /** Navigate, closing the activity panel on the way. */
   navigate: (target: NavigationTarget | NotificationLink) => void;
 }
 
@@ -90,7 +79,6 @@ const countsKey = (run: RunSummary) =>
 
 export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const { surveys, setSelectedSurvey } = useSurvey();
   const [activity, setActivity] = useState<Activity>({ runs: [], active: false, unread_notifications: 0 });
   const [panelOpen, setPanelOpen] = useState(false);
   const previous = useRef<Map<string, RunSummary>>(new Map());
@@ -210,16 +198,13 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [activity.runs]
   );
 
+  const { navigate: navigateTo } = useNavigation();
   const navigate = useCallback(
     (target: NavigationTarget | NotificationLink) => {
-      if (target.survey_id) {
-        const survey = surveys.find((s) => s.survey_id === target.survey_id);
-        if (survey) setSelectedSurvey(survey);
-      }
       setPanelOpen(false);
-      window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: target }));
+      navigateTo(target);
     },
-    [surveys, setSelectedSurvey]
+    [navigateTo]
   );
 
   const version = useMemo(() => activity.runs.map(countsKey).join('|'), [activity.runs]);

@@ -92,8 +92,9 @@ def _get(client, uid=ASSET, **params):
 
 class TestKoboAssetForm:
     def test_returns_questions_and_choices(self, client):
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
         ):
             response = _get(client)
 
@@ -111,8 +112,9 @@ class TestKoboAssetForm:
 
     def test_questions_carry_group_qualified_paths(self, client):
         """Paths must match submission_data keys, not bare names."""
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
         ):
             questions = _get(client).json()["questions"]
 
@@ -130,8 +132,9 @@ class TestKoboAssetForm:
         """Group rows are dropped, so the linter needs their `relevant` per question."""
         payload = deepcopy(ASSET_PAYLOAD)
         payload["content"]["survey"][1]["relevant"] = "${consent} = 'yes'"
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.get_asset_info", return_value=payload
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch("routers.kobo.KoboFetcher.get_asset_info", return_value=payload),
         ):
             by_name = {q["name"]: q for q in _get(client).json()["questions"]}
 
@@ -142,8 +145,9 @@ class TestKoboAssetForm:
 
     def test_structural_rows_and_notes_are_excluded(self, client):
         """The caller is populating pickers, not rendering the form."""
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
         ):
             types = {q["type"] for q in _get(client).json()["questions"]}
 
@@ -156,8 +160,9 @@ class TestKoboAssetForm:
         picker without refetching, and a fetched form can be stored in the same
         shape an uploaded XLSForm produces.
         """
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
         ):
             questions = _get(client).json()["questions"]
 
@@ -176,18 +181,22 @@ class TestKoboAssetForm:
     @pytest.mark.parametrize("uid", ["not-a-uid", "../../etc/passwd", "bXX", "a"])
     def test_malformed_asset_id_is_rejected_before_calling_kobo(self, client, uid):
         """The uid is interpolated into the upstream path, so it is validated."""
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.get_asset_info"
-        ) as fetch:
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch("routers.kobo.KoboFetcher.get_asset_info") as fetch,
+        ):
             response = _get(client, uid=uid)
 
         assert response.status_code in (400, 404)
         fetch.assert_not_called()
 
     def test_kobo_failure_becomes_a_502_without_leaking_internals(self, client):
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.get_asset_info",
-            side_effect=RuntimeError("token=secret123 connection refused"),
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch(
+                "routers.kobo.KoboFetcher.get_asset_info",
+                side_effect=RuntimeError("token=secret123 connection refused"),
+            ),
         ):
             response = _get(client)
 
@@ -195,8 +204,12 @@ class TestKoboAssetForm:
         assert "secret123" not in response.text
 
     def test_project_with_no_form_is_reported_clearly(self, client):
-        with patch("routers.kobo.get_user_kobo_token", return_value="tok"), patch(
-            "routers.kobo.KoboFetcher.get_asset_info", return_value={"uid": ASSET, "content": {}}
+        with (
+            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
+            patch(
+                "routers.kobo.KoboFetcher.get_asset_info",
+                return_value={"uid": ASSET, "content": {}},
+            ),
         ):
             response = _get(client)
 

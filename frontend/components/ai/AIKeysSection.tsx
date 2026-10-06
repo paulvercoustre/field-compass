@@ -19,7 +19,7 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import { PlusIcon } from '../ui/icons';
 import AIKeyDialog from './AIKeyDialog';
 
-export const AIStatusBadge: React.FC<{ status: AIConnection['status'] }> = ({ status }) => {
+const AIStatusBadge: React.FC<{ status: AIConnection['status'] }> = ({ status }) => {
   const styles = {
     ok: 'bg-emerald-50 text-emerald-800 ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20',
     failing: 'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20',

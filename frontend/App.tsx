@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { SurveyProvider, useSurvey } from './contexts/SurveyContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { FilterState } from './types';
+import { forgetView, NavigationProvider, useNavigation, View } from './contexts/NavigationContext';
 import Dashboard from './components/Dashboard';
 import DataCollectionProgressPage from './pages/DataCollectionProgressPage';
 import EnumeratorPerformancePage from './pages/EnumeratorPerformancePage';
@@ -13,11 +13,10 @@ import LoginPage from './pages/LoginPage';
 import Sidebar from './components/Sidebar';
 import { Spinner } from './components/Spinner';
 import SetupChecklist from './components/onboarding/SetupChecklist';
-import { ActivityProvider, NAVIGATE_EVENT, NavigationTarget } from './contexts/ActivityContext';
+import { ActivityProvider } from './contexts/ActivityContext';
 import ActivityIndicator, { ActivityPanel } from './components/activity/ActivityIndicator';
 import NotificationBell from './components/activity/NotificationBell';
-
-type View = 'dashboard' | 'dataCollectionProgress' | 'enumeratorPerformance' | 'qualityOverview' | 'createSurvey' | 'settings' | 'userSettings';
+import { FilterState } from './types';
 
 // Views that are about one survey. Rendering them with nothing selected is
 // what produced a permanent spinner on the Submissions queue: the page waits
@@ -81,20 +80,40 @@ const RequiresSurvey: React.FC<{ view: View; onAddSurvey: () => void; children: 
   );
 };
 
-// Main app content (authenticated)
-const AppContent: React.FC = () => {
-  const { user, isLoading, logout } = useAuth();
-  
-  // Load view from localStorage on mount, default to 'dashboard' if not found
-  const [view, setView] = useState<View>(() => {
-    const savedView = localStorage.getItem('currentView');
-    return (savedView as View) || 'dashboard';
-  });
-  
-  const [dashboardFilters, setDashboardFilters] = useState<FilterState>({});
-  // A tab requested by a link (a notification, a problem in the activity
-  // panel); `at` makes the same tab requested twice still switch.
-  const [requestedTab, setRequestedTab] = useState<{ tab: string; at: number } | undefined>();
+const NavButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({
+  active,
+  onClick,
+  children,
+}) => (
+  // The underline sits on the header's bottom border, as in a tab strip.
+  <button
+    onClick={onClick}
+    aria-current={active ? 'page' : undefined}
+    className={`group relative flex h-full flex-shrink-0 items-center px-1 text-sm font-medium transition-colors ${
+      active
+        ? 'text-gray-900 dark:text-white'
+        : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+    }`}
+  >
+    <span className="rounded-md px-2.5 py-1.5 group-hover:bg-gray-100 dark:group-hover:bg-gray-800/70">
+      {children}
+    </span>
+    {active && <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gray-900 dark:bg-white" aria-hidden="true" />}
+  </button>
+);
+
+const SURVEY_NAV: Array<{ view: View; label: string }> = [
+  { view: 'dashboard', label: 'Submissions' },
+  { view: 'qualityOverview', label: 'Data quality' },
+  { view: 'dataCollectionProgress', label: 'Progress' },
+  { view: 'enumeratorPerformance', label: 'Field team' },
+  { view: 'settings', label: 'Settings' },
+];
+
+// The signed-in app: sidebar, view tabs and the current page.
+const Shell: React.FC = () => {
+  const { user, logout } = useAuth();
+  const { view, requestedTab, dashboardFilters, navigate } = useNavigation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     // On a phone-width screen an open sidebar covers most of the page, so
     // start collapsed there whatever was saved; it is one tap to open.
@@ -102,11 +121,6 @@ const AppContent: React.FC = () => {
     const saved = localStorage.getItem('sidebarOpen');
     return saved !== null ? saved === 'true' : true;
   });
-
-  // Save current view to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('currentView', view);
-  }, [view]);
 
   const handleSidebarToggle = () => {
     setIsSidebarOpen(prev => {
@@ -116,149 +130,51 @@ const AppContent: React.FC = () => {
     });
   };
 
-  // Listen for navigation events from CreateSurveyPage
-  useEffect(() => {
-    const handleNavigateToSettings = () => {
-      setView('settings');
-    };
+  const toSubmissions = (filters?: Partial<FilterState>) => navigate({ view: 'dashboard', filters });
+  const handleAddSurvey = () => navigate({ view: 'createSurvey' });
 
-    const handleNavigateToDashboard = () => {
-      setView('dashboard');
-    };
-
-    // Links from notifications and the activity panel. The survey is
-    // selected by the activity context before this fires.
-    const handleNavigate = (event: Event) => {
-      const target = (event as CustomEvent<NavigationTarget>).detail;
-      if (!target) return;
-      if (target.view === 'dashboard') {
-        setDashboardFilters((target.filters as FilterState) || {});
-      }
-      if (target.tab) setRequestedTab({ tab: target.tab, at: Date.now() });
-      setView(target.view);
-    };
-
-    window.addEventListener('navigateToSettings', handleNavigateToSettings);
-    window.addEventListener('navigateToDashboard', handleNavigateToDashboard);
-    window.addEventListener(NAVIGATE_EVENT, handleNavigate);
-    return () => {
-      window.removeEventListener('navigateToSettings', handleNavigateToSettings);
-      window.removeEventListener('navigateToDashboard', handleNavigateToDashboard);
-      window.removeEventListener(NAVIGATE_EVENT, handleNavigate);
-    };
-  }, []);
-
-  // Show loading state while checking auth
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-white dark:bg-gray-950">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // Show login page if not authenticated
-  if (!user) {
-    return <LoginPage onLoginSuccess={() => setView('dashboard')} />;
-  }
-
-  const NavButton: React.FC<{ currentView: View; targetView: View; onClick: () => void; children: React.ReactNode }> = ({
-    currentView,
-    targetView,
-    onClick,
-    children,
-  }) => {
-    const isActive = currentView === targetView;
-    // The underline sits on the header's bottom border, as in a tab strip.
-    return (
-      <button
-        onClick={onClick}
-        aria-current={isActive ? 'page' : undefined}
-        className={`group relative flex h-full flex-shrink-0 items-center px-1 text-sm font-medium transition-colors ${
-          isActive
-            ? 'text-gray-900 dark:text-white'
-            : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
-        }`}
-      >
-        <span className="rounded-md px-2.5 py-1.5 group-hover:bg-gray-100 dark:group-hover:bg-gray-800/70">
-          {children}
-        </span>
-        {isActive && <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gray-900 dark:bg-white" aria-hidden="true" />}
-      </button>
-    );
-  };
-
-  // Cross-navigation handlers
-  const handleNavigateToSubmissions = (filters?: Partial<FilterState>) => {
-    setDashboardFilters(filters || {});
-    setView('dashboard');
+  const handleSurveySelect = () => {
+    // Picking a survey stays on the current survey page. Pages that are not
+    // about a survey -- creating one, Account settings -- have nothing to
+    // show for it, so they make way for its dashboard.
+    if (view === 'createSurvey' || view === 'userSettings') {
+      navigate({ view: 'dashboard' });
+    }
   };
 
   const views: Record<View, React.ReactElement> = {
     dashboard: <Dashboard initialFilters={dashboardFilters} />,
     dataCollectionProgress: <DataCollectionProgressPage />,
-    enumeratorPerformance: (
-      <EnumeratorPerformancePage 
-        onNavigateToSubmissions={handleNavigateToSubmissions}
-      />
-    ),
-    qualityOverview: (
-      <QualityOverviewPage 
-        onNavigateToSubmissions={handleNavigateToSubmissions}
-      />
-    ),
+    enumeratorPerformance: <EnumeratorPerformancePage onNavigateToSubmissions={toSubmissions} />,
+    qualityOverview: <QualityOverviewPage onNavigateToSubmissions={toSubmissions} />,
     createSurvey: <CreateSurveyPage />,
     settings: <SurveySettingsPage requestedTab={requestedTab} />,
     userSettings: <UserSettingsPage requestedTab={requestedTab} />,
   };
 
-  const handleAddSurvey = () => {
-    setView('createSurvey');
-  };
-
-  const handleSurveySelect = (surveyId: string | null) => {
-    // Picking a survey stays on the current survey page. Pages that are not
-    // about a survey -- creating one, Account settings -- have nothing to
-    // show for it, so they make way for its dashboard.
-    if (view === 'createSurvey' || view === 'userSettings') {
-      setView('dashboard');
-    }
-  };
-
   return (
-    <SurveyProvider>
-      <ActivityProvider>
+    <>
       <div className="flex h-full font-sans text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-950">
-        <Sidebar 
-          onAddSurvey={handleAddSurvey} 
+        <Sidebar
+          onAddSurvey={handleAddSurvey}
           onSurveySelect={handleSurveySelect}
-          user={user}
-          onUserSettings={() => setView('userSettings')}
+          user={user!}
+          onUserSettings={() => navigate({ view: 'userSettings' })}
           onLogout={logout}
           isUserSettingsActive={view === 'userSettings'}
           isOpen={isSidebarOpen}
           onToggle={handleSidebarToggle}
         />
-        
+
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex-shrink-0 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
             <div className="flex h-12 items-stretch gap-4 px-4">
               <nav aria-label="Survey views" className="-mb-px flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto">
-                <NavButton currentView={view} targetView="dashboard" onClick={() => { setDashboardFilters({}); setView('dashboard'); }}>
-                  Submissions
-                </NavButton>
-                <NavButton currentView={view} targetView="qualityOverview" onClick={() => setView('qualityOverview')}>
-                  Data quality
-                </NavButton>
-                <NavButton currentView={view} targetView="dataCollectionProgress" onClick={() => setView('dataCollectionProgress')}>
-                  Progress
-                </NavButton>
-                <NavButton currentView={view} targetView="enumeratorPerformance" onClick={() => setView('enumeratorPerformance')}>
-                  Field team
-                </NavButton>
-                <NavButton currentView={view} targetView="settings" onClick={() => setView('settings')}>
-                  Settings
-                </NavButton>
+                {SURVEY_NAV.map((item) => (
+                  <NavButton key={item.view} active={view === item.view} onClick={() => navigate({ view: item.view })}>
+                    {item.label}
+                  </NavButton>
+                ))}
               </nav>
               {/* Background work and notifications, on every page. */}
               <div className="flex flex-shrink-0 items-center gap-1">
@@ -276,12 +192,37 @@ const AppContent: React.FC = () => {
         </div>
       </div>
       <ActivityPanel />
-      </ActivityProvider>
+    </>
+  );
+};
+
+// Main app content: sign-in first, then the survey-aware shell.
+const AppContent: React.FC = () => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-white dark:bg-gray-950">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage onLoginSuccess={forgetView} />;
+  }
+
+  return (
+    <SurveyProvider>
+      <NavigationProvider>
+        <ActivityProvider>
+          <Shell />
+        </ActivityProvider>
+      </NavigationProvider>
     </SurveyProvider>
   );
 };
 
-// Wrapper component with auth provider
 const App: React.FC = () => {
   return (
     <AuthProvider>

@@ -1,9 +1,12 @@
 /**
- * Parse sampling frame file (CSV or XLSX) and return headers and rows
+ * Parse sampling frame file (CSV or XLSX) and return headers and rows.
+ *
+ * The spreadsheet library is a third of the bundle and only this upload uses
+ * it, so it loads when a spreadsheet is chosen rather than with the app.
  */
-import * as XLSX from 'xlsx';
-
-export const parseSamplingFrame = (file: File): Promise<{ headers: string[]; rows: Record<string, any>[] }> => {
+export const parseSamplingFrame = async (file: File): Promise<{ headers: string[]; rows: Record<string, any>[] }> => {
+  const lowerName = file.name.toLowerCase();
+  const xlsx = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') ? await import('xlsx') : null;
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -16,10 +19,10 @@ export const parseSamplingFrame = (file: File): Promise<{ headers: string[]; row
         const fileName = file.name.toLowerCase();
         const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
 
-        if (isExcel) {
+        if (isExcel && xlsx) {
           // Parse XLSX file
           const data = new Uint8Array(e.target.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
+          const workbook = xlsx.read(data, { type: 'array' });
           
           // Get the first sheet
           const firstSheetName = workbook.SheetNames[0];
@@ -28,7 +31,7 @@ export const parseSamplingFrame = (file: File): Promise<{ headers: string[]; row
           }
           
           const sheet = workbook.Sheets[firstSheetName];
-          const jsonData: any[] = XLSX.utils.sheet_to_json(sheet);
+          const jsonData: any[] = xlsx.utils.sheet_to_json(sheet);
           
           if (jsonData.length === 0) {
             throw new Error("Excel file is empty.");

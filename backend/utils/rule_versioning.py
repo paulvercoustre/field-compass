@@ -8,6 +8,8 @@ import re
 from typing import Any
 
 from etl.dk_utils import dk_codes_fingerprint, dk_numeric_codes, dk_string_tokens, is_dk_value
+from forms.answers import answer_value
+from services.survey_config import get_quality_checks
 
 
 def _canonical_json(value: dict[str, Any]) -> str:
@@ -25,8 +27,7 @@ def _normalize_text(value: Any) -> str:
         return ""
 
     # Collapse repeated whitespace and normalize casing for trivial mismatches.
-    text = re.sub(r"\s+", " ", text)
-    return text
+    return re.sub(r"\s+", " ", text)
 
 
 def generate_llm_rules_hash(config_data: dict[str, Any], qualitative_model: str) -> str:
@@ -35,45 +36,22 @@ def generate_llm_rules_hash(config_data: dict[str, Any], qualitative_model: str)
 
     This is intentionally separate from generic validation_rule_hash.
     """
-    quality_checks = config_data.get("quality_checks", {})
+    qc = get_quality_checks(config_data)
     special_values = config_data.get("special_values", {})
 
     payload = {
         "version": "llm_rules_v1",
-        "enabled": bool(quality_checks.get("flag_llm_qualitative", False)),
-        "fields": sorted(quality_checks.get("llm_qualitative_fields", []) or []),
-        "check_types": sorted(
-            quality_checks.get(
-                "llm_check_types",
-                ["content_quality", "relevance", "completeness"],
-            )
-            or []
-        ),
-        "prompt_template_version": quality_checks.get("llm_prompt_template_version", "v1"),
-        "schema_version": quality_checks.get("llm_response_schema_version", "v1"),
-        "dk_policy_version": quality_checks.get("llm_dk_policy_version", "v1"),
+        "enabled": bool(qc.flag_llm_qualitative),
+        "fields": sorted(qc.llm_qualitative_fields or []),
+        "check_types": sorted(qc.llm_check_types or []),
+        "prompt_template_version": qc.llm_prompt_template_version,
+        "schema_version": qc.llm_response_schema_version,
+        "dk_policy_version": qc.llm_dk_policy_version,
         "dk_numeric": dk_codes_fingerprint(dk_numeric_codes(special_values)),
         "dk_string": special_values.get("dk_string_value", "dk"),
         "qualitative_model": qualitative_model,
     }
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
-
-
-def _resolve_field_value(submission_data: dict[str, Any], field_name: str) -> Any:
-    """
-    Resolve a field value from submission data using path-aware lookup.
-
-    Kobo stores fields with full group paths (e.g. 'group/field'), but config
-    entries often use only the leaf name.  This mirrors the logic in
-    HFCEngine._get_field_value so that hash computation and actual LLM
-    field extraction are consistent.
-    """
-    if field_name in submission_data:
-        return submission_data[field_name]
-    for key in submission_data:
-        if key.endswith(f"/{field_name}"):
-            return submission_data[key]
-    return None
 
 
 def generate_llm_input_hash(
@@ -89,7 +67,7 @@ def generate_llm_input_hash(
     dk_tokens = dk_string_tokens({"dk_string_value": dk_string_value})
     normalized: dict[str, str] = {}
     for field in sorted(llm_fields or []):
-        value = _resolve_field_value(submission_data, field)
+        value = answer_value(submission_data, field)
         text = _normalize_text(value)
         if not text:
             continue

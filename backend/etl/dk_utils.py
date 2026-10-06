@@ -277,9 +277,7 @@ def _last_field_segment(path: str) -> str:
 def _is_present_value(value: Any) -> bool:
     if value is None:
         return False
-    if isinstance(value, str) and value.strip() == "":
-        return False
-    return True
+    return not (isinstance(value, str) and value.strip() == "")
 
 
 def compute_dk_metrics(

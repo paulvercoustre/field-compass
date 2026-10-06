@@ -70,7 +70,7 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
                 />
                 <Tooltip
                   {...tooltipProps}
-                  formatter={(value: number, name: string, props: any) => {
+                  formatter={(value, name, props) => {
                     if (name === 'count') {
                       return [`${value} occurrences (${props.payload.percentage}%)`, 'Count'];
                     }
@@ -85,7 +85,7 @@ const IssueFrequencyChart: React.FC<IssueFrequencyChartProps> = ({ data, onIssue
                   cursor={onIssueClick ? 'pointer' : 'default'}
                   onClick={(data: any) => onIssueClick && onIssueClick(data.check ?? data.payload?.check)}
                 >
-                  {chartData.map((entry, index) => (
+                  {chartData.map((_entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill={barColor}

@@ -3,34 +3,21 @@
 from __future__ import annotations
 
 import logging
-import random
 from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import or_, text
 
 from services.database import SessionLocal
-from services.job_queue import celery_app
+from services.job_queue import backoff_seconds, celery_app
 
 logger = logging.getLogger(__name__)
-
-# Waits between attempts: 30 s, 60 s, 120 s, plus jitter so a pull's worth
-# of rate-limited checks does not retry in lockstep.
-_BACKOFF_BASE_SECONDS = 30
-_BACKOFF_CAP_SECONDS = 300
 
 # A check running this long has lost its worker (a call times out after 120 s
 # and at most four are made). A pending one this old has lost its queue
 # message: a large pull can legitimately keep checks queued for a while.
 STALLED_RUNNING_AFTER = timedelta(minutes=15)
 STALLED_PENDING_AFTER = timedelta(hours=6)
-
-
-def _backoff_seconds(retries: int, retry_after: float | None = None) -> float:
-    wait = _BACKOFF_BASE_SECONDS * (2**retries) + random.uniform(0, 10)
-    if retry_after:
-        wait = max(wait, retry_after)
-    return min(wait, _BACKOFF_CAP_SECONDS)
 
 
 @celery_app.task(
@@ -57,7 +44,7 @@ def run_qualitative_check_task(self, payload: dict[str, Any]) -> dict[str, Any]:
     except AIError as error:
         # Only raised while attempts remain; the runtime stored it as pending.
         raise self.retry(
-            exc=error, countdown=_backoff_seconds(self.request.retries, error.retry_after)
+            exc=error, countdown=backoff_seconds(self.request.retries, error.retry_after)
         ) from error
     except Exception as exc:
         logger.error(
@@ -88,7 +75,7 @@ def run_qualitative_check_task(self, payload: dict[str, Any]) -> dict[str, Any]:
                 db.commit()
         except Exception:
             logger.exception("Failed to persist fallback worker failure state")
-        raise self.retry(exc=exc, countdown=_backoff_seconds(self.request.retries)) from exc
+        raise self.retry(exc=exc, countdown=backoff_seconds(self.request.retries)) from exc
 
 
 @celery_app.task(name="services.qualitative_worker.sweep_stalled_qualitative_checks")

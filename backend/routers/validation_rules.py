@@ -4,37 +4,15 @@ Provides CRUD operations for validation rules with permission checks.
 """
 
 from typing import Any
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 
-from database.models import User, ValidationRule
-from services.auth import get_current_active_user
-from services.database import get_db
-from services.permissions import require_survey_access
+from database.models import ValidationRule
+from services.database import DbSession
+from services.permissions import OwnedSurvey, ViewableSurvey, parse_uuid
 
 router = APIRouter()
-
-
-class ValidationRuleCreate:
-    def __init__(self, rule_name: str, rule_data: dict[str, Any], is_active: bool = True):
-        self.rule_name = rule_name
-        self.rule_data = rule_data
-        self.is_active = is_active
-
-
-class ValidationRuleUpdate:
-    def __init__(
-        self,
-        rule_name: str | None = None,
-        rule_data: dict[str, Any] | None = None,
-        is_active: bool | None = None,
-    ):
-        self.rule_name = rule_name
-        self.rule_data = rule_data
-        self.is_active = is_active
 
 
 class ValidationRuleCreateModel(BaseModel):
@@ -44,7 +22,7 @@ class ValidationRuleCreateModel(BaseModel):
 
 
 class ValidationRuleUpdateModel(BaseModel):
-    rule_name: str | None = Field(None, min_length=1, max_length=255)
+    rule_name: str | None = Field(default=None, min_length=1, max_length=255)
     rule_data: dict[str, Any] | None = None
     is_active: bool | None = None
 
@@ -61,25 +39,15 @@ class ValidationRuleResponse(BaseModel):
 
 @router.get("/surveys/{survey_id}/rules", response_model=list[ValidationRuleResponse])
 async def get_validation_rules(
-    survey_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: ViewableSurvey,
+    db: DbSession,
 ):
     """
     Get all validation rules for a survey.
     Requires viewer access to the survey.
     """
-    try:
-        survey_uuid = UUID(survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
-        )
 
-    # Check user has access to this survey
-    require_survey_access(db, current_user, survey_uuid, min_level="viewer")
-
-    rules = db.query(ValidationRule).filter(ValidationRule.survey_id == survey_uuid).all()
+    rules = db.query(ValidationRule).filter(ValidationRule.survey_id == survey.survey_id).all()
 
     return [
         {
@@ -97,27 +65,19 @@ async def get_validation_rules(
 
 @router.get("/surveys/{survey_id}/rules/{rule_id}", response_model=ValidationRuleResponse)
 async def get_validation_rule(
-    survey_id: str,
     rule_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: ViewableSurvey,
+    db: DbSession,
 ):
     """
     Get a specific validation rule by ID.
     Requires viewer access to the survey.
     """
-    try:
-        survey_uuid = UUID(survey_id)
-        rule_uuid = UUID(rule_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID format")
-
-    # Check user has access to this survey
-    require_survey_access(db, current_user, survey_uuid, min_level="viewer")
+    rule_uuid = parse_uuid(rule_id, "rule_id")
 
     rule = (
         db.query(ValidationRule)
-        .filter(ValidationRule.rule_id == rule_uuid, ValidationRule.survey_id == survey_uuid)
+        .filter(ValidationRule.rule_id == rule_uuid, ValidationRule.survey_id == survey.survey_id)
         .first()
     )
 
@@ -137,30 +97,21 @@ async def get_validation_rule(
 
 @router.post("/surveys/{survey_id}/rules", status_code=201, response_model=ValidationRuleResponse)
 async def create_validation_rule(
-    survey_id: str,
     rule_data: ValidationRuleCreateModel,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
 ):
     """
     Create a new validation rule for a survey.
     Requires owner access to the survey (only owners can configure HFC rules).
     """
-    try:
-        survey_uuid = UUID(survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
-        )
-
-    # Check user has owner access (required to configure HFC rules)
-    require_survey_access(db, current_user, survey_uuid, min_level="owner")
 
     # Check if rule name already exists for this survey
     existing = (
         db.query(ValidationRule)
         .filter(
-            ValidationRule.survey_id == survey_uuid, ValidationRule.rule_name == rule_data.rule_name
+            ValidationRule.survey_id == survey.survey_id,
+            ValidationRule.rule_name == rule_data.rule_name,
         )
         .first()
     )
@@ -173,7 +124,7 @@ async def create_validation_rule(
 
     # Create new rule
     rule = ValidationRule(
-        survey_id=survey_uuid,
+        survey_id=survey.survey_id,
         rule_name=rule_data.rule_name,
         rule_data=rule_data.rule_data,
         is_active=rule_data.is_active,
@@ -196,28 +147,20 @@ async def create_validation_rule(
 
 @router.put("/surveys/{survey_id}/rules/{rule_id}", response_model=ValidationRuleResponse)
 async def update_validation_rule(
-    survey_id: str,
     rule_id: str,
     rule_update: ValidationRuleUpdateModel,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
 ):
     """
     Update an existing validation rule.
     Requires owner access to the survey (only owners can configure HFC rules).
     """
-    try:
-        survey_uuid = UUID(survey_id)
-        rule_uuid = UUID(rule_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID format")
-
-    # Check user has owner access (required to configure HFC rules)
-    require_survey_access(db, current_user, survey_uuid, min_level="owner")
+    rule_uuid = parse_uuid(rule_id, "rule_id")
 
     rule = (
         db.query(ValidationRule)
-        .filter(ValidationRule.rule_id == rule_uuid, ValidationRule.survey_id == survey_uuid)
+        .filter(ValidationRule.rule_id == rule_uuid, ValidationRule.survey_id == survey.survey_id)
         .first()
     )
 
@@ -230,7 +173,7 @@ async def update_validation_rule(
         existing = (
             db.query(ValidationRule)
             .filter(
-                ValidationRule.survey_id == survey_uuid,
+                ValidationRule.survey_id == survey.survey_id,
                 ValidationRule.rule_name == rule_update.rule_name,
                 ValidationRule.rule_id != rule_uuid,
             )
@@ -265,27 +208,19 @@ async def update_validation_rule(
 
 @router.delete("/surveys/{survey_id}/rules/{rule_id}")
 async def delete_validation_rule(
-    survey_id: str,
     rule_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: OwnedSurvey,
+    db: DbSession,
 ):
     """
     Delete a validation rule.
     Requires owner access to the survey (only owners can configure HFC rules).
     """
-    try:
-        survey_uuid = UUID(survey_id)
-        rule_uuid = UUID(rule_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID format")
-
-    # Check user has owner access (required to configure HFC rules)
-    require_survey_access(db, current_user, survey_uuid, min_level="owner")
+    rule_uuid = parse_uuid(rule_id, "rule_id")
 
     rule = (
         db.query(ValidationRule)
-        .filter(ValidationRule.rule_id == rule_uuid, ValidationRule.survey_id == survey_uuid)
+        .filter(ValidationRule.rule_id == rule_uuid, ValidationRule.survey_id == survey.survey_id)
         .first()
     )
 

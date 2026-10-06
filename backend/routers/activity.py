@@ -7,18 +7,25 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from uuid import UUID
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database.models import RUN_OPEN, Notification, Run, User
-from services.auth import get_current_active_user
-from services.database import get_db
+from services.auth import CurrentUser
+from services.database import DbSession
 from services.notifications import notification_payload
-from services.permissions import get_accessible_surveys, get_user_permission, require_survey_access
+from services.permissions import (
+    AccessLevel,
+    ViewableSurvey,
+    get_accessible_surveys,
+    get_user_permission,
+    parse_uuid,
+    require_survey_access,
+)
 from services.runs import finish_if_done, revoke, run_summary, stop_run
 
 logger = logging.getLogger(__name__)
@@ -30,17 +37,10 @@ router = APIRouter()
 RECENTLY_FINISHED = timedelta(minutes=10)
 
 
-def _uuid(value: str, what: str) -> UUID:
-    try:
-        return UUID(value)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid {what}: {value}") from None
-
-
 @router.get("/activity")
 async def get_activity(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Runs under way on the caller's surveys, plus those finished in the last
@@ -75,8 +75,8 @@ async def get_activity(
     }
 
 
-def _run_for(db: Session, run_id: str, user: User, min_level: str = "viewer") -> Run:
-    run = db.query(Run).filter(Run.run_id == _uuid(run_id, "run id")).first()
+def _run_for(db: Session, run_id: str, user: User, min_level: AccessLevel = "viewer") -> Run:
+    run = db.query(Run).filter(Run.run_id == parse_uuid(run_id, "run_id")).first()
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     require_survey_access(db, user, run.survey_id, min_level=min_level)
@@ -86,23 +86,19 @@ def _run_for(db: Session, run_id: str, user: User, min_level: str = "viewer") ->
 @router.get("/runs/{run_id}")
 async def get_run(
     run_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     return run_summary(db, _run_for(db, run_id, current_user))
 
 
 @router.get("/surveys/{survey_id}/runs")
 async def get_survey_runs(
-    survey_id: str,
-    limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey: ViewableSurvey,
+    db: DbSession,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ):
     """A survey's recent runs, newest first: its activity history."""
-    survey = require_survey_access(
-        db, current_user, _uuid(survey_id, "survey_id"), min_level="viewer"
-    )
     runs = (
         db.query(Run)
         .filter(Run.survey_id == survey.survey_id)
@@ -116,8 +112,8 @@ async def get_survey_runs(
 @router.post("/runs/{run_id}/stop")
 async def stop_run_endpoint(
     run_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Stop a run's remaining work. Whoever started it, or the survey's owner.
@@ -141,9 +137,9 @@ async def stop_run_endpoint(
 
 @router.get("/notifications")
 async def get_notifications(
-    limit: int = Query(30, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
 ):
     """The caller's latest notifications, newest first, and how many are unread."""
     rows = (
@@ -168,8 +164,8 @@ class MarkRead(BaseModel):
 @router.post("/notifications/read")
 async def mark_notifications_read(
     body: MarkRead,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     query = db.query(Notification).filter(
         Notification.user_id == current_user.user_id, Notification.read_at.is_(None)

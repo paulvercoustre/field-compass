@@ -26,7 +26,6 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   const [filterState, setFilterState] = useState<FilterState>(initialFilters || {});
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
-  const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const { runs } = useActivity();
   // Progress and outcome are in the activity indicator in the top bar; the
@@ -73,15 +72,12 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     if (!selectedSurvey) return;
 
     try {
-      setIsLoadingConfig(true);
       setError(null);
       const data = await fetchSubmissionsAcrossPages();
       setAllSubmissions(data);
     } catch (err) {
       setError('Failed to fetch submissions.');
       console.error(err);
-    } finally {
-      setIsLoadingConfig(false);
     }
   }, [selectedSurvey, fetchSubmissionsAcrossPages]);
 
@@ -102,19 +98,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       setSubmissions(data);
 
       // Clear selected submission if it's no longer in the filtered results
-      let clearedSelection = false;
-      setSelectedSubmission(prev => {
-        if (!prev) {
-          return prev;
-        }
-
-        const stillExists = data.some(s => s._id === prev._id);
-        if (!stillExists) {
-          clearedSelection = true;
-          return null;
-        }
-        return prev;
-      });
+      setSelectedSubmission(prev => (prev && !data.some(s => s._id === prev._id) ? null : prev));
     } catch (err) {
       if (request !== filteredRequest.current) return;
       setError('Failed to fetch submissions.');
@@ -129,14 +113,11 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     if (!selectedSurvey) return;
 
     try {
-      setIsLoadingConfig(true);
       const config = await getSurveyConfig(selectedSurvey.survey_id);
       setSurveyConfig(config);
     } catch (err) {
       console.error('Failed to fetch survey config:', err);
       // Don't set error for config loading as it's not critical
-    } finally {
-      setIsLoadingConfig(false);
     }
   }, [selectedSurvey]);
 
@@ -299,6 +280,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
           <SubmissionDetail
             submission={selectedSubmission}
             isLoading={false}
+            surveyConfig={surveyConfig}
             onSubmissionUpdate={handleSubmissionUpdate}
           />
         </div>

@@ -76,7 +76,7 @@ const readSeen = (): string[] => {
  * the panel, or for the ten minutes the server keeps a finished run. This is
  * where a pull reports back, whichever page started it.
  */
-export const ActivityIndicator: React.FC = () => {
+const ActivityIndicator: React.FC = () => {
   const { runs, panelOpen, setPanelOpen } = useActivity();
   const { user } = useAuth();
   const [seen, setSeen] = useState<string[]>(readSeen);

@@ -5,19 +5,19 @@ Handles CRUD operations for survey submissions with permission checks.
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Annotated
 from uuid import UUID as UUIDType
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from database.models import AudioTranscript, SubmissionCurrent, User
+from database.models import AI_REVIEW_OPEN, ITEM_OPEN, AudioTranscript, SubmissionCurrent
 from database.models import SubmissionHistory as SubmissionHistoryORM
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
-from models import (
+from schemas import (
     JsonPatch,
     QualityIssue,
     ReviewerNotesUpdate,
@@ -26,10 +26,11 @@ from models import (
     SubmissionListResponse,
     ValidationStatusUpdate,
 )
-from services.auth import get_current_active_user, get_user_kobo_token
-from services.database import get_db
-from services.permissions import require_survey_access
-from services.survey_config import get_enumerator_field
+from services.auth import CurrentUser, get_user_kobo_token
+from services.database import DbSession
+from services.permissions import parse_uuid, require_survey_access
+from services.submission_filters import filter_by_answers, parse_list, parse_sampling_filters
+from services.survey_config import get_enumerator_field, get_sampling_cols
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,21 +39,20 @@ logger = logging.getLogger(__name__)
 def _orm_to_pydantic_submission(orm_submission: SubmissionCurrent) -> Submission:
     """Convert ORM model to Pydantic model."""
     # Convert JSONB quality issues to Pydantic models
-    quality_issues = []
-    if orm_submission.data_quality_issues:
-        for issue in orm_submission.data_quality_issues:
-            quality_issues.append(QualityIssue(**issue))
+    quality_issues = [QualityIssue(**issue) for issue in orm_submission.data_quality_issues or []]
 
     return Submission(
-        _id=orm_submission._id,  # validation_alias will handle the underscore
-        _uuid=orm_submission._uuid,
-        _submission_time=orm_submission._submission_time,
+        # Field names; the model serializes them as Kobo's _id, _uuid, ...
+        id=orm_submission._id,
+        uuid=orm_submission._uuid,
+        submission_time=orm_submission._submission_time,
         end=orm_submission.end,
         submission_data=orm_submission.submission_data,
-        is_edited=orm_submission.is_edited,
-        has_edit_history=orm_submission.has_edit_history,
+        # Nullable columns with defaults; a NULL reads as the default.
+        is_edited=bool(orm_submission.is_edited),
+        has_edit_history=bool(orm_submission.has_edit_history),
         data_quality_issues=quality_issues,
-        qa_status=orm_submission.qa_status,
+        qa_status=orm_submission.qa_status or "PENDING_APPROVAL",
         kobo_validation_status=orm_submission.kobo_validation_status,
         kobo_edit_url=orm_submission.kobo_edit_url,
         reviewer_notes=orm_submission.reviewer_notes,
@@ -68,10 +68,7 @@ def _orm_to_pydantic_submission(orm_submission: SubmissionCurrent) -> Submission
 def _orm_to_pydantic_history(orm_history: SubmissionHistoryORM) -> SubmissionHistory:
     """Convert ORM history model to Pydantic model."""
     # Convert JSONB data_delta to JsonPatch models
-    patches = []
-    if orm_history.data_delta:
-        for patch in orm_history.data_delta:
-            patches.append(JsonPatch(**patch))
+    patches = [JsonPatch(**patch) for patch in orm_history.data_delta or []]
 
     return SubmissionHistory(
         history_id=orm_history.history_id,
@@ -80,36 +77,6 @@ def _orm_to_pydantic_history(orm_history: SubmissionHistoryORM) -> SubmissionHis
         deprecated_uuid=orm_history.deprecated_uuid,
         data_delta=patches,
     )
-
-
-def _get_field_value_from_jsonb(submission_data: dict[str, Any], field_name: str) -> Any:
-    """
-    Get field value from JSONB submission_data, handling Kobo path-based field names.
-
-    Kobo stores fields with full paths like 'module/variable', but config may only
-    specify 'variable'. This function searches for the field by:
-    1. Direct lookup (exact match)
-    2. Path-based search (field name at end of path)
-
-    Args:
-        submission_data: Submission data dictionary
-        field_name: Field name from config (may be just the variable name)
-
-    Returns:
-        Field value or None if not found
-    """
-    # First try direct lookup
-    if field_name in submission_data:
-        return submission_data[field_name]
-
-    # Search for fields that end with the field name (path-based)
-    # e.g., 'enumerator_id' should match 'sampling_information/enumerator_id'
-    for key in submission_data.keys():
-        if key.endswith(f"/{field_name}") or key == field_name:
-            return submission_data[key]
-
-    # Not found
-    return None
 
 
 def _transcript_summaries(
@@ -138,40 +105,48 @@ def _transcript_summaries(
                 entry["no_speech"] += 1
         elif status == "failed":
             entry["failed"] += 1
-        elif status in ("pending", "running"):
+        elif status in ITEM_OPEN:
             entry["in_progress"] += 1
     return out
 
 
 @router.get("/submissions", response_model=SubmissionListResponse)
 async def get_submissions(
-    qa_status: str | None = Query(
-        None, description="Filter by QA status (comma-separated for multiple)"
-    ),
-    validation_status: str | None = Query(
-        None,
-        description="Filter by validation status (comma-separated: Approved,Not Approved,On Hold,Not Reviewed)",
-    ),
-    survey_id: str | None = Query(None, description="Filter by survey ID (UUID)"),
-    enumerator: str | None = Query(
-        None, description="Filter by enumerator ID/value (comma-separated for multiple)"
-    ),
-    sampling_filters: str | None = Query(
-        None,
-        description="Filter by sampling variables (format: variable1=value1,value2;variable2=value3)",
-    ),
-    ai_review: str | None = Query(
-        None, pattern="^(failed|in_progress|not_run)$", description="Filter by AI review state"
-    ),
-    transcript: str | None = Query(
-        None,
-        pattern="^(any|failed|no_speech|in_progress)$",
-        description="Filter by audio transcript state",
-    ),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
+    qa_status: Annotated[
+        str | None, Query(description="Filter by QA status (comma-separated for multiple)")
+    ] = None,
+    validation_status: Annotated[
+        str | None,
+        Query(
+            description="Filter by validation status (comma-separated: Approved,Not Approved,On Hold,Not Reviewed)"
+        ),
+    ] = None,
+    survey_id: Annotated[str | None, Query(description="Filter by survey ID (UUID)")] = None,
+    enumerator: Annotated[
+        str | None,
+        Query(description="Filter by enumerator ID/value (comma-separated for multiple)"),
+    ] = None,
+    sampling_filters: Annotated[
+        str | None,
+        Query(
+            description="Filter by sampling variables (format: variable1=value1,value2;variable2=value3)"
+        ),
+    ] = None,
+    ai_review: Annotated[
+        str | None,
+        Query(pattern="^(failed|in_progress|not_run)$", description="Filter by AI review state"),
+    ] = None,
+    transcript: Annotated[
+        str | None,
+        Query(
+            pattern="^(any|failed|no_speech|in_progress)$",
+            description="Filter by audio transcript state",
+        ),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
 ):
     """
     Get list of submissions with optional filtering and pagination.
@@ -192,60 +167,27 @@ async def get_submissions(
     if not survey_id:
         raise HTTPException(status_code=400, detail="survey_id is required")
 
-    # Validate and parse survey_id
-    try:
-        survey_uuid = UUIDType(survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID."
-        )
-
-    # Check user has access to this survey
+    survey_uuid = parse_uuid(survey_id)
     survey_config = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
 
     # Build query
     query = db.query(SubmissionCurrent).filter(SubmissionCurrent.survey_id == survey_uuid)
 
-    # Apply qa_status filter
-    if qa_status:
-        qa_statuses = [s.strip() for s in qa_status.split(",") if s.strip()]
-        if len(qa_statuses) == 1:
-            query = query.filter(SubmissionCurrent.qa_status == qa_statuses[0])
-        else:
-            query = query.filter(SubmissionCurrent.qa_status.in_(qa_statuses))
+    if qa_statuses := parse_list(qa_status):
+        query = query.filter(SubmissionCurrent.qa_status.in_(qa_statuses))
 
-    # Apply validation_status filter
-    if validation_status:
-        validation_statuses = [s.strip() for s in validation_status.split(",") if s.strip()]
-        # Handle "Not Reviewed" as NULL
+    # "Not Reviewed" is a submission Kobo has no validation status for.
+    if validation_statuses := parse_list(validation_status):
+        reviewed = [v for v in validation_statuses if v != "Not Reviewed"]
+        conditions = [SubmissionCurrent.kobo_validation_status.in_(reviewed)] if reviewed else []
         if "Not Reviewed" in validation_statuses:
-            validation_statuses.remove("Not Reviewed")
-            if len(validation_statuses) == 0:
-                # Only "Not Reviewed" was specified
-                query = query.filter(SubmissionCurrent.kobo_validation_status.is_(None))
-            else:
-                # "Not Reviewed" plus other statuses
-                query = query.filter(
-                    or_(
-                        SubmissionCurrent.kobo_validation_status.is_(None),
-                        SubmissionCurrent.kobo_validation_status.in_(validation_statuses),
-                    )
-                )
-        else:
-            # No "Not Reviewed" specified
-            if len(validation_statuses) == 1:
-                query = query.filter(
-                    SubmissionCurrent.kobo_validation_status == validation_statuses[0]
-                )
-            else:
-                query = query.filter(
-                    SubmissionCurrent.kobo_validation_status.in_(validation_statuses)
-                )
+            conditions.append(SubmissionCurrent.kobo_validation_status.is_(None))
+        query = query.filter(or_(*conditions))
 
     if ai_review:
         statuses = {
             "failed": ("failed",),
-            "in_progress": ("pending", "running", "waiting"),
+            "in_progress": AI_REVIEW_OPEN,
             "not_run": ("not_run_allowance", "cancelled"),
         }[ai_review]
         query = query.filter(SubmissionCurrent.llm_check_status.in_(statuses))
@@ -257,7 +199,7 @@ async def get_submissions(
         if transcript == "failed":
             transcripts = transcripts.filter(AudioTranscript.status == "failed")
         elif transcript == "in_progress":
-            transcripts = transcripts.filter(AudioTranscript.status.in_(("pending", "running")))
+            transcripts = transcripts.filter(AudioTranscript.status.in_(ITEM_OPEN))
         elif transcript == "no_speech":
             transcripts = transcripts.filter(
                 AudioTranscript.status == "success",
@@ -272,55 +214,14 @@ async def get_submissions(
     # in Python is more reliable for path-based field matching
     orm_submissions = query.order_by(SubmissionCurrent._submission_time.desc()).all()
 
-    # Get enumerator field name from survey config
-    enumerator_field = None
-    if survey_config and survey_config.config_data:
-        config = survey_config.config_data
-        enumerator_field = get_enumerator_field(config)
-
-    # Get sampling columns from survey config
-    sampling_cols = []
-    if survey_config and survey_config.config_data:
-        config = survey_config.config_data
-        sampling_frame_config = config.get("sampling_frame", {})
-        sampling_cols = sampling_frame_config.get("sampling_cols", [])
-
-    # Filter by enumerator if provided
-    if enumerator and enumerator_field:
-        enumerators = [e.strip() for e in enumerator.split(",") if e.strip()]
-        filtered_submissions = []
-        for sub in orm_submissions:
-            if sub.submission_data:
-                enum_value = _get_field_value_from_jsonb(sub.submission_data, enumerator_field)
-                if enum_value and str(enum_value) in enumerators:
-                    filtered_submissions.append(sub)
-        orm_submissions = filtered_submissions
-
-    # Filter by sampling filters if provided
-    if sampling_filters:
-        # Parse sampling filters: "variable1=value1,value2;variable2=value3"
-        sampling_filter_parts = [
-            part.strip() for part in sampling_filters.split(";") if part.strip()
-        ]
-
-        for filter_part in sampling_filter_parts:
-            if "=" not in filter_part:
-                continue
-
-            variable, values_str = filter_part.split("=", 1)
-            variable = variable.strip()
-            values = [v.strip() for v in values_str.split(",") if v.strip()]
-
-            if not values or variable not in sampling_cols:
-                continue
-
-            filtered_submissions = []
-            for sub in orm_submissions:
-                if sub.submission_data:
-                    var_value = _get_field_value_from_jsonb(sub.submission_data, variable)
-                    if var_value and str(var_value) in values:
-                        filtered_submissions.append(sub)
-            orm_submissions = filtered_submissions
+    config = survey_config.config_data or {}
+    orm_submissions = filter_by_answers(
+        orm_submissions,
+        enumerator_field=get_enumerator_field(config),
+        enumerators=parse_list(enumerator),
+        sampling_filters=parse_sampling_filters(sampling_filters),
+        sampling_cols=get_sampling_cols(config),
+    )
 
     # Get total count after JSONB filtering
     total = len(orm_submissions)
@@ -348,8 +249,8 @@ async def get_submissions(
 @router.get("/submissions/{kobo_id}", response_model=Submission)
 async def get_submission(
     kobo_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Get a single submission by its KoboToolbox ID (_id).
@@ -371,8 +272,8 @@ async def get_submission(
 @router.get("/submissions/{kobo_id}/history", response_model=list[SubmissionHistory])
 async def get_submission_history(
     kobo_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Get edit history for a submission.
@@ -396,18 +297,15 @@ async def get_submission_history(
         .all()
     )
 
-    # Convert to Pydantic models
-    history = [_orm_to_pydantic_history(h) for h in orm_history]
-
-    return history
+    return [_orm_to_pydantic_history(h) for h in orm_history]
 
 
 @router.get("/submissions/{kobo_id}/kobo-edit-url")
 async def get_kobo_edit_url(
     kobo_id: int,
-    survey_id: UUIDType = Query(..., description="Survey ID to get the Kobo asset ID"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey_id: Annotated[UUIDType, Query(description="Survey ID to get the Kobo asset ID")],
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Get the Kobo edit URL for a submission.
@@ -449,37 +347,27 @@ async def get_kobo_edit_url(
             detail="You need to configure your Kobo API key in user settings to get edit URLs",
         )
 
+    kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+    fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
+    # Kobo answers {"url": "...", "version_uid": "..."}.
+    endpoint = f"/assets/{survey_config.kobo_asset_id}/data/{kobo_id}/enketo/edit/"
     try:
-        # Create Kobo fetcher with user's token
-        kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-        fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
-
-        # Call Kobo API to get edit URL
-        # Format: /assets/{asset_id}/data/{submission_id}/enketo/edit/?return_url=false
-        endpoint = f"/assets/{survey_config.kobo_asset_id}/data/{kobo_id}/enketo/edit/"
-        params = {"return_url": "false"}
-
-        response = fetcher._make_request(endpoint, params=params)
-
-        # Kobo API returns: {"url": "...", "version_uid": "..."}
-        if "url" not in response:
-            raise HTTPException(
-                status_code=500, detail="Kobo API did not return a URL in the response"
-            )
-
-        return {"url": response["url"]}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get Kobo edit URL: {str(e)}")
+        response = fetcher._make_request(endpoint, params={"return_url": "false"})
+    except requests.RequestException as e:
+        logger.warning("Kobo edit link failed for submission %s: %s", kobo_id, e)
+        raise HTTPException(status_code=502, detail="Could not get the edit link from Kobo.") from e
+    if "url" not in response:
+        raise HTTPException(status_code=502, detail="Kobo did not return an edit link.")
+    return {"url": response["url"]}
 
 
 @router.patch("/submissions/{kobo_id}/validation-status", response_model=Submission)
 async def update_submission_validation_status(
     kobo_id: int,
     status_update: ValidationStatusUpdate,
-    survey_id: UUIDType = Query(..., description="Survey ID to get the Kobo asset ID"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey_id: Annotated[UUIDType, Query(description="Survey ID to get the Kobo asset ID")],
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Update the Kobo validation status for a submission.
@@ -528,72 +416,54 @@ async def update_submission_validation_status(
             status_code=400, detail=f"Invalid validation status. Must be one of: {valid_statuses}"
         )
 
+    kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+    fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
     try:
-        # Update validation status in Kobo
-        kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-        fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
-
         fetcher.update_validation_status(
             asset_uid=survey_config.kobo_asset_id,
             submission_id=kobo_id,
             validation_status=status_update.validation_status,
         )
-
-        # Update local database
-        submission.kobo_validation_status = status_update.validation_status
-
-        # Recalculate qa_status based on new validation status and existing quality issues
-        # This ensures the Quality Overview counters update immediately without needing ETL
-        hfc_engine = HFCEngine(db, survey_config)
-
-        # Convert JSONB quality issues to QualityIssue objects
-        quality_issues = []
-        if submission.data_quality_issues:
-            for issue_dict in submission.data_quality_issues:
-                quality_issues.append(QualityIssue(**issue_dict))
-
-        # Determine new qa_status
-        new_qa_status = hfc_engine.determine_qa_status(
-            quality_issues, status_update.validation_status
-        )
-
-        # Handle "On Hold" case (returns None to indicate no change)
-        if new_qa_status is not None:
-            submission.qa_status = new_qa_status
-
-        submission.updated_at = datetime.utcnow()
-        db.commit()
-        db.refresh(submission)
-
-        logger.info(
-            f"Updated validation status for submission {kobo_id} to '{status_update.validation_status}' "
-            f"and qa_status to '{submission.qa_status}' by user {current_user.email}"
-        )
-
-        # Return updated submission
-        return _orm_to_pydantic_submission(submission)
-
-    except requests.exceptions.HTTPError as e:
-        db.rollback()
+    except requests.RequestException as e:
         logger.error(f"Kobo API error updating validation status: {e}")
-        if hasattr(e, "response") and e.response is not None:
+        if e.response is not None:
             logger.error(f"Response: {e.response.text[:500]}")
         raise HTTPException(
-            status_code=502, detail=f"Failed to update validation status in Kobo: {str(e)}"
-        )
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error updating validation status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update validation status: {str(e)}")
+            status_code=502, detail=f"Failed to update validation status in Kobo: {e!s}"
+        ) from e
+
+    submission.kobo_validation_status = status_update.validation_status
+
+    # Recalculate qa_status from the new validation status and the existing
+    # issues, so the quality overview moves without waiting for the next pull.
+    quality_issues = [
+        QualityIssue(**issue_dict) for issue_dict in submission.data_quality_issues or []
+    ]
+    new_qa_status = HFCEngine(db, survey_config).determine_qa_status(
+        quality_issues, status_update.validation_status
+    )
+    # "On Hold" answers None: no change.
+    if new_qa_status is not None:
+        submission.qa_status = new_qa_status
+
+    submission.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(submission)
+
+    logger.info(
+        f"Updated validation status for submission {kobo_id} to '{status_update.validation_status}' "
+        f"and qa_status to '{submission.qa_status}' by user {current_user.email}"
+    )
+    return _orm_to_pydantic_submission(submission)
 
 
 @router.patch("/submissions/{kobo_id}/reviewer-notes", response_model=Submission)
 async def update_submission_reviewer_notes(
     kobo_id: int,
     notes_update: ReviewerNotesUpdate,
-    survey_id: UUIDType = Query(..., description="Survey ID for access control"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    survey_id: Annotated[UUIDType, Query(description="Survey ID for access control")],
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Update reviewer notes for a submission.
@@ -620,16 +490,10 @@ async def update_submission_reviewer_notes(
     # Check user has editor access
     require_survey_access(db, current_user, survey_id, min_level="editor")
 
-    try:
-        submission.reviewer_notes = notes_update.reviewer_notes
-        submission.updated_at = datetime.utcnow()
-        db.commit()
-        db.refresh(submission)
+    submission.reviewer_notes = notes_update.reviewer_notes
+    submission.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(submission)
 
-        logger.info(f"Updated reviewer notes for submission {kobo_id} by user {current_user.email}")
-
-        return _orm_to_pydantic_submission(submission)
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error updating reviewer notes: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update reviewer notes: {str(e)}")
+    logger.info(f"Updated reviewer notes for submission {kobo_id} by user {current_user.email}")
+    return _orm_to_pydantic_submission(submission)

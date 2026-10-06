@@ -1,35 +1,6 @@
 import { Submission, FilterState } from '../types';
 import { SurveyConfig } from '../services/progressApi';
-
-/**
- * Get field value from submission data, handling Kobo path-based field names.
- *
- * Kobo stores fields with full paths like 'module/variable', but config may only
- * specify 'variable'. This function searches for the field by:
- * 1. Direct lookup (exact match)
- * 2. Path-based search (field name at end of path)
- *
- * @param submissionData Submission data dictionary
- * @param fieldName Field name from config (may be just the variable name)
- * @returns Field value or null if not found
- */
-export function getFieldValueFromSubmission(submissionData: Record<string, any>, fieldName: string): any {
-  // First try direct lookup
-  if (fieldName in submissionData) {
-    return submissionData[fieldName];
-  }
-
-  // Search for fields that end with the field name (path-based)
-  // e.g., 'enumerator_id' should match 'sampling_information/enumerator_id'
-  for (const key of Object.keys(submissionData)) {
-    if (key.endsWith(`/${fieldName}`) || key === fieldName) {
-      return submissionData[key];
-    }
-  }
-
-  // Not found
-  return null;
-}
+import { findAnswer } from './answers';
 
 /**
  * Extract unique enumerator values from submissions based on survey config.
@@ -47,7 +18,7 @@ export function extractUniqueEnumerators(submissions: Submission[], config: Surv
   const uniqueValues = new Set<string>();
 
   for (const submission of submissions) {
-    const value = getFieldValueFromSubmission(submission.submission_data, enumeratorField);
+    const value = findAnswer(submission.submission_data, enumeratorField);
     if (value !== null && value !== undefined && value !== '') {
       uniqueValues.add(String(value));
     }
@@ -76,7 +47,7 @@ export function extractUniqueSamplingValues(
   const uniqueValues = new Set<string>();
 
   for (const submission of submissions) {
-    const value = getFieldValueFromSubmission(submission.submission_data, variable);
+    const value = findAnswer(submission.submission_data, variable);
     if (value !== null && value !== undefined && value !== '') {
       uniqueValues.add(String(value));
     }
@@ -95,11 +66,7 @@ export function buildFilterParams(filters: FilterState): URLSearchParams {
   const params = new URLSearchParams();
 
   if (filters.qaStatuses && filters.qaStatuses.length > 0) {
-    // Convert triage to FLAGGED for API
-    const apiStatuses = filters.qaStatuses.map(status =>
-      status === 'triage' ? 'FLAGGED' : status
-    );
-    params.append('qa_status', apiStatuses.join(','));
+    params.append('qa_status', filters.qaStatuses.join(','));
   }
 
   if (filters.validationStatuses && filters.validationStatuses.length > 0) {
@@ -129,23 +96,6 @@ export function buildFilterParams(filters: FilterState): URLSearchParams {
   }
 
   return params;
-}
-
-/**
- * Check if any filters are currently active.
- *
- * @param filters Current filter state
- * @returns True if any filter is active, false otherwise
- */
-export function hasActiveFilters(filters: FilterState): boolean {
-  return !!(
-    (filters.qaStatuses && filters.qaStatuses.length > 0) ||
-    (filters.validationStatuses && filters.validationStatuses.length > 0) ||
-    (filters.enumerators && filters.enumerators.length > 0) ||
-    (filters.samplingFilters && filters.samplingFilters.length > 0) ||
-    !!filters.aiReview ||
-    !!filters.transcript
-  );
 }
 
 /**

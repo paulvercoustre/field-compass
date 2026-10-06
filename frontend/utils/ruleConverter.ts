@@ -5,7 +5,7 @@ import { StagedRule, RulePart, RuleCondition } from '../types';
  * Stored as `is_empty(var)`: the engine counts a question its skip logic
  * hid as not asked rather than empty.
  */
-export const VALUELESS_OPERATORS = ['is_empty', 'is_not_empty'];
+const VALUELESS_OPERATORS = ['is_empty', 'is_not_empty'];
 
 export const isValuelessOperator = (operator: string): boolean =>
   VALUELESS_OPERATORS.includes(operator);
@@ -78,7 +78,7 @@ export const dbFormatToStagedRule = (
 const buildCheckExpression = (conditions: RulePart[]): string => {
   const parts: string[] = [];
   
-  conditions.forEach((part, index) => {
+  conditions.forEach((part) => {
     if ('joiner' in part) {
       // Add joiner (convert & to &, | to |)
       parts.push(part.joiner === '&' ? '&' : '|');

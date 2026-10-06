@@ -11,13 +11,19 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 if "/app" not in sys.path and os.path.isdir("/app"):
     sys.path.insert(0, "/app")
 
-from database.models import AnswerTranslation, AudioTranscript, SubmissionCurrent, SurveyConfig
+from database.models import (
+    ITEM_OPEN,
+    AnswerTranslation,
+    AudioTranscript,
+    SubmissionCurrent,
+    SurveyConfig,
+)
 from etl.translation import (
     ORIGIN_AI,
     SOURCE_TRANSCRIPT,
@@ -31,14 +37,11 @@ from services.ai_providers import resolve_translation_provider
 from services.ai_service import AIService
 from services.ai_usage import TRANSLATION, usage_recorder
 from services.database import SessionLocal
-from services.runs import finish_if_done
+from services.runs import fail_stalled_items, fail_stalled_kobo_sends, finish_if_done
 from services.transcription_languages import language_name
 from services.translation_queue import send_translation_when_ready
 
 logger = logging.getLogger(__name__)
-
-STALLED_RUNNING_AFTER = timedelta(minutes=30)
-STALLED_PENDING_AFTER = timedelta(hours=6)
 
 
 def _finish(
@@ -98,7 +101,7 @@ def run_translation_job(
             return {"status": "missing"}
         if (
             row.input_hash != payload.get("input_hash")
-            or row.status not in ("pending", "running")
+            or row.status not in ITEM_OPEN
             or row.origin != ORIGIN_AI
         ):
             db.commit()
@@ -193,10 +196,10 @@ def run_translation_job(
         if row is not None:
             try:
                 failed = db.get(AnswerTranslation, row.translation_id)
-                if failed is not None and failed.status in ("pending", "running"):
+                if failed is not None and failed.status in ITEM_OPEN:
                     _finish(db, failed, "failed", f"internal: {exc}")
                     finish_if_done(db, failed.run_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 -- recording the failure must not mask it
                 db.rollback()
         raise
     finally:
@@ -206,34 +209,7 @@ def run_translation_job(
 def sweep_stalled_translations(db, now: datetime | None = None) -> int:
     """Fail translations that lost their worker, and their Kobo sends."""
     now = now or datetime.utcnow()
-    stalled = (
-        db.query(AnswerTranslation)
-        .filter(
-            (
-                (AnswerTranslation.status == "running")
-                & (AnswerTranslation.started_at < now - STALLED_RUNNING_AFTER)
-            )
-            | (
-                (AnswerTranslation.status == "pending")
-                & (AnswerTranslation.queued_at < now - STALLED_PENDING_AFTER)
-            )
-        )
-        .all()
-    )
-    for row in stalled:
-        row.status = "failed"
-        row.last_error = "timeout: The translation did not finish."
-        row.finished_at = now
-    kobo_stalled = (
-        db.query(AnswerTranslation)
-        .filter(
-            AnswerTranslation.kobo_status == "pending",
-            AnswerTranslation.updated_at < now - timedelta(hours=6),
-        )
-        .all()
-    )
-    for row in kobo_stalled:
-        row.kobo_status = "failed"
-        row.kobo_last_error = "timeout: Sending to Kobo did not finish."
+    stalled = fail_stalled_items(db, AnswerTranslation, now, "translation")
+    kobo_stalled = fail_stalled_kobo_sends(db, AnswerTranslation, now)
     db.commit()
-    return len(stalled) + len(kobo_stalled)
+    return len(stalled) + kobo_stalled

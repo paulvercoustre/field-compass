@@ -7,93 +7,15 @@ from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import Depends
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from database.models import Base, SubmissionCurrent, SubmissionHistory, SurveyConfig, ValidationRule
-from services.database import get_db as get_db_dependency
+from services.database import DbSession
+from tests.sqlite_compat import sqlite_engine
 
 # Create test database
-TEST_DATABASE_URL = "sqlite:///:memory:"
-
-
-def create_test_engine():
-    """Create a test engine with SQLite-compatible types."""
-    from sqlalchemy import JSON, String, TypeDecorator, event
-    from sqlalchemy.dialects.postgresql import JSONB
-    from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
-
-    engine = create_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    # Map JSONB to JSON and UUID to String for SQLite
-    class JSONBForSQLite(TypeDecorator):
-        """JSONB type that uses JSON for SQLite."""
-
-        impl = JSON
-        cache_ok = True
-
-        def load_dialect_impl(self, dialect):
-            if dialect.name == "sqlite":
-                return dialect.type_descriptor(JSON())
-            else:
-                return dialect.type_descriptor(JSONB())
-
-    class UUIDForSQLite(TypeDecorator):
-        """UUID type that uses String for SQLite."""
-
-        impl = String(36)
-        cache_ok = True
-
-        def load_dialect_impl(self, dialect):
-            if dialect.name == "sqlite":
-                return dialect.type_descriptor(String(36))
-            else:
-                return dialect.type_descriptor(PostgresUUID(as_uuid=True))
-
-        def process_bind_param(self, value, dialect):
-            """Convert UUID to string for SQLite."""
-            if value is None:
-                return None
-            if dialect.name == "sqlite":
-                return str(value) if not isinstance(value, str) else value
-            return value
-
-        def process_result_value(self, value, dialect):
-            """Convert string back to UUID for PostgreSQL."""
-            if value is None:
-                return None
-            if dialect.name == "sqlite":
-                from uuid import UUID
-
-                return UUID(value) if isinstance(value, str) else value
-            return value
-
-    # Replace JSONB and UUID columns for SQLite compatibility
-    for table in Base.metadata.tables.values():
-        for column in table.columns:
-            if isinstance(column.type, JSONB):
-                column.type = JSONBForSQLite()
-            elif isinstance(column.type, PostgresUUID):
-                column.type = UUIDForSQLite()
-
-    @event.listens_for(engine, "connect", propagate=True)
-    def set_sqlite_pragma(dbapi_conn, connection_record):
-        """Set SQLite pragmas for better compatibility."""
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-    return engine
-
-
-engine = create_test_engine()
+engine = sqlite_engine()
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -137,7 +59,7 @@ def _ensure_test_user(db):
     return user
 
 
-def override_current_user(db=Depends(get_db_dependency)):
+def override_current_user(db: DbSession):
     """Stand in for the authenticated user.
 
     These endpoint tests predate the authentication system and were never
@@ -924,7 +846,7 @@ class TestProgressByVariable:
         assert rows["south"]["target"] == 20
         assert rows["south"]["progress"] == 0.0
 
-        detailed = {tuple(row["values"].values())[0]: row for row in payload["detailed"]}
+        detailed = {next(iter(row["values"].values())): row for row in payload["detailed"]}
         assert detailed["south"]["conducted"] == 0
         assert detailed["south"]["target"] == 20
         assert "Unknown" not in detailed
@@ -966,3 +888,36 @@ class TestProgressByVariable:
         base = f"/api/progress?survey_id={survey['survey_id']}"
         assert client.get(base).json()["overall"]["conducted"] == 5
         assert client.get(f"{base}&approved_only=true").json()["overall"]["conducted"] == 3
+
+
+class TestSurveyAccessDependency:
+    """survey_access() resolves survey_id from the path or the query string,
+    and answers a bad id the same way everywhere."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "/api/surveys/not-a-uuid",
+            "/api/surveys/not-a-uuid/rules",
+            "/api/progress?survey_id=not-a-uuid",
+            "/api/quality/overview?survey_id=not-a-uuid",
+        ],
+    )
+    def test_a_malformed_id_is_a_400_naming_it(self, client, url):
+        response = client.get(url)
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "Invalid survey_id format: not-a-uuid. Must be a valid UUID."
+        )
+
+    @pytest.mark.parametrize("url", ["/api/surveys/{id}", "/api/progress?survey_id={id}"])
+    def test_an_unknown_survey_is_a_404(self, client, url):
+        response = client.get(url.format(id=uuid4()))
+        assert response.status_code == 404
+
+    def test_a_missing_query_id_is_rejected(self, client):
+        assert client.get("/api/progress").status_code == 422
+
+    def test_the_survey_reaches_the_handler(self, client, test_survey):
+        response = client.get(f"/api/surveys/{test_survey['survey_id']}/rules")
+        assert response.status_code == 200

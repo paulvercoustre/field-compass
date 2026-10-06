@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from database.models import Run, SubmissionCurrent, SurveyConfig
+from database.models import Run, SurveyConfig
 from etl.audio import is_transcription_issue
 from etl.audit_processor import download_and_process_audit
 from etl.data_merger import merge_submission, parse_kobo_submission
@@ -106,7 +106,7 @@ class ETLPipeline:
         try:
             survey_uuid = UUID(survey_id)
         except ValueError:
-            raise ValueError(f"Invalid survey_id format: {survey_id}")
+            raise ValueError(f"Invalid survey_id format: {survey_id}") from None
 
         survey_config = (
             self.db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_uuid).first()
@@ -214,16 +214,16 @@ class ETLPipeline:
                             )
                             if audit_metrics:
                                 # Add audit metrics to submission_data
-                                parsed["submission_data"][
-                                    "active_interview_time"
-                                ] = audit_metrics.get("active_interview_time")
+                                parsed["submission_data"]["active_interview_time"] = (
+                                    audit_metrics.get("active_interview_time")
+                                )
                                 parsed["submission_data"]["total_duration"] = audit_metrics.get(
                                     "total_duration"
                                 )
                                 logger.debug(
                                     f"Added audit metrics for {submission_uuid}: active_time={audit_metrics.get('active_interview_time')} min, total_duration={audit_metrics.get('total_duration')} min"
                                 )
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001 -- one bad audit log must not stop the pull
                             logger.warning(
                                 f"Failed to process audit log for {submission_uuid}: {e}"
                             )
@@ -395,100 +395,3 @@ class ETLPipeline:
         from services.runs import stop_requested
 
         return stop_requested(self.db, self.run.run_id)
-
-    def process_single_submission(
-        self, survey_id: str, kobo_submission: dict[str, Any]
-    ) -> tuple[SubmissionCurrent, Any | None, list[Any]]:
-        """
-        Process a single submission (for testing or manual processing).
-
-        Args:
-            survey_id: UUID of the survey configuration
-            kobo_submission: Raw submission dictionary from Kobo API
-
-        Returns:
-            Tuple of (SubmissionCurrent, SubmissionHistory or None, List[QualityIssue])
-        """
-        # Get survey configuration
-        try:
-            survey_uuid = UUID(survey_id)
-        except ValueError:
-            raise ValueError(f"Invalid survey_id format: {survey_id}")
-
-        survey_config = (
-            self.db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_uuid).first()
-        )
-
-        if not survey_config:
-            raise ValueError(f"Survey configuration not found: {survey_id}")
-
-        # Parse submission
-        parsed = parse_kobo_submission(kobo_submission)
-        submission_uuid = parsed["_uuid"]
-        audit_url = parsed.get("audit_url")
-
-        # Download and process audit log (if available)
-        kobo_token = self.kobo_api_token
-        if audit_url:
-            try:
-                audit_metrics = download_and_process_audit(
-                    audit_url=audit_url, uuid=submission_uuid, kobo_token=kobo_token
-                )
-                if audit_metrics:
-                    # Add audit metrics to submission_data
-                    parsed["submission_data"]["active_interview_time"] = audit_metrics.get(
-                        "active_interview_time"
-                    )
-                    parsed["submission_data"]["total_duration"] = audit_metrics.get(
-                        "total_duration"
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to process audit log for {submission_uuid}: {e}")
-
-        # Merge submission
-        submission, history, _ = merge_submission(
-            self.db,
-            parsed,
-            survey_id,
-            kobo_asset_id=survey_config.kobo_asset_id,
-            kobo_data=kobo_submission,  # Pass raw Kobo data for deprecatedID detection
-        )
-
-        # Run HFC checks
-        # Note: Duration check uses audit logs (active_interview_time) or form fields (start/end)
-        # Metadata timestamps (_submission_time, end) are NOT used for duration
-        hfc_engine = HFCEngine(
-            self.db, survey_config, fetch_live_form=self.kobo_fetcher.get_asset_info
-        )
-        issues = hfc_engine.run_checks(
-            submission_data=submission.submission_data, submission_uuid=submission_uuid
-        )
-
-        dk_count, dk_eligible_count, dk_percentage = hfc_engine.compute_dk_metrics(
-            submission.submission_data
-        )
-        submission.dk_count = dk_count
-        submission.dk_eligible_count = dk_eligible_count
-        submission.dk_percentage = round(dk_percentage, 2) if dk_percentage is not None else None
-
-        # Update submission with HFC results
-        submission.data_quality_issues = [
-            {
-                "check": issue.check,
-                "field": issue.field,
-                "value": issue.value,
-                "message": issue.message,
-            }
-            for issue in issues
-        ]
-
-        # Determine status based on HFC issues and Kobo validation status
-        new_status = hfc_engine.determine_qa_status(
-            issues, kobo_validation_status=submission.kobo_validation_status
-        )
-        if new_status is not None:
-            submission.qa_status = new_status
-
-        self.db.commit()
-
-        return submission, history, issues

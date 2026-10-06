@@ -5,17 +5,17 @@ Endpoints for triggering and monitoring ETL pipelines.
 
 import logging
 from datetime import datetime
-from uuid import UUID as UUIDType
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from database.models import Run, User
-from models import BaseResponse
-from services.auth import get_current_active_user, get_user_kobo_token
-from services.database import get_db
-from services.permissions import require_survey_access
+from database.models import Run
+from schemas import BaseResponse
+from services.auth import CurrentUser, get_user_kobo_token
+from services.database import DbSession
+from services.permissions import EditableSurvey
 from services.pull_worker import execute_pull, run_pull_task
 from services.runs import RunAlreadyActive, fail_run, run_summary, start_pull
 
@@ -40,24 +40,28 @@ def _already_running(db: Session, error: RunAlreadyActive) -> JSONResponse:
 
 @router.post("/etl/run/{survey_id}")
 async def run_etl_pipeline(
-    survey_id: str,
-    limit: int | None = Query(None, description="Maximum number of submissions to process"),
-    start_date: str | None = Query(
-        None, description="Only process submissions after this date (YYYY-MM-DD)"
-    ),
-    force_validation: bool = Query(
-        False,
-        description="Force revalidation of all submissions (ignores incremental optimization)",
-    ),
-    wait: bool = Query(
-        False,
-        description=(
-            "Run the pull inside this request and return its counts, as this endpoint "
+    survey: EditableSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: Annotated[
+        int | None, Query(description="Maximum number of submissions to process")
+    ] = None,
+    start_date: Annotated[
+        str | None, Query(description="Only process submissions after this date (YYYY-MM-DD)")
+    ] = None,
+    force_validation: Annotated[
+        bool,
+        Query(
+            description="Force revalidation of all submissions (ignores incremental optimization)"
+        ),
+    ] = False,
+    wait: Annotated[
+        bool,
+        Query(
+            description="Run the pull inside this request and return its counts, as this endpoint "
             "did before pulls ran in the background. Kept for scripts for one release."
         ),
-    ),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    ] = False,
 ):
     """
     Start a pull from KoboToolbox for a survey.
@@ -70,15 +74,6 @@ async def run_etl_pipeline(
 
     Requires editor access to the survey and the caller's own Kobo API key.
     """
-    try:
-        survey_uuid = UUIDType(survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid survey_id format: {survey_id}. Must be a valid UUID.",
-        )
-
-    survey = require_survey_access(db, current_user, survey_uuid, min_level="editor")
 
     start_datetime = None
     if start_date:
@@ -87,7 +82,7 @@ async def run_etl_pipeline(
         except ValueError:
             raise HTTPException(
                 status_code=400, detail=f"Invalid date format: {start_date}. Use YYYY-MM-DD"
-            )
+            ) from None
 
     if not get_user_kobo_token(current_user):
         raise HTTPException(
@@ -154,7 +149,7 @@ async def run_etl_pipeline(
         raise HTTPException(
             status_code=503,
             detail="The pull could not start: the background worker is unavailable. Try again shortly.",
-        )
+        ) from exc
 
     db.refresh(run)
     return JSONResponse(

@@ -1,6 +1,6 @@
 /** Usage figures for admins: GET /api/admin/usage (backend/routers/admin.py). */
 
-import { request } from './activityApi';
+import { request } from './apiBase';
 
 export interface UsagePeriod {
   signups: number;

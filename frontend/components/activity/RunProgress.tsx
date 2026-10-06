@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { isOpen, RunAction, RunSummary, stopRun, WorkBucket } from '../../services/activityApi';
-import { NavigationTarget, useActivity } from '../../contexts/ActivityContext';
+import { useActivity } from '../../contexts/ActivityContext';
+import { NavigationTarget } from '../../contexts/NavigationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -9,7 +10,7 @@ import { Spinner } from '../Spinner';
 const number = (n: number) => n.toLocaleString();
 const plural = (n: number, one: string, many = `${one}s`) => `${number(n)} ${n === 1 ? one : many}`;
 
-export const formatEta = (seconds: number | null | undefined): string | null => {
+const formatEta = (seconds: number | null | undefined): string | null => {
   if (seconds == null) return null;
   if (seconds < 60) return 'less than a minute left';
   const minutes = Math.round(seconds / 60);
@@ -49,7 +50,7 @@ export const runStatusLabel = (run: RunSummary): { label: string; tone: 'busy' |
 };
 
 /** Where a problem's action button goes. */
-export const actionTarget = (action: RunAction, surveyId: string): { label: string; target: NavigationTarget } | null => {
+const actionTarget = (action: RunAction, surveyId: string): { label: string; target: NavigationTarget } | null => {
   switch (action) {
     case 'open_ai_providers':
       return { label: 'Open AI settings', target: { view: 'userSettings', tab: 'ai' } };

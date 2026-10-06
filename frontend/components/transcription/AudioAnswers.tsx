@@ -18,7 +18,7 @@ import { koboState, Tone, toneClass } from './koboState';
  * A transcript's state in plain words; `last_error` is "<category>: <message>".
  * Null when there is nothing to say: a question this survey does not transcribe.
  */
-export const describeTranscript = (transcript: Transcript | null, transcribed: boolean): { tone: Tone; text: string } | null => {
+const describeTranscript = (transcript: Transcript | null, transcribed: boolean): { tone: Tone; text: string } | null => {
   if (!transcript) {
     return transcribed ? { tone: 'muted', text: 'Not transcribed yet: it will be on the next pull.' } : null;
   }

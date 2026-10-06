@@ -4,9 +4,8 @@ AI router for validation rule generation and suggestions.
 
 import logging
 from typing import Any
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -17,9 +16,9 @@ from services.ai_errors import AIError
 from services.ai_providers import RULES, resolve_provider
 from services.ai_service import ai_service, rule_error_message
 from services.ai_usage import RULE_GENERATION, RULE_SUGGESTION, usage_recorder
-from services.auth import get_current_active_user
-from services.database import get_db
-from services.permissions import require_survey_access
+from services.auth import CurrentUser
+from services.database import DbSession
+from services.permissions import parse_uuid, require_survey_access
 from services.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -36,17 +35,6 @@ class GenerateRuleRequest(BaseModel):
 
 class SuggestRulesRequest(BaseModel):
     survey_id: str = Field(..., description="UUID of the survey")
-
-
-class RuleCondition(BaseModel):
-    variable: str
-    operator: str
-    value: str
-    valueType: str
-
-
-class RuleJoiner(BaseModel):
-    joiner: str
 
 
 class GeneratedRule(BaseModel):
@@ -88,8 +76,8 @@ def _provider_for(db: Session, survey_config: SurveyConfig, user: User) -> Resol
 async def generate_rule_from_natural_language(
     request: Request,
     payload: GenerateRuleRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Generate a validation rule from natural language description.
@@ -104,15 +92,9 @@ async def generate_rule_from_natural_language(
             "prompt": "Flag if respondent age is greater than 100"
         }
     """
-    # Validate survey_id format
-    try:
-        survey_uuid = UUID(payload.survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {payload.survey_id}"
-        )
-
-    # Check user has access to this survey (editors can create rules too)
+    # The survey is named in the body, so it cannot come from survey_access().
+    # Editors can write rules too.
+    survey_uuid = parse_uuid(payload.survey_id)
     require_survey_access(db, current_user, survey_uuid, min_level="editor")
 
     # Fetch survey config
@@ -190,13 +172,13 @@ async def generate_rule_from_natural_language(
 
     except ValueError as e:
         logger.error(f"Failed to generate rule: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error generating rule: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while generating the rule. Please try again.",
-        )
+        ) from e
 
 
 @router.post("/ai/suggest-rules", response_model=list[GeneratedRule])
@@ -204,8 +186,8 @@ async def generate_rule_from_natural_language(
 async def suggest_validation_rules(
     request: Request,
     payload: SuggestRulesRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Suggest validation rules based on the survey form structure.
@@ -219,15 +201,9 @@ async def suggest_validation_rules(
             "survey_id": "123e4567-e89b-12d3-a456-426614174000"
         }
     """
-    # Validate survey_id format
-    try:
-        survey_uuid = UUID(payload.survey_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid survey_id format: {payload.survey_id}"
-        )
-
-    # Check user has access to this survey (editors can create rules too)
+    # The survey is named in the body, so it cannot come from survey_access().
+    # Editors can write rules too.
+    survey_uuid = parse_uuid(payload.survey_id)
     require_survey_access(db, current_user, survey_uuid, min_level="editor")
 
     # Fetch survey config
@@ -300,13 +276,13 @@ async def suggest_validation_rules(
 
     except ValueError as e:
         logger.error(f"Failed to generate suggestions: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error generating suggestions: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while generating suggestions. Please try again.",
-        )
+        ) from e
 
 
 def _extract_variables_from_config(survey_config: SurveyConfig) -> list[dict[str, Any]]:

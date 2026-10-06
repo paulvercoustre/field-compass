@@ -50,9 +50,5 @@ def iter_checks() -> Iterable[RegisteredCheck]:
     return tuple(_CHECKS[key] for key in sorted(_CHECKS))
 
 
-def get_check(check_id: str) -> RegisteredCheck | None:
-    return _CHECKS.get(check_id)
-
-
 def registered_ids() -> tuple[str, ...]:
     return tuple(sorted(_CHECKS))

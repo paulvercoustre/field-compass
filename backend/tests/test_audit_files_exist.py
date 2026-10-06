@@ -51,9 +51,9 @@ def test_audit_files_can_be_processed():
 
     assert metrics is not None, f"Failed to process audit file: {filename}"
     assert "active_interview_time" in metrics, "Missing active_interview_time in metrics"
-    assert isinstance(
-        metrics["active_interview_time"], int | float
-    ), "active_interview_time should be numeric"
+    assert isinstance(metrics["active_interview_time"], int | float), (
+        "active_interview_time should be numeric"
+    )
 
 
 @pytest.mark.parametrize(

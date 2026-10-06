@@ -5,17 +5,18 @@ Provides user registration, login, profile management, and Kobo API key manageme
 
 import logging
 from datetime import datetime, timedelta
+from typing import Annotated
 from urllib.parse import urlparse
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 
 from database.models import User
 from services import app_events
 from services.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    CurrentUser,
     KoboApiKeyUpdate,
     KoboConnectionUpdate,
     PasswordChange,
@@ -27,7 +28,6 @@ from services.auth import (
     authenticate_user,
     create_access_token,
     encrypt_api_key,
-    get_current_active_user,
     get_password_hash,
     get_user_by_email,
     get_user_by_username,
@@ -35,7 +35,7 @@ from services.auth import (
     user_to_response,
     verify_password,
 )
-from services.database import get_db
+from services.database import DbSession
 from services.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ router = APIRouter()
 
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/hour")
-async def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
+async def register(request: Request, user_data: UserCreate, db: DbSession):
     """
     Register a new user account.
 
@@ -103,8 +103,8 @@ async def register(request: Request, user_data: UserCreate, db: Session = Depend
 @limiter.limit("10/minute")
 async def login(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: DbSession,
 ):
     """
     Login with email and password.
@@ -141,7 +141,7 @@ async def login(
 
 @router.post("/auth/login/json", response_model=Token)
 @limiter.limit("10/minute")
-async def login_json(request: Request, credentials: UserLogin, db: Session = Depends(get_db)):
+async def login_json(request: Request, credentials: UserLogin, db: DbSession):
     """
     Alternative login endpoint accepting JSON body.
     Useful for frontend applications that prefer JSON over form data.
@@ -179,7 +179,7 @@ async def login_json(request: Request, credentials: UserLogin, db: Session = Dep
 
 
 @router.get("/users/me", response_model=UserResponse)
-async def get_current_user_profile(current_user: User = Depends(get_current_active_user)):
+async def get_current_user_profile(current_user: CurrentUser):
     """
     Get the current authenticated user's profile.
     """
@@ -189,8 +189,8 @@ async def get_current_user_profile(current_user: User = Depends(get_current_acti
 @router.put("/users/me", response_model=UserResponse)
 async def update_current_user_profile(
     user_update: UserUpdate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """
     Update the current user's profile.
@@ -218,9 +218,7 @@ async def update_current_user_profile(
 
 
 @router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_current_user(
-    current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
-):
+async def delete_current_user(current_user: CurrentUser, db: DbSession):
     """
     Delete the current user's account.
 
@@ -231,7 +229,7 @@ async def delete_current_user(
     app_events.record(db, app_events.ACCOUNT_DELETED)
     db.delete(current_user)
     db.commit()
-    return None
+    return
 
 
 # =============================================================================
@@ -242,8 +240,8 @@ async def delete_current_user(
 @router.put("/users/me/kobo-api-key", response_model=UserResponse)
 async def set_kobo_api_key(
     api_key_data: KoboApiKeyUpdate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """
     Set or update the Kobo API key for the current user.
@@ -268,9 +266,7 @@ async def set_kobo_api_key(
 
 
 @router.delete("/users/me/kobo-api-key", response_model=UserResponse)
-async def delete_kobo_api_key(
-    current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
-):
+async def delete_kobo_api_key(current_user: CurrentUser, db: DbSession):
     """
     Remove the Kobo API key for the current user.
     """
@@ -326,16 +322,16 @@ def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
         response = requests.get(
             f"{base_url}/assets/", params={"limit": 0}, headers=headers, timeout=10
         )
-    except requests.exceptions.Timeout:
+    except requests.exceptions.Timeout as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=f"{host} took too long to answer. Try again in a moment.",
-        )
-    except requests.exceptions.RequestException:
+        ) from exc
+    except requests.exceptions.RequestException as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Could not reach a Kobo server at {host}. Check the server address.",
-        )
+        ) from exc
 
     if response.status_code in (401, 403):
         raise HTTPException(
@@ -366,16 +362,16 @@ def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
                 "email": data.get("email"),
                 "organization": data.get("organization", ""),
             }
-    except Exception:
-        pass
+    except (requests.RequestException, ValueError):
+        return None
     return None
 
 
 @router.put("/users/me/kobo-connection")
 async def set_kobo_connection(
     payload: KoboConnectionUpdate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """
     Connect the user's Kobo account: server and API key together.
@@ -408,9 +404,7 @@ async def set_kobo_connection(
 
 
 @router.get("/users/me/kobo-api-key/test")
-async def test_kobo_api_key(
-    current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
-):
+async def test_kobo_api_key(current_user: CurrentUser, db: DbSession):
     """
     Test the current user's Kobo API key by making a test request to the Kobo API.
 
@@ -437,8 +431,8 @@ async def test_kobo_api_key(
 @router.put("/users/me/password")
 async def change_password(
     payload: PasswordChange,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser,
+    db: DbSession,
 ):
     """
     Change the current user's password.

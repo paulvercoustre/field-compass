@@ -3,17 +3,22 @@ Permission checking service for survey access control.
 Handles user-to-survey permissions including ownership and shared access.
 """
 
-from typing import Literal
+from collections.abc import Callable
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database.models import SurveyAccess, SurveyConfig, User
+from services.auth import CurrentUser
+from services.database import DbSession
 
 # Permission level type
 PermissionLevel = Literal["owner", "editor", "viewer", "admin"]
+# What an endpoint can require; an admin satisfies all of them.
+AccessLevel = Literal["viewer", "editor", "owner"]
 
 
 def get_user_permission(db: Session, user: User, survey_id: UUID) -> PermissionLevel | None:
@@ -48,7 +53,7 @@ def get_user_permission(db: Session, user: User, survey_id: UUID) -> PermissionL
     )
 
     if access:
-        return access.permission_level
+        return cast(PermissionLevel, access.permission_level)
 
     return None
 
@@ -76,41 +81,11 @@ def get_accessible_surveys(db: Session, user: User) -> list[SurveyConfig]:
     )
 
 
-def can_view_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can view a survey (any access level)."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission is not None
-
-
-def can_edit_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can edit survey data (run ETL, resolve flags)."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission in ("owner", "editor", "admin")
-
-
-def can_configure_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can configure survey settings (HFC rules, etc)."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission in ("owner", "admin")
-
-
-def can_share_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can share survey with others."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission in ("owner", "admin")
-
-
-def can_delete_survey(db: Session, user: User, survey_id: UUID) -> bool:
-    """Check if user can delete the survey."""
-    permission = get_user_permission(db, user, survey_id)
-    return permission in ("owner", "admin")
-
-
 def require_survey_access(
     db: Session,
     user: User,
     survey_id: UUID,
-    min_level: Literal["viewer", "editor", "owner"] = "viewer",
+    min_level: AccessLevel = "viewer",
 ) -> SurveyConfig:
     """
     Require user to have at least the specified access level to the survey.
@@ -226,17 +201,56 @@ def get_survey_access_list(db: Session, survey_id: UUID) -> list[dict]:
     # Add shared access
     shared = db.query(SurveyAccess).filter(SurveyAccess.survey_id == survey_id).all()
 
-    for access in shared:
-        access_list.append(
-            {
-                "user_id": str(access.user_id),
-                "email": access.user.email,
-                "username": access.user.username,
-                "full_name": access.user.full_name,
-                "permission_level": access.permission_level,
-                "granted_at": access.granted_at,
-                "granted_by": str(access.granted_by) if access.granted_by else None,
-            }
-        )
+    access_list.extend(
+        {
+            "user_id": str(access.user_id),
+            "email": access.user.email,
+            "username": access.user.username,
+            "full_name": access.user.full_name,
+            "permission_level": access.permission_level,
+            "granted_at": access.granted_at,
+            "granted_by": str(access.granted_by) if access.granted_by else None,
+        }
+        for access in shared
+    )
 
     return access_list
+
+
+def parse_uuid(value: str, what: str = "survey_id") -> UUID:
+    """A UUID from a request, or a 400 naming which value was malformed."""
+    try:
+        return UUID(str(value))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid {what} format: {value}. Must be a valid UUID.",
+        ) from None
+
+
+def survey_access(min_level: AccessLevel = "viewer") -> Callable[..., SurveyConfig]:
+    """
+    A dependency resolving the request's ``survey_id`` to its survey, once the
+    current user is known to hold at least ``min_level`` on it.
+
+    ``survey_id`` binds to the path when the route has ``{survey_id}`` and to
+    the query string otherwise. A malformed id is a 400, an unknown survey a
+    404 and too little access a 403, the same as ``require_survey_access``.
+
+        survey: EditableSurvey  # = Annotated[SurveyConfig, Depends(survey_access("editor"))]
+    """
+
+    def dependency(
+        survey_id: str,
+        db: DbSession,
+        current_user: CurrentUser,
+    ) -> SurveyConfig:
+        return require_survey_access(db, current_user, parse_uuid(survey_id), min_level)
+
+    return dependency
+
+
+# The request's survey, once the user is known to hold that much access on it.
+ViewableSurvey = Annotated[SurveyConfig, Depends(survey_access("viewer"))]
+EditableSurvey = Annotated[SurveyConfig, Depends(survey_access("editor"))]
+OwnedSurvey = Annotated[SurveyConfig, Depends(survey_access("owner"))]
