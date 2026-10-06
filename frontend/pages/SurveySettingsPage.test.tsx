@@ -15,9 +15,18 @@ vi.mock('../services/progressApi', () => ({
   deleteValidationRule: vi.fn(),
 }));
 vi.mock('../services/api', () => ({ getKoboProjectForm: vi.fn() }));
+const surveyContext = vi.hoisted(() => ({
+  selectedSurvey: {
+    survey_id: 's1',
+    survey_name: 'Household 2026',
+    kobo_asset_id: null,
+    permission: 'owner',
+    is_owner: true,
+  } as Record<string, unknown>,
+}));
 vi.mock('../contexts/SurveyContext', () => ({
   useSurvey: () => ({
-    selectedSurvey: { survey_id: 's1', survey_name: 'Household 2026', kobo_asset_id: null, permission: 'owner' },
+    selectedSurvey: surveyContext.selectedSurvey,
     refreshSurveys: vi.fn(),
     setSelectedSurvey: vi.fn(),
   }),
@@ -25,7 +34,9 @@ vi.mock('../contexts/SurveyContext', () => ({
 // Cards that fetch their own data; not what these tests are about.
 vi.mock('../components/transcription/AudioTranscriptionCard', () => ({ default: () => null }));
 vi.mock('../components/translation/TranslationCard', () => ({ default: () => null }));
-vi.mock('../components/ai/SurveyKeyPicker', () => ({ default: () => null }));
+vi.mock('../components/ai/SurveyKeyPicker', () => ({
+  default: ({ use }: { use: string }) => <span>key picker: {use}</span>,
+}));
 vi.mock('../components/linter/FormLintPanel', () => ({ default: () => null }));
 
 const api = vi.mocked(progressApi);
@@ -86,5 +97,34 @@ describe('SurveySettingsPage survey profile', () => {
     await waitFor(() => expect(view.getAllByText('Survey name already taken').length).toBeGreaterThan(0));
     expect(view.getByDisplayValue('Duplicate')).toBeTruthy();
     expect(view.getByRole('button', { name: 'Save changes' })).toBeTruthy();
+  });
+});
+
+describe('SurveySettingsPage AI review key', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.getSurveyConfig.mockResolvedValue(config('Household 2026'));
+  });
+  afterEach(() => {
+    cleanup();
+    surveyContext.selectedSurvey = { ...surveyContext.selectedSurvey, permission: 'owner', is_owner: true };
+  });
+
+  const openQualityTab = async () => {
+    const view = await renderPage();
+    fireEvent.click(view.getByRole('button', { name: 'Quality checks' }));
+    return view;
+  };
+
+  it('lets an admin choose the key on a survey they own', async () => {
+    surveyContext.selectedSurvey = { ...surveyContext.selectedSurvey, permission: 'admin', is_owner: true };
+    const view = await openQualityTab();
+    expect(view.getByText('key picker: review')).toBeTruthy();
+  });
+
+  it("does not offer an admin someone else's survey: the key would be spent for its owner", async () => {
+    surveyContext.selectedSurvey = { ...surveyContext.selectedSurvey, permission: 'admin', is_owner: false };
+    const view = await openQualityTab();
+    expect(view.queryByText('key picker: review')).toBeNull();
   });
 });
