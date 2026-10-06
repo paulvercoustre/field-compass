@@ -4,7 +4,6 @@ Provides rule generation and suggestion functionality using OpenAI GPT models.
 """
 
 import logging
-import os
 from typing import Any
 
 from etl.dk_utils import (
@@ -15,6 +14,7 @@ from etl.dk_utils import (
 )
 from services.ai_client import AIClient, ResolvedProvider, UsageRecorder, operator_provider
 from services.ai_errors import AUTH, BAD_RESPONSE, NOT_CONFIGURED, PROVIDER_QUOTA, AIError
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -42,41 +42,33 @@ class AIService:
     """Service for AI-powered validation rue generation and suggestions."""
 
     def __init__(self):
-        """Initialize OpenAI client with API key from environment."""
-        self.api_key = os.getenv("OPENAI_API_KEY")
+        """The operator's AI settings, read from the environment once."""
+        settings = get_settings()
+        self.api_key = settings.operator_ai_key
         if not self.api_key:
             logger.warning(
                 "OPENAI_API_KEY not set in environment. AI features will be unavailable."
             )
 
-        base_model = os.getenv("OPENAI_MODEL", "gpt-5-mini")
-        self.rule_gen_model = os.getenv("OPENAI_RULE_GEN_MODEL", base_model)
-        self.qual_check_model = os.getenv("OPENAI_QUAL_CHECK_MODEL", base_model)
-        self.max_completion_tokens = int(os.getenv("OPENAI_MAX_TOKENS", "2500"))
-        self.rule_gen_max_completion_tokens = int(
-            os.getenv("OPENAI_RULE_GEN_MAX_TOKENS", str(self.max_completion_tokens))
-        )
-        self.qual_check_max_completion_tokens = int(
-            os.getenv("OPENAI_QUAL_CHECK_MAX_TOKENS", str(self.max_completion_tokens))
-        )
-        # Suggestions write 5-10 rules, and a reasoning model's thinking counts
-        # against the same limit: at 2 x 2,500 tokens gpt-5 often ran out
-        # before writing any of them. A limit costs nothing until it is used.
-        self.rule_suggest_max_completion_tokens = int(
-            os.getenv("OPENAI_RULE_SUGGEST_MAX_TOKENS", "16000")
-        )
-        # Sent with rule writing on the operator key only (an endpoint that
-        # rejects it is not asked again); empty to leave the model's default.
-        self.rule_gen_reasoning_effort = (
-            os.getenv("OPENAI_RULE_GEN_REASONING_EFFORT", "low").strip() or None
-        )
-        # Translation on the operator key: the review model unless
-        # set, at a low effort -- translating needs little thinking.
-        self.translation_model = os.getenv("OPENAI_TRANSLATION_MODEL") or self.qual_check_model
-        self.translation_reasoning_effort = (
-            os.getenv("OPENAI_TRANSLATION_REASONING_EFFORT", "low").strip() or None
-        )
-        self.temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.2"))
+        self.rule_gen_model = settings.rule_gen_model
+        self.qual_check_model = settings.qual_check_model
+        # A reasoning model's thinking counts against the output limit, so
+        # these are generous: suggestions write 5-10 rules, and at 2 x 2,500
+        # tokens gpt-5 often ran out before writing any. Only what is used
+        # is billed.
+        self.rule_gen_max_completion_tokens = settings.openai_rule_gen_max_tokens
+        self.qual_check_max_completion_tokens = settings.openai_qual_check_max_tokens
+        self.rule_suggest_max_completion_tokens = settings.openai_rule_suggest_max_tokens
+        # Sent on the operator key only (an endpoint that rejects it is not
+        # asked again); None leaves the model's default. A user's own provider
+        # always keeps its model's default.
+        self.rule_gen_reasoning_effort = settings.openai_rule_gen_reasoning_effort
+        self.qual_check_reasoning_effort = settings.openai_qual_check_reasoning_effort
+        # Translation: the review model unless set, at a low effort --
+        # translating needs little thinking.
+        self.translation_model = settings.translation_model
+        self.translation_reasoning_effort = settings.openai_translation_reasoning_effort
+        self.temperature = settings.openai_temperature
         self.timeout = 120  # seconds - GPT-5 models with reasoning can take longer
         self.ai = AIClient(timeout=self.timeout, temperature=self.temperature)
 
@@ -692,6 +684,7 @@ Return only clear issues. If no clear issue exists, return an empty list.{dk_rem
                 max_output=self.qual_check_max_completion_tokens,
                 record=record,
                 end_user=end_user,
+                reasoning_effort=self.qual_check_reasoning_effort if provider is None else None,
             )
         except AIError as error:
             logger.warning("Qualitative check failed (%s)", error)

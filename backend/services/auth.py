@@ -6,12 +6,10 @@ Handles JWT tokens, password hashing, and Kobo API key encryption.
 import base64
 import hashlib
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import Annotated
 
 from cryptography.fernet import Fernet, InvalidToken
-from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -22,21 +20,21 @@ from sqlalchemy.orm import Session
 from database.models import User
 from services.app_events import can_view_usage, mark_active
 from services.database import DbSession
-
-load_dotenv()
+from settings import get_settings
 
 # =============================================================================
 # Configuration from environment
 # =============================================================================
 
 # JWT Configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-secret-in-production-please")
+_settings = get_settings()
+SECRET_KEY = _settings.jwt_secret_key
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # Default: 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = _settings.jwt_expire_minutes  # Default: 24 hours
 
 # Encryption key for Kobo API tokens
 # In production, this should be a proper 32-byte Fernet key
-_ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+_ENCRYPTION_KEY = _settings.encryption_key
 if _ENCRYPTION_KEY:
     # Use provided key directly (must be valid Fernet key)
     FERNET_KEY = _ENCRYPTION_KEY.encode() if isinstance(_ENCRYPTION_KEY, str) else _ENCRYPTION_KEY
@@ -45,7 +43,7 @@ else:
     # This ensures consistent encryption even if no ENCRYPTION_KEY is set
     key_bytes = hashlib.sha256(SECRET_KEY.encode()).digest()
     FERNET_KEY = base64.urlsafe_b64encode(key_bytes)
-    if os.getenv("ENVIRONMENT", "development").lower() != "development":
+    if not _settings.is_development:
         # Stored Kobo and AI provider keys are then tied to the JWT secret:
         # rotating it would make every one of them unreadable.
         logging.getLogger(__name__).error(

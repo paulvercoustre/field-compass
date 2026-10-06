@@ -423,10 +423,11 @@ allowance when on the operator key.
 ### 8.6 Usage
 
 Account Settings › **AI use in <month>**, below AI providers: today's free
-AI rule requests ("1 of 30"), then one row per survey the user owns: what it
-runs on (the allowance or a provider), AI checks ("143 of 200" with a bar
-that turns amber when used up, or a count and "no Field Compass limit"),
-rules written, failures, and tokens in / out. Served by `GET /api/ai/usage`.
+AI rule requests ("1 of 30"), the included usage shared by all the user's
+surveys ("143 of 200" with a bar that turns amber when used up, one per
+feature), then one row per survey the user owns: its use this month and
+whether that was on the included usage or on its own key ("no Field Compass
+limit"). Served by `GET /api/ai/usage`.
 Tokens are as reported by the provider; no cost is computed, since prices
 differ by provider and change.
 
@@ -472,7 +473,7 @@ Configured by the operator; proposed defaults:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH` | 200 | Qualitative checks per survey per calendar month (UTC) on the operator key |
+| `AI_ALLOWANCE_CHECKS_PER_USER_MONTH` | 200 | Checked submissions per account per calendar month (UTC) on the operator key, shared by all the surveys the account owns. The older `AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH` is still read |
 | `AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH` | 30 | Rule generations + suggestions per user per month on the operator key (was per day). The per-IP 20/hour limit stays as abuse protection |
 | `AI_ALLOWANCE_ENABLED` | `true` if `OPENAI_API_KEY` is set | With it off, AI features require a connection |
 
@@ -558,9 +559,11 @@ about $0.0008 at the table's prices.
 
 ## 14. Open questions
 
-1. **Allowance size.** 200 checks per survey per month is a placeholder. Is the
-   unit right (per survey, not per user or per organisation), and should the
-   operator be able to raise it for specific surveys?
+1. **Allowance size.** 200 checks per account per month is a placeholder.
+   *Unit, decided:* the included usage is per account (the survey owner),
+   shared by all their surveys, for reviews, translations and transcription
+   alike; usage counts against `ai_usage.billed_user_id`. Open: should the
+   operator be able to raise it for specific accounts?
 2. **Rule writing on the operator key.** Keep it free within a daily limit
    (proposed), or require a connection for it too once the allowance is used?
 3. **Self-hosted endpoints in the hosted deployment.** Leave

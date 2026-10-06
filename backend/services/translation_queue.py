@@ -49,7 +49,7 @@ from etl.translation import (
     translation_input_hash,
     translation_settings,
 )
-from services.ai_allowance import translation_not_run_message, translations_remaining
+from services.ai_allowance import Account, translation_not_run_message, translations_remaining
 from services.ai_errors import NOT_CONFIGURED
 from services.ai_providers import translation_connection, translation_paused_error
 from services.transcription_languages import normalize_language
@@ -105,7 +105,7 @@ class TranslationQueuer:
         # On the operator's key, how many more answers may be translated this
         # month; None when the survey has its own key (no Field Compass limit).
         self.allowance_left: int | None = (
-            translations_remaining(db, survey_config.survey_id)
+            translations_remaining(db, Account.of(survey_config))
             if self.language and connection is None
             else None
         )

@@ -299,7 +299,7 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
               {ownKey
                 ? `Runs on your key “${key.label}”, with no Field Compass limit.`
                 : key.source === 'operator' && allowance
-                ? `Runs on the included usage: ${plural(allowance.limit, 'translation')} a month for this survey, on top of AI review.`
+                ? `Runs on the included usage: ${plural(allowance.limit, 'translation')} a month, shared by all your surveys, on top of AI review.`
                 : 'Needs an AI key first.'}
             </p>
           </div>
@@ -430,7 +430,7 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
               {ownKey
                 ? `${key.label} · no Field Compass limit`
                 : allowance
-                ? `Included usage · ${plural(allowance.limit, 'translation')} a month`
+                ? `Included usage · ${plural(allowance.limit, 'translation')} a month, shared by your surveys`
                 : 'None yet'}
             </dd>
             <dt className="text-gray-500 dark:text-gray-400">Kobo</dt>
@@ -453,7 +453,8 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
             </p>
             {allowance && (
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                This month: {allowance.used + allowance.in_flight} of {plural(allowance.limit, 'included translation')} used
+                This month, across your surveys: {allowance.used + allowance.in_flight} of{' '}
+                {plural(allowance.limit, 'included translation')} used
                 {allowance.in_flight > 0 && ` (${allowance.in_flight} in progress)`}. They don't count against AI review.
               </p>
             )}
@@ -511,7 +512,7 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
       >
         <p>
           About {plural(counts.success + counts.missing, 'answer')} are sent to {whoTranslates ?? 'the AI provider'} again.
-          {allowance && ` This survey has ${allowance.remaining.toLocaleString()} included translations left this month; the rest wait until next month.`}
+          {allowance && ` ${allowance.remaining.toLocaleString()} included translations are left this month across your surveys; the rest wait until next month.`}
         </p>
         <p>Translations made in Kobo are kept. Ours already sent to Kobo are only replaced where nobody corrected them there.</p>
       </ConfirmDialog>

@@ -28,7 +28,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import re
 import time
 from collections.abc import Callable
@@ -40,6 +39,7 @@ import jsonschema
 import openai
 
 from services.ai_errors import BAD_REQUEST, BAD_RESPONSE, NOT_CONFIGURED, AIError, classify
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -125,10 +125,11 @@ _OPERATOR_CAPABILITIES: dict[tuple[str | None, str], Capabilities] = {}
 
 def operator_provider(model: str) -> ResolvedProvider:
     """The operator's own key, from the environment."""
-    api_key = os.getenv("OPENAI_API_KEY")
+    settings = get_settings()
+    api_key = settings.operator_ai_key
     if not api_key:
         raise AIError(NOT_CONFIGURED, "No AI provider is configured (OPENAI_API_KEY).")
-    base_url = os.getenv("OPENAI_BASE_URL") or None
+    base_url = settings.openai_base_url
     capabilities = _OPERATOR_CAPABILITIES.setdefault((base_url, model), Capabilities())
     return ResolvedProvider(
         api_key=api_key, model=model, base_url=base_url, capabilities=capabilities

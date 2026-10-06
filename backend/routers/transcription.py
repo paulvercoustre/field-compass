@@ -29,7 +29,7 @@ from etl.audio import (
 )
 from etl.kobo_fetcher import KoboFetcher, KoboFetchError
 from forms.schema import load_form_schema
-from services.ai_allowance import month_start
+from services.ai_allowance import Account, month_start
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
 from services.permissions import (
@@ -49,8 +49,9 @@ from services.runs import (
 )
 from services.transcription_allowance import (
     max_recording_seconds,
-    minutes_per_survey_month,
+    minutes_per_month,
     seconds_on_own_key,
+    seconds_remaining,
     seconds_used,
 )
 from services.transcription_keys import OWN, client_for, resolve_transcription_key
@@ -134,8 +135,8 @@ def _counts(db: Session, survey_id: UUID) -> dict[str, Any]:
 
 def _settings_payload(db: Session, survey: SurveyConfig, user: User) -> dict[str, Any]:
     settings = transcription_settings(survey.config_data)
-    used = seconds_used(db, survey.survey_id)
-    limit = minutes_per_survey_month()
+    used = seconds_used(db, Account.of(survey))
+    limit = minutes_per_month()
     key = resolve_transcription_key(db, survey)
     client = client_for(key)
     permission = get_user_permission(db, user, survey.survey_id)
@@ -346,7 +347,7 @@ async def estimate_transcription(
         )
         .scalar()
     )
-    remaining = max(0.0, minutes_per_survey_month() * 60 - seconds_used(db, survey.survey_id))
+    remaining = seconds_remaining(db, Account.of(survey))
     return {
         "mode": mode,
         "recordings": max(0, recordings - in_kobo) if mode == "all" else max(0, recordings - done),

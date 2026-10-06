@@ -38,10 +38,11 @@ from etl.translation import (
     translation_settings,
 )
 from services.ai_allowance import (
+    Account,
     allowance_enabled,
     month_start,
     translations_in_flight,
-    translations_per_survey_month,
+    translations_per_month,
     translations_used,
 )
 from services.ai_providers import translation_connection, translation_paused_error
@@ -188,9 +189,10 @@ def _payload(db: Session, survey: SurveyConfig, user: User) -> dict[str, Any]:
     transcribing = transcription_settings(survey.config_data)
     transcribed = set(transcribing.questions) if transcribing.active else set()
     key = _key(db, survey, user)
-    used = translations_used(db, survey.survey_id)
-    in_flight = translations_in_flight(db, survey.survey_id)
-    limit = translations_per_survey_month() if allowance_enabled() else 0
+    account = Account.of(survey)
+    used = translations_used(db, account)
+    in_flight = translations_in_flight(db, account)
+    limit = translations_per_month() if allowance_enabled() else 0
     permission = get_user_permission(db, user, survey.survey_id)
     return {
         "available": key["source"] is not None,
@@ -214,8 +216,9 @@ def _payload(db: Session, survey: SurveyConfig, user: User) -> dict[str, Any]:
             for q in translatable_questions(survey.config_data)
         ],
         "languages": scribe_languages(),
-        # What the included usage gives this survey a month, whoever pays now.
-        "included_per_month": translations_per_survey_month() if allowance_enabled() else 0,
+        # What the included usage gives the owner's account a month, shared by
+        # all their surveys, whoever pays for this one now.
+        "included_per_month": limit,
         "allowance": {
             "month": month_start().strftime("%Y-%m"),
             "limit": limit,

@@ -12,6 +12,8 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
+from settings import get_settings
+
 logger = logging.getLogger(__name__)
 
 # Recordings larger than this are not downloaded: an answer to one question is
@@ -422,8 +424,9 @@ def create_fetcher_from_env() -> KoboFetcher:
     Raises:
         ValueError: If required environment variables are missing
     """
-    api_token = os.getenv("KOBO_API_TOKEN")
-    api_url = os.getenv("KOBO_API_URL", "https://kf.kobotoolbox.org/api/v2")
+    settings = get_settings()
+    api_token = settings.kobo_api_token
+    api_url = settings.kobo_api_url
 
     if not api_token:
         raise ValueError("KOBO_API_TOKEN environment variable is required")

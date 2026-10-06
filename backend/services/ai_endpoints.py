@@ -14,10 +14,11 @@ See docs/specs/ai-provider-overhaul.md, section 9.2.
 """
 
 import ipaddress
-import os
 import socket
 from collections.abc import Callable
 from urllib.parse import urlsplit
+
+from settings import get_settings
 
 Resolver = Callable[..., list]
 
@@ -27,7 +28,7 @@ class EndpointRejected(ValueError):
 
 
 def private_endpoints_allowed() -> bool:
-    return os.getenv("AI_ALLOW_PRIVATE_ENDPOINTS", "").lower() in {"1", "true", "yes"}
+    return get_settings().ai_allow_private_endpoints
 
 
 def _is_public(address: str) -> bool:

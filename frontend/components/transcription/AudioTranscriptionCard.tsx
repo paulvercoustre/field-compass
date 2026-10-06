@@ -351,7 +351,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
               {ownKey
                 ? `Runs on the key \u201c${overview.key.label}\u201d, with no Field Compass limit.`
                 : overview.key.source === 'operator'
-                ? `Runs on the included usage: ${allowance.limit_minutes} minutes a month for this survey.`
+                ? `Runs on the included usage: ${allowance.limit_minutes} minutes a month, shared by all your surveys.`
                 : 'Needs an ElevenLabs key first.'}
             </p>
           </div>
@@ -593,7 +593,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
             <dd className="text-gray-900 dark:text-white">
               {ownKey
                 ? `${overview.key.label} \u00b7 no Field Compass limit`
-                : `Included usage \u00b7 ${allowance.limit_minutes} minutes a month`}
+                : `Included usage \u00b7 ${allowance.limit_minutes} minutes a month, shared by your surveys`}
             </dd>
             <dt className="text-gray-500 dark:text-gray-400">Language</dt>
             <dd className="text-gray-900 dark:text-white">{languageName(settings.language)}</dd>
@@ -654,7 +654,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {ownKey
                 ? `This month: ${overview.key.own_minutes ?? 0} minutes on \u201c${overview.key.label}\u201d.`
-                : `This month: ${allowance.used_minutes} of ${allowance.limit_minutes} included minutes used.`}{' '}
+                : `This month, across your surveys: ${allowance.used_minutes} of ${allowance.limit_minutes} included minutes used.`}{' '}
               Recordings longer than {allowance.max_recording_minutes} minutes are skipped, and those
               that already have a transcript in Kobo keep it.
             </p>
@@ -747,8 +747,8 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                   }.`}
             </p>
             <p>
-              This survey has {estimate.remaining_minutes} included minutes left this month; recordings beyond that wait until
-              next month.
+              {estimate.remaining_minutes} included minutes are left this month across your surveys; recordings beyond that
+              wait until next month.
             </p>
             {estimate.mode === 'all' && <p>Transcripts already sent to Kobo are only replaced where nobody corrected them in Kobo.</p>}
           </>

@@ -168,16 +168,32 @@ export interface AIFeatureUsage {
   output_tokens: number;
 }
 
+export interface UsageMeter {
+  limit: number;
+  used: number;
+  in_flight: number;
+  remaining: number;
+}
+
 export interface AccountAIUsage {
   month: string; // "2026-10"
   resets_at: string;
-  /** What each survey includes on Field Compass's keys; 0 or null when this server includes none. */
+  /**
+   * What the account includes on Field Compass's keys each month, shared by
+   * all the surveys it owns; 0 or null when this server includes none.
+   */
   included: {
-    reviews_per_survey_month: number;
-    /** Included translated answers per survey per month, apart from AI reviews. */
-    translations_per_survey_month: number;
-    transcription_minutes_per_survey_month: number | null;
+    reviews_per_month: number;
+    /** Included translated answers, apart from AI reviews. */
+    translations_per_month: number;
+    transcription_minutes_per_month: number | null;
     rule_requests_per_month: number;
+  };
+  /** This month's included usage, across all the account's surveys; null when none is included. */
+  included_usage: {
+    reviews: UsageMeter | null;
+    translations: UsageMeter | null;
+    transcription: { limit_minutes: number; used_minutes: number; remaining_minutes: number } | null;
   };
   /** Included AI rule requests on the Field Compass key, this month. */
   rule_requests_this_month: { limit: number; used: number; remaining: number };
@@ -185,24 +201,21 @@ export interface AccountAIUsage {
   surveys: Array<{
     survey_id: string;
     survey_name: string;
-    /** Its own provider; null when it uses the Field Compass allowance. */
+    /** Its own AI review provider; null when it uses the included usage. */
     provider: AIConnectionSummary | null;
-    allowance: { limit: number; used: number; in_flight: number; remaining: number } | null;
-    /** Included transcription minutes this month; null when the survey never transcribed. */
+    /** Submissions AI-reviewed this month, on whichever key. */
+    reviews: number;
+    /** Transcription this month; null when the survey never transcribed. */
     transcription: {
-      limit_minutes: number;
-      used_minutes: number;
-      remaining_minutes: number;
       /** The survey's own transcription key, when it has one: no Field Compass limit. */
       provider: AIConnectionSummary | null;
-      own_key_minutes: number;
+      minutes: number;
     } | null;
     /** Translation this month; null when the survey never translated. */
     translation: {
       /** The survey's own key for translation, when it has one: no Field Compass limit. */
       provider: AIConnectionSummary | null;
-      allowance: { limit: number; used: number; in_flight: number; remaining: number } | null;
-      own_key_translations: number;
+      translations: number;
     } | null;
     by_feature: AIFeatureUsage[];
   }>;

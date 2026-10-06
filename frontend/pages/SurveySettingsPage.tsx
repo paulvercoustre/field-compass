@@ -1440,7 +1440,9 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
 
             <AiReviewSection
               surveyId={selectedSurvey.survey_id}
-              isOwner={userPermission === 'owner'}
+              // Not permission === 'owner': an admin's permission reads 'admin'
+              // even on their own surveys, which hid the key choice from them.
+              isOwner={selectedSurvey.is_owner === true}
               checks={qualityChecks}
               setChecks={setQualityChecks}
               reviewableVariables={reviewableVariables}

@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from functools import lru_cache
 from pathlib import Path
+
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ _DATED_SNAPSHOT = re.compile(r"-\d{4}-\d{2}-\d{2}$")
 
 @lru_cache(maxsize=1)
 def _prices() -> dict[str, dict[str, float]]:
-    path = Path(os.getenv("AI_PRICES_FILE") or _DEFAULT_FILE)
+    path = Path(get_settings().ai_prices_file or _DEFAULT_FILE)
     try:
         return json.loads(path.read_text())["models"]
     except (OSError, ValueError, KeyError) as exc:
@@ -70,7 +71,7 @@ def cost_usd_micros(
 
 @lru_cache(maxsize=1)
 def _audio_prices() -> dict[str, dict[str, float]]:
-    path = Path(os.getenv("AI_PRICES_FILE") or _DEFAULT_FILE)
+    path = Path(get_settings().ai_prices_file or _DEFAULT_FILE)
     try:
         return json.loads(path.read_text()).get("audio_models", {})
     except (OSError, ValueError) as exc:

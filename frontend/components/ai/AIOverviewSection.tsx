@@ -19,17 +19,17 @@ interface AIOverviewSectionProps {
  * Explained once here, so the cards below don't have to.
  */
 const AIOverviewSection: React.FC<AIOverviewSectionProps> = ({ usage }) => {
-  const reviewLimit = usage?.included.reviews_per_survey_month ?? null;
-  const translationLimit = usage?.included.translations_per_survey_month ?? null;
-  const minutesLimit = usage?.included.transcription_minutes_per_survey_month ?? null;
+  const reviewLimit = usage?.included.reviews_per_month ?? null;
+  const translationLimit = usage?.included.translations_per_month ?? null;
+  const minutesLimit = usage?.included.transcription_minutes_per_month ?? null;
   const renews = usage
     ? new Date(usage.resets_at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', timeZone: 'UTC' })
     : null;
   const rules = usage?.included.rule_requests_per_month ?? null;
   const figures = [
-    reviewLimit ? { value: reviewLimit, unit: 'AI-reviewed submissions', per: 'per survey, per month' } : null,
-    translationLimit ? { value: translationLimit, unit: 'translated answers', per: 'per survey, per month' } : null,
-    minutesLimit ? { value: minutesLimit, unit: 'minutes of transcription', per: 'per survey, per month' } : null,
+    reviewLimit ? { value: reviewLimit, unit: 'AI-reviewed submissions', per: 'a month, across your surveys' } : null,
+    translationLimit ? { value: translationLimit, unit: 'translated answers', per: 'a month, across your surveys' } : null,
+    minutesLimit ? { value: minutesLimit, unit: 'minutes of transcription', per: 'a month, across your surveys' } : null,
     rules ? { value: rules, unit: 'AI rule requests', per: 'per person, per month' } : null,
   ].filter((figure): figure is { value: number; unit: string; per: string } => figure !== null);
 

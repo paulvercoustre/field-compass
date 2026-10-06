@@ -180,11 +180,10 @@ For a single-VM production-style deployment (low traffic):
    # OpenAI (for AI-powered rule generation and qualitative checks)
    OPENAI_API_KEY=sk-your-openai-api-key-here
    OPENAI_MODEL=gpt-4o-mini
-   OPENAI_MAX_TOKENS=1000
    OPENAI_TEMPERATURE=0.2
    ```
 
-3. **Docker Compose** loads variables from `.env`. Optional vars (`OPENAI_RULE_GEN_MODEL`, `OPENAI_QUAL_CHECK_MODEL`, `CELERY_BROKER_URL`, etc.) have defaults in `docker-compose.yml`.
+3. **Docker Compose** loads variables from `.env`. Every variable the backend reads, with its default, is in `backend/settings.py`; `.env.example` lists them with notes. A malformed value (a word where a number belongs) stops the API and worker on startup with a message naming the variable.
 
 **Security Note**: Never commit your `.env` file to git. It contains sensitive credentials.
 

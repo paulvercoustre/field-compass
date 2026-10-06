@@ -1,5 +1,5 @@
 import React from 'react';
-import { AccountAIUsage } from '../../services/aiConnectionsApi';
+import { AccountAIUsage, AIConnectionSummary } from '../../services/aiConnectionsApi';
 import AIUsageChart from './AIUsageChart';
 
 interface MeterProps {
@@ -35,10 +35,27 @@ const Meter: React.FC<MeterProps> = ({ used, limit, unit = '', label, inFlight =
   );
 };
 
-const OwnKey: React.FC<{ label: string; amount: string }> = ({ label, amount }) => (
+/** One survey's use this month: on its own key, or its share of the included usage. */
+const SurveyShare: React.FC<{ amount: string; provider: AIConnectionSummary | null; included: boolean }> = ({
+  amount,
+  provider,
+  included,
+}) =>
+  provider || included ? (
+    <div>
+      <span className="tabular text-sm text-gray-900 dark:text-white">{amount}</span>
+      <span className="block text-xs text-gray-500 dark:text-gray-400">
+        {provider ? `on ${provider.label} · no limit` : 'included usage'}
+      </span>
+    </div>
+  ) : (
+    <span className="text-xs text-gray-400 dark:text-gray-500">None</span>
+  );
+
+const IncludedMeter: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>
-    <span className="tabular text-sm text-gray-900 dark:text-white">{amount}</span>
-    <span className="block text-xs text-gray-500 dark:text-gray-400">on {label} · no limit</span>
+    <span className="block text-xs font-medium text-gray-700 dark:text-gray-300">{title}</span>
+    <div className="mt-1">{children}</div>
   </div>
 );
 
@@ -50,13 +67,16 @@ interface AIUsageSectionProps {
 
 /**
  * Account settings › AI integration › Usage: a chart over time, then this
- * month per survey against its included usage, or on its own keys.
+ * month's included usage -- shared by all the user's surveys -- and each
+ * survey's use, on the included usage or on its own keys.
  */
 const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKey }) => {
   const monthName = usage
     ? new Date(`${usage.month}-01T00:00:00Z`).toLocaleString(undefined, { month: 'long', timeZone: 'UTC' })
     : '';
   const rules = usage?.rule_requests_this_month;
+  const included = usage?.included_usage ?? { reviews: null, translations: null, transcription: null };
+  const hasIncluded = Boolean(included.reviews || included.translations || included.transcription);
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-card dark:border-gray-800 dark:bg-gray-900">
@@ -71,6 +91,45 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
           <AIUsageChart surveys={usage.surveys} refreshKey={refreshKey} />
 
           <h3 className="mt-6 text-sm font-medium text-gray-900 dark:text-white">{monthName}</h3>
+          {hasIncluded && (
+            <div className="mt-2 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Included usage, shared by all your surveys on Field Compass's keys
+              </p>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {included.reviews && (
+                  <IncludedMeter title="AI review">
+                    <Meter
+                      used={included.reviews.used}
+                      inFlight={included.reviews.in_flight}
+                      limit={included.reviews.limit}
+                      label={`Included AI reviews used in ${monthName}`}
+                    />
+                  </IncludedMeter>
+                )}
+                {included.translations && (
+                  <IncludedMeter title="Translation">
+                    <Meter
+                      used={included.translations.used}
+                      inFlight={included.translations.in_flight}
+                      limit={included.translations.limit}
+                      label={`Included translations used in ${monthName}`}
+                    />
+                  </IncludedMeter>
+                )}
+                {included.transcription && (
+                  <IncludedMeter title="Transcription">
+                    <Meter
+                      used={included.transcription.used_minutes}
+                      limit={included.transcription.limit_minutes}
+                      unit=" min"
+                      label={`Included transcription minutes used in ${monthName}`}
+                    />
+                  </IncludedMeter>
+                )}
+              </div>
+            </div>
+          )}
           {usage.surveys.length === 0 ? (
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">You don't own any surveys yet.</p>
           ) : (
@@ -86,54 +145,34 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
                 </thead>
                 <tbody>
                   {usage.surveys.map((survey) => {
-                    const reviews = survey.by_feature
-                      .filter((row) => row.feature === 'qualitative_check')
-                      .reduce((total, row) => total + row.calls - row.failed, 0);
-                    const transcription = survey.transcription;
-                    const translation = survey.translation;
+                    const { transcription, translation } = survey;
                     return (
                       <tr key={survey.survey_id} className="border-t border-gray-100 align-top dark:border-gray-800">
                         <td className="py-3 pr-4 font-medium text-gray-900 dark:text-white">{survey.survey_name}</td>
                         <td className="py-3 pr-4">
-                          {survey.allowance ? (
-                            <Meter
-                              used={survey.allowance.used}
-                              inFlight={survey.allowance.in_flight}
-                              limit={survey.allowance.limit}
-                              label={`Included AI reviews used in ${monthName} on ${survey.survey_name}`}
-                            />
-                          ) : survey.provider ? (
-                            <OwnKey label={survey.provider.label} amount={`${reviews.toLocaleString()} reviewed`} />
-                          ) : (
-                            <span className="text-xs text-gray-400 dark:text-gray-500">None</span>
-                          )}
+                          <SurveyShare
+                            amount={`${survey.reviews.toLocaleString()} reviewed`}
+                            provider={survey.provider}
+                            included={included.reviews !== null}
+                          />
                         </td>
                         <td className="py-3 pr-4">
-                          {translation?.provider ? (
-                            <OwnKey
-                              label={translation.provider.label}
-                              amount={`${translation.own_key_translations.toLocaleString()} translated`}
-                            />
-                          ) : translation?.allowance ? (
-                            <Meter
-                              used={translation.allowance.used}
-                              inFlight={translation.allowance.in_flight}
-                              limit={translation.allowance.limit}
-                              label={`Included translations used in ${monthName} on ${survey.survey_name}`}
+                          {translation ? (
+                            <SurveyShare
+                              amount={`${translation.translations.toLocaleString()} translated`}
+                              provider={translation.provider}
+                              included={included.translations !== null}
                             />
                           ) : (
                             <span className="text-xs text-gray-400 dark:text-gray-500">Off</span>
                           )}
                         </td>
                         <td className="py-3">
-                          {transcription?.provider ? (
-                            <OwnKey label={transcription.provider.label} amount={`${transcription.own_key_minutes} min`} />
-                          ) : transcription ? (
-                            <Meter
-                              used={transcription.used_minutes}
-                              limit={transcription.limit_minutes}
-                              unit=" min"
-                              label={`Included transcription minutes used in ${monthName} on ${survey.survey_name}`}
+                          {transcription ? (
+                            <SurveyShare
+                              amount={`${transcription.minutes} min`}
+                              provider={transcription.provider}
+                              included={included.transcription !== null}
                             />
                           ) : (
                             <span className="text-xs text-gray-400 dark:text-gray-500">Off</span>

@@ -1,9 +1,9 @@
 """
 Phase 3: the free AI allowance on the operator's key.
 
-200 checked submissions per survey per month and 30 rule requests per user
-per month by default, counted from ai_usage. Surveys with their own provider
-have no Field Compass limit.
+200 checked submissions per account per month, shared by the account's
+surveys, and 30 rule requests per user per month by default, counted from
+ai_usage. Surveys with their own provider have no Field Compass limit.
 """
 
 from datetime import datetime, timedelta
@@ -18,6 +18,7 @@ from etl.pipeline import ETLPipeline
 from services import ai_allowance
 from services.ai_allowance import (
     NOT_RUN_ALLOWANCE,
+    Account,
     checks_in_flight,
     checks_remaining,
     checks_used,
@@ -36,7 +37,7 @@ def _operator_key(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-operator")
     for name in (
         "AI_ALLOWANCE_ENABLED",
-        "AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH",
+        "AI_ALLOWANCE_CHECKS_PER_USER_MONTH",
         "AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH",
     ):
         monkeypatch.delenv(name, raising=False)
@@ -90,10 +91,10 @@ class TestChecksUsed:
         _usage(test_db, sid, feature=RULE_GENERATION)  # not a check
         _usage(test_db, sid, submission_id=6, connection_id=connection.connection_id)  # own key
 
-        assert checks_used(test_db, sid, NOW) == 2
+        assert checks_used(test_db, Account.of(test_survey_config), NOW) == 2
 
     def test_queued_checks_are_reserved(self, test_db, test_survey_config, monkeypatch):
-        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "5")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "5")
         sid = test_survey_config.survey_id
         _usage(test_db, sid, submission_id=99)
         for n, status in enumerate(("pending", "running", "success")):
@@ -111,11 +112,11 @@ class TestChecksUsed:
         test_db.commit()
 
         # 5 - 1 spent - 2 queued or running
-        assert checks_remaining(test_db, sid, NOW) == 2
+        assert checks_remaining(test_db, Account.of(test_survey_config), NOW) == 2
 
     def test_a_retried_check_holds_one_slot(self, test_db, test_survey_config, monkeypatch):
         """Billed, unusable reply, back to pending for a retry: still one submission."""
-        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "5")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "5")
         sid = test_survey_config.survey_id
         test_db.add(
             SubmissionCurrent(
@@ -132,17 +133,16 @@ class TestChecksUsed:
         _usage(test_db, sid, submission_id=7, outcome="bad_response")
         _usage(test_db, sid, submission_id=7, outcome="bad_response")  # a second retry
 
-        assert checks_used(test_db, sid, NOW) == 1
-        assert checks_in_flight(test_db, sid, NOW) == 0
-        assert checks_remaining(test_db, sid, NOW) == 4
+        assert checks_used(test_db, Account.of(test_survey_config), NOW) == 1
+        assert checks_in_flight(test_db, Account.of(test_survey_config), NOW) == 0
+        assert checks_remaining(test_db, Account.of(test_survey_config), NOW) == 4
 
     def test_allowance_off_or_no_operator_key(self, test_db, test_survey_config, monkeypatch):
-        sid = test_survey_config.survey_id
         monkeypatch.setenv("AI_ALLOWANCE_ENABLED", "false")
-        assert checks_remaining(test_db, sid, NOW) == 0
+        assert checks_remaining(test_db, Account.of(test_survey_config), NOW) == 0
         monkeypatch.delenv("AI_ALLOWANCE_ENABLED")
         monkeypatch.delenv("OPENAI_API_KEY")
-        assert checks_remaining(test_db, sid, NOW) == 0
+        assert checks_remaining(test_db, Account.of(test_survey_config), NOW) == 0
 
 
 class TestRuleRequests:
@@ -233,7 +233,7 @@ def _pull(db, survey, count):
 
 class TestPull:
     def test_queues_up_to_the_allowance_and_holds_the_rest(self, test_db, ai_survey, monkeypatch):
-        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "3")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "3")
         stats = _pull(test_db, ai_survey, 5)
 
         assert (stats["llm_queued"], stats["llm_not_run_allowance"]) == (3, 2)
@@ -246,7 +246,7 @@ class TestPull:
         assert all(s.llm_last_error.startswith("allowance: ") for s in held)
 
     def test_held_checks_run_once_there_is_allowance(self, test_db, ai_survey, monkeypatch):
-        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "3")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "3")
         _pull(test_db, ai_survey, 5)
 
         # The queued three finish (spending three), and the limit is raised.
@@ -255,7 +255,7 @@ class TestPull:
         ).update({SubmissionCurrent.llm_check_status: "success"})
         for n in range(3):
             _usage(test_db, ai_survey.survey_id, when=datetime.utcnow(), submission_id=5000 + n)
-        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "10")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "10")
 
         stats = _pull(test_db, ai_survey, 5)
         assert (stats["llm_queued"], stats["llm_not_run_allowance"]) == (2, 0)
@@ -264,7 +264,7 @@ class TestPull:
         self, test_db, ai_survey, monkeypatch
     ):
         """A failed check retried at the cap must not take a new submission's place."""
-        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "2")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "2")
         _pull(test_db, ai_survey, 2)  # both queued: the cap is reached
 
         # One finished; the other was billed, then failed for good.
@@ -283,7 +283,7 @@ class TestPull:
         assert test_db.get(SubmissionCurrent, 5002).llm_check_status == NOT_RUN_ALLOWANCE
 
     def test_own_provider_has_no_field_compass_limit(self, test_db, ai_survey, monkeypatch):
-        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "0")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "0")
         owner = User(
             user_id=uuid4(), email="own@example.invalid", username="own", password_hash="x"
         )
@@ -370,7 +370,7 @@ class TestHttp:
 
         from tests.test_api_endpoints import TEST_USER_ID, TestingSessionLocal
 
-        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_SURVEY_MONTH", "200")
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "200")
         monkeypatch.setenv("AI_ALLOWANCE_RULE_REQUESTS_PER_USER_MONTH", "30")
         survey_id = _api_survey(client)
         db = TestingSessionLocal()
@@ -393,7 +393,13 @@ class TestHttp:
         (survey,) = body["surveys"]
         assert survey["survey_id"] == survey_id
         assert survey["provider"] is None
-        assert survey["allowance"] == {"limit": 200, "used": 1, "in_flight": 0, "remaining": 199}
+        assert survey["reviews"] == 1
+        assert body["included_usage"]["reviews"] == {
+            "limit": 200,
+            "used": 1,
+            "in_flight": 0,
+            "remaining": 199,
+        }
         checks = next(f for f in survey["by_feature"] if f["feature"] == QUALITATIVE_CHECK)
         assert (checks["calls"], checks["failed"], checks["input_tokens"]) == (2, 1, 500)
 
@@ -418,3 +424,136 @@ class TestHttp:
 def test_not_run_message_names_the_month():
     message = ai_allowance.not_run_message(NOW)
     assert message.startswith("allowance: ") and "October" in message
+
+
+class TestPerAccount:
+    """The included usage is the owner's, shared by all their surveys."""
+
+    @staticmethod
+    def _owner(db, name="owner"):
+        user = User(
+            user_id=uuid4(), email=f"{name}@example.invalid", username=name, password_hash="x"
+        )
+        db.add(user)
+        db.commit()
+        return user
+
+    @staticmethod
+    def _survey(db, owner, name):
+        survey = SurveyConfig(
+            survey_id=uuid4(), survey_name=name, config_data={}, user_id=owner.user_id
+        )
+        db.add(survey)
+        db.commit()
+        return survey
+
+    @staticmethod
+    def _pending(db, survey, submission_id):
+        db.add(
+            SubmissionCurrent(
+                _id=submission_id,
+                survey_id=survey.survey_id,
+                _uuid=f"{survey.survey_name}-{submission_id}",
+                _submission_time=NOW,
+                end=NOW,
+                submission_data={},
+                llm_check_status="pending",
+            )
+        )
+        db.commit()
+
+    def test_two_surveys_draw_on_one_allowance(self, test_db, monkeypatch):
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "10")
+        owner = self._owner(test_db)
+        first, second = (
+            self._survey(test_db, owner, "First"),
+            self._survey(test_db, owner, "Second"),
+        )
+        _usage(test_db, first.survey_id, submission_id=1, billed_user_id=owner.user_id)
+        _usage(test_db, second.survey_id, submission_id=1, billed_user_id=owner.user_id)
+        self._pending(test_db, second, 2)
+
+        # The same submission number on two surveys is two checked submissions.
+        assert checks_used(test_db, Account.of(first), NOW) == 2
+        assert checks_in_flight(test_db, Account.of(first), NOW) == 1
+        assert checks_remaining(test_db, Account.of(first), NOW) == 7
+        assert checks_remaining(test_db, Account.of(second), NOW) == 7
+
+    def test_someone_elses_usage_is_theirs(self, test_db, monkeypatch):
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "10")
+        mine, theirs = self._owner(test_db, "me"), self._owner(test_db, "them")
+        survey, other = self._survey(test_db, mine, "Mine"), self._survey(test_db, theirs, "Theirs")
+        _usage(test_db, other.survey_id, submission_id=1, billed_user_id=theirs.user_id)
+        self._pending(test_db, other, 2)
+
+        assert checks_remaining(test_db, Account.of(survey), NOW) == 10
+
+    def test_usage_from_before_billing_was_recorded_counts_for_the_owner(self, test_db):
+        owner = self._owner(test_db)
+        survey = self._survey(test_db, owner, "Old")
+        _usage(test_db, survey.survey_id, submission_id=1)  # billed_user_id NULL
+
+        assert checks_used(test_db, Account.of(survey), NOW) == 1
+
+    def test_a_survey_keeps_the_usage_it_was_billed_for_when_it_changes_hands(self, test_db):
+        before, after = self._owner(test_db, "before"), self._owner(test_db, "after")
+        survey = self._survey(test_db, after, "Handed over")
+        _usage(test_db, survey.survey_id, submission_id=1, billed_user_id=before.user_id)
+
+        assert checks_used(test_db, Account(user_id=before.user_id), NOW) == 1
+        assert checks_used(test_db, Account.of(survey), NOW) == 0
+
+    def test_queued_checks_on_a_survey_with_its_own_key_hold_nothing(self, test_db, monkeypatch):
+        monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "10")
+        owner = self._owner(test_db)
+        included, own = (
+            self._survey(test_db, owner, "Included"),
+            self._survey(test_db, owner, "Own"),
+        )
+        connection = AIConnection(
+            owner_user_id=owner.user_id,
+            label="Own",
+            base_url="https://own.example/v1",
+            check_model="m",
+            status="ok",
+            consecutive_failures=0,
+        )
+        test_db.add(connection)
+        test_db.commit()
+        own.ai_connection_id = connection.connection_id
+        test_db.commit()
+        self._pending(test_db, included, 1)
+        self._pending(test_db, own, 2)
+
+        assert checks_in_flight(test_db, Account.of(included), NOW) == 1
+
+
+class TestTranscriptionPerAccount:
+    def test_reservations_on_two_surveys_share_the_minutes(self, test_db, monkeypatch):
+        from services.transcription_allowance import reserve, seconds_remaining
+
+        monkeypatch.setenv("TRANSCRIPTION_ALLOWANCE_MINUTES_PER_USER_MONTH", "2")
+        owner = TestPerAccount._owner(test_db)
+        first = TestPerAccount._survey(test_db, owner, "First")
+        second = TestPerAccount._survey(test_db, owner, "Second")
+
+        held = reserve(test_db, first, 90, model="scribe_v2", submission_id=1)
+        assert held is not None and held.billed_user_id == owner.user_id
+        assert seconds_remaining(test_db, Account.of(second)) == 30
+        assert reserve(test_db, second, 60, model="scribe_v2", submission_id=1) is None
+        assert reserve(test_db, second, 30, model="scribe_v2", submission_id=1) is not None
+
+
+class TestTranslationsPerAccount:
+    def test_two_surveys_draw_on_one_allowance(self, test_db, monkeypatch):
+        from services.ai_allowance import translations_remaining
+        from services.ai_usage import TRANSLATION
+
+        monkeypatch.setenv("AI_ALLOWANCE_TRANSLATIONS_PER_USER_MONTH", "5")
+        owner = TestPerAccount._owner(test_db)
+        first = TestPerAccount._survey(test_db, owner, "First")
+        second = TestPerAccount._survey(test_db, owner, "Second")
+        for survey in (first, second):
+            _usage(test_db, survey.survey_id, feature=TRANSLATION, billed_user_id=owner.user_id)
+
+        assert translations_remaining(test_db, Account.of(first), NOW) == 3

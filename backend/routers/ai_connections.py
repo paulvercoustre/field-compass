@@ -16,7 +16,6 @@ See docs/specs/ai-provider-overhaul.md, sections 6.3 and 9.
 """
 
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import Literal
 from urllib.parse import urlsplit
@@ -31,16 +30,17 @@ from database.models import AIConnection, AIUsage, SurveyConfig, User
 from etl.audio import transcription_settings
 from etl.translation import translation_settings
 from services.ai_allowance import (
+    Account,
     allowance_enabled,
     checks_in_flight,
-    checks_per_survey_month,
+    checks_per_month,
     checks_used,
     month_start,
     next_month_start,
     rule_requests_per_user_month,
     rule_requests_remaining,
     translations_in_flight,
-    translations_per_survey_month,
+    translations_per_month,
     translations_used,
 )
 from services.ai_endpoints import EndpointRejected, validate_base_url
@@ -57,7 +57,8 @@ from services.auth import CurrentUser, encrypt_api_key
 from services.database import DbSession
 from services.permissions import OwnedSurvey
 from services.rate_limit import limiter
-from services.transcription_allowance import minutes_per_survey_month, seconds_on_own_key
+from services.transcription_allowance import minutes_per_month, seconds_on_own_key
+from services.transcription_allowance import seconds_on_survey as transcription_seconds_on_survey
 from services.transcription_allowance import seconds_used as transcription_seconds_used
 from services.transcription_keys import (
     ELEVENLABS,
@@ -68,6 +69,7 @@ from services.transcription_keys import (
 )
 from services.transcription_keys import base_url as transcription_base_url
 from services.transcription_keys import model as transcription_model
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -467,77 +469,95 @@ async def account_ai_usage(
                 entry["failed"] += calls
 
     enabled = allowance_enabled()
-    check_limit = checks_per_survey_month() if enabled else 0
-    translation_limit = translations_per_survey_month() if enabled else 0
+    account = Account(user_id=current_user.user_id)
+    check_limit = checks_per_month() if enabled else 0
+    translation_limit = translations_per_month() if enabled else 0
+    minutes_limit = minutes_per_month() if get_settings().operator_transcription_key else None
+
+    def meter(limit: int, used: int, in_flight: int) -> dict:
+        return {
+            "limit": limit,
+            "used": used,
+            "in_flight": in_flight,
+            "remaining": max(0, limit - used - in_flight),
+        }
+
+    used_seconds = transcription_seconds_used(db, account)
+    # This month's included usage, shared by every survey the user owns.
+    included_usage = {
+        "reviews": meter(check_limit, checks_used(db, account), checks_in_flight(db, account))
+        if check_limit
+        else None,
+        "translations": meter(
+            translation_limit, translations_used(db, account), translations_in_flight(db, account)
+        )
+        if translation_limit
+        else None,
+        "transcription": {
+            "limit_minutes": minutes_limit,
+            "used_minutes": round(used_seconds / 60, 1),
+            "remaining_minutes": round(max(0.0, minutes_limit * 60 - used_seconds) / 60, 1),
+        }
+        if minutes_limit is not None
+        else None,
+    }
+
+    def spent(survey_id, feature: str):
+        return (
+            AIUsage.survey_id == survey_id,
+            AIUsage.feature == feature,
+            AIUsage.outcome.in_(("ok", "bad_response")),
+            AIUsage.created_at >= since,
+        )
+
     out = []
     for survey in surveys:
         connection = survey_connection(db, survey)
-        allowance = None
-        if connection is None:
-            used = checks_used(db, survey.survey_id)
-            in_flight = checks_in_flight(db, survey.survey_id)
-            allowance = {
-                "limit": check_limit,
-                "used": used,
-                "in_flight": in_flight,
-                "remaining": max(0, check_limit - used - in_flight),
-            }
-        transcription = None
         own_transcription = survey_transcription_connection(db, survey)
-        transcribed = "transcription" in totals.get(survey.survey_id, {})
-        if transcribed or transcription_settings(survey.config_data).enabled:
-            used_seconds = transcription_seconds_used(db, survey.survey_id)
-            limit_minutes = minutes_per_survey_month()
+        own_translation = translation_connection(db, survey)
+        features = totals.get(survey.survey_id, {})
+        reviews = (
+            db.query(func.count(func.distinct(AIUsage.submission_id)))
+            .filter(*spent(survey.survey_id, QUALITATIVE_CHECK))
+            .scalar()
+        ) or 0
+        transcription = None
+        if "transcription" in features or transcription_settings(survey.config_data).enabled:
             transcription = {
-                "limit_minutes": limit_minutes,
-                "used_minutes": round(used_seconds / 60, 1),
-                "remaining_minutes": round(max(0.0, limit_minutes * 60 - used_seconds) / 60, 1),
                 # On the owner's own ElevenLabs key: no Field Compass limit.
                 "provider": connection_summary(own_transcription) if own_transcription else None,
-                "own_key_minutes": round(seconds_on_own_key(db, survey.survey_id) / 60, 1),
+                "minutes": round(
+                    (
+                        seconds_on_own_key(db, survey.survey_id)
+                        if own_transcription
+                        else transcription_seconds_on_survey(db, survey.survey_id)
+                    )
+                    / 60,
+                    1,
+                ),
             }
         translation = None
-        own_translation = translation_connection(db, survey)
-        translated = TRANSLATION_FEATURE in totals.get(survey.survey_id, {})
-        if translated or translation_settings(survey.config_data).enabled:
+        if TRANSLATION_FEATURE in features or translation_settings(survey.config_data).enabled:
             translation = {
                 # On the owner's own key: no Field Compass limit.
                 "provider": connection_summary(own_translation) if own_translation else None,
-                "allowance": None,
-                "own_key_translations": 0,
-            }
-            if own_translation is None:
-                used = translations_used(db, survey.survey_id)
-                in_flight = translations_in_flight(db, survey.survey_id)
-                translation["allowance"] = {
-                    "limit": translation_limit,
-                    "used": used,
-                    "in_flight": in_flight,
-                    "remaining": max(0, translation_limit - used - in_flight),
-                }
-            else:
-                translation["own_key_translations"] = (
+                "translations": (
                     db.query(func.count(AIUsage.usage_id))
-                    .filter(
-                        AIUsage.survey_id == survey.survey_id,
-                        AIUsage.feature == TRANSLATION_FEATURE,
-                        AIUsage.connection_id.isnot(None),
-                        AIUsage.outcome == "ok",
-                        AIUsage.created_at >= since,
-                    )
+                    .filter(*spent(survey.survey_id, TRANSLATION_FEATURE))
                     .scalar()
-                ) or 0
+                )
+                or 0,
+            }
         out.append(
             {
                 "survey_id": str(survey.survey_id),
                 "survey_name": survey.survey_name,
+                # Its own AI review provider; null when it uses the included usage.
                 "provider": connection_summary(connection) if connection else None,
-                "allowance": allowance,
+                "reviews": reviews,
                 "transcription": transcription,
                 "translation": translation,
-                "by_feature": sorted(
-                    totals.get(survey.survey_id, {}).values(), key=lambda entry: entry["feature"]
-                ),
+                "by_feature": sorted(features.values(), key=lambda entry: entry["feature"]),
             }
         )
 
@@ -546,16 +566,15 @@ async def account_ai_usage(
     return {
         "month": since.strftime("%Y-%m"),
         "resets_at": next_month_start().isoformat() + "Z",
-        # What every survey includes on Field Compass's keys; 0 or None when
-        # this server includes none (no key of its own).
+        # What the user's account includes on Field Compass's keys each month,
+        # shared by all their surveys; 0 or None when this server includes none.
         "included": {
-            "reviews_per_survey_month": check_limit,
-            "translations_per_survey_month": translation_limit,
-            "transcription_minutes_per_survey_month": minutes_per_survey_month()
-            if (os.getenv("ELEVENLABS_API_KEY") or "").strip()
-            else None,
+            "reviews_per_month": check_limit,
+            "translations_per_month": translation_limit,
+            "transcription_minutes_per_month": minutes_limit,
             "rule_requests_per_month": rule_limit,
         },
+        "included_usage": included_usage,
         "rule_requests_this_month": {
             "limit": rule_limit,
             "used": rule_limit - rule_left,

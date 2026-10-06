@@ -4,7 +4,6 @@ Main application entry point.
 """
 
 import logging
-import os
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -34,26 +33,15 @@ from routers import (
 )
 from services.database import init_db
 from services.rate_limit import limiter
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 # CORS origins - configurable via environment variable
 # For production, set CORS_ORIGINS as comma-separated list: "https://app.example.com,https://www.example.com"
 # Defaults to localhost for development
-_cors_origins_env = os.getenv("CORS_ORIGINS", "")
-if _cors_origins_env:
-    # Split by comma and strip whitespace
-    ALLOWED_ORIGINS = [origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()]
-else:
-    # Default to localhost for development
-    ALLOWED_ORIGINS = [
-        "http://localhost:3000",
-        "http://localhost:3001",  # Fallback when 3000 is in use
-        "http://localhost:5173",  # Vite default port
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "http://127.0.0.1:5173",
-    ]
+# Read here, at import, so a malformed variable stops the API on startup.
+ALLOWED_ORIGINS = get_settings().allowed_origins
 
 
 @asynccontextmanager
