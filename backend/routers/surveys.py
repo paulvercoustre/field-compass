@@ -5,7 +5,7 @@ Provides access to survey configurations with permission-based access control.
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr, Field
@@ -60,11 +60,11 @@ class SurveyCreate(BaseModel):
 
 class ShareSurveyRequest(BaseModel):
     email: EmailStr
-    permission_level: str = Field(..., pattern="^(editor|viewer)$")
+    permission_level: Literal["editor", "viewer"]
 
 
 class UpdateAccessRequest(BaseModel):
-    permission_level: str = Field(..., pattern="^(editor|viewer)$")
+    permission_level: Literal["editor", "viewer"]
 
 
 # =============================================================================
@@ -124,7 +124,7 @@ async def get_survey(
         # Which AI provider the survey uses; null is the operator's key.
         "ai_connection": _ai_connection_summary(db, survey),
         "created_at": survey.created_at.isoformat() if survey.created_at else None,
-        "updated_at": survey.updated_at.isoformat() if survey.updated_at else None,
+        "updated_at": updated_at.isoformat() if (updated_at := survey.updated_at) else None,
     }
 
 
@@ -231,7 +231,7 @@ async def update_survey(
         "kobo_asset_id": survey.kobo_asset_id,
         "config_data": survey.config_data,
         "permission": "owner",
-        "updated_at": survey.updated_at.isoformat() if survey.updated_at else None,
+        "updated_at": updated_at.isoformat() if (updated_at := survey.updated_at) else None,
     }
 
 

@@ -262,13 +262,12 @@ def parse_result(
     if "transcripts" in body and isinstance(body["transcripts"], list) and body["transcripts"]:
         first = body["transcripts"][0]
         body = {**first, "audio_duration_secs": body.get("audio_duration_secs")}
-    words = body.get("words") if isinstance(body.get("words"), list) else []
+    raw_words = body.get("words")
+    words: list[Any] = raw_words if isinstance(raw_words, list) else []
     seconds = body.get("audio_duration_secs")
     if not isinstance(seconds, int | float):
-        ends = [
-            w.get("end")
-            for w in words
-            if isinstance(w, dict) and isinstance(w.get("end"), int | float)
+        ends: list[float] = [
+            w["end"] for w in words if isinstance(w, dict) and isinstance(w.get("end"), int | float)
         ]
         seconds = max(ends) if ends else fallback_seconds
     probability = body.get("language_probability")

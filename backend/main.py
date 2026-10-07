@@ -7,7 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -73,7 +73,15 @@ app = FastAPI(
 # Rate limiting (protects auth endpoints from credential stuffing and the AI
 # endpoints from budget exhaustion)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def _rate_limited(request: Request, exc: Exception) -> Response:
+    # Starlette types handlers on Exception; slowapi's handler wants its own type.
+    assert isinstance(exc, RateLimitExceeded)
+    return _rate_limit_exceeded_handler(request, exc)
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limited)
 app.add_middleware(SlowAPIMiddleware)
 
 

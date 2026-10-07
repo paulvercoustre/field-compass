@@ -52,7 +52,7 @@ def run_qualitative_check_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         )
         # Best-effort fallback so jobs do not remain indefinitely pending.
         try:
-            submission_id = int(payload.get("submission_id"))
+            submission_id = int(payload["submission_id"])
             survey_id = str(payload.get("survey_id"))
             with SessionLocal() as db:
                 db.execute(

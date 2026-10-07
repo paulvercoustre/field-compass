@@ -110,7 +110,7 @@ class KoboFetcher:
         self,
         asset_uid: str,
         start: datetime | None = None,
-        limit: int = 30000,
+        limit: int | None = 30000,
         query: dict | None = None,
     ) -> list[dict[str, Any]]:
         """

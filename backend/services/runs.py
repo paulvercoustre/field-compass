@@ -161,7 +161,7 @@ def count_by(db: Session, column, *filters) -> Counter[str]:
 
 def _bucket(
     counts: Counter, queued_stat: int | None, open_statuses, done_statuses, failed_statuses
-):
+) -> dict[str, Any]:
     present = sum(counts.values())
     handed_off = max(0, (queued_stat or 0) - present)
     open_count = sum(counts.get(s, 0) for s in open_statuses)
@@ -674,7 +674,7 @@ def _finished_text(summary: dict[str, Any]) -> tuple[str, str]:
         TRANSCRIPTION_RERUN: f"{name}: transcription finished",
         TRANSLATION_RERUN: f"{name}: translation finished",
         KOBO_RESEND: f"{name}: transcripts sent to Kobo",
-    }.get(summary.get("kind"), f"{name}: finished")
+    }.get(str(summary.get("kind") or ""), f"{name}: finished")
     return title, " ".join(parts) or "Nothing new."
 
 

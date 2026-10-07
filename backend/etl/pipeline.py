@@ -5,6 +5,7 @@ Main orchestrator for fetching, merging, and validating submissions.
 
 import logging
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -273,7 +274,9 @@ class ETLPipeline:
                         submission.dk_count = dk_count
                         submission.dk_eligible_count = dk_eligible_count
                         submission.dk_percentage = (
-                            round(dk_percentage, 2) if dk_percentage is not None else None
+                            Decimal(str(round(dk_percentage, 2)))
+                            if dk_percentage is not None
+                            else None
                         )
 
                         # Update deterministic issues while preserving existing LLM qualitative issues.

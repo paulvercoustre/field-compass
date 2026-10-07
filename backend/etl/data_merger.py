@@ -6,6 +6,7 @@ Handles upsert logic for submissions with edit detection and history tracking.
 import logging
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 import jsonpatch
 from sqlalchemy.orm import Session
@@ -288,7 +289,7 @@ def merge_submission(
             logger.info(
                 f"Submission {submission_id} exists but belongs to different survey. Updating survey_id from {existing.survey_id} to {survey_id}"
             )
-            existing.survey_id = survey_id
+            existing.survey_id = UUID(survey_id)
 
         # Check if this is an edit by looking for deprecatedID
         is_edited, edit_reason = is_edited_submission(kobo_data=kobo_data)

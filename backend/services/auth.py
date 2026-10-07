@@ -186,8 +186,8 @@ def decode_access_token(token: str) -> TokenData | None:
     """Decode and validate a JWT access token."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        email: str = payload.get("email")
+        user_id = payload.get("sub")
+        email = payload.get("email")
         if user_id is None:
             return None
         return TokenData(user_id=user_id, email=email)
@@ -258,7 +258,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Db
     )
 
     token_data = decode_access_token(token)
-    if token_data is None:
+    if token_data is None or token_data.user_id is None:
         raise credentials_exception
 
     user = get_user_by_id(db, token_data.user_id)

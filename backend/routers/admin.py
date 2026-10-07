@@ -187,7 +187,9 @@ async def get_usage(
     sources = Counter(
         _source_label(e.details)
         for e in events
-        if e.kind == app_events.SIGNUP and _naive_utc(e.created_at) >= since_30
+        if e.kind == app_events.SIGNUP
+        and (created := _naive_utc(e.created_at)) is not None
+        and created >= since_30
     )
 
     surveys_per_owner = Counter(owner for owner, _ in surveys if owner)

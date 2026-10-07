@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import posixpath
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from database.models import ITEM_OPEN
 from forms.schema import load_form_schema
@@ -160,7 +160,14 @@ def selected_questions(
     return [q for q in audio_questions(config_data) if q.path in chosen and not q.in_repeat]
 
 
-def answer_key(submission_data: dict[str, Any], question: AudioQuestion) -> str | None:
+class _NamedQuestion(Protocol):
+    @property
+    def path(self) -> str: ...
+    @property
+    def name(self) -> str: ...
+
+
+def answer_key(submission_data: dict[str, Any], question: _NamedQuestion) -> str | None:
     """The submission_data key holding this question's answer, if answered."""
     if question.path in submission_data:
         return question.path
@@ -271,7 +278,8 @@ def transcript_input_hash(question_path: str, attachment_uid: str | None) -> str
 
 def root_uuid(submission_data: dict[str, Any]) -> str | None:
     """The id Kobo files a submission's supplement under, without ``uuid:``."""
-    meta = submission_data.get("meta") if isinstance(submission_data.get("meta"), dict) else {}
+    raw_meta = submission_data.get("meta")
+    meta = raw_meta if isinstance(raw_meta, dict) else {}
     for value in (
         submission_data.get("meta/rootUuid"),
         meta.get("rootUuid"),

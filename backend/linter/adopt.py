@@ -1,5 +1,6 @@
 """Adopt lint findings as HFC validation rules (#34)."""
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 from uuid import UUID
 
@@ -14,8 +15,10 @@ def _key(check_id: str, question_path: str | None) -> tuple[str, str]:
     return (check_id, question_path or "")
 
 
-def select_findings(report: LintReport, selections: list[dict[str, str]]) -> list[LintFinding]:
-    wanted = {_key(item["check_id"], item.get("question_path")) for item in selections}
+def select_findings(
+    report: LintReport, selections: Sequence[Mapping[str, str | None]]
+) -> list[LintFinding]:
+    wanted = {_key(item["check_id"] or "", item.get("question_path")) for item in selections}
     return [
         finding
         for finding in report.findings
