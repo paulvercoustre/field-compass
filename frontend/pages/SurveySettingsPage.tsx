@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
-import { getSurveyConfig, updateSurvey, deleteSurvey, SurveyConfig, getValidationRules, createValidationRule, updateValidationRule, deleteValidationRule } from '../services/progressApi';
+import { getSurveyConfig, updateSurvey, SurveyConfig } from '../services/progressApi';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
-import { stagedRuleToDbFormat, dbFormatToStagedRule } from '../utils/ruleConverter';
-import { KoboToolData, StagedRule } from '../types';
+import { KoboToolData } from '../types';
 import CustomChecks from '../components/rule-builder/CustomChecks';
 import { Spinner } from '../components/Spinner';
 import SettingsLayout from '../components/ui/SettingsLayout';
@@ -15,6 +14,7 @@ import CollectionTargets from '../components/ui/CollectionTargets';
 import CollectionTargetsEditor from '../components/ui/CollectionTargetsEditor';
 import { useCollectionTargets } from '../hooks/useCollectionTargets';
 import { useSectionEditor } from '../hooks/useSectionEditor';
+import { useCustomChecks } from '../hooks/useCustomChecks';
 import { DEFAULT_QUALITY_CHECKS, GENERAL_FLAG_KEYS, LLM_KEYS, OUTLIER_KEYS, pick, sameSetting } from '../utils/qualityCheckSettings';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
@@ -27,6 +27,9 @@ import TranslationCard from '../components/translation/TranslationCard';
 import SurveyAccessTab from '../components/settings/SurveyAccessTab';
 import OutlierChecksSection from '../components/settings/OutlierChecksSection';
 import AiReviewSection from '../components/settings/AiReviewSection';
+import GeneralChecksSection from '../components/settings/GeneralChecksSection';
+import KoboFormSection from '../components/settings/KoboFormSection';
+import DeleteSurveySection from '../components/settings/DeleteSurveySection';
 import { SavedNote, SectionActions, SectionEditButton } from '../components/settings/SectionControls';
 import { RequestedTab } from '../contexts/NavigationContext';
 
@@ -50,10 +53,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   // Wrapped so the handlers can be the ones defined further down.
@@ -86,9 +85,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const canEditSurvey = userPermission === 'owner' || userPermission === 'admin';
   const canDeleteSurvey = userPermission === 'owner' || userPermission === 'admin';
 
-  // Validation rules state
-  const [stagedRules, setStagedRules] = useState<StagedRule[]>([]);
-  const [isLoadingRules, setIsLoadingRules] = useState(false);
+  const customChecks = useCustomChecks(selectedSurvey?.survey_id, setError);
 
   // Kobo tool state
   const [koboToolData, setKoboToolData] = useState<KoboToolData | null>(null);
@@ -209,9 +206,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       setSavedAt({});
       loadSurveyConfig();
     } else {
-      // Reset deletion state when no survey is selected (keep success message visible)
-      setIsDeleting(false);
-      setShowDeleteConfirm(false);
+      // Keep the success message visible: a deleted survey ends up here.
       setError(null);
       sections.closeAll();
     }
@@ -226,15 +221,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     // survey.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSurvey?.survey_id]);
-
-  // Reset deletion state when modal is closed
-  useEffect(() => {
-    if (!showDeleteConfirm) {
-      setDeleteConfirmInput('');
-      setDeleteError(null);
-      setIsDeleting(false);
-    }
-  }, [showDeleteConfirm]);
 
   useEffect(() => {
     if (koboToolData && koboToolData.variableMap) {
@@ -389,31 +375,11 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
 
       applyKoboTool(cd);
       
-      // Load validation rules
-      await loadValidationRules();
+      await customChecks.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load survey configuration');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadValidationRules = async () => {
-    if (!selectedSurvey) return;
-    
-    setIsLoadingRules(true);
-    try {
-      const rules = await getValidationRules(selectedSurvey.survey_id);
-      // Convert to StagedRule format for display/editing
-      const staged = rules.map(rule => 
-        dbFormatToStagedRule(rule.rule_id, rule.rule_name, rule.rule_data)
-      );
-      setStagedRules(staged);
-    } catch (err) {
-      console.error('Error loading validation rules:', err);
-      // Don't show error to user, just log it
-    } finally {
-      setIsLoadingRules(false);
     }
   };
 
@@ -603,113 +569,14 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     }
   };
 
-  const handleDeleteClick = () => {
-    // Reset deletion state when opening the modal
-    setIsDeleting(false);
-    setDeleteConfirmInput('');
-    setShowDeleteConfirm(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!selectedSurvey) return;
-
-    setDeleteError(null);
-    setIsDeleting(true);
-    setSuccess(null);
-
-    try {
-      await deleteSurvey(selectedSurvey.survey_id);
-      setSuccess('Survey deleted successfully!');
-      
-      // Close confirmation dialog and reset state
-      setShowDeleteConfirm(false);
-      setIsDeleting(false);
-      
-      // Clear selection and refresh surveys list
+  const handleSurveyDeleted = async () => {
+    setSuccess('Survey deleted successfully!');
+    setSelectedSurvey(null);
+    await refreshSurveys();
+    // Don't auto-select a survey after deletion - let user choose
+    setTimeout(() => {
       setSelectedSurvey(null);
-      await refreshSurveys();
-      
-      // Don't auto-select a survey after deletion - let user choose
-      setTimeout(() => {
-        setSelectedSurvey(null);
-      }, 0);
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete survey');
-      setIsDeleting(false);
-    }
-  };
-
-  const handleDeleteCancel = () => {
-    setShowDeleteConfirm(false);
-    setDeleteConfirmInput('');
-    setDeleteError(null);
-  };
-
-  const handleSaveCustomCheck = useCallback(async (rule: Omit<StagedRule, 'id'>, ruleId: string | null) => {
-    if (!selectedSurvey) return;
-
-    try {
-      const dbRule = stagedRuleToDbFormat({ ...rule, id: '' });
-      if (ruleId) {
-        await updateValidationRule(selectedSurvey.survey_id, ruleId, {
-          rule_name: rule.description,
-          rule_data: dbRule,
-        });
-      } else {
-        await createValidationRule(selectedSurvey.survey_id, {
-          rule_name: rule.description,
-          rule_data: dbRule,
-          is_active: true,
-        });
-      }
-      await loadValidationRules(); // Refresh from server
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save the check');
-      throw err; // Lets the form stay open with what the user entered
-    }
-  }, [selectedSurvey]);
-
-  const handleDeleteRule = useCallback(async (ruleId: string) => {
-    if (!selectedSurvey) return;
-
-    try {
-      await deleteValidationRule(selectedSurvey.survey_id, ruleId);
-      setStagedRules(rules => rules.filter(r => r.id !== ruleId));
-      await loadValidationRules(); // Refresh from server
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete the check');
-    }
-  }, [selectedSurvey]);
-
-  const handleAISuggestedRulesAdded = useCallback(async (rules: StagedRule[]) => {
-    // Save all suggested rules to the database
-    if (!selectedSurvey) return;
-    
-    try {
-      for (const rule of rules) {
-        const dbRule = stagedRuleToDbFormat({ ...rule, id: '' });
-        await createValidationRule(selectedSurvey.survey_id, {
-          rule_name: rule.description,
-          rule_data: dbRule,
-          is_active: true,
-        });
-      }
-      await loadValidationRules(); // Refresh from server
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add the suggested checks');
-      throw err;
-    }
-  }, [selectedSurvey]);
-
-  const handleWeekendDayToggle = (day: number) => {
-    setQualityChecks(prev => {
-      const currentDays = prev.weekend_days || [];
-      if (currentDays.includes(day)) {
-        return { ...prev, weekend_days: currentDays.filter(d => d !== day) };
-      } else {
-        return { ...prev, weekend_days: [...currentDays, day].sort() };
-      }
-    });
+    }, 0);
   };
 
 
@@ -741,16 +608,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     );
   }
 
-  const daysOfWeek = [
-    { value: 0, label: 'Mon' },
-    { value: 1, label: 'Tue' },
-    { value: 2, label: 'Wed' },
-    { value: 3, label: 'Thu' },
-    { value: 4, label: 'Fri' },
-    { value: 5, label: 'Sat' },
-    { value: 6, label: 'Sun' },
-  ];
-
   // Transcription is processing, not a check: its own section, and only for
   // forms that record audio.
   const hasAudioQuestions = !!koboToolData?.survey?.some((row) => row.type === 'audio');
@@ -778,54 +635,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
             autoHideDelay={5000}
           />
         </div>}
-
-        {/* Delete Confirmation Modal */}
-        {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[2px] flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in">
-              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Delete survey</h2>
-              <p className="text-gray-700 dark:text-gray-300 mb-4">
-                Are you sure you want to delete <strong className="text-gray-900 dark:text-white">{surveyName}</strong>?
-                <br />
-                <br />
-                This action cannot be undone. This will permanently delete the survey configuration and all associated data.
-              </p>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Type <strong className="text-gray-900 dark:text-white">{surveyName}</strong> to confirm
-                </label>
-                <input
-                  type="text"
-                  value={deleteConfirmInput}
-                  onChange={(e) => setDeleteConfirmInput(e.target.value)}
-                  placeholder="Survey name"
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                />
-              </div>
-              {deleteError && (
-                <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
-                  <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>
-                </div>
-              )}
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={handleDeleteCancel}
-                  disabled={isDeleting}
-                  className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteConfirm}
-                  disabled={isDeleting || deleteConfirmInput !== surveyName}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-700 disabled:cursor-not-allowed text-sm font-medium"
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete survey'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
 </>}
     >
@@ -924,93 +733,24 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               </div>
             </section>
 
-            {/* Kobo Tool */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Kobo form</h2>
-                {!sections.isEditing('koboTool') && <SavedNote at={savedAt.koboTool} className="ml-auto mr-2" />}
-                {canEditSurvey && !sections.isEditing('koboTool') && (
-                  <SectionEditButton onClick={() => sections.edit('koboTool')} />
-                )}
-              </div>
-              {sections.isEditing('koboTool') ? (
-                <div className="space-y-2">
-                  {koboToolData && (
-                    <div className="mb-3">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{koboToolFileName || 'Form loaded'}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{availableVariables.length} variables</p>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleRefreshFormFromProject}
-                    disabled={isLoadingTool || !config?.kobo_asset_id}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
-                  >
-                    {isLoadingTool ? (
-                      <>
-                        <Spinner size="sm" className="text-current" />
-                        <span>Reading form...</span>
-                      </>
-                    ) : (
-                      <span>Refresh form</span>
-                    )}
-                  </button>
-                  
-                  {/* Label language. Only shown when the form has more than one
-                      translation: a control with a single option asks the user to
-                      read something they cannot act on. */}
-                  {koboToolData && (() => {
-                    // Translations are stored as `label::<language>` columns, so the
-                    // languages the form carries are exactly those column names.
-                    const languages = Array.from(
-                      new Set(
-                        [...koboToolData.survey, ...koboToolData.choices].flatMap((row) =>
-                          Object.keys(row).filter((key) => key.startsWith('label::'))
-                        )
-                      )
-                    );
-                    if (languages.length < 2) return null;
-
-                    return (
-                      <div className="mt-4 space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <label className="block text-sm font-semibold text-gray-900 dark:text-white">
-                          Label language
-                        </label>
-                        <select
-                          value={labelColumnSurvey}
-                          onChange={(e) => {
-                            // One language for both: showing questions in one language
-                            // and their answers in another helps nobody.
-                            setLabelColumnSurvey(e.target.value);
-                            setLabelColumnChoices(e.target.value);
-                          }}
-                          className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          {languages.map((column) => (
-                            <option key={column} value={column}>
-                              {column.replace('label::', '')}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  })()}
-                  <SectionActions controls={sections.controls('koboTool')} className="mt-4" />
-                </div>
-              ) : (
-                <div className="text-gray-700 dark:text-gray-300">
-                  {koboToolData ? (
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{koboToolFileName || 'Form loaded'}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{availableVariables.length} variables</p>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No form loaded yet.</p>
-                  )}
-                </div>
-              )}
-            </section>
+            <KoboFormSection
+              koboToolData={koboToolData}
+              fileName={koboToolFileName}
+              variableCount={availableVariables.length}
+              labelColumn={labelColumnSurvey}
+              onLabelColumnChange={(column) => {
+                // One language for both: showing questions in one language
+                // and their answers in another helps nobody.
+                setLabelColumnSurvey(column);
+                setLabelColumnChoices(column);
+              }}
+              onRefresh={handleRefreshFormFromProject}
+              isRefreshing={isLoadingTool}
+              canRefresh={Boolean(config?.kobo_asset_id)}
+              canEdit={canEditSurvey}
+              controls={sections.controls('koboTool')}
+              savedAt={savedAt.koboTool}
+            />
 
             {/* Form readiness: about the Kobo form, so it sits right below it,
                 and re-runs on its own when the form is refreshed above. */}
@@ -1019,7 +759,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
                 surveyId={selectedSurvey.survey_id}
                 form={refreshedFormPayload}
                 canEdit={canEditSurvey}
-                onRulesAdopted={loadValidationRules}
+                onRulesAdopted={customChecks.reload}
                 autoRunKey={formCheckRunKey}
                 labelColumn={labelColumnSurvey}
               />
@@ -1109,324 +849,29 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               )}
             </section>
 
-            {/* Delete survey Section */}
             {canDeleteSurvey && (
-              <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900/50 p-6">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-2">Delete survey</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Permanently deletes the survey and its data. This cannot be undone.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={handleDeleteClick}
-                  disabled={isDeleting}
-                  className="px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium rounded-lg transition-colors"
-                >
-                  Delete survey
-                </button>
-              </section>
+              <DeleteSurveySection
+                surveyId={selectedSurvey.survey_id}
+                surveyName={config?.survey_name ?? selectedSurvey.survey_name}
+                onDeleted={handleSurveyDeleted}
+              />
             )}
           </div>
         {activeTab === 'access' ? (
           <SurveyAccessTab surveyId={selectedSurvey.survey_id} onError={setError} onSuccess={setSuccess} />
         ) : activeTab === 'quality' ? (
           <div className="space-y-6">
-            {/* General Quality Checks - dirty pattern like Survey Profile */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">General checks</h2>
-              <div className="space-y-6">
-                
-                {/* Out of Period Flag */}
-                <div className="flex items-start">
-                  <div className="flex h-5 items-center">
-                    <input
-                      type="checkbox"
-                      disabled={!canEditSurvey || !hasCollectionDates}
-                      checked={qualityChecks.flag_out_of_period && hasCollectionDates}
-                      onChange={(e) => setQualityChecks({ ...qualityChecks, flag_out_of_period: e.target.checked })}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                    />
-                  </div>
-                  <div className="ml-3">
-                    <label className={`text-sm font-medium ${hasCollectionDates ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-                      Flag submissions outside the collection period
-                    </label>
-                    {!hasCollectionDates && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Needs a collection start or end date (General → Survey profile).
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Weekend Flag */}
-                <div className="space-y-2">
-                  <div className="flex items-start">
-                    <div className="flex h-5 items-center">
-                      <input
-                        type="checkbox"
-                        disabled={!canEditSurvey}
-                        checked={qualityChecks.flag_weekend}
-                        onChange={(e) => setQualityChecks({ ...qualityChecks, flag_weekend: e.target.checked })}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                      />
-                    </div>
-                    <div className="ml-3">
-                      <label className="text-sm font-medium text-gray-900 dark:text-white">
-                        Flag submissions on weekends
-                      </label>
-                    </div>
-                  </div>
-                  
-                  {qualityChecks.flag_weekend && (
-                    <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                      <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Weekend Days:</span>
-                      <div className="flex flex-wrap gap-2">
-                        {daysOfWeek.map((day) => (
-                          <button
-                            key={day.value}
-                            onClick={() => canEditSurvey && handleWeekendDayToggle(day.value)}
-                            disabled={!canEditSurvey}
-                            className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                              qualityChecks.weekend_days?.includes(day.value)
-                                ? 'bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900 dark:text-indigo-200 dark:border-indigo-700'
-                                : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600'
-                            } ${canEditSurvey ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-                          >
-                            {day.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Office Hours Flag */}
-                <div className="space-y-2">
-                  <div className="flex items-start">
-                    <div className="flex h-5 items-center">
-                      <input
-                        type="checkbox"
-                        disabled={!canEditSurvey}
-                        checked={qualityChecks.flag_office_hours}
-                        onChange={(e) => setQualityChecks({ ...qualityChecks, flag_office_hours: e.target.checked })}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                      />
-                    </div>
-                    <div className="ml-3">
-                      <label className="text-sm font-medium text-gray-900 dark:text-white">
-                        Flag submissions outside office hours
-                      </label>
-                    </div>
-                  </div>
-
-                  {qualityChecks.flag_office_hours && (
-                    <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Start Time</label>
-                        {canEditSurvey ? (
-                          <input
-                            type="time"
-                            value={qualityChecks.office_hours_start}
-                            onChange={(e) => setQualityChecks({ ...qualityChecks, office_hours_start: e.target.value })}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        ) : (
-                          <span className="text-sm text-gray-700 dark:text-gray-300">{qualityChecks.office_hours_start}</span>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">End Time</label>
-                        {canEditSurvey ? (
-                          <input
-                            type="time"
-                            value={qualityChecks.office_hours_end}
-                            onChange={(e) => setQualityChecks({ ...qualityChecks, office_hours_end: e.target.value })}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        ) : (
-                          <span className="text-sm text-gray-700 dark:text-gray-300">{qualityChecks.office_hours_end}</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Collection targets check */}
-                <div className="flex items-start">
-                  <div className="flex h-5 items-center">
-                    <input
-                      type="checkbox"
-                      disabled={!canEditSurvey}
-                      checked={qualityChecks.flag_sampling_frame}
-                      onChange={(e) => setQualityChecks({ ...qualityChecks, flag_sampling_frame: e.target.checked })}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                    />
-                  </div>
-                  <div className="ml-3">
-                    <label className="text-sm font-medium text-gray-900 dark:text-white">
-                      Flag submissions outside the collection targets
-                    </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Includes groups missing from the targets file and answers not among the question’s options.
-                    </p>
-                  </div>
-                </div>
-
-                {/* DK Percentage Flag */}
-                <div className="space-y-2">
-                  <div className="flex items-start">
-                    <div className="flex h-5 items-center">
-                      <input
-                        type="checkbox"
-                        disabled={!canEditSurvey}
-                        checked={qualityChecks.flag_dk_percentage}
-                        onChange={(e) => setQualityChecks({ ...qualityChecks, flag_dk_percentage: e.target.checked })}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                      />
-                    </div>
-                    <div className="ml-3">
-                      <label className="text-sm font-medium text-gray-900 dark:text-white">
-                        Flag submissions with a high percentage of "Don't know" answers
-                      </label>
-                    </div>
-                  </div>
-
-                  {qualityChecks.flag_dk_percentage && (
-                    <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        Threshold (%)
-                      </label>
-                      {canEditSurvey ? (
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.1"
-                          value={qualityChecks.dk_percentage_threshold}
-                          onChange={(e) =>
-                            setQualityChecks({
-                              ...qualityChecks,
-                              dk_percentage_threshold: Math.max(
-                                0,
-                                Math.min(100, Number.parseFloat(e.target.value) || 0)
-                              ),
-                            })
-                          }
-                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      ) : (
-                        <span className="text-sm text-gray-700 dark:text-gray-300">
-                          {qualityChecks.dk_percentage_threshold}%
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Empty Answer Percentage Flag */}
-                <div className="space-y-2">
-                  <div className="flex items-start">
-                    <div className="flex h-5 items-center">
-                      <input
-                        type="checkbox"
-                        disabled={!canEditSurvey}
-                        checked={qualityChecks.flag_empty_percentage}
-                        onChange={(e) => setQualityChecks({ ...qualityChecks, flag_empty_percentage: e.target.checked })}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                      />
-                    </div>
-                    <div className="ml-3">
-                      <label className="text-sm font-medium text-gray-900 dark:text-white">
-                        Flag submissions with a high percentage of empty answers
-                      </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Questions hidden by skip logic don’t count as empty.
-                      </p>
-                    </div>
-                  </div>
-
-                  {qualityChecks.flag_empty_percentage && (
-                    <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        Threshold (%)
-                      </label>
-                      {canEditSurvey ? (
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.1"
-                          value={qualityChecks.empty_percentage_threshold}
-                          onChange={(e) =>
-                            setQualityChecks({
-                              ...qualityChecks,
-                              empty_percentage_threshold: Math.max(
-                                0,
-                                Math.min(100, Number.parseFloat(e.target.value) || 0)
-                              ),
-                            })
-                          }
-                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                      ) : (
-                        <span className="text-sm text-gray-700 dark:text-gray-300">
-                          {qualityChecks.empty_percentage_threshold}%
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Survey Duration Limits */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Interview duration limits</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                        Minimum (minutes)
-                      </label>
-                      {canEditSurvey ? (
-                        <input
-                          type="number"
-                          value={globalParameters.min_survey_duration_minutes || ''}
-                          onChange={(e) => setGlobalParameters({ ...globalParameters, min_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          placeholder="e.g., 10"
-                        />
-                      ) : (
-                        <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                          {globalParameters.min_survey_duration_minutes ?? '—'}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                        Maximum (minutes)
-                      </label>
-                      {canEditSurvey ? (
-                        <input
-                          type="number"
-                          value={globalParameters.max_survey_duration_minutes || ''}
-                          onChange={(e) => setGlobalParameters({ ...globalParameters, max_survey_duration_minutes: e.target.value ? parseInt(e.target.value) : null })}
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          placeholder="e.g., 240"
-                        />
-                      ) : (
-                        <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                          {globalParameters.max_survey_duration_minutes ?? '—'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                {!isGeneralFlagsDirty && <SavedNote at={savedAt.generalFlags} className="pt-4" />}
-                {canEditSurvey && isGeneralFlagsDirty && (
-                  <SectionActions controls={sections.controls('generalFlags')} className="pt-4" />
-                )}
-              </div>
-            </section>
+            <GeneralChecksSection
+              checks={qualityChecks}
+              setChecks={setQualityChecks}
+              durations={globalParameters}
+              onDurationChange={(key, minutes) => setGlobalParameters((prev) => ({ ...prev, [key]: minutes }))}
+              hasCollectionDates={hasCollectionDates}
+              canEdit={canEditSurvey}
+              dirty={isGeneralFlagsDirty}
+              controls={sections.controls('generalFlags')}
+              savedAt={savedAt.generalFlags}
+            />
 
             <OutlierChecksSection
               checks={qualityChecks}
@@ -1458,13 +903,13 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               <CustomChecks
                 key={selectedSurvey.survey_id}
                 surveyId={selectedSurvey.survey_id}
-                rules={stagedRules}
-                isLoading={isLoadingRules}
+                rules={customChecks.rules}
+                isLoading={customChecks.isLoading}
                 canEdit={canEditSurvey}
                 koboToolData={koboToolData}
-                onSave={handleSaveCustomCheck}
-                onDelete={handleDeleteRule}
-                onAddMany={handleAISuggestedRulesAdded}
+                onSave={customChecks.save}
+                onDelete={customChecks.remove}
+                onAddMany={customChecks.addMany}
               />
             )}
           </div>
