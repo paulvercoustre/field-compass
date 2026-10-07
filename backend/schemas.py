@@ -361,6 +361,49 @@ class SubmissionListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    # The review tab and the order the list is in: the defaults when none was asked for.
+    review: str | None = None
+    sort: str | None = None
+
+
+class FacetCount(BaseModel):
+    value: str
+    count: int
+
+
+class SamplingFacet(BaseModel):
+    variable: str
+    values: list[FacetCount]
+
+
+class TabCounts(BaseModel):
+    needs_review: int
+    on_hold: int
+    reviewed: int
+    all: int
+
+
+class CleanCounts(BaseModel):
+    """Clean submissions with no decision: ready to approve, or still being checked."""
+
+    ready: int
+    waiting: int
+
+
+class SubmissionFacets(BaseModel):
+    """The counts behind the Submissions tabs and filter menu (services/review_queue.py)."""
+
+    review: str
+    tabs: TabCounts
+    issues: list[FacetCount]
+    enumerators: list[FacetCount]
+    sampling: list[SamplingFacet]
+    clean: CleanCounts
+
+
+class ApproveCleanResult(BaseModel):
+    approved: int
+    failed: int
 
 
 # ============================================================================

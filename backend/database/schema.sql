@@ -31,7 +31,8 @@ CREATE TABLE users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     last_login_at TIMESTAMP WITH TIME ZONE,
-    last_seen_at TIMESTAMP WITH TIME ZONE
+    last_seen_at TIMESTAMP WITH TIME ZONE,
+    preferences JSONB
 );
 
 COMMENT ON TABLE users IS 'User accounts with authentication and Kobo API credentials';
@@ -45,6 +46,7 @@ COMMENT ON COLUMN users.is_active IS 'Whether user account is active';
 COMMENT ON COLUMN users.is_admin IS 'Whether user has admin privileges';
 COMMENT ON COLUMN users.last_login_at IS 'Timestamp of last successful login';
 COMMENT ON COLUMN users.last_seen_at IS 'Last authenticated request; updated at most once a day';
+COMMENT ON COLUMN users.preferences IS 'How the app behaves for this user, e.g. auto_advance; null means the defaults';
 
 CREATE TABLE ai_connections (
     connection_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
