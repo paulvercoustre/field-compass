@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Submission, FilterState } from '../types';
 import { api } from '../services/api';
@@ -41,12 +40,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       let total = 0;
 
       while (true) {
-        const response = await api.getSubmissions(
-          filters,
-          selectedSurvey.survey_id,
-          page,
-          MAX_PAGE_SIZE
-        );
+        const response = await api.getSubmissions(filters, selectedSurvey.survey_id, page, MAX_PAGE_SIZE);
 
         combined.push(...response.submissions);
         total = response.total;
@@ -98,7 +92,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       setSubmissions(data);
 
       // Clear selected submission if it's no longer in the filtered results
-      setSelectedSubmission(prev => (prev && !data.some(s => s._id === prev._id) ? null : prev));
+      setSelectedSubmission((prev) => (prev && !data.some((s) => s._id === prev._id) ? null : prev));
     } catch (err) {
       if (request !== filteredRequest.current) return;
       setError('Failed to fetch submissions.');
@@ -155,7 +149,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     () =>
       runs
         .filter((r) => r.survey_id === selectedSurvey?.survey_id)
-        .map((r) => `${r.run_id}:${r.status}:${r.ai_checks?.done}:${r.ai_checks?.failed}:${r.transcripts?.done}:${r.transcripts?.failed}:${r.kobo?.done}`)
+        .map(
+          (r) =>
+            `${r.run_id}:${r.status}:${r.ai_checks?.done}:${r.ai_checks?.failed}:${r.transcripts?.done}:${r.transcripts?.failed}:${r.kobo?.done}`
+        )
         .join('|'),
     [runs, selectedSurvey?.survey_id]
   );
@@ -187,13 +184,16 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [surveyRunsKey]);
 
-  const handleSelectSubmission = useCallback(async (submissionId: number) => {
-    const submission = submissions.find(s => s._id === submissionId);
-    if (submission) {
-      if (selectedSubmission?._id === submissionId) return; // Avoid refetching for the same submission
-      setSelectedSubmission(submission);
-    }
-  }, [submissions, selectedSubmission]);
+  const handleSelectSubmission = useCallback(
+    async (submissionId: number) => {
+      const submission = submissions.find((s) => s._id === submissionId);
+      if (submission) {
+        if (selectedSubmission?._id === submissionId) return; // Avoid refetching for the same submission
+        setSelectedSubmission(submission);
+      }
+    },
+    [submissions, selectedSubmission]
+  );
 
   const handleFiltersChange = useCallback((newFilters: FilterState) => {
     setFilterState(newFilters);
@@ -201,9 +201,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
 
   const handleSubmissionUpdate = useCallback((updatedSubmission: Submission) => {
     setSelectedSubmission(updatedSubmission);
-    setSubmissions(prev =>
-      prev.map(s => s._id === updatedSubmission._id ? updatedSubmission : s)
-    );
+    setSubmissions((prev) => prev.map((s) => (s._id === updatedSubmission._id ? updatedSubmission : s)));
   }, []);
 
   // Keyboard navigation for submissions
@@ -220,8 +218,8 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
         return;
       }
 
-      const currentIndex = submissions.findIndex(s => s._id === selectedSubmission._id);
-      
+      const currentIndex = submissions.findIndex((s) => s._id === selectedSubmission._id);
+
       if (event.key === 'ArrowDown' && currentIndex < submissions.length - 1) {
         event.preventDefault();
         const nextSubmission = submissions[currentIndex + 1];
@@ -241,10 +239,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader
-        title="Submissions"
-        actions={<PullButton pull={pull} />}
-      >
+      <PageHeader title="Submissions" actions={<PullButton pull={pull} />}>
         <PullStartError pull={pull} />
       </PageHeader>
 

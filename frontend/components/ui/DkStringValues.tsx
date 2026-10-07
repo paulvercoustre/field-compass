@@ -25,13 +25,7 @@ interface DkStringValuesProps {
  * chosen values are chips, the codings the form actually contains are offered
  * as one-click adds, and a dropdown covers everything else.
  */
-const DkStringValues: React.FC<DkStringValuesProps> = ({
-  values,
-  onChange,
-  survey,
-  choices,
-  readOnly = false,
-}) => {
+const DkStringValues: React.FC<DkStringValuesProps> = ({ values, onChange, survey, choices, readOnly = false }) => {
   const [typed, setTyped] = useState('');
 
   // One entry per name: the same coding appears in every list that offers it.
@@ -77,35 +71,34 @@ const DkStringValues: React.FC<DkStringValuesProps> = ({
 
   // Three children, matching the field-grid rows: label, control, extras.
   // Read-only has no control, so the chosen values take its place.
-  const chosenValues = (
-          values.length > 0 ? (
-            <div className="flex flex-wrap gap-2 mb-2">
-              {values.map((value) => (
-                <span
-                  key={value}
-                  title={describe(value)}
-                  className="inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20 rounded-md text-sm"
-                >
-                  {value}
-                  {!readOnly && (
-                    <button
-                      type="button"
-                      onClick={() => remove(value)}
-                      aria-label={`Remove ${value}`}
-                      className="text-indigo-600 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-white"
-                    >
-                      ×
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500 mb-2">
-              {readOnly ? '—' : 'None set — don\'t-know rates will count numeric codes only.'}
-            </p>
-          )
-  );
+  const chosenValues =
+    values.length > 0 ? (
+      <div className="flex flex-wrap gap-2 mb-2">
+        {values.map((value) => (
+          <span
+            key={value}
+            title={describe(value)}
+            className="inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20 rounded-md text-sm"
+          >
+            {value}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => remove(value)}
+                aria-label={`Remove ${value}`}
+                className="text-indigo-600 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-white"
+              >
+                ×
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+    ) : (
+      <p className="text-sm text-gray-500 mb-2">
+        {readOnly ? '—' : "None set — don't-know rates will count numeric codes only."}
+      </p>
+    );
 
   return (
     <div className="field-cell">

@@ -113,7 +113,11 @@ const UsageTab: React.FC = () => {
             value={month.ai_reviews.toLocaleString()}
             hint={`$${month.operator_ai_spend_usd.toFixed(2)} on your key, incl. translation and transcription`}
           />
-          <Stat label="Translations (30 days)" value={(month.translations ?? 0).toLocaleString()} hint="Answers translated" />
+          <Stat
+            label="Translations (30 days)"
+            value={(month.translations ?? 0).toLocaleString()}
+            hint="Answers translated"
+          />
           <Stat
             label="Transcriptions (30 days)"
             value={month.transcriptions.toLocaleString()}
@@ -207,12 +211,20 @@ const UsageTab: React.FC = () => {
                     <div className="text-gray-900 dark:text-white">{row.full_name || row.email}</div>
                     {row.full_name && <div className="text-xs text-gray-500 dark:text-gray-400">{row.email}</div>}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-gray-600 dark:text-gray-400">{shortDate(row.signed_up_at)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-gray-600 dark:text-gray-400">{shortDate(row.last_seen_at)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-gray-600 dark:text-gray-400">
+                    {shortDate(row.signed_up_at)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-gray-600 dark:text-gray-400">
+                    {shortDate(row.last_seen_at)}
+                  </td>
                   <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.source ?? '—'}</td>
-                  <td className="px-3 py-2 text-center"><Check on={row.kobo_connected} /></td>
+                  <td className="px-3 py-2 text-center">
+                    <Check on={row.kobo_connected} />
+                  </td>
                   <td className="px-3 py-2 text-center tabular-nums text-gray-600 dark:text-gray-400">{row.surveys}</td>
-                  <td className="px-5 py-2 text-center"><Check on={row.pulled} /></td>
+                  <td className="px-5 py-2 text-center">
+                    <Check on={row.pulled} />
+                  </td>
                 </tr>
               ))}
             </tbody>

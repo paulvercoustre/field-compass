@@ -1,11 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  adoptLintRules,
-  lintForm,
-  lintSurvey,
-  LintFinding,
-  LintReport,
-} from '../../services/lintApi';
+import { adoptLintRules, lintForm, lintSurvey, LintFinding, LintReport } from '../../services/lintApi';
 import { Spinner } from '../Spinner';
 
 interface FormLintPanelProps {
@@ -59,7 +53,9 @@ const FindingCard: React.FC<{
   return (
     <li className="p-3 bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 space-y-2">
       <div className="flex items-start gap-2">
-        <span className={`shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${SEVERITY_STYLES[finding.severity] || SEVERITY_STYLES.info}`}>
+        <span
+          className={`shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${SEVERITY_STYLES[finding.severity] || SEVERITY_STYLES.info}`}
+        >
           {finding.severity}
         </span>
         <p className="flex-1 text-sm font-medium text-gray-900 dark:text-white">{finding.message}</p>
@@ -74,9 +70,7 @@ const FindingCard: React.FC<{
       </div>
       {open && (
         <div className="space-y-2 pl-1">
-          {finding.details && (
-            <p className="text-sm text-gray-800 dark:text-gray-200">{finding.details}</p>
-          )}
+          {finding.details && <p className="text-sm text-gray-800 dark:text-gray-200">{finding.details}</p>}
           {finding.question_path && (
             <p className="text-xs font-mono text-gray-500 dark:text-gray-400">{finding.question_path}</p>
           )}
@@ -107,10 +101,9 @@ const FindingCard: React.FC<{
 
 const FormLogicMissingNotice: React.FC = () => (
   <p className="text-sm p-3 rounded-md bg-yellow-50 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
-    The copy of this form saved with the survey has no constraints, skip logic, or
-    required flags, and it could not be re-read from Kobo (add your Kobo API key in
-    user settings). Checks that need them were skipped. Read the form from the Kobo
-    project again and save to run them.
+    The copy of this form saved with the survey has no constraints, skip logic, or required flags, and it could not be
+    re-read from Kobo (add your Kobo API key in user settings). Checks that need them were skipped. Read the form from
+    the Kobo project again and save to run them.
   </p>
 );
 
@@ -141,9 +134,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
     setError(null);
     setIsChecking(true);
     try {
-      const next = form
-        ? await lintForm(form, labelColumn)
-        : await lintSurvey(surveyId as string, labelColumn);
+      const next = form ? await lintForm(form, labelColumn) : await lintSurvey(surveyId as string, labelColumn);
       if (seq !== checkSeq.current) return;
       setReport(next);
     } catch (err) {
@@ -225,11 +216,10 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
     <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
-            Form readiness check
-          </h2>
+          <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Form readiness check</h2>
           <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-            Is this form ready for fieldwork? Finds form issues that would switch off quality checks or let errors through.
+            Is this form ready for fieldwork? Finds form issues that would switch off quality checks or let errors
+            through.
           </p>
         </div>
         <button
@@ -246,9 +236,7 @@ const FormLintPanel: React.FC<FormLintPanelProps> = ({
         </button>
       </div>
 
-      {error && (
-        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-      )}
+      {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}
 
       {isChecking && !report && (
         <div className="flex justify-center py-6">

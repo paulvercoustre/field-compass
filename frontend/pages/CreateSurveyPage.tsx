@@ -67,7 +67,7 @@ const CreateSurveyPage: React.FC = () => {
   const [formLanguages, setFormLanguages] = useState<string[]>([]);
   const [selectedLanguage, setSelectedLanguage] = useState<string>('');
   const [coreIdentifiers, setCoreIdentifiers] = useState({
-    uuid: '_uuid',  // always supplied by Kobo as submission metadata
+    uuid: '_uuid', // always supplied by Kobo as submission metadata
     // Form-dependent: never pre-fill a field the user did not choose. A form
     // may name these anything, or not have them at all. These stay empty until
     // a form is read and a conventional name is found in it -- see the effect
@@ -100,7 +100,7 @@ const CreateSurveyPage: React.FC = () => {
       // are question names and nothing else.
       const vars = Array.from(koboToolData.variableMap.keys()) as string[];
       setAvailableVariables(vars);
-      
+
       // Pre-select a conventional name only when the form actually contains a
       // question by that name, and only when exactly one candidate matches.
       // That is a verified, unambiguous match rather than a guess -- unlike a
@@ -113,9 +113,9 @@ const CreateSurveyPage: React.FC = () => {
       //
       // Only fields the user has not already touched are filled, so re-reading
       // the form does not overwrite a deliberate choice.
-      setCoreIdentifiers(prev => {
+      setCoreIdentifiers((prev) => {
         const updated = { ...prev };
-        (['enumerator', 'consent', 'date_interview', 'start_time', 'end_time'] as const).forEach(field => {
+        (['enumerator', 'consent', 'date_interview', 'start_time', 'end_time'] as const).forEach((field) => {
           if (prev[field]) {
             return;
           }
@@ -136,10 +136,8 @@ const CreateSurveyPage: React.FC = () => {
       findDkValues((koboToolData.survey as any[]) || [], (koboToolData.choices as any[]) || [])
         .then((found) => {
           if (cancelled || found.length === 0) return;
-          setSpecialValues(prev =>
-            prev.dk_string_value.length > 0
-              ? prev
-              : { ...prev, dk_string_value: found.map((value) => value.name) }
+          setSpecialValues((prev) =>
+            prev.dk_string_value.length > 0 ? prev : { ...prev, dk_string_value: found.map((value) => value.name) }
           );
         })
         .catch(() => {
@@ -150,7 +148,6 @@ const CreateSurveyPage: React.FC = () => {
       };
     }
   }, [koboToolData]);
-
 
   // Required to create a survey that can actually run: without a project the
   // ETL has nothing to fetch.
@@ -167,28 +164,31 @@ const CreateSurveyPage: React.FC = () => {
   // so a link edited mid-read cannot land the wrong project's form.
   const readForAssetId = useRef<string | null>(null);
 
-  const handleLoadProjectForm = useCallback(async (assetId: string | null = koboAssetId) => {
-    if (!assetId) return;
+  const handleLoadProjectForm = useCallback(
+    async (assetId: string | null = koboAssetId) => {
+      if (!assetId) return;
 
-    readForAssetId.current = assetId;
-    setIsLoadingProjectForm(true);
-    setProjectFormError(null);
-    try {
-      const form = await getKoboProjectForm(assetId);
-      if (readForAssetId.current !== assetId) return;
-      const language = form.languages[0] || 'default';
-      setFormLanguages(form.languages);
-      setSelectedLanguage(language);
-      setKoboToolData(projectFormToKoboTool(form, language));
-      setProjectFormName(form.asset_name || assetId);
-    } catch (err) {
-      if (readForAssetId.current !== assetId) return;
-      setProjectFormError(err instanceof Error ? err.message : 'Could not read the form.');
-      setProjectFormName(null);
-    } finally {
-      if (readForAssetId.current === assetId) setIsLoadingProjectForm(false);
-    }
-  }, [koboAssetId]);
+      readForAssetId.current = assetId;
+      setIsLoadingProjectForm(true);
+      setProjectFormError(null);
+      try {
+        const form = await getKoboProjectForm(assetId);
+        if (readForAssetId.current !== assetId) return;
+        const language = form.languages[0] || 'default';
+        setFormLanguages(form.languages);
+        setSelectedLanguage(language);
+        setKoboToolData(projectFormToKoboTool(form, language));
+        setProjectFormName(form.asset_name || assetId);
+      } catch (err) {
+        if (readForAssetId.current !== assetId) return;
+        setProjectFormError(err instanceof Error ? err.message : 'Could not read the form.');
+        setProjectFormName(null);
+      } finally {
+        if (readForAssetId.current === assetId) setIsLoadingProjectForm(false);
+      }
+    },
+    [koboAssetId]
+  );
 
   // Read the form as soon as the link names a project -- no button needed.
   // Short pause so typing a link character by character does not fire a
@@ -215,13 +215,15 @@ const CreateSurveyPage: React.FC = () => {
           roster_uuid: '_submission__uuid',
           roster_configs: {},
         },
-        kobo_tool: koboToolData ? {
-          survey: koboToolData.survey,
-          choices: koboToolData.choices,
-          has_audit: koboToolData.has_audit ?? null,
-          label_column_survey: labelColumnFor(selectedLanguage),
-          label_column_choices: labelColumnFor(selectedLanguage),
-        } : undefined,
+        kobo_tool: koboToolData
+          ? {
+              survey: koboToolData.survey,
+              choices: koboToolData.choices,
+              has_audit: koboToolData.has_audit ?? null,
+              label_column_survey: labelColumnFor(selectedLanguage),
+              label_column_choices: labelColumnFor(selectedLanguage),
+            }
+          : undefined,
       };
 
       const newSurvey = await createSurvey({
@@ -229,12 +231,12 @@ const CreateSurveyPage: React.FC = () => {
         kobo_asset_id: koboAssetId,
         config_data: configData,
       });
-      
+
       setSuccess('Survey created successfully!');
-      
+
       // Select the new survey, then ask whether to set up its checks now.
       const surveys = await refreshSurveys();
-      const created = surveys.find(s => s.survey_id === newSurvey.survey_id);
+      const created = surveys.find((s) => s.survey_id === newSurvey.survey_id);
       if (created) {
         setSelectedSurvey(created);
         setCreatedSurvey(created);
@@ -259,7 +261,6 @@ const CreateSurveyPage: React.FC = () => {
   const handleConfigureNow = () => leaveFor('settings');
   const handleConfigureLater = () => leaveFor('dashboard');
 
-
   return (
     <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
       <div className="mx-auto max-w-3xl py-2">
@@ -267,18 +268,15 @@ const CreateSurveyPage: React.FC = () => {
 
         <div className="mb-4 space-y-2">
           <ErrorMessage error={error} className="text-base" />
-          <SuccessMessage 
-            message={success} 
-            onDismiss={() => setSuccess(null)}
-            autoHide={true}
-            autoHideDelay={5000}
-          />
+          <SuccessMessage message={success} onDismiss={() => setSuccess(null)} autoHide={true} autoHideDelay={5000} />
         </div>
 
         <div className="space-y-6">
           {/* Basic Information */}
           <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Basic information</h2>
+            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">
+              Basic information
+            </h2>
             <div className="space-y-4">
               <KoboProjectPicker value={koboLink} onChange={handleProjectChange} />
               <div>
@@ -301,7 +299,9 @@ const CreateSurveyPage: React.FC = () => {
                   <input
                     type="date"
                     value={globalParameters.data_collection_start_date}
-                    onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
+                    onChange={(e) =>
+                      setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })
+                    }
                     className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -312,7 +312,9 @@ const CreateSurveyPage: React.FC = () => {
                   <input
                     type="date"
                     value={globalParameters.data_collection_end_date}
-                    onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
+                    onChange={(e) =>
+                      setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })
+                    }
                     className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -325,53 +327,49 @@ const CreateSurveyPage: React.FC = () => {
             <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Survey form</h2>
 
             <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => handleLoadProjectForm(koboAssetId)}
-                  disabled={!koboAssetId || isLoadingProjectForm}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
-                >
-                  {isLoadingProjectForm ? (
-                    <>
-                      <Spinner size="sm" className="text-current" />
-                      <span>Reading form...</span>
-                    </>
-                  ) : (
-                    <span>{projectFormName ? 'Read form again' : 'Read form from project'}</span>
-                  )}
-                </button>
-                {!koboAssetId && (
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    Choose your Kobo project above first.
-                  </p>
+              <button
+                type="button"
+                onClick={() => handleLoadProjectForm(koboAssetId)}
+                disabled={!koboAssetId || isLoadingProjectForm}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
+              >
+                {isLoadingProjectForm ? (
+                  <>
+                    <Spinner size="sm" className="text-current" />
+                    <span>Reading form...</span>
+                  </>
+                ) : (
+                  <span>{projectFormName ? 'Read form again' : 'Read form from project'}</span>
                 )}
-                {projectFormName && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{projectFormName}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{availableVariables.length} questions</p>
-                  </div>
-                )}
-                {formLanguages.length > 1 && (
-                  <div className="pt-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Show question labels in
-                    </label>
-                    <select
-                      value={selectedLanguage}
-                      onChange={(e) => setSelectedLanguage(e.target.value)}
-                      className="w-full sm:w-64 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      {formLanguages.map((language) => (
-                        <option key={language} value={language}>
-                          {language}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {projectFormError && (
-                  <p className="text-sm text-red-600 dark:text-red-400">{projectFormError}</p>
-                )}
+              </button>
+              {!koboAssetId && (
+                <p className="text-xs text-gray-600 dark:text-gray-400">Choose your Kobo project above first.</p>
+              )}
+              {projectFormName && (
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{projectFormName}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{availableVariables.length} questions</p>
+                </div>
+              )}
+              {formLanguages.length > 1 && (
+                <div className="pt-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Show question labels in
+                  </label>
+                  <select
+                    value={selectedLanguage}
+                    onChange={(e) => setSelectedLanguage(e.target.value)}
+                    className="w-full sm:w-64 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {formLanguages.map((language) => (
+                      <option key={language} value={language}>
+                        {language}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {projectFormError && <p className="text-sm text-red-600 dark:text-red-400">{projectFormError}</p>}
             </div>
           </section>
 
@@ -385,7 +383,9 @@ const CreateSurveyPage: React.FC = () => {
 
           {/* Collection Targets */}
           <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Data collection targets</h2>
+            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">
+              Data collection targets
+            </h2>
             <div className="space-y-4">
               <CollectionTargetsEditor targets={targets} koboToolData={koboToolData} />
             </div>
@@ -393,7 +393,9 @@ const CreateSurveyPage: React.FC = () => {
 
           {/* Core Identifiers */}
           <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Core identifiers</h2>
+            <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">
+              Core identifiers
+            </h2>
             <div className="field-grid">
               <VariableDropdown
                 value={coreIdentifiers.enumerator}
@@ -434,16 +436,12 @@ const CreateSurveyPage: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       {showQualityCheckPrompt && (
-        <QualityCheckPromptModal
-          onConfigureNow={handleConfigureNow}
-          onConfigureLater={handleConfigureLater}
-        />
+        <QualityCheckPromptModal onConfigureNow={handleConfigureNow} onConfigureLater={handleConfigureLater} />
       )}
     </div>
   );
 };
 
 export default CreateSurveyPage;
-

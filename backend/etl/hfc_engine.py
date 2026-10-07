@@ -7,7 +7,7 @@ import logging
 import math
 import re
 import statistics
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import date, datetime, time
 from typing import Any
 
@@ -156,6 +156,18 @@ def blank_checked_only(expression: str, variables: list[str]) -> set[str]:
     }
 
 
+def signed_log1p(x: float) -> float:
+    """sign(x) * log(1 + |x|): compresses a long tail, keeps zero and the sign."""
+    return (1 if x > 0 else -1 if x < 0 else 0) * math.log(1 + abs(x))
+
+
+def signed_log1p_inverse(y: float) -> float:
+    """The inverse of signed_log1p, to show bounds on the raw scale."""
+    if y >= 0:
+        return math.exp(y) - 1
+    return 1 - math.exp(-y)
+
+
 class HFCEngine:
     """High-Frequency Check engine for data quality validation."""
 
@@ -230,7 +242,9 @@ class HFCEngine:
         self.flag_outliers = qc.flag_outliers
         self.outlier_variables = qc.outlier_variables
         self.outlier_log_transform_variables = [
-            v for v in qc.outlier_log_transform_variables or [] if v in self.outlier_variables
+            v
+            for v in qc.outlier_log_transform_variables or []
+            if v in (self.outlier_variables or [])
         ]
         self.outlier_method = qc.outlier_method
         self.outlier_threshold = qc.outlier_threshold
@@ -315,9 +329,7 @@ class HFCEngine:
                 # Build detection values: transformed when configured, else raw
                 use_log_transform = variable in self.outlier_log_transform_variables
                 detection_values = (
-                    [self._signed_log_transform(v) for v in raw_values]
-                    if use_log_transform
-                    else raw_values
+                    [signed_log1p(v) for v in raw_values] if use_log_transform else raw_values
                 )
 
                 # Compute detection stats (for IQR/MAD/Z-score) from detection values
@@ -426,16 +438,6 @@ class HFCEngine:
         except (ValueError, TypeError):
             # Not a numeric string, return original value
             return value
-
-    def _signed_log_transform(self, x: float) -> float:
-        """Signed log transform: sign(x) × log(1 + |x|). Handles zero, positive, and negative values."""
-        return (1 if x > 0 else -1 if x < 0 else 0) * math.log(1 + abs(x))
-
-    def _signed_log_inverse(self, y: float) -> float:
-        """Inverse of signed log transform for bounds display."""
-        if y >= 0:
-            return math.exp(y) - 1
-        return 1 - math.exp(-y)
 
     def run_checks(
         self,
@@ -589,12 +591,15 @@ class HFCEngine:
 
         # Submission was edited after last validation
         # (is_edited flag indicates this was edited in Kobo)
-        if submission.is_edited and submission.updated_at > submission.last_validated_at:
+        updated_at = submission.updated_at
+        if updated_at is None:
+            return (False, "up_to_date")
+        if submission.is_edited and updated_at > submission.last_validated_at:
             return (True, "submission_edited")
 
         # Submission data updated after validation (catches edge cases)
         # This handles cases where data changed without is_edited being set
-        if submission.updated_at > submission.last_validated_at:
+        if updated_at > submission.last_validated_at:
             return (True, "data_updated")
 
         # No revalidation needed
@@ -673,7 +678,7 @@ class HFCEngine:
         # 3. Interview date: inside the collection period, and not on a weekend.
         date_value, date_field_path = find_answer(submission_data, self.date_interview_field)
         interview_date = _parse_date(date_value)
-        date_field = date_field_path or self.date_interview_field
+        date_field = date_field_path or self.date_interview_field or ""
         if interview_date and self.flag_out_of_period:
             if self._period_start and interview_date < self._period_start:
                 issues.append(
@@ -693,7 +698,11 @@ class HFCEngine:
                         message=f"Interview date {interview_date} is after allowed end date {self._period_end}",
                     )
                 )
-        if interview_date and self.flag_weekend and interview_date.weekday() in self.weekend_days:
+        if (
+            interview_date
+            and self.flag_weekend
+            and interview_date.weekday() in (self.weekend_days or [])
+        ):
             issues.append(
                 QualityIssue(
                     check="interview_on_weekend",
@@ -757,7 +766,8 @@ class HFCEngine:
 
         dk_count, dk_eligible_count, dk_percentage = self.compute_dk_metrics(submission_data)
 
-        if dk_percentage is None:
+        # A threshold set to null in the stored config means no threshold.
+        if dk_percentage is None or self.dk_percentage_threshold is None:
             return issues
 
         if dk_percentage >= self.dk_percentage_threshold:
@@ -832,7 +842,8 @@ class HFCEngine:
     def _check_empty_percentage(self, submission_data: dict[str, Any]) -> list[QualityIssue]:
         """Flag submission when the share of shown questions left empty exceeds the threshold."""
         empty_count, shown_count, empty_percentage = self.compute_empty_metrics(submission_data)
-        if empty_percentage is None or empty_percentage < self.empty_percentage_threshold:
+        threshold = self.empty_percentage_threshold
+        if empty_percentage is None or threshold is None or empty_percentage < threshold:
             return []
 
         return [
@@ -1175,6 +1186,10 @@ class HFCEngine:
 
         if not self.outlier_variables:
             return issues
+        # Null in the stored config: the model's defaults. The attributes stay as
+        # stored, since the rules hash is computed from them.
+        method = self.outlier_method or "iqr"
+        threshold = self.outlier_threshold if self.outlier_threshold is not None else 1.5
 
         # Compute statistics for each variable from all existing submissions
         for variable in self.outlier_variables:
@@ -1214,24 +1229,20 @@ class HFCEngine:
                 # Keep raw value for display; use transformed value only for detection
                 raw_value = float(numeric_value)
                 use_log_transform = variable in self.outlier_log_transform_variables
-                value_for_detection = (
-                    self._signed_log_transform(raw_value) if use_log_transform else raw_value
-                )
+                value_for_detection = signed_log1p(raw_value) if use_log_transform else raw_value
 
                 # Check if value is an outlier using the configured method
-                is_outlier = self._is_outlier(
-                    value_for_detection, stats, self.outlier_method, self.outlier_threshold
-                )
+                is_outlier = self._is_outlier(value_for_detection, stats, method, threshold)
 
                 if is_outlier:
-                    method_name = self.outlier_method.upper()
+                    method_name = method.upper()
 
                     # Calculate bounds for display (inverse-transform to raw space when needed)
                     bounds_info = self._get_outlier_bounds(
                         value_for_detection,
                         stats,
-                        self.outlier_method,
-                        self.outlier_threshold,
+                        method,
+                        threshold,
                         log_transform=use_log_transform,
                     )
 
@@ -1413,8 +1424,8 @@ class HFCEngine:
             lb = result.get("lower_bound")
             ub = result.get("upper_bound")
             if lb is not None and ub is not None:
-                result["lower_bound"] = round(self._signed_log_inverse(lb), 3)
-                result["upper_bound"] = round(self._signed_log_inverse(ub), 3)
+                result["lower_bound"] = round(signed_log1p_inverse(lb), 3)
+                result["upper_bound"] = round(signed_log1p_inverse(ub), 3)
 
         return result
 
@@ -1573,9 +1584,8 @@ class HFCEngine:
         import json
 
         kobo_tool = (self.config_data or {}).get("kobo_tool") or {}
-        content = (
-            kobo_tool.get("content") if isinstance(kobo_tool.get("content"), dict) else kobo_tool
-        )
+        nested = kobo_tool.get("content")
+        content = nested if isinstance(nested, dict) else kobo_tool
         rows = [
             {column: row.get(column) for column in _FORM_LOGIC_COLUMNS if row.get(column)}
             for row in (content.get("survey") or [])
@@ -1677,7 +1687,9 @@ class HFCEngine:
             return False
 
     def determine_qa_status(
-        self, issues: list[QualityIssue], kobo_validation_status: str | None = None
+        self,
+        issues: Sequence[QualityIssue | dict[str, Any]] | None,
+        kobo_validation_status: str | None = None,
     ) -> str | None:
         """
         Determine QA status based on HFC issues and Kobo validation status.

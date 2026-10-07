@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { getSurveyAccess, revokeSurveyAccess, shareSurvey, SurveyAccessEntry, updateSurveyAccess } from '../../services/progressApi';
+import {
+  getSurveyAccess,
+  revokeSurveyAccess,
+  shareSurvey,
+  SurveyAccessEntry,
+  updateSurveyAccess,
+} from '../../services/progressApi';
 import { ApiError } from '../../services/apiBase';
 import { Spinner } from '../Spinner';
 
@@ -83,9 +89,7 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
           </div>
         ) : accessList.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-sm py-4">
-            {canManageAccess 
-              ? "No one else has access to this survey yet." 
-              : "Unable to load access list."}
+            {canManageAccess ? 'No one else has access to this survey yet.' : 'Unable to load access list.'}
           </p>
         ) : (
           <div className="space-y-3">
@@ -102,9 +106,7 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
                     <div className="font-medium text-gray-900 dark:text-white">
                       {access.full_name || access.username}
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {access.email}
-                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{access.email}</div>
                   </div>
                 </div>
 
@@ -129,16 +131,23 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
                         title="Revoke access"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
                         </svg>
                       </button>
                     </>
                   ) : (
-                    <span className={`px-3 py-1 text-sm font-medium rounded-full ${
-                      access.permission_level === 'editor' 
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                        : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                    }`}>
+                    <span
+                      className={`px-3 py-1 text-sm font-medium rounded-full ${
+                        access.permission_level === 'editor'
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                          : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                      }`}
+                    >
                       {access.permission_level === 'editor' ? 'Editor' : 'Viewer'}
                     </span>
                   )}
@@ -162,9 +171,7 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
         ) : (
           <form onSubmit={handleShare} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Invite by email
-              </label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Invite by email</label>
               <div className="flex gap-2">
                 <input
                   type="email"
@@ -192,7 +199,8 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
               </div>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              <strong>Viewer:</strong> Can view data and reports. <strong>Editor:</strong> Can also run ETL and resolve flags.
+              <strong>Viewer:</strong> Can view data and reports. <strong>Editor:</strong> Can also run ETL and resolve
+              flags.
             </p>
           </form>
         )}

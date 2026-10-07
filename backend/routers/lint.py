@@ -5,6 +5,7 @@ Every check is a pure function of the form schema: no model, no network, and
 no respondent data.
 """
 
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -81,12 +82,14 @@ def _survey_form(survey: SurveyConfig, current_user: User) -> SurveyForm:
     report says the logic is missing and the checks that need it are skipped.
     """
     token = get_user_kobo_token(current_user)
-    fetch_live = None
+    fetch_live: Callable[[str], Any] | None = None
     if token:
         api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
 
-        def fetch_live(asset_uid: str) -> Any:
+        def fetch_with_token(asset_uid: str) -> Any:
             return KoboFetcher(api_token=token, api_url=api_url).get_asset_info(asset_uid)
+
+        fetch_live = fetch_with_token
 
     survey_form = load_survey_form(survey, fetch_live)
     _require_form(survey_form.schema)

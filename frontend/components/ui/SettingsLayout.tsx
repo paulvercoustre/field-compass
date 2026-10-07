@@ -20,7 +20,14 @@ interface SettingsLayoutProps<T extends string> {
  * selected section on the right. Shared by survey and account settings so
  * the two look and behave the same.
  */
-const SettingsLayout = <T extends string>({ title, items, active, onSelect, banner, children }: SettingsLayoutProps<T>) => (
+const SettingsLayout = <T extends string>({
+  title,
+  items,
+  active,
+  onSelect,
+  banner,
+  children,
+}: SettingsLayoutProps<T>) => (
   <div className="h-full overflow-y-auto p-4 md:p-8 text-gray-700 dark:text-gray-300">
     <div className="w-full max-w-7xl mx-auto">
       {banner}

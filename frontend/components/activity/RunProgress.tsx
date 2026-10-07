@@ -32,7 +32,9 @@ export const runTitle = (run: RunSummary): string => {
   return `${what} started${who}, ${time(run.started_at || run.created_at)}`;
 };
 
-export const runStatusLabel = (run: RunSummary): { label: string; tone: 'busy' | 'ok' | 'warn' | 'error' | 'muted' } => {
+export const runStatusLabel = (
+  run: RunSummary
+): { label: string; tone: 'busy' | 'ok' | 'warn' | 'error' | 'muted' } => {
   switch (run.status) {
     case 'queued':
       return { label: 'Starting', tone: 'busy' };
@@ -45,7 +47,10 @@ export const runStatusLabel = (run: RunSummary): { label: string; tone: 'busy' |
     case 'stopped':
       return { label: 'Stopped', tone: 'muted' };
     default:
-      return { label: run.problems.length ? 'Finished, with problems' : 'Finished', tone: run.problems.length ? 'warn' : 'ok' };
+      return {
+        label: run.problems.length ? 'Finished, with problems' : 'Finished',
+        tone: run.problems.length ? 'warn' : 'ok',
+      };
   }
 };
 
@@ -59,7 +64,10 @@ const actionTarget = (action: RunAction, surveyId: string): { label: string; tar
     case 'open_kobo_settings':
       return { label: 'Open Kobo connection', target: { view: 'userSettings', tab: 'kobo' } };
     case 'open_transcription_settings':
-      return { label: 'Open transcription settings', target: { view: 'settings', survey_id: surveyId, tab: 'transcription' } };
+      return {
+        label: 'Open transcription settings',
+        target: { view: 'settings', survey_id: surveyId, tab: 'transcription' },
+      };
     default:
       return null;
   }
@@ -67,7 +75,8 @@ const actionTarget = (action: RunAction, surveyId: string): { label: string; tar
 
 const StepIcon: React.FC<{ state: 'done' | 'busy' | 'warn' | 'waiting' }> = ({ state }) => {
   if (state === 'busy') return <Spinner size="sm" className="text-indigo-600 dark:text-indigo-400" />;
-  if (state === 'waiting') return <span className="block h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true" />;
+  if (state === 'waiting')
+    return <span className="block h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true" />;
   return (
     <svg
       className={`h-4 w-4 ${state === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}
@@ -79,7 +88,11 @@ const StepIcon: React.FC<{ state: 'done' | 'busy' | 'warn' | 'waiting' }> = ({ s
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {state === 'warn' ? <path d="M12 8v5M12 16.5h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /> : <path d="m5 12.5 4.5 4.5L19 7" />}
+      {state === 'warn' ? (
+        <path d="M12 8v5M12 16.5h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+      ) : (
+        <path d="m5 12.5 4.5 4.5L19 7" />
+      )}
     </svg>
   );
 };
@@ -95,7 +108,10 @@ const Bar: React.FC<{ done: number; total: number; label: string }> = ({ done, t
       aria-valuenow={done}
       aria-label={label}
     >
-      <div className="h-full rounded-full bg-indigo-500 transition-[width] duration-500" style={{ width: `${share}%` }} />
+      <div
+        className="h-full rounded-full bg-indigo-500 transition-[width] duration-500"
+        style={{ width: `${share}%` }}
+      />
     </div>
   );
 };
@@ -122,11 +138,20 @@ const Step: React.FC<StepProps> = ({ state, title, children, bar }) => (
   </li>
 );
 
-const CountLink: React.FC<{ count: number; text: string; onClick?: () => void; tone?: 'warn' }> = ({ count, text, onClick, tone }) => {
+const CountLink: React.FC<{ count: number; text: string; onClick?: () => void; tone?: 'warn' }> = ({
+  count,
+  text,
+  onClick,
+  tone,
+}) => {
   if (!count) return null;
   const className = tone === 'warn' ? 'text-amber-700 dark:text-amber-300' : '';
   return onClick ? (
-    <button type="button" onClick={onClick} className={`underline decoration-dotted underline-offset-2 hover:text-gray-900 dark:hover:text-white ${className}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`underline decoration-dotted underline-offset-2 hover:text-gray-900 dark:hover:text-white ${className}`}
+    >
       {number(count)} {text}
     </button>
   ) : (
@@ -165,7 +190,9 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
 
   const permission = surveys.find((s) => s.survey_id === run.survey_id)?.permission;
   const canStop =
-    isOpen(run) && !run.stop_requested && (run.started_by.user_id === user?.user_id || permission === 'owner' || permission === 'admin');
+    isOpen(run) &&
+    !run.stop_requested &&
+    (run.started_by.user_id === user?.user_id || permission === 'owner' || permission === 'admin');
   const toSubmissions = (filters: Record<string, unknown>) => () =>
     navigate({ view: 'dashboard', survey_id: run.survey_id, filters });
 
@@ -201,16 +228,22 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {!compact && <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{run.survey_name}</p>}
+          {!compact && (
+            <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{run.survey_name}</p>
+          )}
           <p className="text-xs text-gray-500 dark:text-gray-400">{runTitle(run)}</p>
         </div>
-        <span className={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${statusClass}`}>
+        <span
+          className={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${statusClass}`}
+        >
           {status.label}
         </span>
       </div>
 
       {run.status === 'failed' && run.error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-200">{run.error}</p>
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-200">
+          {run.error}
+        </p>
       )}
 
       <ol className="space-y-2.5">
@@ -218,7 +251,13 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
           <>
             <Step
               state={run.status === 'queued' || run.stage === 'fetching' ? 'busy' : 'done'}
-              title={run.status === 'queued' ? 'Waiting to start' : run.stage === 'fetching' ? 'Fetching from Kobo…' : 'Fetched from Kobo'}
+              title={
+                run.status === 'queued'
+                  ? 'Waiting to start'
+                  : run.stage === 'fetching'
+                    ? 'Fetching from Kobo…'
+                    : 'Fetched from Kobo'
+              }
             >
               {pull && run.stage !== 'fetching' && run.status !== 'queued' && (
                 <>
@@ -270,7 +309,12 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
             {ai.failed > 0 && (
               <>
                 {sep}
-                <CountLink count={ai.failed} text="failed" tone="warn" onClick={toSubmissions({ aiReview: 'failed' })} />
+                <CountLink
+                  count={ai.failed}
+                  text="failed"
+                  tone="warn"
+                  onClick={toSubmissions({ aiReview: 'failed' })}
+                />
               </>
             )}
             {ai.not_run > 0 && (
@@ -297,7 +341,10 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
           <Step
             state={bucketState(transcripts)}
             title="Transcripts"
-            bar={{ done: transcripts.done + transcripts.failed + transcripts.not_run, total: transcripts.queued - transcripts.handed_off }}
+            bar={{
+              done: transcripts.done + transcripts.failed + transcripts.not_run,
+              total: transcripts.queued - transcripts.handed_off,
+            }}
           >
             {number(transcripts.done)} of {number(transcripts.queued - transcripts.handed_off)}
             {transcripts.minutes > 0 && (
@@ -309,13 +356,23 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
             {(transcripts.flagged ?? 0) > 0 && (
               <>
                 {sep}
-                <CountLink count={transcripts.flagged ?? 0} text="flagged" tone="warn" onClick={toSubmissions({ qaStatuses: ['FLAGGED'], transcript: 'any' })} />
+                <CountLink
+                  count={transcripts.flagged ?? 0}
+                  text="flagged"
+                  tone="warn"
+                  onClick={toSubmissions({ qaStatuses: ['FLAGGED'], transcript: 'any' })}
+                />
               </>
             )}
             {transcripts.failed > 0 && (
               <>
                 {sep}
-                <CountLink count={transcripts.failed} text="failed" tone="warn" onClick={toSubmissions({ transcript: 'failed' })} />
+                <CountLink
+                  count={transcripts.failed}
+                  text="failed"
+                  tone="warn"
+                  onClick={toSubmissions({ transcript: 'failed' })}
+                />
               </>
             )}
             {transcripts.not_run > 0 && (
@@ -342,7 +399,10 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
           <Step
             state={bucketState(translations)}
             title="Translations"
-            bar={{ done: translations.done + translations.failed + translations.not_run, total: translations.queued - translations.handed_off }}
+            bar={{
+              done: translations.done + translations.failed + translations.not_run,
+              total: translations.queued - translations.handed_off,
+            }}
           >
             {number(translations.done)} of {number(translations.queued - translations.handed_off)}
             {translations.failed > 0 && (
@@ -367,7 +427,11 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
         )}
 
         {kobo && kobo.queued > 0 && (
-          <Step state={bucketState(kobo)} title="Sent to Kobo" bar={{ done: kobo.done + kobo.failed + kobo.not_run, total: kobo.queued }}>
+          <Step
+            state={bucketState(kobo)}
+            title="Sent to Kobo"
+            bar={{ done: kobo.done + kobo.failed + kobo.not_run, total: kobo.queued }}
+          >
             {number(kobo.done)} of {number(kobo.queued)}
             {kobo.edited_in_kobo > 0 && (
               <>
@@ -437,8 +501,9 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
         onCancel={() => setConfirmStop(false)}
       >
         <p>
-          Queued AI reviews and transcriptions for <strong className="text-gray-900 dark:text-white">{run.survey_name}</strong> won't run now.
-          Work already under way finishes.
+          Queued AI reviews and transcriptions for{' '}
+          <strong className="text-gray-900 dark:text-white">{run.survey_name}</strong> won't run now. Work already under
+          way finishes.
         </p>
         <p>Everything stopped runs again on the next pull.</p>
         {stopError && <p className="text-red-600 dark:text-red-400">{stopError}</p>}

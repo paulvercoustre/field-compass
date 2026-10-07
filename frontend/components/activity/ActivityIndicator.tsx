@@ -34,22 +34,35 @@ const headline = (runs: RunSummary[]): string | null => {
 /** How one of your own runs ended, for the header until you have seen it. */
 const outcome = (run: RunSummary): { tone: 'ok' | 'warn' | 'error' | 'muted'; text: string } => {
   const name = run.survey_name || 'Survey';
-  if (run.status === 'failed') return { tone: 'error', text: run.kind === 'pull' ? `Couldn't pull ${name}` : `${name}: failed` };
+  if (run.status === 'failed')
+    return { tone: 'error', text: run.kind === 'pull' ? `Couldn't pull ${name}` : `${name}: failed` };
   if (run.status === 'stopped') return { tone: 'muted', text: `${name}: stopped` };
   if (run.problems.length) return { tone: 'warn', text: `${name}: finished with problems` };
-  if (run.kind === 'pull' && run.pull) return { tone: 'ok', text: `${name}: ${run.pull.new} new, ${run.pull.flagged} flagged` };
+  if (run.kind === 'pull' && run.pull)
+    return { tone: 'ok', text: `${name}: ${run.pull.new} new, ${run.pull.flagged} flagged` };
   return { tone: 'ok', text: `${name}: finished` };
 };
 
 const outcomeClass = {
   ok: 'bg-emerald-50 text-emerald-800 ring-emerald-600/20 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-400/25 dark:hover:bg-emerald-500/20',
   warn: 'bg-amber-50 text-amber-900 ring-amber-600/20 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-400/25 dark:hover:bg-amber-500/20',
-  error: 'bg-red-50 text-red-800 ring-red-600/20 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-200 dark:ring-red-400/25 dark:hover:bg-red-500/20',
-  muted: 'bg-gray-100 text-gray-700 ring-gray-500/20 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600/30 dark:hover:bg-gray-700',
+  error:
+    'bg-red-50 text-red-800 ring-red-600/20 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-200 dark:ring-red-400/25 dark:hover:bg-red-500/20',
+  muted:
+    'bg-gray-100 text-gray-700 ring-gray-500/20 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600/30 dark:hover:bg-gray-700',
 };
 
 const OutcomeIcon: React.FC<{ tone: keyof typeof outcomeClass }> = ({ tone }) => (
-  <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className="h-3.5 w-3.5 flex-shrink-0"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     {tone === 'ok' ? (
       <path d="m5 12.5 4.5 4.5L19 7" />
     ) : tone === 'muted' ? (
@@ -100,7 +113,8 @@ const ActivityIndicator: React.FC = () => {
 
   const ended = line
     ? null
-    : runs.find((run) => !isOpen(run) && run.started_by.user_id === user?.user_id && !seen.includes(run.run_id)) ?? null;
+    : (runs.find((run) => !isOpen(run) && run.started_by.user_id === user?.user_id && !seen.includes(run.run_id)) ??
+      null);
   const result = ended ? outcome(ended) : null;
 
   let control: React.ReactNode;
@@ -137,7 +151,16 @@ const ActivityIndicator: React.FC = () => {
         aria-label="Activity"
         title="Activity"
       >
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg
+          className="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.75}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
           <path d="M22 12h-4l-3 8L9 4l-3 8H2" />
         </svg>
       </button>
@@ -186,7 +209,8 @@ const RecentRuns: React.FC<{ surveyId: string; exclude: Set<string> }> = ({ surv
               aria-expanded={expanded === run.run_id}
             >
               <span className="min-w-0 truncate text-xs text-gray-700 dark:text-gray-300">
-                {new Date(run.created_at || '').toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} · {runTitle(run)}
+                {new Date(run.created_at || '').toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ·{' '}
+                {runTitle(run)}
                 {run.pull && ` · ${run.pull.new} new, ${run.pull.flagged} flagged`}
               </span>
               <span className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">{status.label}</span>
@@ -224,7 +248,10 @@ export const ActivityPanel: React.FC = () => {
   const recent = runs.filter((run) => !isOpen(run));
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-gray-950/20" onMouseDown={(e) => e.target === e.currentTarget && setPanelOpen(false)}>
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-gray-950/20"
+      onMouseDown={(e) => e.target === e.currentTarget && setPanelOpen(false)}
+    >
       <aside
         role="dialog"
         aria-label="Activity"
@@ -238,14 +265,24 @@ export const ActivityPanel: React.FC = () => {
             className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"
             aria-label="Close"
           >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" aria-hidden="true">
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.75}
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
               <path d="M18 6 6 18M6 6l12 12" />
             </svg>
           </button>
         </div>
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
           <section>
-            <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Running now</h3>
+            <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Running now
+            </h3>
             {open.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">Nothing is running.</p>
             ) : (
@@ -261,7 +298,9 @@ export const ActivityPanel: React.FC = () => {
 
           {recent.length > 0 && (
             <section>
-              <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Just finished</h3>
+              <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Just finished
+              </h3>
               <div className="space-y-3">
                 {recent.map((run) => (
                   <div key={run.run_id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">

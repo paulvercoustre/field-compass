@@ -118,7 +118,6 @@ export interface SurveyCreate {
   config_data: SurveyConfig['config_data'];
 }
 
-
 /** Surveys the user can open. */
 export const getSurveys = () => request<Survey[]>('/api/surveys');
 
@@ -167,8 +166,7 @@ export const rerunAiChecks = async (surveyId: string): Promise<number> => {
 // Survey sharing
 // ============================================================================
 
-export const getSurveyAccess = (surveyId: string) =>
-  request<SurveyAccessEntry[]>(`/api/surveys/${surveyId}/access`);
+export const getSurveyAccess = (surveyId: string) => request<SurveyAccessEntry[]>(`/api/surveys/${surveyId}/access`);
 
 export const shareSurvey = (surveyId: string, email: string, permissionLevel: 'editor' | 'viewer') =>
   request<SurveyAccessEntry>(`/api/surveys/${surveyId}/access`, {
@@ -235,9 +233,7 @@ interface ValidationRuleUpdate {
   is_active?: boolean;
 }
 
-
-export const getValidationRules = (surveyId: string) =>
-  request<ValidationRule[]>(`/api/surveys/${surveyId}/rules`);
+export const getValidationRules = (surveyId: string) => request<ValidationRule[]>(`/api/surveys/${surveyId}/rules`);
 
 export const createValidationRule = (surveyId: string, ruleData: ValidationRuleCreate) =>
   request<ValidationRule>(`/api/surveys/${surveyId}/rules`, {

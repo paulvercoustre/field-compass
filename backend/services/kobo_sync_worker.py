@@ -301,7 +301,8 @@ def run_translation_kobo_send_job(
             finish_if_done(db, run_id)
             return {"status": "not_sent"}
 
-        if not sending_to_kobo(survey):
+        asset_uid = survey.kobo_asset_id if survey is not None else None
+        if survey is None or not asset_uid or not sending_to_kobo(survey):
             return not_sent()
         if not sendable(row, transcript, kobo_statuses=("pending",)):
             # Not ours, not a transcript's, or Kobo doesn't show the transcript
@@ -334,7 +335,7 @@ def run_translation_kobo_send_job(
         try:
             try:
                 current = selected_translation(
-                    read_supplement(fetcher, survey.kobo_asset_id, root),
+                    read_supplement(fetcher, asset_uid, root),
                     row.question_path,
                     language,
                 )
@@ -353,9 +354,9 @@ def run_translation_kobo_send_job(
             elif current is not None and (current.get("_data") or {}).get("value"):
                 # Kobo has a translation into this language of its own: it stands.
                 return done("edited_in_kobo")
-            ensure_translation_feature(fetcher, survey.kobo_asset_id, row.question_path, language)
+            ensure_translation_feature(fetcher, asset_uid, row.question_path, language)
             version = send_translation(
-                fetcher, survey.kobo_asset_id, root, row.question_path, language, row.text or ""
+                fetcher, asset_uid, root, row.question_path, language, row.text or ""
             )
         except KoboSupplementError as error:
             if error.retryable and not final_attempt:

@@ -17,7 +17,7 @@ interface QualityOverviewDashboardProps {
   onIssueClick?: (check: string) => void;
 }
 
-const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({ 
+const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
   surveyId,
   onStatusClick,
   onIssueClick,
@@ -58,11 +58,11 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
 
   const handleDatePresetChange = (preset: string) => {
     setDatePreset(preset);
-    
+
     const today = new Date();
     let startDate: string | undefined;
     let endDate: string | undefined = today.toISOString().split('T')[0];
-    
+
     switch (preset) {
       case 'last7':
         startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -79,8 +79,8 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
         endDate = undefined;
         break;
     }
-    
-    setFilters(prev => ({ ...prev, startDate, endDate }));
+
+    setFilters((prev) => ({ ...prev, startDate, endDate }));
   };
 
   const pull = usePull(() => loadData(true));

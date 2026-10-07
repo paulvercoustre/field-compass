@@ -12,8 +12,20 @@ export interface SectionControls {
 /** "Saved 14:32", inside the section, until it is edited again. */
 export const SavedNote: React.FC<{ at?: Date; className?: string }> = ({ at, className = '' }) =>
   at ? (
-    <span role="status" className={`inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-400 ${className}`}>
-      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <span
+      role="status"
+      className={`inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-400 ${className}`}
+    >
+      <svg
+        className="h-4 w-4"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <path d="m5 12.5 4.5 4.5L19 7" />
       </svg>
       Saved {at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
@@ -30,7 +42,10 @@ export const SectionEditButton: React.FC<{ onClick: () => void }> = ({ onClick }
 );
 
 /** A section's Save changes and Cancel buttons. */
-export const SectionActions: React.FC<{ controls: SectionControls; className?: string }> = ({ controls, className = '' }) => (
+export const SectionActions: React.FC<{ controls: SectionControls; className?: string }> = ({
+  controls,
+  className = '',
+}) => (
   <div className={`flex gap-3 ${className}`}>
     <button
       onClick={controls.save}

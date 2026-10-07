@@ -55,7 +55,7 @@ def execute_pull(
         if survey is None:
             fail_run(db, run, "The survey no longer exists.")
             return None
-        if not token:
+        if user is None or not token:
             fail_run(db, run, "No Kobo API key: add one in Account settings, then pull again.")
             return None
 
@@ -87,6 +87,8 @@ def execute_pull(
             return None
 
         run = db.query(Run).filter(Run.run_id == run_uuid).first()
+        if run is None:  # deleted while the pull ran
+            return stats
         merged = dict(run.stats or {})
         merged.update(_json_stats(stats))
         run.stats = merged

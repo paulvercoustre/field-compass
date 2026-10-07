@@ -14,6 +14,7 @@ import os
 import sys
 import tempfile
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 if "/app" not in sys.path and os.path.isdir("/app"):
@@ -285,7 +286,7 @@ def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality
 
             duration = probe_duration(local)
             if duration is not None and duration > max_recording_seconds():
-                row.audio_seconds = round(duration, 2)
+                row.audio_seconds = Decimal(str(round(duration, 2)))
                 _finish(db, row, "skipped", skip="too_long")
                 _after_any(db, row, survey)
                 return {"status": "skipped", "reason": "too_long"}
@@ -319,7 +320,7 @@ def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality
             except AIError as error:
                 if reservation is not None:
                     settle(db, reservation, error.category)
-                elif key.source == OWN:
+                elif key.source == OWN and key.connection_id is not None:
                     record_own_key_call(
                         db,
                         survey.survey_id,
@@ -365,7 +366,7 @@ def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality
             seconds = result.audio_seconds if result.audio_seconds is not None else duration
             if reservation is not None:
                 settle(db, reservation, "ok", seconds)
-            else:
+            elif key.connection_id is not None:  # on the owner's own key
                 record_own_key_call(
                     db,
                     survey.survey_id,
@@ -381,8 +382,12 @@ def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality
         row.text = result.text
         row.segments = result.segments
         row.language_code = result.language_code
-        row.language_probability = result.language_probability
-        row.audio_seconds = round(seconds, 2) if seconds is not None else None
+        row.language_probability = (
+            Decimal(str(result.language_probability))
+            if result.language_probability is not None
+            else None
+        )
+        row.audio_seconds = Decimal(str(round(seconds, 2))) if seconds is not None else None
         row.model = client.model
         _finish(db, row, "success")
         _after_success(db, row, survey)

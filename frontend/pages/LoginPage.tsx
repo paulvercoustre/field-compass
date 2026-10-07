@@ -9,14 +9,12 @@ interface LoginPageProps {
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { login, register, isLoading: authLoading } = useAuth();
-  
+
   // The marketing site links straight here with #register on its "Create an
   // account" buttons, so that CTA opens the registration form rather than
   // dropping people on Sign In with an extra click to find. Any other entry
   // opens on Sign In as before.
-  const [isLogin, setIsLogin] = useState(
-    () => !['#register', '#signup'].includes(window.location.hash.toLowerCase())
-  );
+  const [isLogin, setIsLogin] = useState(() => !['#register', '#signup'].includes(window.location.hash.toLowerCase()));
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -79,16 +77,17 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <h1 className="mt-5 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
             {isLogin ? 'Sign in to Field Compass' : 'Create your account'}
           </h1>
-          <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
-            Data quality for KoboToolbox surveys
-          </p>
+          <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">Data quality for KoboToolbox surveys</p>
         </div>
 
         {/* Card */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_32px_-12px_rgb(0_0_0/0.12)] dark:border-gray-800 dark:bg-gray-900/80 dark:shadow-none sm:p-7">
           {/* Error message */}
           {error && (
-            <div role="alert" className="mb-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 ring-1 ring-inset ring-red-600/15 dark:bg-red-500/10 dark:text-red-200 dark:ring-red-400/20">
+            <div
+              role="alert"
+              className="mb-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 ring-1 ring-inset ring-red-600/15 dark:bg-red-500/10 dark:text-red-200 dark:ring-red-400/20"
+            >
               {error}
             </div>
           )}
@@ -219,4 +218,3 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 };
 
 export default LoginPage;
-

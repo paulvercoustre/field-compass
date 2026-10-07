@@ -772,8 +772,7 @@ class _FakeFetcher:
 def test_a_pull_queues_transcriptions_and_the_ai_review_waits(
     test_db, survey, env, monkeypatch, owner
 ):
-    import etl.pipeline as pipeline_module
-    from etl.pipeline import ETLPipeline
+    from etl.pipeline import ETLPipeline, PipelineTasks
 
     survey.config_data = {
         **survey.config_data,
@@ -785,13 +784,7 @@ def test_a_pull_queues_transcriptions_and_the_ai_review_waits(
     }
     test_db.commit()
     transcribe = _Recorder()
-    import services.transcription_worker as transcription_worker
-
-    monkeypatch.setattr(
-        transcription_worker.transcribe_recording_task, "apply_async", transcribe.apply_async
-    )
     ai = _Recorder()
-    monkeypatch.setattr(pipeline_module, "run_qualitative_check_task", ai)
     run = Run(
         survey_id=survey.survey_id,
         kind="pull",
@@ -812,7 +805,11 @@ def test_a_pull_queues_transcriptions_and_the_ai_review_waits(
         "_attachments": [_attachment()],
     }
     stats = ETLPipeline(
-        test_db, kobo_fetcher=_FakeFetcher([kobo_sub]), run=run, started_by_user_id=owner.user_id
+        test_db,
+        kobo_fetcher=_FakeFetcher([kobo_sub]),
+        run=run,
+        started_by_user_id=owner.user_id,
+        tasks=PipelineTasks(ai_review=ai, transcription=transcribe),
     ).run_pipeline(str(survey.survey_id))
 
     assert (

@@ -81,11 +81,7 @@ const KoboProjectPicker: React.FC<KoboProjectPickerProps> = ({ value, onChange }
 
   const addKeyPrompt = (
     <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-      <button
-        type="button"
-        onClick={() => navigate({ view: 'userSettings', tab: 'kobo' })}
-        className={linkButtonClass}
-      >
+      <button type="button" onClick={() => navigate({ view: 'userSettings', tab: 'kobo' })} className={linkButtonClass}>
         Add your Kobo API key
       </button>{' '}
       to choose from your projects instead.

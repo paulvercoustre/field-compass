@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 from etl.kobo_fetcher import KoboFetcher
 from forms import load_form_schema
 from linter.questions import enclosing_relevants
-from schemas import KoboProject, SurveyFormResponse
+from schemas import FormChoice, FormQuestion, KoboProject, SurveyFormResponse
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
 from services.permissions import get_accessible_surveys
@@ -197,6 +197,9 @@ async def get_kobo_asset_form(
         deployed_version_id=asset.get("deployed_version_id"),
         languages=schema.languages,
         has_audit=schema.has_audit,
-        questions=questions,
-        choice_lists=choice_lists,
+        questions=[FormQuestion.model_validate(q) for q in questions],
+        choice_lists={
+            name: [FormChoice.model_validate(c) for c in choices]
+            for name, choices in choice_lists.items()
+        },
     )

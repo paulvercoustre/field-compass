@@ -64,7 +64,7 @@ def validate_base_url(
     except (socket.gaierror, UnicodeError) as exc:
         raise EndpointRejected(f"Could not find {parts.hostname}.") from exc
 
-    addresses = {info[4][0] for info in infos}
+    addresses = {str(info[4][0]) for info in infos}
     if not addresses:
         raise EndpointRejected(f"Could not find {parts.hostname}.")
     if not allow_private and not all(_is_public(address) for address in addresses):

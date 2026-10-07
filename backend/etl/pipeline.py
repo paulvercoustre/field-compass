@@ -4,7 +4,9 @@ Main orchestrator for fetching, merging, and validating submissions.
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -17,7 +19,6 @@ from etl.data_merger import merge_submission, parse_kobo_submission
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
 from services.ai_review_queue import AIReviewQueuer
-from services.qualitative_worker import run_qualitative_check_task
 from services.transcription_queue import TranscriptionQueuer
 from services.translation_queue import TranslationQueuer
 
@@ -41,6 +42,18 @@ def _is_background_issue(issue: dict[str, Any]) -> bool:
     return _is_llm_qual_issue(issue) or is_transcription_issue(issue)
 
 
+@dataclass(frozen=True)
+class PipelineTasks:
+    """
+    The Celery tasks a pull sends its background jobs to. ``None`` is the real
+    task, loaded when first needed; tests pass a stand-in with ``apply_async``.
+    """
+
+    ai_review: Any = None
+    transcription: Any = None
+    translation: Any = None
+
+
 class ETLPipeline:
     """Main ETL pipeline orchestrator."""
 
@@ -52,6 +65,7 @@ class ETLPipeline:
         kobo_api_url: str | None = None,
         run: Run | None = None,
         started_by_user_id: UUID | None = None,
+        tasks: PipelineTasks | None = None,
     ):
         """
         Initialize ETL pipeline.
@@ -61,6 +75,7 @@ class ETLPipeline:
             kobo_fetcher: Optional KoboFetcher instance
             kobo_api_token: Kobo API token (required if kobo_fetcher not provided)
             kobo_api_url: Optional Kobo API URL (defaults to kf.kobotoolbox.org)
+            tasks: Where background jobs are sent (the Celery tasks by default)
 
         Raises:
             ValueError: If neither kobo_fetcher nor kobo_api_token is provided
@@ -69,6 +84,7 @@ class ETLPipeline:
         # The run this pull reports to, when started from the app.
         self.run = run
         self.started_by_user_id = started_by_user_id
+        self.tasks = tasks or PipelineTasks()
         self.kobo_api_token = kobo_api_token
         self.kobo_api_url = kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
 
@@ -273,7 +289,9 @@ class ETLPipeline:
                         submission.dk_count = dk_count
                         submission.dk_eligible_count = dk_eligible_count
                         submission.dk_percentage = (
-                            round(dk_percentage, 2) if dk_percentage is not None else None
+                            Decimal(str(round(dk_percentage, 2)))
+                            if dk_percentage is not None
+                            else None
                         )
 
                         # Update deterministic issues while preserving existing LLM qualitative issues.
@@ -347,9 +365,9 @@ class ETLPipeline:
                     logger.debug("AI review for submission %s: %s", submission_uuid, llm_outcome)
 
                     self.db.commit()
-                    ai_reviews.dispatch(run_qualitative_check_task)
-                    transcriptions.dispatch()
-                    translations.dispatch()
+                    ai_reviews.dispatch(self.tasks.ai_review)
+                    transcriptions.dispatch(self.tasks.transcription)
+                    translations.dispatch(self.tasks.translation)
 
                 except Exception as e:
                     logger.error(f"Error processing submission: {e}", exc_info=True)

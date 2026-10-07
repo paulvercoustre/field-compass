@@ -136,8 +136,7 @@ export const updateAIConnection = (id: string, input: Partial<AIConnectionInput>
 export const testAIConnection = (id: string) =>
   request<AIConnection>(`/api/ai/connections/${id}/test`, { method: 'POST' });
 
-export const deleteAIConnection = (id: string) =>
-  request<void>(`/api/ai/connections/${id}`, { method: 'DELETE' });
+export const deleteAIConnection = (id: string) => request<void>(`/api/ai/connections/${id}`, { method: 'DELETE' });
 
 /** `null` puts the survey back on included usage (Field Compass's key). */
 export const setSurveyAIConnection = (surveyId: string, connectionId: string | null, kind: AIKeyUse = 'review') =>

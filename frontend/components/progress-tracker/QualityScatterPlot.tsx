@@ -71,8 +71,8 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
   const { collection, quality } = data;
 
   const chartData = useMemo(() => {
-    return collection.map(c => {
-      const q = quality.find(qs => qs.id === c.id);
+    return collection.map((c) => {
+      const q = quality.find((qs) => qs.id === c.id);
       return {
         id: c.id,
         submissions: c.total,
@@ -98,32 +98,31 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800">
-      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-        Issues against submissions
-      </h3>
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Issues against submissions</h3>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-        Each circle is an enumerator, sized by submissions. Dashed lines are the team average. Click one to see their submissions.
+        Each circle is an enumerator, sized by submissions. Dashed lines are the team average. Click one to see their
+        submissions.
       </p>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
             <CartesianGrid stroke="var(--fc-chart-grid)" />
-            <XAxis 
+            <XAxis
               type="number"
               dataKey="submissions"
               name="Submissions"
               tick={{ fontSize: 12, fill: 'var(--fc-chart-tick)' }}
               tickLine={false}
               stroke="var(--fc-chart-axis)"
-              label={{ 
-                value: 'Submissions', 
-                position: 'bottom', 
+              label={{
+                value: 'Submissions',
+                position: 'bottom',
                 offset: -5,
                 fontSize: 11,
-                fill: 'currentColor'
+                fill: 'currentColor',
               }}
             />
-            <YAxis 
+            <YAxis
               type="number"
               dataKey="avgIssues"
               name="Issues per submission"
@@ -131,37 +130,25 @@ const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumera
               tick={{ fontSize: 12, fill: 'var(--fc-chart-tick)' }}
               tickLine={false}
               stroke="var(--fc-chart-axis)"
-              label={{ 
-                value: 'Issues per submission', 
-                angle: -90, 
+              label={{
+                value: 'Issues per submission',
+                angle: -90,
                 position: 'insideLeft',
                 fontSize: 11,
-                fill: 'currentColor'
+                fill: 'currentColor',
               }}
             />
             <ZAxis range={[60, 400]} />
             <Tooltip content={<EnumeratorTooltip />} />
-            
+
             {/* Reference lines for averages */}
-            <ReferenceLine 
-              x={avgSubmissions} 
-              stroke="#6366f1" 
-              strokeDasharray="5 5"
-            />
-            <ReferenceLine 
-              y={avgIssues} 
-              stroke="#6366f1" 
-              strokeDasharray="5 5"
-            />
-            
-            <Scatter
-              data={chartData}
-              shape={<EnumeratorDot onEnumeratorClick={onEnumeratorClick} />}
-            />
+            <ReferenceLine x={avgSubmissions} stroke="#6366f1" strokeDasharray="5 5" />
+            <ReferenceLine y={avgIssues} stroke="#6366f1" strokeDasharray="5 5" />
+
+            <Scatter data={chartData} shape={<EnumeratorDot onEnumeratorClick={onEnumeratorClick} />} />
           </ScatterChart>
         </ResponsiveContainer>
       </div>
-      
     </div>
   );
 };

@@ -1,12 +1,13 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "project": [
-    "frontend/**/*.{ts,tsx}"
-  ],
-  "ignoreDependencies": [
-    "@fontsource-variable/inter"
+    "frontend/**/*.{ts,tsx,css}"
   ],
   "ignore": [
     "frontend/components/ui/icons.tsx"
-  ]
+  ],
+  "ignoreExportsUsedInFile": {
+    "interface": true,
+    "type": true
+  }
 }

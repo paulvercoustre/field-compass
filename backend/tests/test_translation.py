@@ -394,10 +394,8 @@ class TestTranslationsFromKobo:
     def test_a_pull_takes_kobos_transcript_and_translation(
         self, test_db, survey, ai, owner, monkeypatch
     ):
-        import etl.pipeline as pipeline_module
-        from etl.pipeline import ETLPipeline
+        from etl.pipeline import ETLPipeline, PipelineTasks
 
-        monkeypatch.setattr(pipeline_module, "run_qualitative_check_task", _Recorder())
         run = Run(
             survey_id=survey.survey_id,
             kind="pull",
@@ -428,6 +426,7 @@ class TestTranslationsFromKobo:
             kobo_fetcher=_FakeFetcher([kobo_sub]),
             run=run,
             started_by_user_id=owner.user_id,
+            tasks=PipelineTasks(ai_review=_Recorder()),
         ).run_pipeline(str(survey.survey_id))
 
         assert stats["transcripts_from_kobo"] == 1 and stats["translations_from_kobo"] == 1

@@ -22,11 +22,18 @@ import AIKeyDialog from './AIKeyDialog';
 const AIStatusBadge: React.FC<{ status: AIConnection['status'] }> = ({ status }) => {
   const styles = {
     ok: 'bg-emerald-50 text-emerald-800 ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20',
-    failing: 'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20',
+    failing:
+      'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20',
     untested: 'bg-gray-100 text-gray-700 ring-gray-500/20 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600/30',
   }[status];
   const text = { ok: 'Connected', failing: 'Not working', untested: 'Not checked' }[status];
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${styles}`}>{text}</span>;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${styles}`}
+    >
+      {text}
+    </span>
+  );
 };
 
 const KIND_ORDER: AIKeyKind[] = ['review', 'transcription'];
@@ -136,8 +143,7 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
 
   const keyFor = (use: AIKeyUse, surveyId: string) =>
     connections.find(
-      (c) =>
-        c.kind === AI_FEATURES[use].kind && c.surveys.some((s) => s.survey_id === surveyId && s.uses.includes(use))
+      (c) => c.kind === AI_FEATURES[use].kind && c.surveys.some((s) => s.survey_id === surveyId && s.uses.includes(use))
     );
 
   return (
@@ -146,8 +152,8 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
         <div>
           <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Your keys</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Which surveys use each key, and for what: untick one to put it back on the included usage. A survey's
-            owner can also pick the key in that survey's settings.
+            Which surveys use each key, and for what: untick one to put it back on the included usage. A survey's owner
+            can also pick the key in that survey's settings.
           </p>
         </div>
         <Button variant="secondary" icon={<PlusIcon />} onClick={() => setEditing({ kind: 'review' })}>
@@ -176,7 +182,9 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
               </h3>
               {keys.length === 0 ? (
                 <div className="flex items-center justify-between gap-3 border-t border-gray-100 py-3 dark:border-gray-800">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No key: your surveys use the included usage.</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    No key: your surveys use the included usage.
+                  </p>
                   <Button size="sm" variant="ghost" icon={<PlusIcon />} onClick={() => setEditing({ kind })}>
                     Add key
                   </Button>
@@ -187,7 +195,10 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
                     const busy = busyId === connection.connection_id;
                     const choosing = choosingSurveysFor === connection.connection_id;
                     const usedFor = USES[kind]
-                      .map((use) => ({ use, count: connection.surveys.filter((survey) => survey.uses.includes(use)).length }))
+                      .map((use) => ({
+                        use,
+                        count: connection.surveys.filter((survey) => survey.uses.includes(use)).length,
+                      }))
                       .filter(({ count }) => count > 0)
                       .map(({ use, count }) =>
                         USES[kind].length > 1
@@ -205,12 +216,18 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">{connection.label}</span>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {connection.label}
+                              </span>
                               <AIStatusBadge status={connection.status} />
                             </div>
-                            <p className="mt-0.5 break-all text-xs text-gray-500 dark:text-gray-400">{detail.join(' · ')}</p>
+                            <p className="mt-0.5 break-all text-xs text-gray-500 dark:text-gray-400">
+                              {detail.join(' · ')}
+                            </p>
                             {connection.last_error && (
-                              <p className={`mt-1 text-xs ${connection.status === 'failing' ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>
+                              <p
+                                className={`mt-1 text-xs ${connection.status === 'failing' ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}
+                              >
                                 {describeAIError(connection.last_error)}{' '}
                                 {connection.status === 'failing'
                                   ? 'Its surveys are paused until it passes a check.'
@@ -228,10 +245,20 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
                             >
                               Surveys
                             </Button>
-                            <Button size="sm" variant="secondary" loading={busy} onClick={() => handleCheck(connection)}>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              loading={busy}
+                              onClick={() => handleCheck(connection)}
+                            >
                               Check
                             </Button>
-                            <Button size="sm" variant="secondary" disabled={busy} onClick={() => setEditing({ connection, kind })}>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={busy}
+                              onClick={() => setEditing({ connection, kind })}
+                            >
                               Edit
                             </Button>
                             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDeleting(connection)}>
@@ -265,7 +292,9 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
                                   {ownedSurveys.map((survey) => (
                                     <tr key={survey.survey_id} className="align-top">
                                       {USES[kind].length > 1 && (
-                                        <td className="py-1 pr-3 text-gray-900 dark:text-white">{survey.survey_name}</td>
+                                        <td className="py-1 pr-3 text-gray-900 dark:text-white">
+                                          {survey.survey_name}
+                                        </td>
                                       )}
                                       {USES[kind].map((use) => {
                                         const current = keyFor(use, survey.survey_id);
@@ -277,13 +306,17 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
                                                 type="checkbox"
                                                 checked={usesThis}
                                                 disabled={busy}
-                                                onChange={(e) => toggleSurvey(connection, survey.survey_id, use, e.target.checked)}
+                                                onChange={(e) =>
+                                                  toggleSurvey(connection, survey.survey_id, use, e.target.checked)
+                                                }
                                                 aria-label={`${survey.survey_name}: ${AI_FEATURES[use].name}`}
                                                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
                                               />
                                               {USES[kind].length === 1 && survey.survey_name}
                                               {current && !usesThis && (
-                                                <span className="text-xs text-gray-500 dark:text-gray-400">(uses {current.label})</span>
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                  (uses {current.label})
+                                                </span>
                                               )}
                                             </label>
                                           </td>
@@ -334,9 +367,7 @@ const AIKeysSection: React.FC<AIKeysSectionProps> = ({ onChange }) => {
               can't be recovered.
             </p>
             {deleting.surveys.length > 0 && (
-              <p>
-                {deleting.surveys.map((s) => s.survey_name).join(', ')} go back to the included usage.
-              </p>
+              <p>{deleting.surveys.map((s) => s.survey_name).join(', ')} go back to the included usage.</p>
             )}
           </>
         )}

@@ -9,19 +9,48 @@ type CollectionSortKey = 'id' | 'needsReview' | 'validated' | 'total' | 'percent
 type QualitySortKey = 'id' | 'avgActiveTime' | 'avgTotalTime' | 'avgDkRate' | 'avgIssuesPerSurvey';
 
 const DEFINITIONS: Record<string, { title: string; text: string }> = {
-  needsReview: { title: "Flagged, not yet approved", text: "Submissions where the checks found at least one issue, and that no reviewer has approved or rejected in Kobo yet." },
-  validated: { title: "Approved by reviewer", text: "Submissions a reviewer marked Approved in Kobo. This says how far review has got, not how good the interviews were: an enumerator whose work has not been reviewed yet has few." },
-  totalSurveys: { title: "Total", text: "All of this enumerator's submissions pulled from Kobo, except deleted ones." },
-  percentValidated: { title: "% Approved by reviewer", text: "The share of this enumerator's submissions that a reviewer approved in Kobo. Low while review is behind; not a measure of quality." },
-  percentNeedsReview: { title: "% Flagged, not yet approved", text: "The share of this enumerator's submissions with issues that no reviewer has decided on yet." },
-  avgActiveTime: { title: "Avg. Active Survey Time (min)", text: "The average time the enumerator spent actively answering questions (e.g., excluding pauses). Requires audit logs." },
-  avgTotalTime: { title: "Avg. Total Survey Time (min)", text: "The average total time from the first event to the last event in the audit log." },
-  avgDkRate: { title: "Avg. DK Rate (%)", text: "The average percentage of 'Don\\'t Know' or equivalent answers across all questions for this enumerator." },
-  avgIssuesPerSurvey: { title: "Issues per submission", text: "The average number of issues the checks found per submission from this enumerator, whether or not a reviewer has seen them. A higher number may mean they need follow-up." },
+  needsReview: {
+    title: 'Flagged, not yet approved',
+    text: 'Submissions where the checks found at least one issue, and that no reviewer has approved or rejected in Kobo yet.',
+  },
+  validated: {
+    title: 'Approved by reviewer',
+    text: 'Submissions a reviewer marked Approved in Kobo. This says how far review has got, not how good the interviews were: an enumerator whose work has not been reviewed yet has few.',
+  },
+  totalSurveys: { title: 'Total', text: "All of this enumerator's submissions pulled from Kobo, except deleted ones." },
+  percentValidated: {
+    title: '% Approved by reviewer',
+    text: "The share of this enumerator's submissions that a reviewer approved in Kobo. Low while review is behind; not a measure of quality.",
+  },
+  percentNeedsReview: {
+    title: '% Flagged, not yet approved',
+    text: "The share of this enumerator's submissions with issues that no reviewer has decided on yet.",
+  },
+  avgActiveTime: {
+    title: 'Avg. Active Survey Time (min)',
+    text: 'The average time the enumerator spent actively answering questions (e.g., excluding pauses). Requires audit logs.',
+  },
+  avgTotalTime: {
+    title: 'Avg. Total Survey Time (min)',
+    text: 'The average total time from the first event to the last event in the audit log.',
+  },
+  avgDkRate: {
+    title: 'Avg. DK Rate (%)',
+    text: "The average percentage of 'Don\\'t Know' or equivalent answers across all questions for this enumerator.",
+  },
+  avgIssuesPerSurvey: {
+    title: 'Issues per submission',
+    text: 'The average number of issues the checks found per submission from this enumerator, whether or not a reviewer has seen them. A higher number may mean they need follow-up.',
+  },
 };
 
 const InfoIcon: React.FC<{ onClick: (e: React.MouseEvent) => void }> = ({ onClick }) => (
-  <span onClick={onClick} className="cursor-pointer text-gray-600 dark:text-gray-400 font-bold ml-1 hover:text-gray-900 dark:hover:text-white">&#9432;</span>
+  <span
+    onClick={onClick}
+    className="cursor-pointer text-gray-600 dark:text-gray-400 font-bold ml-1 hover:text-gray-900 dark:hover:text-white"
+  >
+    &#9432;
+  </span>
 );
 
 const SortIcon: React.FC<{ direction: SortDirection | null }> = ({ direction }) => {
@@ -40,10 +69,16 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
   const [activeSubTab, setActiveSubTab] = useState<PerformanceSubTab>('collected');
   const [filter, setFilter] = useState('');
   const [modalContent, setModalContent] = useState<{ title: string; text: string } | null>(null);
-  
+
   // Sorting state
-  const [collectionSort, setCollectionSort] = useState<{ key: CollectionSortKey; dir: SortDirection }>({ key: 'total', dir: 'desc' });
-  const [qualitySort, setQualitySort] = useState<{ key: QualitySortKey; dir: SortDirection }>({ key: 'avgIssuesPerSurvey', dir: 'desc' });
+  const [collectionSort, setCollectionSort] = useState<{ key: CollectionSortKey; dir: SortDirection }>({
+    key: 'total',
+    dir: 'desc',
+  });
+  const [qualitySort, setQualitySort] = useState<{ key: QualitySortKey; dir: SortDirection }>({
+    key: 'avgIssuesPerSurvey',
+    dir: 'desc',
+  });
 
   const handleShowModal = (key: string) => {
     if (DEFINITIONS[key]) {
@@ -56,23 +91,23 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
     const totalSubmissions = data.collection.reduce((sum, e) => sum + e.total, 0);
     const totalValidated = data.collection.reduce((sum, e) => sum + e.validated, 0);
     const totalNeedsReview = data.collection.reduce((sum, e) => sum + e.needsReview, 0);
-    
+
     const avgTotal = data.collection.length > 0 ? totalSubmissions / data.collection.length : 0;
     const avgValidatedPercent = totalSubmissions > 0 ? (totalValidated / totalSubmissions) * 100 : 0;
     const avgNeedsReviewPercent = totalSubmissions > 0 ? (totalNeedsReview / totalSubmissions) * 100 : 0;
-    
-    const avgActiveTime = data.quality.length > 0 
-      ? data.quality.reduce((sum, q) => sum + q.avgActiveTime, 0) / data.quality.length 
-      : 0;
-    const avgTotalTime = data.quality.length > 0 
-      ? data.quality.reduce((sum, q) => sum + q.avgTotalTime, 0) / data.quality.length 
-      : 0;
-    const avgIssues = data.quality.length > 0 
-      ? data.quality.reduce((sum, q) => sum + q.avgIssuesPerSurvey, 0) / data.quality.length 
-      : 0;
-    const avgDkRate = data.quality.length > 0 
-      ? data.quality.reduce((sum, q) => sum + parseFloat(q.avgDkRate), 0) / data.quality.length 
-      : 0;
+
+    const avgActiveTime =
+      data.quality.length > 0 ? data.quality.reduce((sum, q) => sum + q.avgActiveTime, 0) / data.quality.length : 0;
+    const avgTotalTime =
+      data.quality.length > 0 ? data.quality.reduce((sum, q) => sum + q.avgTotalTime, 0) / data.quality.length : 0;
+    const avgIssues =
+      data.quality.length > 0
+        ? data.quality.reduce((sum, q) => sum + q.avgIssuesPerSurvey, 0) / data.quality.length
+        : 0;
+    const avgDkRate =
+      data.quality.length > 0
+        ? data.quality.reduce((sum, q) => sum + parseFloat(q.avgDkRate), 0) / data.quality.length
+        : 0;
 
     return {
       total: avgTotal,
@@ -88,14 +123,14 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
   const filteredCollectionData = useMemo(() => {
     let filtered = data.collection;
     if (filter) {
-      filtered = filtered.filter(row => row.id.toLowerCase().includes(filter.toLowerCase()));
+      filtered = filtered.filter((row) => row.id.toLowerCase().includes(filter.toLowerCase()));
     }
-    
+
     // Sort
     return [...filtered].sort((a, b) => {
       let aVal: number | string;
       let bVal: number | string;
-      
+
       switch (collectionSort.key) {
         case 'id':
           aVal = a.id.toLowerCase();
@@ -113,7 +148,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
           aVal = a[collectionSort.key];
           bVal = b[collectionSort.key];
       }
-      
+
       if (aVal < bVal) return collectionSort.dir === 'asc' ? -1 : 1;
       if (aVal > bVal) return collectionSort.dir === 'asc' ? 1 : -1;
       return 0;
@@ -123,14 +158,14 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
   const filteredQualityData = useMemo(() => {
     let filtered = data.quality;
     if (filter) {
-      filtered = filtered.filter(row => row.id.toLowerCase().includes(filter.toLowerCase()));
+      filtered = filtered.filter((row) => row.id.toLowerCase().includes(filter.toLowerCase()));
     }
-    
+
     // Sort
     return [...filtered].sort((a, b) => {
       let aVal: number | string;
       let bVal: number | string;
-      
+
       switch (qualitySort.key) {
         case 'id':
           aVal = a.id.toLowerCase();
@@ -144,7 +179,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
           aVal = a[qualitySort.key];
           bVal = b[qualitySort.key];
       }
-      
+
       if (aVal < bVal) return qualitySort.dir === 'asc' ? -1 : 1;
       if (aVal > bVal) return qualitySort.dir === 'asc' ? 1 : -1;
       return 0;
@@ -152,16 +187,16 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
   }, [data.quality, filter, qualitySort]);
 
   const handleCollectionSort = (key: CollectionSortKey) => {
-    setCollectionSort(prev => ({
+    setCollectionSort((prev) => ({
       key,
-      dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc'
+      dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc',
     }));
   };
 
   const handleQualitySort = (key: QualitySortKey) => {
-    setQualitySort(prev => ({
+    setQualitySort((prev) => ({
       key,
-      dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc'
+      dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc',
     }));
   };
 
@@ -191,9 +226,9 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
       higherIsBetter === null
         ? 'text-gray-500 dark:text-gray-400'
         : (higherIsBetter ? diff > 0 : diff < 0)
-        ? 'text-emerald-600 dark:text-emerald-400'
-        : 'text-red-600 dark:text-red-400';
-    
+          ? 'text-emerald-600 dark:text-emerald-400'
+          : 'text-red-600 dark:text-red-400';
+
     return (
       <span className={`ml-1 text-xs ${colorClass}`} title={`${diff > 0 ? '+' : ''}${diff.toFixed(0)}% vs avg`}>
         {arrow}
@@ -208,14 +243,21 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
     onSort: (key: any) => void;
     infoKey?: string;
   }> = ({ label, sortKey, currentSort, onSort, infoKey }) => (
-    <th 
+    <th
       className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none"
       onClick={() => onSort(sortKey)}
     >
       <div className="flex items-center">
         {label}
         <SortIcon direction={currentSort.key === sortKey ? currentSort.dir : null} />
-        {infoKey && <InfoIcon onClick={(e) => { e.stopPropagation(); handleShowModal(infoKey); }} />}
+        {infoKey && (
+          <InfoIcon
+            onClick={(e) => {
+              e.stopPropagation();
+              handleShowModal(infoKey);
+            }}
+          />
+        )}
       </div>
     </th>
   );
@@ -226,18 +268,53 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
         <table className="min-w-full">
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <SortableHeader label="Enumerator ID" sortKey="id" currentSort={collectionSort} onSort={handleCollectionSort} />
-              <SortableHeader label="Flagged, not yet approved" sortKey="needsReview" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="needsReview" />
-              <SortableHeader label="Approved by reviewer" sortKey="validated" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="validated" />
-              <SortableHeader label="Total" sortKey="total" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="totalSurveys" />
-              <SortableHeader label="% Approved" sortKey="percentValidated" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="percentValidated" />
-              <SortableHeader label="% Flagged, not yet approved" sortKey="percentNeedsReview" currentSort={collectionSort} onSort={handleCollectionSort} infoKey="percentNeedsReview" />
+              <SortableHeader
+                label="Enumerator ID"
+                sortKey="id"
+                currentSort={collectionSort}
+                onSort={handleCollectionSort}
+              />
+              <SortableHeader
+                label="Flagged, not yet approved"
+                sortKey="needsReview"
+                currentSort={collectionSort}
+                onSort={handleCollectionSort}
+                infoKey="needsReview"
+              />
+              <SortableHeader
+                label="Approved by reviewer"
+                sortKey="validated"
+                currentSort={collectionSort}
+                onSort={handleCollectionSort}
+                infoKey="validated"
+              />
+              <SortableHeader
+                label="Total"
+                sortKey="total"
+                currentSort={collectionSort}
+                onSort={handleCollectionSort}
+                infoKey="totalSurveys"
+              />
+              <SortableHeader
+                label="% Approved"
+                sortKey="percentValidated"
+                currentSort={collectionSort}
+                onSort={handleCollectionSort}
+                infoKey="percentValidated"
+              />
+              <SortableHeader
+                label="% Flagged, not yet approved"
+                sortKey="percentNeedsReview"
+                currentSort={collectionSort}
+                onSort={handleCollectionSort}
+                infoKey="percentNeedsReview"
+              />
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-950 divide-y divide-gray-100 dark:divide-gray-800">
-            {filteredCollectionData.map(row => (
-              <tr 
-                key={row.id} 
+            {filteredCollectionData.map((row) => (
+              <tr
+                key={row.id}
                 className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onEnumeratorClick ? 'cursor-pointer' : ''}`}
                 onClick={() => onEnumeratorClick?.(row.id)}
               >
@@ -258,7 +335,9 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                   {row.percentValidated}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
-                  <span className={`px-2 py-1 rounded-md text-xs font-medium ${getNeedsReviewColor(row.percentNeedsReview)}`}>
+                  <span
+                    className={`px-2 py-1 rounded-md text-xs font-medium ${getNeedsReviewColor(row.percentNeedsReview)}`}
+                  >
                     {row.percentNeedsReview}
                   </span>
                 </td>
@@ -275,15 +354,39 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
               <SortableHeader label="Enumerator ID" sortKey="id" currentSort={qualitySort} onSort={handleQualitySort} />
-              <SortableHeader label="Avg Active Time (min)" sortKey="avgActiveTime" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgActiveTime" />
-              <SortableHeader label="Avg Total Time (min)" sortKey="avgTotalTime" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgTotalTime" />
-              <SortableHeader label="Avg DK Rate (%)" sortKey="avgDkRate" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgDkRate" />
-              <SortableHeader label="Issues per submission" sortKey="avgIssuesPerSurvey" currentSort={qualitySort} onSort={handleQualitySort} infoKey="avgIssuesPerSurvey" />
+              <SortableHeader
+                label="Avg Active Time (min)"
+                sortKey="avgActiveTime"
+                currentSort={qualitySort}
+                onSort={handleQualitySort}
+                infoKey="avgActiveTime"
+              />
+              <SortableHeader
+                label="Avg Total Time (min)"
+                sortKey="avgTotalTime"
+                currentSort={qualitySort}
+                onSort={handleQualitySort}
+                infoKey="avgTotalTime"
+              />
+              <SortableHeader
+                label="Avg DK Rate (%)"
+                sortKey="avgDkRate"
+                currentSort={qualitySort}
+                onSort={handleQualitySort}
+                infoKey="avgDkRate"
+              />
+              <SortableHeader
+                label="Issues per submission"
+                sortKey="avgIssuesPerSurvey"
+                currentSort={qualitySort}
+                onSort={handleQualitySort}
+                infoKey="avgIssuesPerSurvey"
+              />
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-950 divide-y divide-gray-100 dark:divide-gray-800">
-            {filteredQualityData.map(row => (
-              <tr 
+            {filteredQualityData.map((row) => (
+              <tr
                 key={row.id}
                 className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onEnumeratorClick ? 'cursor-pointer' : ''}`}
                 onClick={() => onEnumeratorClick?.(row.id)}
@@ -302,7 +405,9 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                   {row.avgDkRate}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
-                  <span className={`px-2 py-1 rounded-md text-xs font-medium ${getIssuesColor(row.avgIssuesPerSurvey)}`}>
+                  <span
+                    className={`px-2 py-1 rounded-md text-xs font-medium ${getIssuesColor(row.avgIssuesPerSurvey)}`}
+                  >
                     {row.avgIssuesPerSurvey.toFixed(2)}
                   </span>
                   {getComparisonBadge(row.avgIssuesPerSurvey, teamAverages.issues, false)}
@@ -318,8 +423,10 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
 
   return (
     <div>
-      {modalContent && <InfoModal title={modalContent.title} text={modalContent.text} onClose={() => setModalContent(null)} />}
-      
+      {modalContent && (
+        <InfoModal title={modalContent.title} text={modalContent.text} onClose={() => setModalContent(null)} />
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Detailed Data</h2>
         <input
@@ -330,7 +437,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
           className="w-full sm:w-64 px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
         />
       </div>
-      
+
       <div className="mb-4 inline-flex flex-wrap gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
         <SubTabButton<PerformanceSubTab> tabId="collected" activeTab={activeSubTab} onClick={setActiveSubTab}>
           Survey Collected
@@ -339,31 +446,43 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
           Survey Quality
         </SubTabButton>
       </div>
-      
+
       {/* Team Averages Bar */}
       <div className="mb-4 p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">
         <div className="text-xs font-medium text-indigo-700 dark:text-indigo-300 mb-1">Team Averages</div>
         <div className="flex flex-wrap gap-4 text-xs text-indigo-600 dark:text-indigo-400">
           {activeSubTab === 'collected' ? (
             <>
-              <span>Submissions: <strong>{teamAverages.total.toFixed(1)}</strong>/enum</span>
-              <span>Approved by reviewer: <strong>{teamAverages.validatedPercent.toFixed(1)}%</strong></span>
-              <span>Flagged, not yet approved: <strong>{teamAverages.needsReviewPercent.toFixed(1)}%</strong></span>
+              <span>
+                Submissions: <strong>{teamAverages.total.toFixed(1)}</strong>/enum
+              </span>
+              <span>
+                Approved by reviewer: <strong>{teamAverages.validatedPercent.toFixed(1)}%</strong>
+              </span>
+              <span>
+                Flagged, not yet approved: <strong>{teamAverages.needsReviewPercent.toFixed(1)}%</strong>
+              </span>
             </>
           ) : (
             <>
-              <span>Active Time: <strong>{teamAverages.activeTime.toFixed(0)}</strong> min</span>
-              <span>Total Time: <strong>{teamAverages.totalTime.toFixed(0)}</strong> min</span>
-              <span>Issues: <strong>{teamAverages.issues.toFixed(2)}</strong>/sub</span>
+              <span>
+                Active Time: <strong>{teamAverages.activeTime.toFixed(0)}</strong> min
+              </span>
+              <span>
+                Total Time: <strong>{teamAverages.totalTime.toFixed(0)}</strong> min
+              </span>
+              <span>
+                Issues: <strong>{teamAverages.issues.toFixed(2)}</strong>/sub
+              </span>
             </>
           )}
         </div>
       </div>
-      
+
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-card dark:border-gray-800 dark:bg-gray-950">
         {renderContent()}
       </div>
-      
+
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
         ↑↓ more than 5% above or below the team average. Green or red only where more or less is clearly better.
       </p>

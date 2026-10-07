@@ -15,6 +15,7 @@ See docs/specs/audio-transcription.md, section 4.6.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, text
@@ -110,7 +111,7 @@ def settle(db: Session, row: AIUsage | None, outcome: str, seconds: float | None
         return
     row.outcome = outcome
     if outcome == "ok" and seconds is not None:
-        row.audio_seconds = round(seconds, 2)
+        row.audio_seconds = Decimal(str(round(seconds, 2)))
         row.cost_usd_micros = audio_cost_usd_micros(row.model, seconds)
     db.commit()
 

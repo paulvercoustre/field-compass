@@ -54,7 +54,10 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-labelledby="confirm-dialog-title"
         className="mx-4 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-popover animate-fade-in dark:border-gray-800 dark:bg-gray-900"
       >
-        <h2 id="confirm-dialog-title" className="mb-3 text-base font-semibold tracking-tight text-gray-900 dark:text-white">
+        <h2
+          id="confirm-dialog-title"
+          className="mb-3 text-base font-semibold tracking-tight text-gray-900 dark:text-white"
+        >
           {title}
         </h2>
         <div className="mb-5 space-y-2 text-sm text-gray-700 dark:text-gray-300">{children}</div>

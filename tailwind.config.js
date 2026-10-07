@@ -6,11 +6,7 @@
 import defaultTheme from 'tailwindcss/defaultTheme';
 
 export default {
-  content: [
-    './index.html',
-    './index.tsx',
-    './frontend/**/*.{js,ts,jsx,tsx}',
-  ],
+  content: ['./index.html', './index.tsx', './frontend/**/*.{js,ts,jsx,tsx}'],
   darkMode: 'media',
   theme: {
     extend: {

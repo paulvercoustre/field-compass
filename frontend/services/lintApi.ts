@@ -44,10 +44,7 @@ interface AdoptedRule {
  * `labelColumn` is the survey's label language as a sheet column
  * (`label::French (fr)`); findings quote question labels in it.
  */
-export async function lintForm(
-  form: Record<string, unknown>,
-  labelColumn?: string | null
-): Promise<LintReport> {
+export async function lintForm(form: Record<string, unknown>, labelColumn?: string | null): Promise<LintReport> {
   return orMessage(
     request<LintReport>('/api/lint', {
       method: 'POST',

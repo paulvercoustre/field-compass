@@ -117,6 +117,14 @@ bring_up() {
   docker compose -f "$COMPOSE_FILE" up -d --build
 }
 
+# The schema revision the database is at, read with whichever image .env pins
+# right now (empty if that cannot be read). Alembic logs to stderr, so stdout
+# holds only lines like "0014_example (head)".
+db_revision() {
+  docker compose -f "$COMPOSE_FILE" run --rm --no-deps -T migrate alembic current 2>/dev/null \
+    | awk 'NF { print $1 }' | grep -E '^[0-9A-Za-z_]+$' || true
+}
+
 log "fetching from origin"
 git fetch --quiet origin main
 git cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null \
@@ -146,8 +154,12 @@ git merge-base --is-ancestor "$TARGET_SHA" FETCH_HEAD 2>/dev/null \
 #
 # Alembic runs each revision in a transaction and Postgres has transactional
 # DDL, so the revision that failed leaves nothing behind and the previous image
-# is safe to bring back. Earlier revisions in the same chain stay applied, which
-# is why old code against a partly-migrated database can still need a human.
+# is safe to bring back. Earlier revisions in the same chain stay applied; the
+# rollback below steps them back too.
+# Read before anything changes: the revision the running code expects.
+PREVIOUS_REVISION="$(db_revision)"
+log "database at revision: ${PREVIOUS_REVISION:-unknown}"
+
 FAILURE=""
 if ! bring_up "$TARGET_SHA"; then
   FAILURE="the stack did not come up -- see the output above. A failed migration stops here, and the old containers are already down."
@@ -171,6 +183,29 @@ docker compose -f "$COMPOSE_FILE" logs --tail 50 || true
 
 if [ "$PREVIOUS_SHA" = "$TARGET_SHA" ]; then
   fail "deploy failed health check and there is nothing to roll back to"
+fi
+
+# A migration that succeeded before the new code failed its health check left
+# the database on a revision the old code has never heard of, and the old
+# image's `alembic upgrade head` refuses to start against it -- so the rollback
+# would take the site down for good. Step the schema back first, with the new
+# image (still pinned in .env): it is the only one that has the new revisions'
+# downgrade steps. Stop the new API and worker so nothing writes meanwhile.
+#
+# A downgrade can drop what the new revisions added (a column, a table) along
+# with anything written there since. That is the price of getting the old code
+# back up; the alternative is staying down until someone is at the keyboard.
+CURRENT_REVISION="$(db_revision)"
+if [ -n "$PREVIOUS_REVISION" ] && [ -n "$CURRENT_REVISION" ] \
+    && [ "$CURRENT_REVISION" != "$PREVIOUS_REVISION" ]; then
+  [ "$(wc -l <<< "$PREVIOUS_REVISION")" -eq 1 ] \
+    || fail "the database had several heads before this deploy (${PREVIOUS_REVISION//$'\n'/, }) -- not downgrading automatically; manual intervention needed"
+  log "database moved from ${PREVIOUS_REVISION} to ${CURRENT_REVISION}: downgrading before the rollback"
+  docker compose -f "$COMPOSE_FILE" stop backend worker || true
+  docker compose -f "$COMPOSE_FILE" run --rm --no-deps -T migrate alembic downgrade "$PREVIOUS_REVISION" \
+    || fail "downgrade to ${PREVIOUS_REVISION} failed -- the site is DOWN and the old code cannot start against revision ${CURRENT_REVISION}; manual intervention needed"
+elif [ -z "$PREVIOUS_REVISION" ]; then
+  log "WARNING: the revision before this deploy is unknown, so the schema cannot be stepped back if it moved"
 fi
 
 log "rolling back to ${PREVIOUS_SHA}"

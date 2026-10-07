@@ -98,7 +98,10 @@ const AIKeyDialog: React.FC<AIKeyDialogProps> = ({ connection, initialKind = 're
         aria-labelledby="ai-key-dialog-title"
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-popover animate-fade-in dark:border-gray-800 dark:bg-gray-900"
       >
-        <h2 id="ai-key-dialog-title" className="mb-4 text-base font-semibold tracking-tight text-gray-900 dark:text-white">
+        <h2
+          id="ai-key-dialog-title"
+          className="mb-4 text-base font-semibold tracking-tight text-gray-900 dark:text-white"
+        >
           {target ? `Edit ${KEY_KINDS[kind].name.toLowerCase()} key` : 'Add a key'}
         </h2>
 
@@ -125,7 +128,9 @@ const AIKeyDialog: React.FC<AIKeyDialogProps> = ({ connection, initialKind = 're
                       className="sr-only"
                     />
                     <span className="block font-medium text-gray-900 dark:text-white">{KEY_KINDS[option].name}</span>
-                    <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">{KEY_KINDS[option].does}</span>
+                    <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+                      {KEY_KINDS[option].does}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -133,7 +138,10 @@ const AIKeyDialog: React.FC<AIKeyDialogProps> = ({ connection, initialKind = 're
           )}
 
           <div>
-            <FieldLabel htmlFor="ai-key-provider" hint={isReview ? presetInfo.note : TRANSCRIPTION_PRESETS.elevenlabs.note}>
+            <FieldLabel
+              htmlFor="ai-key-provider"
+              hint={isReview ? presetInfo.note : TRANSCRIPTION_PRESETS.elevenlabs.note}
+            >
               Provider
             </FieldLabel>
             {isReview ? (
@@ -159,7 +167,13 @@ const AIKeyDialog: React.FC<AIKeyDialogProps> = ({ connection, initialKind = 're
 
           <div>
             <FieldLabel htmlFor="ai-key-name">Name</FieldLabel>
-            <input id="ai-key-name" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={defaultName} className={inputClass} />
+            <input
+              id="ai-key-name"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={defaultName}
+              className={inputClass}
+            />
           </div>
 
           {isReview && (
@@ -186,7 +200,9 @@ const AIKeyDialog: React.FC<AIKeyDialogProps> = ({ connection, initialKind = 're
               spellCheck={false}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={target?.api_key_hint ? `••••${target.api_key_hint} (leave empty to keep)` : isReview ? '' : 'sk_…'}
+              placeholder={
+                target?.api_key_hint ? `••••${target.api_key_hint} (leave empty to keep)` : isReview ? '' : 'sk_…'
+              }
               className={`${inputClass} font-mono`}
             />
           </div>
@@ -217,13 +233,17 @@ const AIKeyDialog: React.FC<AIKeyDialogProps> = ({ connection, initialKind = 're
           )}
 
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            The key is checked with the provider, stored encrypted, and never shown again. Your provider bills you for what
-            the surveys you choose use.
+            The key is checked with the provider, stored encrypted, and never shown again. Your provider bills you for
+            what the surveys you choose use.
           </p>
         </div>
 
         <div role="status" aria-live="polite" className="mt-4 space-y-2">
-          {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">{error}</p>}
+          {error && (
+            <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+              {error}
+            </p>
+          )}
           {saved && saved.status === 'failing' && (
             <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
               Saved, but the check failed: {describeAIError(saved.last_error)}

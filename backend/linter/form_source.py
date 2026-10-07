@@ -42,7 +42,8 @@ def stored_form_has_logic(payload: Any) -> bool:
     """Whether any stored survey row carries one of the logic columns."""
     if not isinstance(payload, dict):
         return False
-    content = payload.get("content") if isinstance(payload.get("content"), dict) else payload
+    nested = payload.get("content")
+    content = nested if isinstance(nested, dict) else payload
     for row in content.get("survey") or []:
         if not isinstance(row, dict):
             continue

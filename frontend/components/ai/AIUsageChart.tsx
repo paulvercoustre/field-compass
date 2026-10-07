@@ -60,7 +60,9 @@ const label = (start: string, unit: 'day' | 'month') => {
 };
 
 const formatValue = (value: number, metric: UsageMetric) =>
-  metric === 'minutes' ? `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} min` : value.toLocaleString();
+  metric === 'minutes'
+    ? `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} min`
+    : value.toLocaleString();
 
 const segmentButton = (active: boolean) =>
   `px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
@@ -112,14 +114,33 @@ const AIUsageChart: React.FC<AIUsageChartProps> = ({ surveys, refreshKey }) => {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900" role="group" aria-label="What to show">
-          <button type="button" className={segmentButton(metric === 'reviews')} onClick={() => setMetric('reviews')} aria-pressed={metric === 'reviews'}>
+        <div
+          className="inline-flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900"
+          role="group"
+          aria-label="What to show"
+        >
+          <button
+            type="button"
+            className={segmentButton(metric === 'reviews')}
+            onClick={() => setMetric('reviews')}
+            aria-pressed={metric === 'reviews'}
+          >
             AI reviews
           </button>
-          <button type="button" className={segmentButton(metric === 'translations')} onClick={() => setMetric('translations')} aria-pressed={metric === 'translations'}>
+          <button
+            type="button"
+            className={segmentButton(metric === 'translations')}
+            onClick={() => setMetric('translations')}
+            aria-pressed={metric === 'translations'}
+          >
             Translations
           </button>
-          <button type="button" className={segmentButton(metric === 'minutes')} onClick={() => setMetric('minutes')} aria-pressed={metric === 'minutes'}>
+          <button
+            type="button"
+            className={segmentButton(metric === 'minutes')}
+            onClick={() => setMetric('minutes')}
+            aria-pressed={metric === 'minutes'}
+          >
             Transcription minutes
           </button>
         </div>
@@ -169,7 +190,11 @@ const AIUsageChart: React.FC<AIUsageChartProps> = ({ surveys, refreshKey }) => {
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         {!error && history && (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: 0 }} barCategoryGap={period === '30d' ? 2 : '30%'}>
+            <BarChart
+              data={data}
+              margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
+              barCategoryGap={period === '30d' ? 2 : '30%'}
+            >
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="label" {...axisProps} interval={period === '30d' ? 6 : 0} />
               <YAxis
@@ -193,7 +218,8 @@ const AIUsageChart: React.FC<AIUsageChartProps> = ({ surveys, refreshKey }) => {
         )}
         {!error && empty && (
           <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-            {{ reviews: 'No AI reviews', translations: 'No translations', minutes: 'No transcription' }[metric]} in this period.
+            {{ reviews: 'No AI reviews', translations: 'No translations', minutes: 'No transcription' }[metric]} in this
+            period.
           </p>
         )}
       </div>

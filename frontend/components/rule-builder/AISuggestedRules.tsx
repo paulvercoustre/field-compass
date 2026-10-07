@@ -25,12 +25,7 @@ const describeError = (message: string): string => {
   return message;
 };
 
-const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
-  surveyId,
-  onRulesAdded,
-  autoStart = false,
-  onClose,
-}) => {
+const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({ surveyId, onRulesAdded, autoStart = false, onClose }) => {
   const [suggestions, setSuggestions] = useState<Array<Omit<StagedRule, 'id'>> | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -123,7 +118,9 @@ const AISuggestedRules: React.FC<AISuggestedRulesProps> = ({
                   className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
                 />
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium text-gray-900 dark:text-white">{suggestion.description}</span>
+                  <span className="block text-sm font-medium text-gray-900 dark:text-white">
+                    {suggestion.description}
+                  </span>
                   <span className="block text-xs text-gray-500 dark:text-gray-400">{suggestion.issue_message}</span>
                   <code className="mt-1 block truncate font-mono text-xs text-gray-600 dark:text-gray-300">
                     {describeConditions(suggestion.conditions)}

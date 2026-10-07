@@ -294,8 +294,12 @@ Compare with `ssh-keygen -lf` output from a machine that has already connected.
    `SITE_ADDRESS` (HTTPS with a loopback `--resolve` once a domain is set, so
    the probe does not depend on NAT hairpinning).
 6. **Rolls back to the previous commit** if that check fails, then fails the
-   job. If the rollback is also unhealthy the job says so loudly -- that is the
-   case that needs a human.
+   job. If a migration ran first, the schema is stepped back to the revision
+   the database was at before the deploy (`alembic downgrade`, with the new
+   image, the only one that knows the new revisions), since the old code cannot
+   start on a revision it has never seen. A downgrade drops whatever the new
+   revisions added. If the downgrade or the rollback fails, the job says so
+   loudly -- that is the case that needs a human.
 7. The workflow then re-checks `/health` from outside, confirming the site is
    reachable to the internet and not just to itself.
 

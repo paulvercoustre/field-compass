@@ -23,11 +23,12 @@ interface SidebarProps {
 
 const PermissionBadge: React.FC<{ permission?: string }> = ({ permission }) => {
   if (!permission || permission === 'owner' || permission === 'admin') return null;
-  
-  const colors = permission === 'editor'
-    ? 'bg-sky-50 text-sky-700 ring-sky-600/15 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-400/20'
-    : 'bg-gray-100 text-gray-600 ring-gray-500/15 dark:bg-gray-700/50 dark:text-gray-300 dark:ring-gray-400/20';
-  
+
+  const colors =
+    permission === 'editor'
+      ? 'bg-sky-50 text-sky-700 ring-sky-600/15 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-400/20'
+      : 'bg-gray-100 text-gray-600 ring-gray-500/15 dark:bg-gray-700/50 dark:text-gray-300 dark:ring-gray-400/20';
+
   return (
     <span className={`ml-auto flex-shrink-0 rounded px-1.5 py-px text-xs font-medium ring-1 ring-inset ${colors}`}>
       {permission === 'editor' ? 'Editor' : 'Viewer'}
@@ -35,15 +36,15 @@ const PermissionBadge: React.FC<{ permission?: string }> = ({ permission }) => {
   );
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  onAddSurvey, 
+const Sidebar: React.FC<SidebarProps> = ({
+  onAddSurvey,
   onSurveySelect,
   user,
   onUserSettings,
   onLogout,
   isUserSettingsActive = false,
   isOpen = true,
-  onToggle
+  onToggle,
 }) => {
   const { surveys, selectedSurvey, isLoading, setSelectedSurvey } = useSurvey();
   const { isSurveyBusy } = useActivity();
@@ -70,33 +71,40 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [isUserMenuOpen]);
 
   const handleSurveyClick = (surveyId: string) => {
-    const survey = surveys.find(s => s.survey_id === surveyId);
+    const survey = surveys.find((s) => s.survey_id === surveyId);
     if (survey) {
       setSelectedSurvey(survey);
       onSurveySelect(surveyId);
     }
   };
 
-  const iconButtonClass = "inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-200/70 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white transition-colors";
-  const rowClass = "flex w-full items-center gap-2.5 rounded-md text-sm transition-colors";
+  const iconButtonClass =
+    'inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-200/70 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white transition-colors';
+  const rowClass = 'flex w-full items-center gap-2.5 rounded-md text-sm transition-colors';
   const initial = (user?.username?.charAt(0) || user?.email?.charAt(0) || '?').toUpperCase();
 
   return (
-    <aside className={`${isOpen ? 'w-60' : 'w-14'} bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col flex-shrink-0 h-screen transition-[width] duration-200`}>
+    <aside
+      className={`${isOpen ? 'w-60' : 'w-14'} bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col flex-shrink-0 h-screen transition-[width] duration-200`}
+    >
       {/* Brand and toggle (just the toggle when collapsed) */}
-      <div className={`flex h-12 flex-shrink-0 items-center ${isOpen ? 'justify-between pl-4 pr-2.5' : 'justify-center'}`}>
+      <div
+        className={`flex h-12 flex-shrink-0 items-center ${isOpen ? 'justify-between pl-4 pr-2.5' : 'justify-center'}`}
+      >
         {isOpen && (
           <div className="flex min-w-0 items-center gap-2.5">
             <LogoTile />
-            <span className="truncate text-sm font-semibold tracking-tight text-gray-900 dark:text-white">Field Compass</span>
+            <span className="truncate text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
+              Field Compass
+            </span>
           </div>
         )}
         {onToggle && (
           <button
             onClick={onToggle}
             className={iconButtonClass}
-            title={isOpen ? "Collapse sidebar" : "Expand sidebar"}
-            aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+            title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             <SidebarIcon />
           </button>
@@ -104,7 +112,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* New survey button - always visible */}
-      <div className={isOpen ? "px-2.5 pt-1" : "flex justify-center px-2 pt-1"}>
+      <div className={isOpen ? 'px-2.5 pt-1' : 'flex justify-center px-2 pt-1'}>
         <button
           onClick={() => {
             // Clear the selection on the way in. Leaving a survey highlighted
@@ -115,13 +123,17 @@ const Sidebar: React.FC<SidebarProps> = ({
             forgetSurveyId();
             onAddSurvey();
           }}
-          className={isOpen
-            ? `${rowClass} h-8 px-2 font-medium text-gray-700 hover:bg-gray-200/60 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white`
-            : iconButtonClass}
+          className={
+            isOpen
+              ? `${rowClass} h-8 px-2 font-medium text-gray-700 hover:bg-gray-200/60 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white`
+              : iconButtonClass
+          }
           title="New survey"
           aria-label="New survey"
         >
-          <span className={`flex flex-shrink-0 items-center justify-center rounded-md ${isOpen ? 'h-5 w-5 border border-gray-300 bg-white text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300' : ''}`}>
+          <span
+            className={`flex flex-shrink-0 items-center justify-center rounded-md ${isOpen ? 'h-5 w-5 border border-gray-300 bg-white text-gray-600 shadow-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300' : ''}`}
+          >
             <PlusIcon className={isOpen ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
           </span>
           {isOpen && <span>New survey</span>}
@@ -138,13 +150,9 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Loading…</div>
           ) : (
             <div className="px-2.5 pb-3 pt-4">
-              <div className="px-2 pb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
-                Surveys
-              </div>
+              <div className="px-2 pb-1 text-sm font-medium text-gray-500 dark:text-gray-400">Surveys</div>
               {surveys.length === 0 ? (
-                <div className="px-2 py-1.5 text-sm text-gray-500 dark:text-gray-400">
-                  No surveys yet.
-                </div>
+                <div className="px-2 py-1.5 text-sm text-gray-500 dark:text-gray-400">No surveys yet.</div>
               ) : (
                 <div className="space-y-px">
                   {surveys.map((survey) => {
@@ -164,7 +172,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{survey.survey_name}</span>
                           {isSurveyBusy(survey.survey_id) && (
-                            <span className="relative flex h-2 w-2 flex-shrink-0" title="Pulling or checking" aria-label="Pulling or checking">
+                            <span
+                              className="relative flex h-2 w-2 flex-shrink-0"
+                              title="Pulling or checking"
+                              aria-label="Pulling or checking"
+                            >
                               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
                               <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
                             </span>
@@ -183,7 +195,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* User Menu - Bottom of Sidebar with popup */}
       {user && (
-        <div ref={userMenuRef} className={`relative border-t border-gray-200 dark:border-gray-800 ${isOpen ? 'p-2.5' : 'p-2 flex flex-col items-center'}`}>
+        <div
+          ref={userMenuRef}
+          className={`relative border-t border-gray-200 dark:border-gray-800 ${isOpen ? 'p-2.5' : 'p-2 flex flex-col items-center'}`}
+        >
           {/* User popup - appears above the user section */}
           {isUserMenuOpen && (
             <div
@@ -193,7 +208,9 @@ const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <div className="px-2.5 pb-2 pt-1.5">
-                <div className="truncate text-sm font-medium text-gray-900 dark:text-white">{user.username || 'Account'}</div>
+                <div className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                  {user.username || 'Account'}
+                </div>
                 <div className="truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
               </div>
               <div className="my-1 h-px bg-gray-100 dark:bg-gray-800" />
@@ -224,11 +241,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {/* User button - click toggles popup */}
           <button
-            onClick={() => setIsUserMenuOpen(prev => !prev)}
+            onClick={() => setIsUserMenuOpen((prev) => !prev)}
             aria-haspopup="menu"
             aria-expanded={isUserMenuOpen}
             className={`flex items-center rounded-md text-sm transition-colors ${
-              isUserSettingsActive || isUserMenuOpen ? 'bg-gray-200/60 dark:bg-gray-800' : 'hover:bg-gray-200/60 dark:hover:bg-gray-800'
+              isUserSettingsActive || isUserMenuOpen
+                ? 'bg-gray-200/60 dark:bg-gray-800'
+                : 'hover:bg-gray-200/60 dark:hover:bg-gray-800'
             } ${isOpen ? 'w-full gap-2.5 px-2 py-1.5' : 'p-1'}`}
             title={user.email}
           >
@@ -252,5 +271,3 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 export default Sidebar;
-
-

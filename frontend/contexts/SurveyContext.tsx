@@ -37,10 +37,10 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
     setError(null);
     try {
       const data = await getSurveys();
-      
+
       // Update surveys state
       setSurveys(data);
-      
+
       // Use functional update to get current selectedSurvey state
       setSelectedSurvey((currentSelected) => {
         // Nothing is ever selected on the user's behalf.
@@ -52,7 +52,7 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
         // wrong selection costs trust in the numbers.
         //
         // Keep a selection that is still valid -- that one was chosen.
-        if (currentSelected && data.find(s => s.survey_id === currentSelected.survey_id)) {
+        if (currentSelected && data.find((s) => s.survey_id === currentSelected.survey_id)) {
           return currentSelected;
         }
 
@@ -71,7 +71,7 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
         // login, logout, or starting a new survey.
         const rememberedId = readRememberedSurveyId();
         if (rememberedId) {
-          const remembered = data.find(s => s.survey_id === rememberedId);
+          const remembered = data.find((s) => s.survey_id === rememberedId);
           if (remembered) {
             return remembered;
           }
@@ -81,7 +81,7 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
         // to whatever happens to be first.
         return null;
       });
-      
+
       return data;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load surveys');

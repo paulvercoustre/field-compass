@@ -101,7 +101,9 @@ export function useCollectionTargets(koboToolData: KoboToolData | null) {
     try {
       const { headers, rows } = await parseSamplingFrame(file);
       if (!koboToolData?.variableMap) {
-        throw new Error('Read the form from your Kobo project first, so its columns can be checked against your questions');
+        throw new Error(
+          'Read the form from your Kobo project first, so its columns can be checked against your questions'
+        );
       }
       const validation = validateSamplingFrameColumns(headers, Array.from(koboToolData.variableMap.keys()));
       if (!validation.isValid) {

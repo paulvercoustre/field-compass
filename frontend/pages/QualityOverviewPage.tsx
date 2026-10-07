@@ -6,18 +6,14 @@ interface QualityOverviewPageProps {
   onNavigateToSubmissions?: (filters?: { validationStatuses?: string[] }) => void;
 }
 
-const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({ 
-  onNavigateToSubmissions,
-}) => {
+const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({ onNavigateToSubmissions }) => {
   const { selectedSurvey } = useSurvey();
 
   if (!selectedSurvey) {
     return (
       <div className="h-full flex items-center justify-center p-8">
         <div className="text-center">
-          <h2 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
-            No Survey Selected
-          </h2>
+          <h2 className="text-sm font-medium text-gray-900 dark:text-white mb-1">No Survey Selected</h2>
           <p className="text-gray-500 dark:text-gray-400">
             Please select a survey from the sidebar to view quality overview.
           </p>

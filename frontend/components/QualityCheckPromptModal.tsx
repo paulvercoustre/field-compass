@@ -5,36 +5,31 @@ interface QualityCheckPromptModalProps {
   onConfigureLater: () => void;
 }
 
-const QualityCheckPromptModal: React.FC<QualityCheckPromptModalProps> = ({ 
-  onConfigureNow, 
-  onConfigureLater 
-}) => {
+const QualityCheckPromptModal: React.FC<QualityCheckPromptModalProps> = ({ onConfigureNow, onConfigureLater }) => {
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 backdrop-blur-[2px]"
       onClick={onConfigureLater}
     >
-      <div 
+      <div
         className="bg-white dark:bg-gray-900 rounded-xl shadow-popover p-6 w-full max-w-md border border-gray-200 dark:border-gray-800 animate-fade-in"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
             Set up quality checks
           </h3>
-          <button 
-            onClick={onConfigureLater} 
+          <button
+            onClick={onConfigureLater}
             className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-2xl font-bold"
             aria-label="Close"
           >
             &times;
           </button>
         </div>
-        
-        <p className="text-gray-700 dark:text-gray-300 mb-6">
-          Survey created. Set up its quality checks now?
-        </p>
-        
+
+        <p className="text-gray-700 dark:text-gray-300 mb-6">Survey created. Set up its quality checks now?</p>
+
         <div className="flex gap-3 justify-end">
           <button
             onClick={onConfigureLater}
@@ -55,5 +50,3 @@ const QualityCheckPromptModal: React.FC<QualityCheckPromptModalProps> = ({
 };
 
 export default QualityCheckPromptModal;
-
-

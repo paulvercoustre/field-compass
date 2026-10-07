@@ -5,7 +5,16 @@ import React from 'react';
 type IconProps = { className?: string };
 
 const Icon: React.FC<IconProps & { children: React.ReactNode }> = ({ className = 'w-4 h-4', children }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.75}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     {children}
   </svg>
 );
@@ -18,19 +27,30 @@ export const RefreshIcon: React.FC<IconProps> = (p) => (
 );
 
 export const PlusIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><path d="M12 5v14M5 12h14" /></Icon>
+  <Icon {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Icon>
 );
 
 export const ListIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></Icon>
+  <Icon {...p}>
+    <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+  </Icon>
 );
 
 export const ChartIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></Icon>
+  <Icon {...p}>
+    <path d="M3 3v18h18" />
+    <path d="M7 15l4-4 3 3 5-6" />
+  </Icon>
 );
 
 export const TargetIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></Icon>
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="5" />
+    <circle cx="12" cy="12" r="1" />
+  </Icon>
 );
 
 export const UsersIcon: React.FC<IconProps> = (p) => (
@@ -50,23 +70,35 @@ export const SettingsIcon: React.FC<IconProps> = (p) => (
 );
 
 export const LogoutIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></Icon>
+  <Icon {...p}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+  </Icon>
 );
 
 export const UserCogIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></Icon>
+  <Icon {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </Icon>
 );
 
 export const SidebarIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></Icon>
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M9 4v16" />
+  </Icon>
 );
 
 export const ChevronDownIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><path d="M6 9l6 6 6-6" /></Icon>
+  <Icon {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Icon>
 );
 
 export const ChevronUpDownIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><path d="M8 9l4-4 4 4M8 15l4 4 4-4" /></Icon>
+  <Icon {...p}>
+    <path d="M8 9l4-4 4 4M8 15l4 4 4-4" />
+  </Icon>
 );
 
 export const AlertTriangleIcon: React.FC<IconProps> = (p) => (
@@ -77,23 +109,35 @@ export const AlertTriangleIcon: React.FC<IconProps> = (p) => (
 );
 
 export const CheckIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><path d="M20 6 9 17l-5-5" /></Icon>
+  <Icon {...p}>
+    <path d="M20 6 9 17l-5-5" />
+  </Icon>
 );
 
 export const CheckCircleIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><circle cx="12" cy="12" r="9" /><path d="m8.5 12 2.5 2.5 4.5-5" /></Icon>
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m8.5 12 2.5 2.5 4.5-5" />
+  </Icon>
 );
 
 export const XCircleIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><circle cx="12" cy="12" r="9" /><path d="m15 9-6 6M9 9l6 6" /></Icon>
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m15 9-6 6M9 9l6 6" />
+  </Icon>
 );
 
 export const ExternalLinkIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></Icon>
+  <Icon {...p}>
+    <path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+  </Icon>
 );
 
 export const PencilIcon: React.FC<IconProps> = (p) => (
-  <Icon {...p}><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></Icon>
+  <Icon {...p}>
+    <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+  </Icon>
 );
 
 /** The one mark for anything AI does or decides, so it is recognisable everywhere. */

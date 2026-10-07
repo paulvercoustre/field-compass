@@ -3,7 +3,16 @@ import { AccountAIUsage, AI_FEATURES } from '../../services/aiConnectionsApi';
 import { SparkleIcon, TranslateIcon } from '../ui/icons';
 
 const MicIcon: React.FC<{ className?: string }> = ({ className = 'h-4 w-4' }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.75}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <rect x="9" y="2" width="6" height="12" rx="3" />
     <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" />
   </svg>
@@ -28,8 +37,12 @@ const AIOverviewSection: React.FC<AIOverviewSectionProps> = ({ usage }) => {
   const rules = usage?.included.rule_requests_per_month ?? null;
   const figures = [
     reviewLimit ? { value: reviewLimit, unit: 'AI-reviewed submissions', per: 'a month, across your surveys' } : null,
-    translationLimit ? { value: translationLimit, unit: 'translated answers', per: 'a month, across your surveys' } : null,
-    minutesLimit ? { value: minutesLimit, unit: 'minutes of transcription', per: 'a month, across your surveys' } : null,
+    translationLimit
+      ? { value: translationLimit, unit: 'translated answers', per: 'a month, across your surveys' }
+      : null,
+    minutesLimit
+      ? { value: minutesLimit, unit: 'minutes of transcription', per: 'a month, across your surveys' }
+      : null,
     rules ? { value: rules, unit: 'AI rule requests', per: 'per person, per month' } : null,
   ].filter((figure): figure is { value: number; unit: string; per: string } => figure !== null);
 
@@ -75,11 +88,13 @@ const AIOverviewSection: React.FC<AIOverviewSectionProps> = ({ usage }) => {
             ))}
           </ul>
         ) : (
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">None on this server: AI runs on your own keys.</p>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            None on this server: AI runs on your own keys.
+          </p>
         )}
         <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-          {renews && figures.length > 0 ? `Renews ${renews}. ` : ''}A survey that uses your own API key for a feature has no
-          Field Compass limit for it: choose the key in the survey's settings, or below.
+          {renews && figures.length > 0 ? `Renews ${renews}. ` : ''}A survey that uses your own API key for a feature
+          has no Field Compass limit for it: choose the key in the survey's settings, or below.
         </p>
       </div>
     </section>

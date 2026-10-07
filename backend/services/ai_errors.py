@@ -66,7 +66,8 @@ def _provider_message(exc: openai.APIStatusError) -> str:
     """The provider's own wording, not the SDK's ``Error code: 429 - {...}`` wrapper."""
     body = exc.body
     if isinstance(body, dict):
-        inner = body.get("error") if isinstance(body.get("error"), dict) else body
+        nested = body.get("error")
+        inner = nested if isinstance(nested, dict) else body
         if inner.get("message"):
             return str(inner["message"])
     return exc.response.text or f"HTTP {exc.status_code}"

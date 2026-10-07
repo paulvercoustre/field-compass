@@ -23,7 +23,6 @@ interface CustomChecksProps {
 
 type Panel = 'none' | 'compose' | 'suggest';
 
-
 const describeAiError = (message: string): string => {
   if (message.includes('Not authenticated')) {
     return 'Your session has expired. Refresh the page and sign in again.';
@@ -129,16 +128,28 @@ const CustomChecks: React.FC<CustomChecksProps> = ({
         <div className="min-w-0">
           <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Custom checks</h2>
           {canEdit && !koboToolData && (
-            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Load the Kobo form (General → Kobo form) to add checks.</p>
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+              Load the Kobo form (General → Kobo form) to add checks.
+            </p>
           )}
         </div>
         {canEdit && panel === 'none' && (
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => openPanel('suggest')} disabled={!canCompose} className={`${ghostButton} gap-1.5`}>
+            <button
+              type="button"
+              onClick={() => openPanel('suggest')}
+              disabled={!canCompose}
+              className={`${ghostButton} gap-1.5`}
+            >
               <SparkleIcon className="h-3.5 w-3.5" />
               Suggest from form
             </button>
-            <button type="button" onClick={() => openPanel('compose')} disabled={!canCompose} className={secondaryButton}>
+            <button
+              type="button"
+              onClick={() => openPanel('compose')}
+              disabled={!canCompose}
+              className={secondaryButton}
+            >
               <span aria-hidden="true">+</span> Add check
             </button>
           </div>
@@ -163,7 +174,12 @@ const CustomChecks: React.FC<CustomChecksProps> = ({
               disabled={isGenerating}
               className="h-9 min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-xs placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
             />
-            <button type="button" onClick={handleFillWithAI} disabled={!prompt.trim() || isGenerating} className={`${secondaryButton} h-9 justify-center`}>
+            <button
+              type="button"
+              onClick={handleFillWithAI}
+              disabled={!prompt.trim() || isGenerating}
+              className={`${secondaryButton} h-9 justify-center`}
+            >
               {isGenerating ? <Spinner size="sm" className="text-current" /> : <SparkleIcon className="h-3.5 w-3.5" />}
               {isGenerating ? 'Writing…' : 'Fill in with AI'}
             </button>
@@ -211,15 +227,18 @@ const CustomChecks: React.FC<CustomChecksProps> = ({
                 <div className="min-w-0 flex-1 basis-64">
                   <p className="text-sm font-medium text-gray-900 dark:text-white">{rule.description}</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">{rule.issue_message}</p>
-                  <code className="mt-1 block truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={describeConditions(rule.conditions)}>
+                  <code
+                    className="mt-1 block truncate font-mono text-xs text-gray-600 dark:text-gray-300"
+                    title={describeConditions(rule.conditions)}
+                  >
                     {describeConditions(rule.conditions)}
                   </code>
                   {rule.roster_name && (
                     <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">In roster {rule.roster_name}</p>
                   )}
                 </div>
-                {canEdit && (
-                  confirmingDeleteId === rule.id ? (
+                {canEdit &&
+                  (confirmingDeleteId === rule.id ? (
                     <div className="flex flex-shrink-0 items-center gap-2">
                       <span className="text-sm text-gray-600 dark:text-gray-400">Delete this check?</span>
                       <button type="button" onClick={() => setConfirmingDeleteId(null)} className={ghostButton}>
@@ -248,12 +267,15 @@ const CustomChecks: React.FC<CustomChecksProps> = ({
                       >
                         Edit
                       </button>
-                      <button type="button" onClick={() => setConfirmingDeleteId(rule.id)} className={`${ghostButton} hover:text-red-600 dark:hover:text-red-400`}>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingDeleteId(rule.id)}
+                        className={`${ghostButton} hover:text-red-600 dark:hover:text-red-400`}
+                      >
                         Delete
                       </button>
                     </div>
-                  )
-                )}
+                  ))}
               </li>
             )
           )}

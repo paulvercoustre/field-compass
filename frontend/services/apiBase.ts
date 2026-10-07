@@ -15,8 +15,7 @@ const configured = (import.meta.env.VITE_API_URL ?? '')
   .replace(/\/api\/?$/, '')
   .replace(/\/$/, '');
 
-export const API_BASE_URL =
-  configured || (import.meta.env.DEV ? 'http://localhost:8000' : '');
+export const API_BASE_URL = configured || (import.meta.env.DEV ? 'http://localhost:8000' : '');
 
 /** Where the signed-in session's token is kept. */
 export const TOKEN_KEY = 'field_compass_token';
@@ -60,7 +59,11 @@ export const apiFetch = async (input: string, init: RequestInit = {}): Promise<R
 
 /** An API error that keeps the status and body: a 409 from a pull carries the run under way. */
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public body: any) {
+  constructor(
+    message: string,
+    public status: number,
+    public body: any
+  ) {
     super(message);
   }
 }

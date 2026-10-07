@@ -39,18 +39,27 @@ const ValidationStatusDropdown: React.FC<ValidationStatusDropdownProps> = ({
 
   return (
     <Menu as="div" className="relative inline-block text-left">
-      <MenuButton
-        className={buttonClasses}
-        disabled={isUpdating || disabled}
-      >
+      <MenuButton className={buttonClasses} disabled={isUpdating || disabled}>
         {isUpdating ? (
           <Spinner size="sm" className="text-current" />
         ) : (
-          <span className={`h-2 w-2 rounded-full ${statusDotClass(getStatusDisplay(currentStatus))}`} aria-hidden="true" />
+          <span
+            className={`h-2 w-2 rounded-full ${statusDotClass(getStatusDisplay(currentStatus))}`}
+            aria-hidden="true"
+          />
         )}
         <span>{isUpdating ? 'Updating…' : getStatusDisplay(currentStatus)}</span>
         {!isUpdating && (
-          <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            className="w-3.5 h-3.5 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.75}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path d="M6 9l6 6 6-6" />
           </svg>
         )}
@@ -66,12 +75,8 @@ const ValidationStatusDropdown: React.FC<ValidationStatusDropdownProps> = ({
               <button
                 onClick={() => onChange(option.value)}
                 disabled={currentStatus === option.value}
-                className={`${
-                  focus ? 'bg-gray-100 dark:bg-gray-800' : ''
-                } ${
-                  currentStatus === option.value
-                    ? 'opacity-50 cursor-not-allowed'
-                    : ''
+                className={`${focus ? 'bg-gray-100 dark:bg-gray-800' : ''} ${
+                  currentStatus === option.value ? 'opacity-50 cursor-not-allowed' : ''
                 } group flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-gray-700 dark:text-gray-200`}
               >
                 {option.value ? (

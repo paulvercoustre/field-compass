@@ -27,7 +27,7 @@ psql -h 127.0.0.1 -p 55432 -U postgres -d field_compass -f backend/database/sche
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
-npm install            # if cdn.sheetjs.com is unreachable: npm install --no-save xlsx@0.18.5 (+ the other deps)
+npm install
 VENV=$PWD/.venv LOGS=/tmp/fc-review-logs bash docs/ui-ux-review/fixtures/run_stack.sh
 ```
 

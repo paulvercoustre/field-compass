@@ -118,6 +118,12 @@ class TranslationQueuer:
 
     # --- Rows -----------------------------------------------------------------
 
+    def _target_language(self) -> str:
+        """The language translated into. Only asked for while translation is on."""
+        if self.language is None:
+            raise RuntimeError("Translation is off for this survey: nothing to translate into.")
+        return self.language
+
     def _row(self, submission_id: int, question_path: str) -> AnswerTranslation | None:
         return (
             self.db.query(AnswerTranslation)
@@ -154,8 +160,9 @@ class TranslationQueuer:
         once it is gone there. Returns the row and whether Kobo has one (then
         nothing is translated here). Does not commit.
         """
+        language = self._target_language()
         found = kobo_translation(
-            submission.submission_data or {}, question.path, question.name, self.language
+            submission.submission_data or {}, question.path, question.name, language
         )
         if found is None:
             if row is not None and row.origin == ORIGIN_KOBO:
@@ -164,10 +171,10 @@ class TranslationQueuer:
                 self.db.flush()
                 return None, False
             return row, False
-        if row is not None and row.origin == ORIGIN_KOBO and row.language == self.language:
+        if row is not None and row.origin == ORIGIN_KOBO and row.language == language:
             if row.text == found.text:
                 return row, True
-        elif row is not None and row.language == self.language:
+        elif row is not None and row.language == language:
             if row.status == "running" or (row.text or "").strip() == found.text:
                 return row, True  # ours as sent to Kobo, or settled on the next pull
             if row.kobo_version_uuid and row.kobo_status not in ("sent", "edited_in_kobo"):
@@ -179,14 +186,14 @@ class TranslationQueuer:
         # Kobo's stands: typed there, Kobo's own, or ours corrected there.
         corrected = (
             row.origin == ORIGIN_AI
-            and row.language == self.language
+            and row.language == language
             and row.kobo_version_uuid is not None
         )
         row.origin = ORIGIN_KOBO
         row.source = SOURCE_TRANSCRIPT
         row.transcript_id = transcript.transcript_id
-        row.language = self.language
-        row.input_hash = translation_input_hash(transcript.text, self.language)
+        row.language = language
+        row.input_hash = translation_input_hash(transcript.text, language)
         row.status = "success"
         row.skip_reason = None
         row.last_error = None
@@ -228,7 +235,7 @@ class TranslationQueuer:
         transcript: AudioTranscript | None = None,
         force: bool = False,
     ) -> AnswerTranslation | None:
-        language = self.language
+        language = self._target_language()
         input_hash = translation_input_hash(text, language)
         if row is not None and row.origin == ORIGIN_KOBO and row.language == language:
             return None  # Kobo's translation stands

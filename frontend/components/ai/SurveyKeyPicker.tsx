@@ -78,7 +78,11 @@ const SurveyKeyPicker: React.FC<SurveyKeyPickerProps> = ({ surveyId, use, includ
             {includedOption}
             <span className="text-gray-500 dark:text-gray-400">
               {' · '}
-              <button type="button" onClick={toAccountKeys} className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+              <button
+                type="button"
+                onClick={toAccountKeys}
+                className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+              >
                 Add your own API key
               </button>{' '}
               for no Field Compass limit

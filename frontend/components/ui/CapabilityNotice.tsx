@@ -16,11 +16,7 @@ interface CapabilityNoticeProps {
  * instead. Deliberately does not name the config key: the person reading it
  * is looking at a screen, not a schema.
  */
-const CapabilityNotice: React.FC<CapabilityNoticeProps> = ({
-  title,
-  message,
-  onOpenSettings,
-}) => (
+const CapabilityNotice: React.FC<CapabilityNoticeProps> = ({ title, message, onOpenSettings }) => (
   <div className="max-w-xl mx-auto my-10 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 p-6 text-center">
     <svg
       aria-hidden="true"
@@ -38,9 +34,7 @@ const CapabilityNotice: React.FC<CapabilityNoticeProps> = ({
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 3h.01" />
     </svg>
 
-    <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
-      {title} needs a bit more setup
-    </h3>
+    <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">{title} needs a bit more setup</h3>
 
     <p className="text-sm text-gray-700 dark:text-gray-300 mb-5">{message}</p>
 

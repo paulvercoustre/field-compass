@@ -24,25 +24,25 @@ const FormField: React.FC<FormFieldProps> = ({
 
   return (
     <div className={`flex flex-col ${className}`}>
-      <label
-        htmlFor={fieldId}
-        className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-400"
-      >
+      <label htmlFor={fieldId} className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-400">
         {label}
-        {required && <span className="text-red-600 dark:text-red-400 ml-1" aria-label="required">*</span>}
+        {required && (
+          <span className="text-red-600 dark:text-red-400 ml-1" aria-label="required">
+            *
+          </span>
+        )}
       </label>
-      {helpText && (
-        <p className="text-xs text-gray-500 mb-1">{helpText}</p>
-      )}
+      {helpText && <p className="text-xs text-gray-500 mb-1">{helpText}</p>}
       <div className={error ? 'has-error' : ''}>
-        {React.isValidElement(children) && React.cloneElement(children as React.ReactElement<any>, {
-          id: fieldId,
-          'aria-invalid': error ? 'true' : 'false',
-          'aria-describedby': error ? `${fieldId}-error` : undefined,
-          className: `${(children as React.ReactElement<any>).props.className || ''} ${
-            error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
-          }`.trim(),
-        })}
+        {React.isValidElement(children) &&
+          React.cloneElement(children as React.ReactElement<any>, {
+            id: fieldId,
+            'aria-invalid': error ? 'true' : 'false',
+            'aria-describedby': error ? `${fieldId}-error` : undefined,
+            className: `${(children as React.ReactElement<any>).props.className || ''} ${
+              error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+            }`.trim(),
+          })}
       </div>
       <ErrorMessage error={error} id={`${fieldId}-error`} />
     </div>
@@ -50,4 +50,3 @@ const FormField: React.FC<FormFieldProps> = ({
 };
 
 export default FormField;
-

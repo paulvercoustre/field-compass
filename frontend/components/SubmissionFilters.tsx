@@ -7,7 +7,7 @@ import {
   extractUniqueSamplingValues,
   supportsEnumeratorFiltering,
   supportsSamplingFiltering,
-  getSamplingVariables
+  getSamplingVariables,
 } from '../utils/filterUtils';
 
 interface SubmissionFiltersProps {
@@ -76,7 +76,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
   options,
   selectedValues,
   onChange,
-  placeholder = "Select options...",
+  placeholder = 'Select options...',
   maxDisplayItems = 2,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -96,13 +96,11 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(option =>
-    option.label.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOptions = options.filter((option) => option.label.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleToggleOption = (value: string) => {
     const newValues = selectedValues.includes(value)
-      ? selectedValues.filter(v => v !== value)
+      ? selectedValues.filter((v) => v !== value)
       : [...selectedValues, value];
     onChange(newValues);
   };
@@ -131,8 +129,8 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
               <span className="text-gray-500 dark:text-gray-400">{placeholder}</span>
             ) : (
               <>
-                {displayedValues.map(value => {
-                  const option = options.find(opt => opt.value === value);
+                {displayedValues.map((value) => {
+                  const option = options.find((opt) => opt.value === value);
                   return (
                     <span
                       key={value}
@@ -182,11 +180,9 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
             )}
             <div className="max-h-48 overflow-y-auto">
               {filteredOptions.length === 0 ? (
-                <div className="p-3 text-center text-gray-600 dark:text-gray-400 text-sm">
-                  No options found
-                </div>
+                <div className="p-3 text-center text-gray-600 dark:text-gray-400 text-sm">No options found</div>
               ) : (
-                filteredOptions.map(option => (
+                filteredOptions.map((option) => (
                   <label
                     key={option.value}
                     className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-sm"
@@ -239,63 +235,73 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
   }, [submissions, surveyConfig]);
 
   // Handle filter changes with debouncing
-  const handleFilterChange = useCallback((newFilters: Partial<FilterState>) => {
-    const updatedFilters = { ...activeFilters, ...newFilters };
-    onFiltersChange(updatedFilters);
-  }, [activeFilters, onFiltersChange]);
-
+  const handleFilterChange = useCallback(
+    (newFilters: Partial<FilterState>) => {
+      const updatedFilters = { ...activeFilters, ...newFilters };
+      onFiltersChange(updatedFilters);
+    },
+    [activeFilters, onFiltersChange]
+  );
 
   // Handle sampling filter changes
-  const handleSamplingFilterChange = useCallback((variable: string, values: string[]) => {
-    let newSamplingFilters = [...(activeFilters.samplingFilters || [])];
-    const existingFilterIndex = newSamplingFilters.findIndex(f => f.variable === variable);
+  const handleSamplingFilterChange = useCallback(
+    (variable: string, values: string[]) => {
+      let newSamplingFilters = [...(activeFilters.samplingFilters || [])];
+      const existingFilterIndex = newSamplingFilters.findIndex((f) => f.variable === variable);
 
-    if (values.length > 0) {
-      if (existingFilterIndex >= 0) {
-        // Update existing filter
-        newSamplingFilters[existingFilterIndex].values = values;
+      if (values.length > 0) {
+        if (existingFilterIndex >= 0) {
+          // Update existing filter
+          newSamplingFilters[existingFilterIndex].values = values;
+        } else {
+          // Create new filter
+          newSamplingFilters.push({ variable, values });
+        }
       } else {
-        // Create new filter
-        newSamplingFilters.push({ variable, values });
+        // Remove filter if no values selected
+        if (existingFilterIndex >= 0) {
+          newSamplingFilters.splice(existingFilterIndex, 1);
+        }
       }
-    } else {
-      // Remove filter if no values selected
-      if (existingFilterIndex >= 0) {
-        newSamplingFilters.splice(existingFilterIndex, 1);
-      }
-    }
 
-    handleFilterChange({ samplingFilters: newSamplingFilters.length > 0 ? newSamplingFilters : undefined });
-  }, [activeFilters.samplingFilters, handleFilterChange]);
+      handleFilterChange({ samplingFilters: newSamplingFilters.length > 0 ? newSamplingFilters : undefined });
+    },
+    [activeFilters.samplingFilters, handleFilterChange]
+  );
 
   // Handle removing a specific filter
-  const handleRemoveFilter = useCallback((filterType: 'validationStatuses' | 'enumerators' | 'samplingFilters', value?: string, variable?: string) => {
-    const updatedFilters = { ...activeFilters };
+  const handleRemoveFilter = useCallback(
+    (filterType: 'validationStatuses' | 'enumerators' | 'samplingFilters', value?: string, variable?: string) => {
+      const updatedFilters = { ...activeFilters };
 
-    if (filterType === 'validationStatuses' && value) {
-      updatedFilters.validationStatuses = (activeFilters.validationStatuses || []).filter(s => s !== value);
-      if (updatedFilters.validationStatuses.length === 0) {
-        updatedFilters.validationStatuses = undefined;
-      }
-    } else if (filterType === 'enumerators' && value) {
-      updatedFilters.enumerators = (activeFilters.enumerators || []).filter(e => e !== value);
-      if (updatedFilters.enumerators.length === 0) {
-        updatedFilters.enumerators = undefined;
-      }
-    } else if (filterType === 'samplingFilters' && variable && value) {
-      updatedFilters.samplingFilters = (activeFilters.samplingFilters || []).map(f => {
-        if (f.variable === variable) {
-          f.values = f.values.filter(v => v !== value);
+      if (filterType === 'validationStatuses' && value) {
+        updatedFilters.validationStatuses = (activeFilters.validationStatuses || []).filter((s) => s !== value);
+        if (updatedFilters.validationStatuses.length === 0) {
+          updatedFilters.validationStatuses = undefined;
         }
-        return f;
-      }).filter(f => f.values.length > 0);
-      if (updatedFilters.samplingFilters.length === 0) {
-        updatedFilters.samplingFilters = undefined;
+      } else if (filterType === 'enumerators' && value) {
+        updatedFilters.enumerators = (activeFilters.enumerators || []).filter((e) => e !== value);
+        if (updatedFilters.enumerators.length === 0) {
+          updatedFilters.enumerators = undefined;
+        }
+      } else if (filterType === 'samplingFilters' && variable && value) {
+        updatedFilters.samplingFilters = (activeFilters.samplingFilters || [])
+          .map((f) => {
+            if (f.variable === variable) {
+              f.values = f.values.filter((v) => v !== value);
+            }
+            return f;
+          })
+          .filter((f) => f.values.length > 0);
+        if (updatedFilters.samplingFilters.length === 0) {
+          updatedFilters.samplingFilters = undefined;
+        }
       }
-    }
 
-    onFiltersChange(updatedFilters);
-  }, [activeFilters, onFiltersChange]);
+      onFiltersChange(updatedFilters);
+    },
+    [activeFilters, onFiltersChange]
+  );
 
   // Handle clearing all filters
   const handleClearAllFilters = useCallback(() => {
@@ -326,7 +332,16 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
             aria-expanded={isExpanded}
             className="flex h-7 items-center gap-1.5 px-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
           >
-            <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              className="w-4 h-4 text-gray-400"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.75}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="M3 5h18M6 12h12M10 19h4" />
             </svg>
             <span>Filters</span>
@@ -354,13 +369,14 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
           {/* Filter Summary */}
           {activeFilterCount > 0 && (
             <div className="mt-4 mb-4">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
-                Active filters
-              </div>
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Active filters</div>
               <div className="flex flex-wrap gap-2">
                 {/* Validation Status Chips */}
                 {(activeFilters.validationStatuses || []).map((status) => (
-                  <span key={status} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
+                  <span
+                    key={status}
+                    className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20"
+                  >
                     Status: {status}
                     <button
                       onClick={() => handleRemoveFilter('validationStatuses', status)}
@@ -373,7 +389,10 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
 
                 {/* Enumerator Chips */}
                 {(activeFilters.enumerators || []).map((enumerator) => (
-                  <span key={enumerator} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
+                  <span
+                    key={enumerator}
+                    className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20"
+                  >
                     Enumerator: {enumerator}
                     <button
                       onClick={() => handleRemoveFilter('enumerators', enumerator)}
@@ -385,7 +404,10 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
                 ))}
 
                 {(activeFilters.qaStatuses || []).map((status) => (
-                  <span key={`qa-${status}`} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
+                  <span
+                    key={`qa-${status}`}
+                    className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20"
+                  >
                     {status === 'FLAGGED' ? 'Flagged' : status}
                     <button
                       onClick={() => {
@@ -427,7 +449,10 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
                 {/* Sampling Filter Chips */}
                 {(activeFilters.samplingFilters || []).map((filter) =>
                   filter.values.map((value) => (
-                    <span key={`${filter.variable}-${value}`} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20">
+                    <span
+                      key={`${filter.variable}-${value}`}
+                      className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-md ring-1 ring-inset ring-indigo-600/15 dark:ring-indigo-400/20"
+                    >
                       {filter.variable}: {value}
                       <button
                         onClick={() => handleRemoveFilter('samplingFilters', value, filter.variable)}
@@ -462,9 +487,9 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
             {supportsEnumeratorFiltering(surveyConfig) && (
               <MultiSelectDropdown
                 label="Enumerator"
-                options={filterOptions.enumerators.map(enumValue => ({
+                options={filterOptions.enumerators.map((enumValue) => ({
                   value: enumValue,
-                  label: enumValue
+                  label: enumValue,
                 }))}
                 selectedValues={activeFilters.enumerators || []}
                 onChange={(values) => handleFilterChange({ enumerators: values.length > 0 ? values : undefined })}
@@ -499,13 +524,13 @@ const SubmissionFilters: React.FC<SubmissionFiltersProps> = ({
                 <div className="space-y-3">
                   {filterOptions.samplingVariables.map((variable) => {
                     const values = extractUniqueSamplingValues(submissions, variable, surveyConfig);
-                    const currentFilter = (activeFilters.samplingFilters || []).find(f => f.variable === variable);
+                    const currentFilter = (activeFilters.samplingFilters || []).find((f) => f.variable === variable);
 
                     return (
                       <MultiSelectDropdown
                         key={variable}
                         label={variable}
-                        options={values.map(value => ({ value, label: value }))}
+                        options={values.map((value) => ({ value, label: value }))}
                         selectedValues={currentFilter?.values || []}
                         onChange={(selectedValues) => handleSamplingFilterChange(variable, selectedValues)}
                         placeholder={`Select ${variable} values...`}

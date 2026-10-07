@@ -43,7 +43,9 @@ const CollectionTargetsEditor: React.FC<CollectionTargetsEditorProps> = ({
                   `${frameData.length} rows`,
                   settings.sampling_cols.length > 0 && `grouped by ${settings.sampling_cols.join(', ')}`,
                   planned !== null && `${planned} interviews planned`,
-                ].filter(Boolean).join(' · ')}
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
             </div>
           )}
@@ -58,7 +60,12 @@ const CollectionTargetsEditor: React.FC<CollectionTargetsEditorProps> = ({
                 className="inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 File format
               </button>
@@ -66,10 +73,19 @@ const CollectionTargetsEditor: React.FC<CollectionTargetsEditorProps> = ({
             {showHelp && (
               <div className="mb-3 p-3 bg-blue-50 dark:bg-gray-800/50 border border-blue-200 dark:border-gray-700 rounded-md text-xs text-gray-700 dark:text-gray-300 space-y-2">
                 <ul className="list-disc list-inside space-y-1.5 ml-2">
-                  <li><strong>Format:</strong> CSV or Excel (.xlsx, .xls)</li>
-                  <li><strong>Column Headers:</strong> Must match variable names from your Kobo tool (e.g., <code className="bg-white dark:bg-gray-900 px-1 rounded">district</code>, <code className="bg-white dark:bg-gray-900 px-1 rounded">village</code>, <code className="bg-white dark:bg-gray-900 px-1 rounded">sector</code>)</li>
                   <li>
-                    <strong>Target Column (Optional):</strong> A column for interview targets/sample size that doesn't need to match Kobo variables. Recognized names: target, target_interviews, sample_size, interview_target, expected_interviews, etc.
+                    <strong>Format:</strong> CSV or Excel (.xlsx)
+                  </li>
+                  <li>
+                    <strong>Column Headers:</strong> Must match variable names from your Kobo tool (e.g.,{' '}
+                    <code className="bg-white dark:bg-gray-900 px-1 rounded">district</code>,{' '}
+                    <code className="bg-white dark:bg-gray-900 px-1 rounded">village</code>,{' '}
+                    <code className="bg-white dark:bg-gray-900 px-1 rounded">sector</code>)
+                  </li>
+                  <li>
+                    <strong>Target Column (Optional):</strong> A column for interview targets/sample size that doesn't
+                    need to match Kobo variables. Recognized names: target, target_interviews, sample_size,
+                    interview_target, expected_interviews, etc.
                   </li>
                 </ul>
                 <div className="mt-2 pt-2 border-t border-blue-200 dark:border-gray-700">
@@ -85,7 +101,7 @@ const CollectionTargetsEditor: React.FC<CollectionTargetsEditorProps> = ({
             )}
             <input
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".csv,.xlsx"
               onChange={targets.upload}
               className="block w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
               disabled={isLoading || !koboToolData}

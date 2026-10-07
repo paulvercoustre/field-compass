@@ -47,18 +47,25 @@ const SessionExpiredDialog: React.FC<SessionExpiredDialogProps> = ({ email, onSi
         onSubmit={submit}
         className="mx-4 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-popover animate-fade-in dark:border-gray-800 dark:bg-gray-900"
       >
-        <h2 id="session-expired-title" className="mb-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white">
+        <h2
+          id="session-expired-title"
+          className="mb-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white"
+        >
           Sign in to continue
         </h2>
         <p id="session-expired-text" className="mb-4 text-sm text-gray-700 dark:text-gray-300">
-          Your session has expired. Sign in again and Field Compass carries on where you were; nothing on this page is lost.
+          Your session has expired. Sign in again and Field Compass carries on where you were; nothing on this page is
+          lost.
         </p>
 
         {/* For password managers: the account being signed in to. */}
         <input type="email" name="email" autoComplete="username" value={email} readOnly hidden />
         <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">{email}</p>
 
-        <label htmlFor="session-expired-password" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label
+          htmlFor="session-expired-password"
+          className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
           Password
         </label>
         <input

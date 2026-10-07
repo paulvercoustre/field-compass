@@ -2,13 +2,14 @@
 Tests for HFC engine, especially status determination logic.
 """
 
+import math
 from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
 
 from database.models import SubmissionCurrent, SurveyConfig
-from etl.hfc_engine import HFCEngine, QualityIssue
+from etl.hfc_engine import HFCEngine, QualityIssue, signed_log1p, signed_log1p_inverse
 
 
 class TestDetermineQAStatus:
@@ -407,48 +408,34 @@ class TestPrecomputeOutlierStatistics:
         engine = HFCEngine(test_db, survey_config)
         engine.precompute_outlier_statistics()
 
-        stats = engine._outlier_stats_cache.get("age")
-        assert stats is not None
-        # Baseline should include only Approved (30) and Not Reviewed (32), not Not Approved (1000)
-        assert stats["count"] == 2
-        assert abs(stats["mean"] - 31.0) < 0.01  # (30 + 32) / 2 = 31
+        issues = engine.run_checks({"age": 500, "_uuid": "outlier-test-new"}, "outlier-test-new")
+        (outlier,) = [i for i in issues if i.check == "outlier_age"]
+        # Baseline: Approved (30) and Not Reviewed (32) only, not Not Approved (1000)
+        assert outlier.metadata["statistics"]["count"] == 2
+        assert abs(outlier.metadata["statistics"]["mean"] - 31.0) < 0.01  # (30 + 32) / 2
 
 
 class TestSignedLogTransform:
-    """Tests for signed log transform and inverse."""
+    """sign(x) * log(1 + |x|), and its inverse for showing bounds."""
 
-    def test_signed_log_zero(self, test_db, test_survey_config):
-        """Zero maps to zero."""
-        engine = HFCEngine(test_db, test_survey_config)
-        assert engine._signed_log_transform(0) == 0
+    def test_zero_maps_to_zero(self):
+        assert signed_log1p(0) == 0
 
-    def test_signed_log_positive(self, test_db, test_survey_config):
-        """Positive values: sign(x) * log(1 + |x|) = log(1 + x)."""
-        engine = HFCEngine(test_db, test_survey_config)
-        import math
-
+    def test_positive(self):
         x = 10.0
-        y = engine._signed_log_transform(x)
+        y = signed_log1p(x)
         assert abs(y - math.log(1 + x)) < 1e-10
-        assert engine._signed_log_inverse(y) == pytest.approx(x, rel=1e-10)
+        assert signed_log1p_inverse(y) == pytest.approx(x, rel=1e-10)
 
-    def test_signed_log_negative(self, test_db, test_survey_config):
-        """Negative values: -log(1 + |x|)."""
-        engine = HFCEngine(test_db, test_survey_config)
-        import math
-
+    def test_negative(self):
         x = -5.0
-        y = engine._signed_log_transform(x)
+        y = signed_log1p(x)
         assert abs(y - (-math.log(1 + 5))) < 1e-10
-        assert engine._signed_log_inverse(y) == pytest.approx(x, rel=1e-10)
+        assert signed_log1p_inverse(y) == pytest.approx(x, rel=1e-10)
 
-    def test_signed_log_roundtrip(self, test_db, test_survey_config):
-        """Round-trip: inverse(transform(x)) == x for various x."""
-        engine = HFCEngine(test_db, test_survey_config)
+    def test_roundtrip(self):
         for x in [0, 1, 10, 100, -1, -10, 0.5, -0.5]:
-            y = engine._signed_log_transform(x)
-            x_back = engine._signed_log_inverse(y)
-            assert x_back == pytest.approx(x, rel=1e-9)
+            assert signed_log1p_inverse(signed_log1p(x)) == pytest.approx(x, rel=1e-9)
 
 
 class TestOutlierLogTransform:
@@ -496,12 +483,6 @@ class TestOutlierLogTransform:
         engine = HFCEngine(test_db, survey_config)
         engine.precompute_outlier_statistics()
 
-        stats = engine._outlier_stats_cache.get("profit")
-        assert stats is not None
-        # Display stats must be raw scale
-        assert abs(stats["raw_mean"] - 30.0) < 0.01  # (10+20+30+40+50)/5
-        assert abs(stats["raw_median"] - 30.0) < 0.01
-
         # Submit extreme outlier in raw space (e.g. 10000) - should be flagged
         issues = engine.run_checks(
             {"profit": 10000, "_uuid": "log-outlier-sub", "enumerator_id": "enum1"},
@@ -518,7 +499,8 @@ class TestOutlierLogTransform:
         if "lower_bound" in bounds and "upper_bound" in bounds:
             assert bounds["lower_bound"] > 0  # Raw space, not transformed
         st = outlier_issues[0].metadata.get("statistics", {})
-        assert abs(st.get("mean", 0) - 30.0) < 1  # Raw mean
+        assert abs(st.get("mean", 0) - 30.0) < 0.01  # raw mean of 10..50, not the log-scale one
+        assert abs(st.get("median", 0) - 30.0) < 0.01
 
 
 class TestOutlierBackwardCompat:
@@ -675,7 +657,7 @@ class TestOptionalCoreIdentifiers:
     ):
         engine = self._engine(test_db, test_survey_config, {"date_interview": "today"})
 
-        issues = engine._run_basic_checks(
+        issues = engine.run_checks(
             {"_uuid": "u1", "intro/interviewer_code": "ENUM07", "today": "2023-06-15"}, "u1"
         )
 
@@ -688,7 +670,7 @@ class TestOptionalCoreIdentifiers:
             test_db, test_survey_config, {"enumerator": value, "date_interview": "today"}
         )
 
-        issues = engine._run_basic_checks({"_uuid": "u1", "today": "2023-06-15"}, "u1")
+        issues = engine.run_checks({"_uuid": "u1", "today": "2023-06-15"}, "u1")
 
         assert [i.check for i in issues] == []
 
@@ -700,7 +682,7 @@ class TestOptionalCoreIdentifiers:
             test_db, test_survey_config, {"enumerator": "enum_id", "date_interview": "today"}
         )
 
-        issues = engine._run_basic_checks({"_uuid": "u1", "today": "2023-06-15"}, "u1")
+        issues = engine.run_checks({"_uuid": "u1", "today": "2023-06-15"}, "u1")
 
         assert [i.check for i in issues] == ["missing_enumerator"]
 
@@ -709,7 +691,7 @@ class TestOptionalCoreIdentifiers:
             test_db, test_survey_config, {"enumerator": "enum_id", "date_interview": "today"}
         )
 
-        issues = engine._run_basic_checks(
+        issues = engine.run_checks(
             {"_uuid": "u1", "enum_id": "ENUM07", "today": "2023-06-15"}, "u1"
         )
 
@@ -725,7 +707,7 @@ class TestOptionalCoreIdentifiers:
         engine = HFCEngine(test_db, test_survey_config)
 
         # 2023-06-17 is a Saturday and outside the configured collection period.
-        issues = engine._run_basic_checks(
+        issues = engine.run_checks(
             {"_uuid": "u1", "enum_id": "ENUM07", "today": "2023-06-17"}, "u1"
         )
 
@@ -735,17 +717,30 @@ class TestOptionalCoreIdentifiers:
         """Regression guard: the default fixture maps every identifier."""
         engine = HFCEngine(test_db, test_survey_config)
 
-        clean = engine._run_basic_checks(
+        clean = engine.run_checks(
             {"_uuid": "u1", "enumerator_id": "ENUM07", "today": "2023-06-15"}, "u1"
         )
-        missing_enum = engine._run_basic_checks({"_uuid": "u1", "today": "2023-06-15"}, "u1")
+        missing_enum = engine.run_checks({"_uuid": "u1", "today": "2023-06-15"}, "u1")
 
         assert clean == []
         assert [i.check for i in missing_enum] == ["missing_enumerator"]
 
 
+def _issues_of(engine, check: str, submission_data: dict) -> list:
+    """What run_checks flags for one check, leaving out the others."""
+    return [i for i in engine.run_checks(submission_data, "u1") if i.check == check]
+
+
+def _frame_issues(engine, submission_data: dict) -> list:
+    return _issues_of(engine, "sampling_frame_mismatch", submission_data)
+
+
+def _strata_issues(engine, submission_data: dict) -> list:
+    return _issues_of(engine, "strata_value_not_in_form", submission_data)
+
+
 class TestSamplingFrameCheck:
-    """`_check_sampling_frame` had no tests at all before collection targets
+    """The `sampling_frame_mismatch` check had no tests before collection targets
     became optional. It asks one question: is this submission's *combination*
     of sampling values one the survey intended to sample? Only an uploaded file
     says which combinations those are."""
@@ -770,7 +765,7 @@ class TestSamplingFrameCheck:
     def test_combination_in_the_frame_is_not_flagged(self, test_db, test_survey_config):
         engine = self._engine(test_db, test_survey_config, self.UPLOADED)
 
-        issues = engine._check_sampling_frame({"admin1": "Kabul", "livelihood": "farming"})
+        issues = _frame_issues(engine, {"admin1": "Kabul", "livelihood": "farming"})
 
         assert issues == []
 
@@ -778,7 +773,7 @@ class TestSamplingFrameCheck:
         """A real combination that was never planned -- the case this exists for."""
         engine = self._engine(test_db, test_survey_config, self.UPLOADED)
 
-        issues = engine._check_sampling_frame({"admin1": "Kabul", "livelihood": "trade"})
+        issues = _frame_issues(engine, {"admin1": "Kabul", "livelihood": "trade"})
 
         assert len(issues) == 1
         assert issues[0].check == "sampling_frame_mismatch"
@@ -791,7 +786,7 @@ class TestSamplingFrameCheck:
         """The check is on the combination, not on each column separately."""
         engine = self._engine(test_db, test_survey_config, self.UPLOADED)
 
-        issues = engine._check_sampling_frame({"admin1": "Herat", "livelihood": "farming"})
+        issues = _frame_issues(engine, {"admin1": "Herat", "livelihood": "farming"})
 
         assert len(issues) == 1
 
@@ -801,7 +796,7 @@ class TestSamplingFrameCheck:
         for a form that did not ask."""
         engine = self._engine(test_db, test_survey_config, self.UPLOADED)
 
-        issues = engine._check_sampling_frame({"admin1": "Kabul"})
+        issues = _frame_issues(engine, {"admin1": "Kabul"})
 
         assert issues == []
 
@@ -820,7 +815,7 @@ class TestSamplingFrameCheck:
         combinations were intended, so there is nothing to be wrong about."""
         engine = self._engine(test_db, test_survey_config, sampling_frame)
 
-        issues = engine._check_sampling_frame({"admin1": "Nowhere", "livelihood": "nothing"})
+        issues = _frame_issues(engine, {"admin1": "Nowhere", "livelihood": "nothing"})
 
         assert issues == []
 
@@ -829,14 +824,14 @@ class TestSamplingFrameCheck:
         legacy = {k: v for k, v in self.UPLOADED.items() if k != "mode"}
         engine = self._engine(test_db, test_survey_config, legacy)
 
-        issues = engine._check_sampling_frame({"admin1": "Kabul", "livelihood": "trade"})
+        issues = _frame_issues(engine, {"admin1": "Kabul", "livelihood": "trade"})
 
         assert len(issues) == 1
 
 
 class TestStrataValueInForm:
     """`strata_value_not_in_form` asks a different question from
-    `_check_sampling_frame`: not "was this combination one we meant to sample"
+    `sampling_frame_mismatch`: not "was this combination one we meant to sample"
     but "is this a legal answer at all", per the form's own choice list."""
 
     FORM = {
@@ -869,14 +864,14 @@ class TestStrataValueInForm:
     def test_value_in_the_choice_list_passes(self, test_db, test_survey_config):
         engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE, self.FORM)
 
-        assert engine._check_strata_value_in_form({"district": "north"}) == []
+        assert _strata_issues(engine, {"district": "north"}) == []
 
     def test_value_outside_the_choice_list_is_flagged(self, test_db, test_survey_config):
         """The real case: a submission from an older form version whose choice
         list has since changed."""
         engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE, self.FORM)
 
-        issues = engine._check_strata_value_in_form({"district": "xyzzy"})
+        issues = _strata_issues(engine, {"district": "xyzzy"})
 
         assert len(issues) == 1
         assert issues[0].check == "strata_value_not_in_form"
@@ -886,19 +881,19 @@ class TestStrataValueInForm:
     def test_unanswered_question_is_not_an_illegal_answer(self, test_db, test_survey_config):
         engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE, self.FORM)
 
-        assert engine._check_strata_value_in_form({}) == []
+        assert _strata_issues(engine, {}) == []
 
     def test_no_stored_form_skips_rather_than_flags(self, test_db, test_survey_config):
         """ "Cannot check" must not become "nothing is legal"."""
         engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE)
 
-        assert engine._check_strata_value_in_form({"district": "anything"}) == []
+        assert _strata_issues(engine, {"district": "anything"}) == []
 
     def test_variable_absent_from_the_form_skips(self, test_db, test_survey_config):
         frame = dict(self.BY_VARIABLE, variable="province", sampling_cols=["province"])
         engine = self._engine(test_db, test_survey_config, frame, self.FORM)
 
-        assert engine._check_strata_value_in_form({"province": "anything"}) == []
+        assert _strata_issues(engine, {"province": "anything"}) == []
 
     @pytest.mark.parametrize(
         "sampling_frame",
@@ -917,7 +912,7 @@ class TestStrataValueInForm:
         only mode where a choice list is known to be the authority."""
         engine = self._engine(test_db, test_survey_config, sampling_frame, self.FORM)
 
-        assert engine._check_strata_value_in_form({"district": "xyzzy"}) == []
+        assert _strata_issues(engine, {"district": "xyzzy"}) == []
 
     def test_form_is_parsed_once_per_run(self, test_db, test_survey_config, monkeypatch):
         """An ETL run calls this per submission; re-parsing the form each time
@@ -934,7 +929,7 @@ class TestStrataValueInForm:
 
         engine = self._engine(test_db, test_survey_config, self.BY_VARIABLE, self.FORM)
         for _ in range(5):
-            engine._check_strata_value_in_form({"district": "north"})
+            _strata_issues(engine, {"district": "north"})
 
         assert len(parses) == 1, f"form parsed {len(parses)} times, expected once"
 
@@ -957,6 +952,6 @@ class TestStrataValueInForm:
         frame = dict(self.BY_VARIABLE, variable="province", sampling_cols=["province"])
         engine = self._engine(test_db, test_survey_config, frame, self.FORM)
         for _ in range(5):
-            engine._check_strata_value_in_form({"province": "anything"})
+            _strata_issues(engine, {"province": "anything"})
 
         assert len(parses) == 1, f"form parsed {len(parses)} times, expected once"

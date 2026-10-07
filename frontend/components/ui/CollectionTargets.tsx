@@ -68,8 +68,7 @@ const MODE_OPTIONS: Array<{ value: SamplingMode; label: string; hint: string }> 
   {
     value: 'by_variable',
     label: 'A target per answer to one question',
-    hint:
-      'Pick a question from your form and set a target for each of its answer options. e.g. 200 interviews for region A, 250 interviews for region B',
+    hint: 'Pick a question from your form and set a target for each of its answer options. e.g. 200 interviews for region A, 250 interviews for region B',
   },
   {
     value: 'uploaded',
@@ -211,23 +210,17 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
     onTargetsByValueChange(next);
   };
 
-  const enteredTotal = (Object.values(targetsByValue) as number[]).reduce(
-    (sum, n) => sum + n,
-    0
-  );
+  const enteredTotal = (Object.values(targetsByValue) as number[]).reduce((sum, n) => sum + n, 0);
 
   if (!editable) {
     const summary = MODE_OPTIONS.find((option) => option.value === mode)?.label || mode;
     return (
       <div className="text-gray-700 dark:text-gray-300">
         <div className="font-medium">{summary}</div>
-        {mode === 'total' && totalTarget ? (
-          <div className="text-sm mt-1">{totalTarget} interviews</div>
-        ) : null}
+        {mode === 'total' && totalTarget ? <div className="text-sm mt-1">{totalTarget} interviews</div> : null}
         {mode === 'by_variable' && variable ? (
           <div className="text-sm mt-1">
-            By {variable} — {enteredTotal || '—'} interviews across{' '}
-            {Object.keys(targetsByValue).length} groups
+            By {variable} — {enteredTotal || '—'} interviews across {Object.keys(targetsByValue).length} groups
           </div>
         ) : null}
       </div>
@@ -253,12 +246,8 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                 className="mt-1 text-indigo-600 focus:ring-indigo-500"
               />
               <span>
-                <span className="block text-sm font-medium text-gray-900 dark:text-white">
-                  {option.label}
-                </span>
-                <span className="block text-xs text-gray-500 dark:text-gray-400">
-                  {option.hint}
-                </span>
+                <span className="block text-sm font-medium text-gray-900 dark:text-white">{option.label}</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">{option.hint}</span>
               </span>
             </label>
           ))}
@@ -284,9 +273,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
       {mode === 'by_variable' && (
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Group by
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Group by</label>
             {strataVariables.length > 0 ? (
               <select
                 value={variable || ''}
@@ -391,16 +378,11 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                       // the same option name ("yes", "other", an admin code),
                       // and a bare value key lets React reuse the previous
                       // question's row rather than replace it.
-                      <tr
-                        key={`${variable}:${choice.value}`}
-                        className="border-t border-gray-200 dark:border-gray-700"
-                      >
+                      <tr key={`${variable}:${choice.value}`} className="border-t border-gray-200 dark:border-gray-700">
                         <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
                           {choice.label}
                           {choice.label !== choice.value && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                              {choice.value}
-                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{choice.value}</span>
                           )}
                         </td>
                         <td className="px-4 py-2">
@@ -418,9 +400,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                   </tbody>
                   <tfoot className="bg-gray-50 dark:bg-gray-900">
                     <tr className="border-t border-gray-200 dark:border-gray-700">
-                      <td className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Total
-                      </td>
+                      <td className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">Total</td>
                       <td className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
                         {enteredTotal || '—'}
                       </td>
