@@ -59,7 +59,7 @@ jobs:
 
     - name: Type check with pyright
       working-directory: ./backend
-      # Basic mode; pyrightconfig.json lists the files not yet clean.
+      # Basic mode over all application code (tests, scripts and migrations excluded).
       run: pyright
     
     - name: Run unit tests

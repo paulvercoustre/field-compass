@@ -351,10 +351,21 @@ Choices made along the way:
   The general-checks card, the Kobo tool card and the custom checks stay in the page. They share enough state (form, collection dates, targets) that splitting them now would mostly add props.
 - **`xlsx`** is loaded on demand. The main bundle went from 1,512 kB to 1,156 kB.
 
-Not done, deliberately:
+### Follow-ups
 
-- **Settings read with `os.getenv` in 22 modules.** These should become one settings object. It is low risk to leave, and the change touches deployment configuration.
-- **Injecting the ETL/pipeline queuers** so tests stop patching module globals.
-- **`test_hfc_engine.py`** still calls private methods in places. `run_checks` covers the behaviour, but the private-method tests were kept rather than rewritten.
-- **Prettier.** Adopting a formatter for the frontend is the owner's call. It would reformat every file.
-- **`xlsx` from `cdn.sheetjs.com`.** This is unchanged. `npm ci` still needs that host.
+The items left open above have since been done, in two later branches:
+`claude/settings-and-allowances` and `claude/review-follow-ups`.
+
+- **One settings object.** `backend/settings.py` reads every environment variable, with its default and validation. The API and worker stop on startup on a malformed value, naming the variable. Variable names are unchanged.
+- **The pyright baseline is empty.** Basic mode now checks all application code. Tests, one-off scripts and migrations are excluded.
+- **`test_hfc_engine.py`** goes through `run_checks`, its issue metadata and two public helpers (`signed_log1p` and its inverse). No test reaches into the engine's private methods or caches.
+- **The pipeline's Celery tasks are injected** (`PipelineTasks`) rather than patched as module globals.
+- **The spreadsheet library** is `read-excel-file`, from npm. `npm ci` no longer needs `cdn.sheetjs.com`. Old `.xls` files are refused with a message to save as `.xlsx` or CSV, and the spreadsheet chunk went from 430 kB to 65 kB.
+- **`SurveySettingsPage` (F8)** is down to about 940 lines. The general checks, Kobo form and delete survey cards are now components, and the custom checks' state moved to `useCustomChecks`.
+- **Prettier** formats the frontend, and CI checks it. The formatting commit is in `.git-blame-ignore-revs`.
+- **Deploy rollback after a migration.** `deploy/vm/deploy.sh` steps the schema back with the new image before it brings the old one back. Before, the old code could not start against a revision it had never seen.
+- **Dependencies.** `npm audit fix` was applied, and Vitest 5 and knip 6 adopted.
+
+Still open:
+
+- **Tailwind 4.** The remaining `npm audit` findings (2 moderate, 5 high) all come in through Tailwind 3's build tooling and do not reach the browser bundle. Moving to Tailwind 4 changes the config format and some utilities, so it is a change of its own.
