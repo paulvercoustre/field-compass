@@ -4,6 +4,93 @@ Commit reviewed: `2e4d096` (main, 2026-09-29) · Review date: 2026-09-29 · Evid
 Companion files: [`findings.json`](findings.json) (same 36 findings, machine-readable) · [`00-inventory.md`](00-inventory.md) · [`wireframes/`](wireframes/) (W1–W5) · [`screenshots/`](screenshots/) · [`fixtures/`](fixtures/) (mock Kobo/OpenAI, stack script, findings builder).
 Screenshot references such as `j4-03` mean `screenshots/j4-03-*.png` (journey 4, step 3); `state-*`, `reflow-*`, `dark-*` and `kbd-*` are named in full.
 
+**Progress is tracked in [§0](#0-status--2026-10-08).** Sections 1–10 are the original review and are left as written; their file and line references point at `2e4d096`.
+
+---
+
+## 0. Status — 2026-10-08
+
+Checked against `main` at `7b77770` (after PR #86), by reading the code and the PRs merged since the review. Nothing below was re-measured in a browser, so contrast and keyboard figures are still the review's.
+
+**Summary: 10 done, 14 partly done, 12 open.**
+
+- Roadmap step 0 (data-loss bug) and step 1 (honesty quick wins) are **done**: #64, #67, #69, #73, #79.
+- Part of step 3 is in: tokens and shared components (#71), and persisted pull runs with an activity panel (#73).
+- Step 2, **Review loop v1**, has **not started**. The core job — find what needs me, see why, decide, move on — works as it did on 2026-09-29.
+
+### What changed since the review
+
+| PR | What it did for the review |
+|---|---|
+| #64 | Fixed the §10 data-loss bug: a list of don't-know codes crashed AI checks and discarded flags. |
+| #67 | AI check failures are recorded, not stored as clean (F-13 for AI). AI-only findings now set `qa_status` (F-10 B). A beat task fails checks stuck in `running`/`pending` (F-17). |
+| #69 | Setup checklist for users with no surveys (F-19 B). One Kobo connection form with a Global / EU / own-server picker; the server and key are saved together after Kobo accepts the key (F-18). |
+| #71 | Neutral palette, Inter, one type scale. Shared `Button`, `PageHeader`, `Card`, `Banner`, `Badge`, chart theme (F-33). Global `:focus-visible` ring (F-28). Contrast fixes (F-29). `autocomplete` on sign-in (F-31). |
+| #72 | `issueNames.ts`: readable check names in charts and detail (F-12). "AI review" vocabulary. Custom-check composer: nothing saves until "Save check", and delete asks first (F-24). The false "click a bar to filter" hint is gone (F-09). One `FieldLabel` pattern (F-27). |
+| #73 | Pulls run in the background with stages, an activity panel and notifications (F-14, part). A refused pull fails in words, never "0 fetched" (F-13). A failed pull no longer replaces the list (F-16). |
+| #75 | Pick the Kobo project from a list; paste a link as fallback (F-19, F-25 context). |
+| #79 | Step 1: one `PullButton` on four pages, outcome in the top bar (F-13). Field Team relabelled; podium, medals and verdicts removed; neutral ranking by issues per submission (F-08 A, part of B). Sign-in dialog on 401 that retries the request (F-35). Each settings section saves only its own fields, shows "Saved hh:mm", and errors stay until dismissed (F-15, F-21). |
+| #83, #85 | `NavigationContext` holds all navigation, which makes a router easier (F-32). `SurveySettingsPage` split into sections with one section editor (F-22). Settings labels bound to inputs; delete dialog has `role="dialog"` (F-27, F-30). Dead code removed, including the unused `HistoryViewer` (F-06). |
+
+#66 (the first step-1 PR) was closed unmerged and redone as #79. Three things in #66 were not carried over: per-view `document.title`, the 8 s Undo on rule delete, and the amber "pulled 800 of 1 000" partial pull. Today a Kobo error part-way through fails the whole pull (`kobo_fetcher.py`, `KoboFetchError`), which is honest, but the pages already read are not kept.
+
+### Finding status
+
+✅ done · 🟡 partly done · ⬜ open. Sorted by the original priority.
+
+| ID | Finding (short) | Status | Where it stands / what is left |
+|---|---|---|---|
+| F-13 | Failed pulls shown as success | ✅ | #64, #67, #73, #79. Partial pulls now fail outright instead of keeping the pages read (see above). |
+| F-18 | Kobo server can't be saved | ✅ | #69. Server picker, key checked before saving. |
+| F-08 | Field Team ranks review progress as quality | 🟡 | A done (#79). Ranking by issues per submission is in. Left: W2 table of coordinator signals, which needs validating first (Q4, Q5). |
+| F-01 | Can't isolate flagged submissions | 🟡 | A "Flagged" filter exists, but only the activity panel's "N flagged" link sets it (`RunProgress.tsx:289`); the queue has no control for it. Left: **Needs review · Reviewed · All** switch and a sort (A), then an issue filter (B). |
+| F-02 | Flag reason below the fold | ⬜ | The header still says "Review N quality issues below". General and custom checks fold away when all pass, but there is no "Why flagged" block next to the decision. |
+| F-03 | No auto-advance; filtered list goes stale | ⬜ | `handleSubmissionUpdate` still patches the item in place. Only ↓ moves to the next item. |
+| F-09 | Issue bars promise a filter | 🟡 | The hint is gone and the labels are readable. The bars still show a pointer and open the **unfiltered** list (`QualityOverviewPage.tsx:31`, TODO). Left: drop the click, or wire it to an issue filter (B). |
+| F-15 | Save confirmations wiped; errors auto-hide | ✅ | #79. |
+| F-19 | No first-run path | ✅ | #69 checklist, #75 project picker. |
+| F-21 | One section's save commits others' edits | ✅ | #79. |
+| F-27 | Labels not bound to fields | 🟡 | 38 of 68 `<label>`s have `htmlFor` (Settings sections done in #85). Left: e.g. the survey name and "Kobo asset ID" in `SurveySettingsPage.tsx`, Create survey, filters. |
+| F-28 | Invisible focus on queue rows | ✅ | #71 global ring; queue rows keep it. |
+| F-35 | Expired session not detected | ✅ | #79. |
+| F-29 | Contrast failures | 🟡 | Palette and issue chip fixed in #71 (amber-800). Not re-measured. |
+| F-05 | No detail pane below 768 px / 200 % zoom | ⬜ | Detail is still `hidden md:block` (`Dashboard.tsx:274`). |
+| F-10 | Counts disagree across screens | 🟡 | B done (#67): AI-only findings set `qa_status`. Progress no longer filters by validation status. Left: A, one glossary of named counts used on every screen. |
+| F-14 | No data-freshness indicator | 🟡 | Runs are stored and the activity panel lists recent ones (#73). Left: an always-visible "Last pulled 3 h ago" on each data page. |
+| F-20 | Date / start / end identifiers invisible | ⬜ | They are still auto-filled with no control on Create or Settings; only enumerator and consent have pickers. #70 noted that surveys created on 2026-10-02 between #68 and #70 may have them empty, which silently turns off the period, weekend, office-hours and duration checks. |
+| F-23 | New surveys start with checks off | ⬜ | Every `flag_*` defaults to `False` (`services/survey_config.py:273-289`). Needs Q6. |
+| F-26 | Keyboard: 147 Tabs to decide | ⬜ | Depends on F-03 shortcuts. |
+| F-32 | No URLs | ⬜ | `NavigationContext` (#83) is the one place a router would plug in. |
+| F-36 | Queue downloads everything twice | ⬜ | `fetchSubmissionsAcrossPages` still runs twice per survey switch (`Dashboard.tsx:70, 90`). Urgency depends on Q10. |
+| F-04 | Rows lack who / where / what | 🟡 | #71: shorter rows, plural fixed, chip contrast fixed. Left: enumerator, district and issue names on the row. |
+| F-11 | Enumerator codes; phantom "Unknown" | ⬜ | Unconfigured surveys handled earlier. Configured surveys with blank values still make an "Unknown" enumerator (`services/progress.py:428`), and Field Team shows "Enumerator ID" codes. |
+| F-12 | Jargon and check IDs | 🟡 | Mostly done (#72, #79). Left: "Avg. DK Rate (%)" (`PerformanceDataView.tsx:38, 372`) and "run ETL" in the Access tab's role text (`SurveyAccessTab.tsx:202`). |
+| F-16 | Failed pull replaces the list | ✅ | #73, #79. |
+| F-22 | Four save models on one page | 🟡 | One section editor and tabbed layout (#72, #83, #85). Every section still needs Edit first; whether to drop that is validate-first. |
+| F-24 | AI "Add to editor" saves live | ✅ | #72. |
+| F-30 | Dialogs lack semantics | 🟡 | 6 of 9 overlays have `role="dialog"`. `ConfirmDialog` closes on Escape. Left: `InfoModal`, `QualityCheckPromptModal`, the dialog in `UserSettingsPage`; focus trap and focus return not checked. |
+| F-31 | Title, live regions, autocomplete | 🟡 | Autocomplete done (#71). 11 live regions. Left: `document.title` per view (dropped with #66). |
+| F-33 | No tokens / shared components | 🟡 | Tokens and components exist (#71). Adoption is partial: 21 `<Button>` against 148 raw `<button>`. Move screens over as they are touched. |
+| F-34 | Viewers see actions they can't perform | 🟡 | Settings sections check `canEdit`. The pull button, validation menu and reviewer notes are still enabled for viewers. |
+| F-06 | Edit history not viewable | ⬜ | `HistoryViewer` was removed as dead code in #83. `GET /submissions/{id}/history` still exists; option B now starts from scratch. |
+| F-07 | Kobo call on every click | ⬜ | `getKoboEditUrl` still runs when a submission is selected (`SubmissionDetail.tsx:328-346`). |
+| F-17 | AI check can hang forever | ✅ | #67 beat task. |
+| F-25 | "Kobo asset ID" in Settings | ⬜ | Still a free-text field (`SurveySettingsPage.tsx:688`). |
+
+### Next five
+
+This replaces the order in §9.1 for what is left. Items 1–3 are roadmap step 2 and are best shipped together.
+
+| # | Change | Findings | Effort | Why now |
+|---|---|---|---|---|
+| 1 | **Needs review · Reviewed · All** switch above the queue, defaulting to Needs review when it isn't empty, plus a sort (most issues / newest / oldest) | F-01 A | S | The backend filter and the `qaStatuses` state already exist; only a control is missing. Since #67 the switch also catches AI-only findings. Decide Q7 (does On Hold count as reviewed?) first. |
+| 2 | **"Why flagged (n)"** block under the detail header, one line per issue (name, value, threshold), with passed checks folded | F-02 B | S–M | Every decision depends on it. `issueNames.ts` (#72) gives the labels. |
+| 3 | **After a decision**, drop the item from a list it no longer matches, open the next one, show Undo; scoped A/N/H and J/K keys that can be turned off | F-03 A+B, F-26 | S | Turns 1 and 2 into a working loop. Check with reviewers whether auto-advance should default on. |
+| 4 | **Show and allow editing of the date, start and end identifiers**, and check the surveys created on 2026-10-02 for empty ones | F-20 B | S | Today an unmatched name turns off four checks without telling anyone. It is the one open finding that hides wrong results. |
+| 5 | **Issue filter on the queue** (`issue_check` on `/api/submissions`), wired to the Data quality bars | F-01 B, F-09 B | S–M | The bars look clickable but open an unfiltered list. The same filter lets reviewers work through one issue type at a time. |
+
+Next after these, in order: F-11 A (enumerator labels and no phantom "Unknown"), F-14 A ("Last pulled" on data pages), F-31 per-view titles and F-34 viewer gating (both XS–S), F-32 router, then F-36 once Q10 gives survey sizes.
+
 ---
 
 ## 1. Executive summary
