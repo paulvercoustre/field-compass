@@ -176,6 +176,13 @@ docker compose -f docker-compose.prod.yml up -d --build
 The `migrate` service runs `alembic upgrade head` before the API starts, so a
 pull that brings new migrations applies them here too.
 
+### Backups
+
+The `backup` service dumps the database every night. It keeps the last three
+dumps on the VM, and uploads each one to Azure Blob Storage once
+`BACKUP_UPLOAD_URL` is set. Setting up the storage, checking on the backups
+and restoring are in [docs/backups.md](docs/backups.md).
+
 ## 8) HTTPS
 
 The stack uses Caddy, which obtains and renews Let's Encrypt certificates

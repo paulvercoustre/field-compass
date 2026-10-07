@@ -21,8 +21,8 @@ Use this checklist to ensure all deployment steps are completed.
       Let's Encrypt certificate challenges, not just redirects)
 - [ ] Docker + docker compose installed on VM
 - [ ] Repo deployed to VM
-- [ ] `docker-compose.prod.yml` running (caddy + backend + postgres + redis + worker + frontend build)
-- [ ] Basic backup approach for postgres volume documented (even for demos)
+- [ ] `docker-compose.prod.yml` running (caddy + backend + postgres + redis + worker + backup + frontend build)
+- [ ] Backups going off the VM: `BACKUP_UPLOAD_URL` set, see [docs/backups.md](docs/backups.md)
 
 ### Configuration
 - [ ] VM `.env` configured:
@@ -92,9 +92,11 @@ Use this checklist to ensure all deployment steps are completed.
 - [ ] Team notified of deployment
 
 ### Backup & Recovery
-- [ ] Database backup strategy defined
-- [ ] Backup schedule configured (Azure automated backups)
-- [ ] Recovery procedure documented
+- [ ] Storage account, expiry rules and add-only key set up ([docs/backups.md](docs/backups.md))
+- [ ] `docker compose -f docker-compose.prod.yml ps backup` shows `healthy`
+- [ ] One practice restore into a scratch database done
+- [ ] A copy of the VM's `.env` kept in a password manager (`ENCRYPTION_KEY` is needed to use a restored database)
+- [ ] Reminder set to renew the backup key before it expires
 
 ## Optional Enhancements
 
