@@ -84,7 +84,7 @@ CI runs all of these on every push. To change the schema, edit the models in `ba
 
 ## Deployment
 
-Pushes to `main` are tested and the backend image is published to GHCR. Then CI deploys that exact commit to the VM over SSH, using [`deploy/vm/deploy.sh`](deploy/vm/deploy.sh). If the health check fails afterwards, the script rolls back, schema included.
+Pushes to `main` are tested and the backend image is published to GHCR. Then CI deploys that exact commit to the VM over SSH, using [`deploy/vm/deploy.sh`](deploy/vm/deploy.sh). If the health check fails afterwards, the script rolls back, schema included. The database is backed up every night, off the VM: see [docs/backups.md](docs/backups.md).
 
 To set up the VM, follow [VM_DEPLOYMENT_AZURE.md](VM_DEPLOYMENT_AZURE.md). [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) lists what to check before a release.
 

@@ -211,6 +211,29 @@ services:
     networks:
       - field-compass-network
 
+  # Nightly database backups: a dump kept on the VM, and uploaded off it when
+  # BACKUP_UPLOAD_URL is set. See docs/backups.md.
+  backup:
+    build:
+      context: ./deploy/backup
+    container_name: field-compass-backup
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env - see .env.example}
+      PGDATABASE: ${POSTGRES_DB:-field_compass}
+      BACKUP_UPLOAD_URL: ${BACKUP_UPLOAD_URL:-}
+      BACKUP_HOUR: ${BACKUP_HOUR:-2}
+      BACKUP_KEEP_LOCAL: ${BACKUP_KEEP_LOCAL:-3}
+    volumes:
+      - db_backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - field-compass-network
+
 networks:
   field-compass-network:
     driver: bridge
@@ -220,4 +243,4 @@ volumes:
   frontend_dist:
   caddy_data:
   caddy_config:
-
+  db_backups:
