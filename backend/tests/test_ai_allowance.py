@@ -13,8 +13,7 @@ from uuid import uuid4
 import pytest
 
 from database.models import AIConnection, AIUsage, SubmissionCurrent, SurveyConfig, User
-from etl import pipeline as pipeline_module
-from etl.pipeline import ETLPipeline
+from etl.pipeline import ETLPipeline, PipelineTasks
 from services import ai_allowance
 from services.ai_allowance import (
     NOT_RUN_ALLOWANCE,
@@ -222,13 +221,13 @@ def ai_survey(test_db, test_survey_config, monkeypatch):
     test_db.commit()
 
     _FakeTask.queued = []
-    monkeypatch.setattr(pipeline_module, "run_qualitative_check_task", _FakeTask)
     return test_survey_config
 
 
 def _pull(db, survey, count):
     fetcher = _FakeFetcher([_kobo_submission(n) for n in range(count)])
-    return ETLPipeline(db, kobo_fetcher=fetcher).run_pipeline(str(survey.survey_id))
+    pipeline = ETLPipeline(db, kobo_fetcher=fetcher, tasks=PipelineTasks(ai_review=_FakeTask))
+    return pipeline.run_pipeline(str(survey.survey_id))
 
 
 class TestPull:
