@@ -34,12 +34,7 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
       setActiveTab(requestedTab.tab as AccountTab);
     }
   }, [requestedTab]);
-  const {
-    user,
-    updateUser,
-    changePassword,
-    deleteAccount,
-  } = useAuth();
+  const { user, updateUser, changePassword, deleteAccount } = useAuth();
 
   // Profile form state
   const [username, setUsername] = useState(user?.username || '');
@@ -48,8 +43,7 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
-  const isProfileDirty =
-    username !== (user?.username || '') || fullName !== (user?.full_name || '');
+  const isProfileDirty = username !== (user?.username || '') || fullName !== (user?.full_name || '');
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -160,24 +154,20 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
             {/* Profile Section */}
             <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
               <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Profile</h2>
-          
+
               <form onSubmit={handleUpdateProfile} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Email
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
                   <input
                     type="email"
                     value={user.email}
                     disabled
                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800 rounded-lg text-gray-500 dark:text-gray-500 cursor-not-allowed"
                   />
-                    </div>
+                </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Username
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Username</label>
                   <input
                     type="text"
                     value={username}
@@ -187,9 +177,7 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Full name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full name</label>
                   <input
                     type="text"
                     value={fullName}
@@ -235,8 +223,10 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
 
             {/* Change Password Section */}
             <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
-              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Change password</h2>
-          
+              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
+                Change password
+              </h2>
+
               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -303,25 +293,25 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
 
             {/* Account Info */}
             <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
-              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Account information</h2>
+              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
+                Account information
+              </h2>
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-gray-500 dark:text-gray-400">Account created</dt>
-                  <dd className="text-gray-900 dark:text-white">
-                    {new Date(user.created_at).toLocaleDateString()}
-                  </dd>
+                  <dd className="text-gray-900 dark:text-white">{new Date(user.created_at).toLocaleDateString()}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-500 dark:text-gray-400">Last login</dt>
                   <dd className="text-gray-900 dark:text-white">
-                    {user.last_login_at
-                      ? new Date(user.last_login_at).toLocaleString()
-                      : 'Never'}
+                    {user.last_login_at ? new Date(user.last_login_at).toLocaleString() : 'Never'}
                   </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-gray-500 dark:text-gray-400">Account status</dt>
-                  <dd className={`font-medium ${user.is_active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <dd
+                    className={`font-medium ${user.is_active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                  >
                     {user.is_active ? 'Active' : 'Inactive'}
                   </dd>
                 </div>
@@ -330,7 +320,9 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
 
             {/* Delete Account Section */}
             <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-red-200 dark:border-red-900/50 p-6">
-              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-2">Delete account</h2>
+              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-2">
+                Delete account
+              </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Permanently deletes your account and its data. This cannot be undone.
               </p>
@@ -348,19 +340,23 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
         )}
 
         {activeTab === 'kobo' && (
-              <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">KoboToolbox connection</h2>
-                <span className={`flex-shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+          <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
+                KoboToolbox connection
+              </h2>
+              <span
+                className={`flex-shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                   user.has_kobo_api_key
                     ? 'bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20'
                     : 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20'
-                }`}>
-                  {user.has_kobo_api_key ? 'Connected' : 'Not connected'}
-                </span>
-              </div>
-              <KoboConnection />
-            </section>
+                }`}
+              >
+                {user.has_kobo_api_key ? 'Connected' : 'Not connected'}
+              </span>
+            </div>
+            <KoboConnection />
+          </section>
         )}
 
         {activeTab === 'ai' && (
@@ -378,7 +374,9 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[2px] flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in">
-            <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">Delete Account</h2>
+            <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
+              Delete Account
+            </h2>
             <p className="text-gray-700 dark:text-gray-300 mb-6">
               Are you sure you want to delete your account?
               <br />
@@ -414,4 +412,3 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
 };
 
 export default UserSettingsPage;
-

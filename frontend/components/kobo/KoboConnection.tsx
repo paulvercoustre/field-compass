@@ -154,7 +154,8 @@ const KoboConnection: React.FC = () => {
               Connected to <strong>{savedHost}</strong>
               {koboUser?.username && (
                 <>
-                  {' '}as <strong>{koboUser.username}</strong>
+                  {' '}
+                  as <strong>{koboUser.username}</strong>
                   {koboUser.email && <span className="text-gray-500 dark:text-gray-400"> ({koboUser.email})</span>}
                 </>
               )}
@@ -189,7 +190,11 @@ const KoboConnection: React.FC = () => {
             </button>
           </div>
         </div>
-        {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
 
         {/* Same dialog style as deleting a survey */}
         {confirmingRemove && (
@@ -200,7 +205,10 @@ const KoboConnection: React.FC = () => {
               aria-labelledby="disconnect-kobo-title"
               className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in"
             >
-              <h2 id="disconnect-kobo-title" className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
+              <h2
+                id="disconnect-kobo-title"
+                className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4"
+              >
                 Disconnect KoboToolbox
               </h2>
               <p className="text-gray-700 dark:text-gray-300 mb-4">
@@ -362,15 +370,16 @@ const KoboConnection: React.FC = () => {
                 </button>
               )}
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Stored encrypted.
-            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Stored encrypted.</p>
           </div>
         </li>
       </ol>
 
       {error && (
-        <div role="alert" className="p-3 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg">
+        <div
+          role="alert"
+          className="p-3 bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg"
+        >
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
       )}

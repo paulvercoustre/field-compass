@@ -72,9 +72,7 @@ const RequiresSurvey: React.FC<{ view: View; onAddSurvey: () => void; children: 
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
         <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">No survey selected</p>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
-          Choose a survey from the list on the left.
-        </p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">Choose a survey from the list on the left.</p>
       </div>
     </div>
   );
@@ -95,10 +93,10 @@ const NavButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
         : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
     }`}
   >
-    <span className="rounded-md px-2.5 py-1.5 group-hover:bg-gray-100 dark:group-hover:bg-gray-800/70">
-      {children}
-    </span>
-    {active && <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gray-900 dark:bg-white" aria-hidden="true" />}
+    <span className="rounded-md px-2.5 py-1.5 group-hover:bg-gray-100 dark:group-hover:bg-gray-800/70">{children}</span>
+    {active && (
+      <span className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gray-900 dark:bg-white" aria-hidden="true" />
+    )}
   </button>
 );
 
@@ -123,7 +121,7 @@ const Shell: React.FC = () => {
   });
 
   const handleSidebarToggle = () => {
-    setIsSidebarOpen(prev => {
+    setIsSidebarOpen((prev) => {
       const next = !prev;
       localStorage.setItem('sidebarOpen', String(next));
       return next;
@@ -169,7 +167,10 @@ const Shell: React.FC = () => {
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex-shrink-0 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
             <div className="flex h-12 items-stretch gap-4 px-4">
-              <nav aria-label="Survey views" className="-mb-px flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto">
+              <nav
+                aria-label="Survey views"
+                className="-mb-px flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto"
+              >
                 {SURVEY_NAV.map((item) => (
                   <NavButton key={item.view} active={view === item.view} onClick={() => navigate({ view: item.view })}>
                     {item.label}

@@ -22,7 +22,10 @@ const renderSection = (editing: boolean) => {
     isOwner: true,
     checks: { ...DEFAULT_QUALITY_CHECKS, flag_llm_qualitative: true, llm_qualitative_fields: ['comments'] },
     setChecks: vi.fn(),
-    reviewableVariables: [{ name: 'comments', label: 'Any comments?' }, { name: 'other', label: 'Other, specify' }],
+    reviewableVariables: [
+      { name: 'comments', label: 'Any comments?' },
+      { name: 'other', label: 'Other, specify' },
+    ],
     canEdit: true,
     controls: controls(editing),
     onError: vi.fn(),
@@ -40,7 +43,9 @@ describe('AiReviewSection', () => {
 
     fireEvent.click(view.getByRole('button', { name: 'Review all answers again' }));
 
-    await waitFor(() => expect(props.onSuccess).toHaveBeenCalledWith('42 submissions will be reviewed again on the next pull.'));
+    await waitFor(() =>
+      expect(props.onSuccess).toHaveBeenCalledWith('42 submissions will be reviewed again on the next pull.')
+    );
     expect(progressApi.rerunAiChecks).toHaveBeenCalledWith('s1');
   });
 
@@ -51,7 +56,9 @@ describe('AiReviewSection', () => {
 
     const { view, props } = renderSection(true);
     fireEvent.click(view.getByRole('checkbox', { name: /Other, specify/ }));
-    expect(props.setChecks).toHaveBeenCalledWith(expect.objectContaining({ llm_qualitative_fields: ['comments', 'other'] }));
+    expect(props.setChecks).toHaveBeenCalledWith(
+      expect.objectContaining({ llm_qualitative_fields: ['comments', 'other'] })
+    );
     expect(view.queryByRole('button', { name: 'Review all answers again' })).toBeNull();
   });
 });

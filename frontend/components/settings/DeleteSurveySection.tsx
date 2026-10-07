@@ -64,14 +64,18 @@ const DeleteSurveySection: React.FC<DeleteSurveySectionProps> = ({ surveyId, sur
             aria-labelledby="delete-survey-title"
             className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in"
           >
-            <h2 id="delete-survey-title" className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
+            <h2
+              id="delete-survey-title"
+              className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4"
+            >
               Delete survey
             </h2>
             <p className="text-gray-700 dark:text-gray-300 mb-4">
               Are you sure you want to delete <strong className="text-gray-900 dark:text-white">{surveyName}</strong>?
               <br />
               <br />
-              This action cannot be undone. This will permanently delete the survey configuration and all associated data.
+              This action cannot be undone. This will permanently delete the survey configuration and all associated
+              data.
             </p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">

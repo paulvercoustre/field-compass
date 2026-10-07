@@ -60,19 +60,8 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({
           className="ml-4 p-0.5 text-red-700/70 dark:text-red-300/70 hover:text-red-900 dark:hover:text-red-100 rounded"
           aria-label="Dismiss error message"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       )}
@@ -81,4 +70,3 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({
 };
 
 export default ErrorMessage;
-

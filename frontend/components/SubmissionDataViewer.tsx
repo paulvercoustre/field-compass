@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { KoboQuestion, QualityIssue } from '../types';
 import { SurveyConfig } from '../services/progressApi';
@@ -57,7 +56,7 @@ const humanize = (str: string): string =>
   str
     .replace(/_/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\b\w/g, c => c.toUpperCase());
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 
 // Look up a value from submission_data using path-based matching
 const lookupValue = (data: Record<string, any>, fieldName: string): any => {
@@ -70,11 +69,7 @@ const lookupValue = (data: Record<string, any>, fieldName: string): any => {
 };
 
 // Format a raw value for display: empty → em dash
-const displayValue = (
-  value: any,
-  fieldName: string,
-  surveyConfig: SurveyConfig | null
-): string => {
+const displayValue = (value: any, fieldName: string, surveyConfig: SurveyConfig | null): string => {
   if (value === null || value === undefined || value === '') return '—';
   return formatValueForDisplay(value, fieldName, surveyConfig);
 };
@@ -95,19 +90,13 @@ const QuestionRow: React.FC<QuestionRowProps> = ({ question, value, surveyConfig
   return (
     <div
       className={`grid grid-cols-2 gap-4 px-4 py-2.5 ${
-        isEven
-          ? 'bg-gray-50 dark:bg-gray-800/50'
-          : 'bg-white dark:bg-gray-900/20'
+        isEven ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900/20'
       }`}
     >
-      <span className="text-sm text-gray-500 dark:text-gray-400 break-words leading-snug">
-        {label}
-      </span>
+      <span className="text-sm text-gray-500 dark:text-gray-400 break-words leading-snug">{label}</span>
       <span
         className={`text-sm font-medium break-words leading-snug ${
-          isEmpty
-            ? 'text-gray-300 dark:text-gray-600'
-            : 'text-gray-900 dark:text-gray-100'
+          isEmpty ? 'text-gray-300 dark:text-gray-600' : 'text-gray-900 dark:text-gray-100'
         }`}
       >
         {formatted}
@@ -132,14 +121,30 @@ interface RecordingRowProps {
 
 // An audio question: the player in place of the file name, and its
 // transcript across the full width underneath.
-const RecordingRow: React.FC<RecordingRowProps> = ({ label, answer, recordings, isEven, translation, translationsToKobo }) => (
+const RecordingRow: React.FC<RecordingRowProps> = ({
+  label,
+  answer,
+  recordings,
+  isEven,
+  translation,
+  translationsToKobo,
+}) => (
   <div
     className={`grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-2.5 ${
       isEven ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900/20'
     }`}
   >
     <span className="flex items-start gap-1.5 text-sm text-gray-500 dark:text-gray-400 break-words leading-snug">
-      <svg className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-indigo-500 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-indigo-500 dark:text-indigo-400"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <rect x="9" y="2" width="6" height="12" rx="3" />
         <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" />
       </svg>
@@ -174,13 +179,11 @@ const SectionCard: React.FC<SectionCardProps> = ({ title, children, defaultOpen 
     <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors text-left"
       >
-        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-          {title}
-        </span>
+        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</span>
         <svg
           className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           fill="none"
@@ -199,12 +202,8 @@ const SectionCard: React.FC<SectionCardProps> = ({ title, children, defaultOpen 
 // Column header row for question/answer grid
 const GridHeader: React.FC = () => (
   <div className="grid grid-cols-2 gap-4 px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950">
-    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-      Question
-    </span>
-    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-      Answer
-    </span>
+    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Question</span>
+    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Answer</span>
   </div>
 );
 
@@ -215,18 +214,11 @@ interface RosterSectionProps {
   surveyConfig: SurveyConfig | null;
 }
 
-const RosterSection: React.FC<RosterSectionProps> = ({
-  rosterName,
-  questions,
-  rosterItems,
-  surveyConfig,
-}) => {
+const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, rosterItems, surveyConfig }) => {
   return (
     <SectionCard title={humanize(rosterName)}>
       {rosterItems.length === 0 ? (
-        <div className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500 italic">
-          No entries recorded
-        </div>
+        <div className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500 italic">No entries recorded</div>
       ) : (
         rosterItems.map((item, itemIdx) => (
           <div key={itemIdx} className="border-b last:border-b-0 border-gray-100 dark:border-gray-700/50">
@@ -255,17 +247,18 @@ const RosterSection: React.FC<RosterSectionProps> = ({
   );
 };
 
-const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surveyConfig, recordings, translations }) => {
+const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
+  data,
+  surveyConfig,
+  recordings,
+  translations,
+}) => {
   const survey = surveyConfig?.config_data.kobo_tool?.survey ?? [];
 
   // Separate top-level and roster questions
   const topLevelQuestions = survey.filter((q: KoboQuestion) => !q.roster_name);
   const rosterNames: string[] = Array.from(
-    new Set(
-      survey
-        .filter((q: KoboQuestion) => q.roster_name)
-        .map((q: KoboQuestion) => q.roster_name as string)
-    )
+    new Set(survey.filter((q: KoboQuestion) => q.roster_name).map((q: KoboQuestion) => q.roster_name as string))
   );
 
   // Metadata keys (start with '_')
@@ -306,9 +299,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surve
             })}
           </SectionCard>
         )}
-        {metadataEntries.length > 0 && (
-          <MetadataSection entries={metadataEntries} />
-        )}
+        {metadataEntries.length > 0 && <MetadataSection entries={metadataEntries} />}
       </div>
     );
   }
@@ -350,17 +341,15 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surve
       )}
 
       {/* Roster / repeat group sections */}
-      {rosterNames.map(rosterName => {
-        const rosterQuestions = survey.filter(
-          (q: KoboQuestion) => q.roster_name === rosterName
-        );
+      {rosterNames.map((rosterName) => {
+        const rosterQuestions = survey.filter((q: KoboQuestion) => q.roster_name === rosterName);
         // Kobo stores repeat items as an array under the roster name key
         const rawRosterValue = data[rosterName];
         const rosterItems: Record<string, any>[] = Array.isArray(rawRosterValue)
           ? rawRosterValue
           : rawRosterValue != null
-          ? [rawRosterValue]
-          : [];
+            ? [rawRosterValue]
+            : [];
 
         return (
           <RosterSection
@@ -374,9 +363,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({ data, surve
       })}
 
       {/* Metadata section */}
-      {metadataEntries.length > 0 && (
-        <MetadataSection entries={metadataEntries} />
-      )}
+      {metadataEntries.length > 0 && <MetadataSection entries={metadataEntries} />}
     </div>
   );
 };
@@ -393,14 +380,10 @@ const MetadataSection: React.FC<MetadataSectionProps> = ({ entries }) => (
       <div
         key={key}
         className={`grid grid-cols-2 gap-4 px-4 py-2.5 ${
-          idx % 2 === 0
-            ? 'bg-gray-50 dark:bg-gray-800/50'
-            : 'bg-white dark:bg-gray-900/20'
+          idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900/20'
         }`}
       >
-        <span className="text-sm text-gray-400 dark:text-gray-500 font-mono break-words">
-          {key}
-        </span>
+        <span className="text-sm text-gray-400 dark:text-gray-500 font-mono break-words">{key}</span>
         <span className="text-sm text-gray-600 dark:text-gray-400 break-words">
           {val === null || val === undefined || val === '' ? '—' : String(val)}
         </span>

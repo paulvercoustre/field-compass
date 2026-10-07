@@ -18,7 +18,10 @@ import { koboState, Tone, toneClass } from './koboState';
  * A transcript's state in plain words; `last_error` is "<category>: <message>".
  * Null when there is nothing to say: a question this survey does not transcribe.
  */
-const describeTranscript = (transcript: Transcript | null, transcribed: boolean): { tone: Tone; text: string } | null => {
+const describeTranscript = (
+  transcript: Transcript | null,
+  transcribed: boolean
+): { tone: Tone; text: string } | null => {
   if (!transcript) {
     return transcribed ? { tone: 'muted', text: 'Not transcribed yet: it will be on the next pull.' } : null;
   }
@@ -33,15 +36,22 @@ const describeTranscript = (transcript: Transcript | null, transcribed: boolean)
   switch (transcript.status) {
     case 'pending':
     case 'running':
-      return { tone: 'busy', text: transcript.last_error ? 'Transcribing… retrying after a temporary error.' : 'Transcribing…' };
+      return {
+        tone: 'busy',
+        text: transcript.last_error ? 'Transcribing… retrying after a temporary error.' : 'Transcribing…',
+      };
     case 'success':
       return { tone: 'ok', text: 'Transcribed' };
     case 'not_run_allowance':
-      return { tone: 'warn', text: message || 'Not transcribed: this survey has used its included minutes for this month.' };
+      return {
+        tone: 'warn',
+        text: message || 'Not transcribed: this survey has used its included minutes for this month.',
+      };
     case 'cancelled':
       return { tone: 'muted', text: message || 'Stopped before it ran. It runs again on the next pull.' };
     case 'skipped':
-      if (transcript.skip_reason === 'too_long') return { tone: 'warn', text: 'Not transcribed: the recording is too long.' };
+      if (transcript.skip_reason === 'too_long')
+        return { tone: 'warn', text: 'Not transcribed: the recording is too long.' };
       return { tone: 'warn', text: 'Not transcribed: Kobo has no recording for this answer.' };
     default: {
       const reasons: Record<string, string> = {
@@ -51,7 +61,10 @@ const describeTranscript = (transcript: Transcript | null, transcribed: boolean)
         bad_request: "Couldn't transcribe: the recording's format isn't supported, or the file is damaged.",
         kobo_auth: "Couldn't download the recording from Kobo.",
       };
-      return { tone: 'warn', text: reasons[category] ?? "Couldn't transcribe this time. It will be retried on the next pull." };
+      return {
+        tone: 'warn',
+        text: reasons[category] ?? "Couldn't transcribe this time. It will be retried on the next pull.",
+      };
     }
   }
 };
@@ -71,16 +84,21 @@ export const Player: React.FC<{ koboId: number; answer: AudioAnswer }> = ({ kobo
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => () => {
-    if (url) URL.revokeObjectURL(url);
-  }, [url]);
+  useEffect(
+    () => () => {
+      if (url) URL.revokeObjectURL(url);
+    },
+    [url]
+  );
 
   if (!answer.has_recording) {
     return <p className="text-sm text-gray-400 dark:text-gray-500">No recording in Kobo</p>;
   }
   if (url) {
     // eslint-disable-next-line jsx-a11y/media-has-caption
-    return <audio controls autoPlay src={url} className="h-9 w-full max-w-md" aria-label={`Recording: ${answer.label}`} />;
+    return (
+      <audio controls autoPlay src={url} className="h-9 w-full max-w-md" aria-label={`Recording: ${answer.label}`} />
+    );
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -129,7 +147,9 @@ const TranscriptText: React.FC<{ transcript: Transcript }> = ({ transcript }) =>
       <dl className="space-y-1.5 text-sm">
         {transcript.segments.map((segment, index) => (
           <div key={index} className="grid grid-cols-[5.5rem,1fr] gap-2">
-            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">{speakerName(segment.speaker, speakers)}</dt>
+            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              {speakerName(segment.speaker, speakers)}
+            </dt>
             <dd className="text-gray-800 dark:text-gray-200">{segment.text}</dd>
           </div>
         ))}

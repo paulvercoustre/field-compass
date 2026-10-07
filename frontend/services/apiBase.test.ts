@@ -35,7 +35,9 @@ describe('request', () => {
   it("rejects with the server's detail, status and body", async () => {
     fetchMock.mockResolvedValueOnce(respond(409, { detail: 'Busy', run: { id: 1 } }));
     const error: ApiError = await request('/api/x').then(
-      () => { throw new Error('resolved'); },
+      () => {
+        throw new Error('resolved');
+      },
       (e: ApiError) => e
     );
     expect(error).toBeInstanceOf(ApiError);

@@ -80,8 +80,8 @@ export function buildFilterParams(filters: FilterState): URLSearchParams {
   if (filters.samplingFilters && filters.samplingFilters.length > 0) {
     // Format: "variable1=value1,value2;variable2=value3"
     const samplingParts = filters.samplingFilters
-      .filter(f => f.values.length > 0)
-      .map(f => `${f.variable}=${f.values.join(',')}`);
+      .filter((f) => f.values.length > 0)
+      .map((f) => `${f.variable}=${f.values.join(',')}`);
     if (samplingParts.length > 0) {
       params.append('sampling_filters', samplingParts.join(';'));
     }
@@ -115,7 +115,7 @@ export function supportsEnumeratorFiltering(config: SurveyConfig | null): boolea
  * @returns True if sampling variable filtering is supported
  */
 export function supportsSamplingFiltering(config: SurveyConfig | null): boolean {
-  return !!(config?.config_data?.sampling_frame?.sampling_cols?.length);
+  return !!config?.config_data?.sampling_frame?.sampling_cols?.length;
 }
 
 /**

@@ -9,14 +9,9 @@ import { labelColumnFor } from './koboUrl';
  * relevant, required, calculation, and the enclosing groups' path and
  * conditions — group rows themselves are not stored).
  */
-export function projectFormToKoboTool(
-  form: KoboProjectForm,
-  language: string
-): KoboToolData {
+export function projectFormToKoboTool(form: KoboProjectForm, language: string): KoboToolData {
   const labelColumns = (labels: Record<string, string>) =>
-    Object.fromEntries(
-      Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text])
-    );
+    Object.fromEntries(Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text]));
 
   const survey = form.questions.map((q) => ({
     type: q.type,

@@ -27,7 +27,12 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
   const [lowest, setLowest] = useState(false);
 
   const value = (item: { avgIssues: number; total: number; avgActiveTime: number; approvedPercent: number }) =>
-    ({ avgIssues: item.avgIssues, submissions: item.total, avgTime: item.avgActiveTime, approved: item.approvedPercent })[metric];
+    ({
+      avgIssues: item.avgIssues,
+      submissions: item.total,
+      avgTime: item.avgActiveTime,
+      approved: item.approvedPercent,
+    })[metric];
 
   const rankings = useMemo(() => {
     const combined = collection
@@ -106,7 +111,9 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
             const shown = display(item);
             const content = (
               <>
-                <span className="tabular w-6 flex-shrink-0 text-center text-sm text-gray-500 dark:text-gray-400">{index + 1}</span>
+                <span className="tabular w-6 flex-shrink-0 text-center text-sm text-gray-500 dark:text-gray-400">
+                  {index + 1}
+                </span>
                 <span className="flex-1 min-w-0">
                   <span className="block font-medium text-gray-900 dark:text-white truncate">{item.id}</span>
                   <span className="block text-xs text-gray-500 dark:text-gray-400">{shown.sublabel}</span>

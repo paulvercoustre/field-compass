@@ -44,7 +44,14 @@ interface QuestionListProps {
 }
 
 /** One kind of question (text or audio), each with its box to tick. */
-const QuestionList: React.FC<QuestionListProps> = ({ title, questions, chosen, disabled, onToggle, onTurnOnTranscription }) =>
+const QuestionList: React.FC<QuestionListProps> = ({
+  title,
+  questions,
+  chosen,
+  disabled,
+  onToggle,
+  onTurnOnTranscription,
+}) =>
   questions.length === 0 ? null : (
     <div>
       <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</p>
@@ -62,7 +69,9 @@ const QuestionList: React.FC<QuestionListProps> = ({ title, questions, chosen, d
               <span className="text-gray-900 dark:text-white">{question.label}</span>
               <span className="block text-xs text-gray-500 dark:text-gray-400">{question.path}</span>
               {question.in_repeat && (
-                <span className="block text-xs text-gray-500 dark:text-gray-400">Inside a repeat group: can't be translated yet.</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">
+                  Inside a repeat group: can't be translated yet.
+                </span>
               )}
               {!question.in_repeat && question.kind === 'audio' && !question.transcribed && (
                 <span className="block text-xs text-amber-700 dark:text-amber-300">
@@ -131,7 +140,7 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
   const editable = editing && canEdit;
 
   const languageName = (code: string | null) =>
-    code ? overview.languages.find((lang) => lang.code === code)?.name ?? code : 'Not chosen';
+    code ? (overview.languages.find((lang) => lang.code === code)?.name ?? code) : 'Not chosen';
   const selectable = overview.questions.filter((q) => !q.in_repeat);
   const text = overview.questions.filter((q) => q.kind === 'text');
   const audio = overview.questions.filter((q) => q.kind === 'audio');
@@ -142,8 +151,8 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
   const whoTranslates = ownKey
     ? `your key “${key.label}”`
     : key.source === 'operator'
-    ? 'Field Compass’s AI, within the included translations'
-    : null;
+      ? 'Field Compass’s AI, within the included translations'
+      : null;
   const toRetry = counts.missing + counts.failed + counts.not_run;
   const pause = settings.send_to_kobo ? overview.kobo_pause : null;
 
@@ -235,7 +244,9 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
           <SurveyKeyPicker
             surveyId={surveyId}
             use="translation"
-            included={overview.included_per_month ? plural(overview.included_per_month, 'translation') + ' a month' : null}
+            included={
+              overview.included_per_month ? plural(overview.included_per_month, 'translation') + ' a month' : null
+            }
             onChange={load}
           />
         </div>
@@ -299,8 +310,8 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
               {ownKey
                 ? `Runs on your key “${key.label}”, with no Field Compass limit.`
                 : key.source === 'operator' && allowance
-                ? `Runs on the included usage: ${plural(allowance.limit, 'translation')} a month, shared by all your surveys, on top of AI review.`
-                : 'Needs an AI key first.'}
+                  ? `Runs on the included usage: ${plural(allowance.limit, 'translation')} a month, shared by all your surveys, on top of AI review.`
+                  : 'Needs an AI key first.'}
             </p>
           </div>
         </div>
@@ -380,8 +391,8 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
                   </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     Adds them next to the transcript in Kobo's data table and exports, once Kobo has the transcript.
-                    Kobo has no place for translations of typed answers: those stay in Field Compass. Corrections made in
-                    Kobo are kept.
+                    Kobo has no place for translations of typed answers: those stay in Field Compass. Corrections made
+                    in Kobo are kept.
                   </p>
                 </div>
               </div>
@@ -389,7 +400,8 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
 
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Answers to the chosen questions are sent to {whoTranslates ?? 'the AI provider'} to be translated, with
-              their question labels. Nothing else from the submission is sent. Make sure respondents' consent covers this.
+              their question labels. Nothing else from the submission is sent. Make sure respondents' consent covers
+              this.
             </p>
           </div>
         )}
@@ -430,8 +442,8 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
               {ownKey
                 ? `${key.label} · no Field Compass limit`
                 : allowance
-                ? `Included usage · ${plural(allowance.limit, 'translation')} a month, shared by your surveys`
-                : 'None yet'}
+                  ? `Included usage · ${plural(allowance.limit, 'translation')} a month, shared by your surveys`
+                  : 'None yet'}
             </dd>
             <dt className="text-gray-500 dark:text-gray-400">Kobo</dt>
             <dd className="text-gray-900 dark:text-white">
@@ -446,39 +458,59 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
               {plural(counts.success, 'answer')} translated
               {counts.from_kobo > 0 && <> · {counts.from_kobo.toLocaleString()} already translated in Kobo</>}
               {counts.in_progress > 0 && <> · {counts.in_progress} in progress</>}
-              {counts.failed > 0 && <span className="text-amber-700 dark:text-amber-300"> · {counts.failed} failed</span>}
+              {counts.failed > 0 && (
+                <span className="text-amber-700 dark:text-amber-300"> · {counts.failed} failed</span>
+              )}
               {counts.not_run > 0 && <> · {counts.not_run} not run</>}
               {counts.missing > 0 && <> · {counts.missing.toLocaleString()} not translated yet</>}
-              {counts.skipped > 0 && <> · {counts.skipped} already in {languageName(settings.language)} or nothing to translate</>}.
+              {counts.skipped > 0 && (
+                <>
+                  {' '}
+                  · {counts.skipped} already in {languageName(settings.language)} or nothing to translate
+                </>
+              )}
+              .
             </p>
             {allowance && (
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 This month, across your surveys: {allowance.used + allowance.in_flight} of{' '}
                 {plural(allowance.limit, 'included translation')} used
-                {allowance.in_flight > 0 && ` (${allowance.in_flight} in progress)`}. They don't count against AI review.
+                {allowance.in_flight > 0 && ` (${allowance.in_flight} in progress)`}. They don't count against AI
+                review.
               </p>
             )}
 
-            {settings.send_to_kobo && (counts.kobo.sent + counts.kobo.edited_in_kobo + counts.kobo.failed + counts.kobo.pending > 0 || pause) && (
-              <div className="space-y-2">
-                {pause ? (
-                  <Banner tone="warning">{pause.message}</Banner>
-                ) : (
-                  <p className="text-sm text-gray-700 dark:text-gray-300">
-                    {plural(counts.kobo.sent, 'translation')} in Kobo
-                    {counts.kobo.edited_in_kobo > 0 && <> · {counts.kobo.edited_in_kobo} corrected in Kobo</>}
-                    {counts.kobo.failed > 0 && (
-                      <span className="text-amber-700 dark:text-amber-300"> · {counts.kobo.failed} couldn't be sent</span>
-                    )}
-                    {counts.kobo.pending > 0 && <> · {counts.kobo.pending} on the way</>}.
-                  </p>
-                )}
-              </div>
-            )}
+            {settings.send_to_kobo &&
+              (counts.kobo.sent + counts.kobo.edited_in_kobo + counts.kobo.failed + counts.kobo.pending > 0 ||
+                pause) && (
+                <div className="space-y-2">
+                  {pause ? (
+                    <Banner tone="warning">{pause.message}</Banner>
+                  ) : (
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      {plural(counts.kobo.sent, 'translation')} in Kobo
+                      {counts.kobo.edited_in_kobo > 0 && <> · {counts.kobo.edited_in_kobo} corrected in Kobo</>}
+                      {counts.kobo.failed > 0 && (
+                        <span className="text-amber-700 dark:text-amber-300">
+                          {' '}
+                          · {counts.kobo.failed} couldn't be sent
+                        </span>
+                      )}
+                      {counts.kobo.pending > 0 && <> · {counts.kobo.pending} on the way</>}.
+                    </p>
+                  )}
+                </div>
+              )}
 
             {canEdit && overview.available && (
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="secondary" onClick={() => translate('missing')} loading={starting && !translateAgain} disabled={toRetry === 0}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => translate('missing')}
+                  loading={starting && !translateAgain}
+                  disabled={toRetry === 0}
+                >
                   {toRetry > 0 ? `Translate ${toRetry.toLocaleString()} now` : 'Everything is translated'}
                 </Button>
                 {settings.send_to_kobo && !pause && counts.kobo.unsent > 0 && (
@@ -511,10 +543,15 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
         onCancel={() => setTranslateAgain(false)}
       >
         <p>
-          About {plural(counts.success + counts.missing, 'answer')} are sent to {whoTranslates ?? 'the AI provider'} again.
-          {allowance && ` ${allowance.remaining.toLocaleString()} included translations are left this month across your surveys; the rest wait until next month.`}
+          About {plural(counts.success + counts.missing, 'answer')} are sent to {whoTranslates ?? 'the AI provider'}{' '}
+          again.
+          {allowance &&
+            ` ${allowance.remaining.toLocaleString()} included translations are left this month across your surveys; the rest wait until next month.`}
         </p>
-        <p>Translations made in Kobo are kept. Ours already sent to Kobo are only replaced where nobody corrected them there.</p>
+        <p>
+          Translations made in Kobo are kept. Ours already sent to Kobo are only replaced where nobody corrected them
+          there.
+        </p>
       </ConfirmDialog>
     </section>
   );

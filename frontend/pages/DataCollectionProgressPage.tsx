@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { progressApi, getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import { useSurvey } from '../contexts/SurveyContext';
@@ -19,25 +18,28 @@ const DataCollectionProgressPage: React.FC = () => {
   const [filter, setFilter] = useState('');
 
   // `quiet`: re-read after a pull without swapping the page for a spinner.
-  const fetchData = useCallback(async (quiet = false) => {
-    if (!selectedSurvey) return;
+  const fetchData = useCallback(
+    async (quiet = false) => {
+      if (!selectedSurvey) return;
 
-    if (!quiet) setIsLoading(true);
-    setError(null);
-    try {
-      const [progress, config] = await Promise.all([
-        progressApi.getProgressData(selectedSurvey.survey_id, { approvedOnly }),
-        getSurveyConfig(selectedSurvey.survey_id)
-      ]);
-      setProgressData(progress);
-      setSurveyConfig(config);
-    } catch (e) {
-      setError('Failed to fetch tracking data.');
-      console.error(e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedSurvey, approvedOnly]);
+      if (!quiet) setIsLoading(true);
+      setError(null);
+      try {
+        const [progress, config] = await Promise.all([
+          progressApi.getProgressData(selectedSurvey.survey_id, { approvedOnly }),
+          getSurveyConfig(selectedSurvey.survey_id),
+        ]);
+        setProgressData(progress);
+        setSurveyConfig(config);
+      } catch (e) {
+        setError('Failed to fetch tracking data.');
+        console.error(e);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [selectedSurvey, approvedOnly]
+  );
 
   useEffect(() => {
     fetchData();
@@ -88,7 +90,7 @@ const DataCollectionProgressPage: React.FC = () => {
         ) : (
           <div className="mx-auto max-w-screen-2xl">
             {progressData && (
-              <ProgressDataView 
+              <ProgressDataView
                 data={progressData}
                 surveyConfig={surveyConfig}
                 activeSubTab={activeSubTab}

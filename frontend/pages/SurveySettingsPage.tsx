@@ -15,7 +15,14 @@ import CollectionTargetsEditor from '../components/ui/CollectionTargetsEditor';
 import { useCollectionTargets } from '../hooks/useCollectionTargets';
 import { useSectionEditor } from '../hooks/useSectionEditor';
 import { useCustomChecks } from '../hooks/useCustomChecks';
-import { DEFAULT_QUALITY_CHECKS, GENERAL_FLAG_KEYS, LLM_KEYS, OUTLIER_KEYS, pick, sameSetting } from '../utils/qualityCheckSettings';
+import {
+  DEFAULT_QUALITY_CHECKS,
+  GENERAL_FLAG_KEYS,
+  LLM_KEYS,
+  OUTLIER_KEYS,
+  pick,
+  sameSetting,
+} from '../utils/qualityCheckSettings';
 import VariableDropdown from '../components/ui/VariableDropdown';
 import DkStringValues from '../components/ui/DkStringValues';
 import DkNumericCodes from '../components/ui/DkNumericCodes';
@@ -46,7 +53,8 @@ interface SurveySettingsPageProps {
  * as it is on the server at that moment, so saving one section never writes
  * another's unsaved edits (or an older copy of what someone else saved).
  */
-type SettingsSection = 'basicInfo' | 'coreIdentifiers' | 'koboTool' | 'samplingFrame' | 'generalFlags' | 'outlier' | 'llm';
+type SettingsSection =
+  'basicInfo' | 'coreIdentifiers' | 'koboTool' | 'samplingFrame' | 'generalFlags' | 'outlier' | 'llm';
 
 const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab }) => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
@@ -136,7 +144,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const [surveyName, setSurveyName] = useState('');
   const [koboAssetId, setKoboAssetId] = useState('');
   const [coreIdentifiers, setCoreIdentifiers] = useState({
-    uuid: '_uuid',  // always supplied by Kobo as submission metadata
+    uuid: '_uuid', // always supplied by Kobo as submission metadata
     // Form-dependent, and nothing here is guessed: this screen is reached
     // after the survey exists, so the stored config is the only source of
     // truth. A default could only overwrite it or misrepresent it -- and not
@@ -168,12 +176,21 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   const isBasicInfoDirty =
     surveyName !== (config?.survey_name || '') ||
     koboAssetId !== (config?.kobo_asset_id || '') ||
-    globalParameters.data_collection_start_date !== (config?.config_data?.global_parameters?.data_collection_start_date || '') ||
-    globalParameters.data_collection_end_date !== (config?.config_data?.global_parameters?.data_collection_end_date || '');
+    globalParameters.data_collection_start_date !==
+      (config?.config_data?.global_parameters?.data_collection_start_date || '') ||
+    globalParameters.data_collection_end_date !==
+      (config?.config_data?.global_parameters?.data_collection_end_date || '');
 
   // Fallbacks here must match the initial state above, or clearing a field
   // reads as "unchanged" and the Save button never enables.
-  const savedCoreIdentifiers = config?.config_data?.core_identifiers || { uuid: '_uuid', enumerator: '', date_interview: '', start_time: '', end_time: '', consent: '' };
+  const savedCoreIdentifiers = config?.config_data?.core_identifiers || {
+    uuid: '_uuid',
+    enumerator: '',
+    date_interview: '',
+    start_time: '',
+    end_time: '',
+    consent: '',
+  };
   const isCoreIdentifiersDirty =
     coreIdentifiers.uuid !== (savedCoreIdentifiers.uuid ?? '_uuid') ||
     coreIdentifiers.enumerator !== (savedCoreIdentifiers.enumerator ?? '') ||
@@ -182,21 +199,20 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     coreIdentifiers.end_time !== (savedCoreIdentifiers.end_time ?? '') ||
     coreIdentifiers.consent !== (savedCoreIdentifiers.consent ?? '') ||
     !sameDkCodes(specialValues.dk_value, readDkCodes(config?.config_data?.special_values?.dk_value)) ||
-    !sameDkValues(
-      specialValues.dk_string_value,
-      readDkValues(config?.config_data?.special_values?.dk_string_value)
-    );
+    !sameDkValues(specialValues.dk_string_value, readDkValues(config?.config_data?.special_values?.dk_string_value));
 
   // Quality Checks State
   const [qualityChecks, setQualityChecks] = useState(DEFAULT_QUALITY_CHECKS);
 
   // Dirty flag for General Quality Checks section only (Save/Cancel when user edits)
   const savedQc = config?.config_data?.quality_checks;
-  const isGeneralFlagsDirty = savedQc ? (
-    GENERAL_FLAG_KEYS.some((key) => !sameSetting(qualityChecks[key], savedQc[key] ?? DEFAULT_QUALITY_CHECKS[key])) ||
-    globalParameters.min_survey_duration_minutes !== (config?.config_data?.global_parameters?.min_survey_duration_minutes ?? null) ||
-    globalParameters.max_survey_duration_minutes !== (config?.config_data?.global_parameters?.max_survey_duration_minutes ?? null)
-  ) : false;
+  const isGeneralFlagsDirty = savedQc
+    ? GENERAL_FLAG_KEYS.some((key) => !sameSetting(qualityChecks[key], savedQc[key] ?? DEFAULT_QUALITY_CHECKS[key])) ||
+      globalParameters.min_survey_duration_minutes !==
+        (config?.config_data?.global_parameters?.min_survey_duration_minutes ?? null) ||
+      globalParameters.max_survey_duration_minutes !==
+        (config?.config_data?.global_parameters?.max_survey_duration_minutes ?? null)
+    : false;
 
   useEffect(() => {
     if (selectedSurvey) {
@@ -246,17 +262,15 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
           type: q.type,
         }));
       setTextVariables(textQuestions);
-      
+
       // Clean up outlier_variables and outlier_log_transform_variables to remove any non-numeric variables
       setQualityChecks((prev) => ({
         ...prev,
         outlier_variables: prev.outlier_variables.filter((v) => numericVars.includes(v)),
-        outlier_log_transform_variables: prev.outlier_log_transform_variables.filter((v) =>
-          numericVars.includes(v) && prev.outlier_variables.includes(v)
+        outlier_log_transform_variables: prev.outlier_log_transform_variables.filter(
+          (v) => numericVars.includes(v) && prev.outlier_variables.includes(v)
         ),
-        llm_qualitative_fields: prev.llm_qualitative_fields.filter((v) =>
-          textQuestions.some((t) => t.name === v)
-        ),
+        llm_qualitative_fields: prev.llm_qualitative_fields.filter((v) => textQuestions.some((t) => t.name === v)),
       }));
     }
   }, [koboToolData]);
@@ -292,11 +306,11 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
 
   const loadSurveyConfig = async () => {
     if (!selectedSurvey) return;
-    
+
     setIsLoading(true);
     setError(null);
     setSuccess(null);
-    
+
     // Reset all state before loading new survey config to prevent stale data
     // from previous survey.
     targets.load(undefined);
@@ -304,7 +318,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     setKoboToolFileName('');
     setAvailableVariables([]);
     setNumericVariables([]);
-    
+
     try {
       const data = await getSurveyConfig(selectedSurvey.survey_id);
       setConfig(data);
@@ -314,7 +328,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       });
       setSurveyName(data.survey_name);
       setKoboAssetId(data.kobo_asset_id || '');
-      
+
       const cd = data.config_data;
       if (cd.core_identifiers) {
         setCoreIdentifiers({ ...coreIdentifiers, ...cd.core_identifiers });
@@ -344,11 +358,9 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
               return varInfo && numericTypes.includes(varInfo.type);
             })
           : savedOutlierVars; // If no tool data, keep all (will be filtered later)
-        
+
         const savedLogTransformVars = cd.quality_checks.outlier_log_transform_variables ?? [];
-        const validLogTransformVars = savedLogTransformVars.filter((v: string) =>
-          validOutlierVars.includes(v)
-        );
+        const validLogTransformVars = savedLogTransformVars.filter((v: string) => validOutlierVars.includes(v));
 
         setQualityChecks({
           flag_out_of_period: cd.quality_checks.flag_out_of_period ?? false,
@@ -374,7 +386,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       }
 
       applyKoboTool(cd);
-      
+
       await customChecks.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load survey configuration');
@@ -393,7 +405,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
   // does nothing without at least one of them.
   const hasCollectionDates = Boolean(
     config?.config_data?.global_parameters?.data_collection_start_date ||
-      config?.config_data?.global_parameters?.data_collection_end_date
+    config?.config_data?.global_parameters?.data_collection_end_date
   );
 
   // Bumped by each successful refresh; the form check runs when it changes.
@@ -447,7 +459,8 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     const gp = globalParameters;
     return (base: SurveyConfig) => {
       const cd = { ...base.config_data };
-      const update: { survey_name?: string; kobo_asset_id?: string | null; config_data: SurveyConfig['config_data'] } = { config_data: cd };
+      const update: { survey_name?: string; kobo_asset_id?: string | null; config_data: SurveyConfig['config_data'] } =
+        { config_data: cd };
       switch (section) {
         case 'basicInfo':
           update.survey_name = surveyName;
@@ -463,17 +476,21 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
           cd.special_values = { ...cd.special_values, ...specialValues };
           break;
         case 'koboTool':
-          cd.kobo_tool = koboToolData ? {
-            survey: koboToolData.survey,
-            choices: koboToolData.choices,
-            has_audit: koboToolData.has_audit ?? cd.kobo_tool?.has_audit ?? null,
-            label_column_survey: labelColumnSurvey,
-            label_column_choices: labelColumnChoices,
-          } : cd.kobo_tool ? {
-            ...cd.kobo_tool,
-            label_column_survey: labelColumnSurvey,
-            label_column_choices: labelColumnChoices,
-          } : undefined;
+          cd.kobo_tool = koboToolData
+            ? {
+                survey: koboToolData.survey,
+                choices: koboToolData.choices,
+                has_audit: koboToolData.has_audit ?? cd.kobo_tool?.has_audit ?? null,
+                label_column_survey: labelColumnSurvey,
+                label_column_choices: labelColumnChoices,
+              }
+            : cd.kobo_tool
+              ? {
+                  ...cd.kobo_tool,
+                  label_column_survey: labelColumnSurvey,
+                  label_column_choices: labelColumnChoices,
+                }
+              : undefined;
           break;
         case 'samplingFrame':
           cd.sampling_frame = targets.toConfig();
@@ -579,19 +596,13 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
     }, 0);
   };
 
-
   if (!selectedSurvey) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center max-w-lg w-full px-4">
           <div className="mb-4 space-y-2">
             <ErrorMessage error={error} className="text-base" autoHide={false} onDismiss={() => setError(null)} />
-            <SuccessMessage
-              message={success}
-              onDismiss={() => setSuccess(null)}
-              autoHide={true}
-              autoHideDelay={5000}
-            />
+            <SuccessMessage message={success} onDismiss={() => setSuccess(null)} autoHide={true} autoHideDelay={5000} />
           </div>
           <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">No survey selected</p>
           <p className="text-gray-500 text-sm">Please select a survey from the sidebar to view its settings.</p>
@@ -625,309 +636,316 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       items={navItems}
       active={activeTab}
       onSelect={setActiveTab}
-      banner={<>
-        {(error || success) && <div className="mb-4 space-y-2">
-          <ErrorMessage error={error} className="text-base" autoHide={false} onDismiss={() => setError(null)} />
-          <SuccessMessage 
-            message={success} 
-            onDismiss={() => setSuccess(null)}
-            autoHide={true}
-            autoHideDelay={5000}
-          />
-        </div>}
-
-</>}
+      banner={
+        <>
+          {(error || success) && (
+            <div className="mb-4 space-y-2">
+              <ErrorMessage error={error} className="text-base" autoHide={false} onDismiss={() => setError(null)} />
+              <SuccessMessage
+                message={success}
+                onDismiss={() => setSuccess(null)}
+                autoHide={true}
+                autoHideDelay={5000}
+              />
+            </div>
+          )}
+        </>
+      }
     >
-            {activeTab === 'settings' && !canEditSurvey && userPermission && (
-              <div className="mb-6">
-                <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                  View only
-                </span>
-              </div>
-            )}
+      {activeTab === 'settings' && !canEditSurvey && userPermission && (
+        <div className="mb-6">
+          <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+            View only
+          </span>
+        </div>
+      )}
 
-        {/* General is only hidden on other tabs, not unmounted, so the form
+      {/* General is only hidden on other tabs, not unmounted, so the form
             check's results survive leaving the tab -- and a refresh's check
             runs once, not again on every return to General. */}
-          <div className={activeTab === 'settings' ? 'space-y-6' : 'hidden'}>
-            {/* Survey Profile */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Survey profile</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Survey name *
-                  </label>
-                  {canEditSurvey ? (
-                    <input
-                      type="text"
-                      value={surveyName}
-                      onChange={(e) => setSurveyName(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      required
-                    />
-                  ) : (
-                    <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                      {surveyName}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Kobo asset ID
-                  </label>
-                  {canEditSurvey ? (
-                    <input
-                      type="text"
-                      value={koboAssetId}
-                      onChange={(e) => setKoboAssetId(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="e.g., a3wCWjYRXo46cSygF8gQAc"
-                    />
-                  ) : (
-                    <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                      {koboAssetId || '—'}
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Collection start date
-                    </label>
-                    {canEditSurvey ? (
-                      <input
-                        type="date"
-                        value={globalParameters.data_collection_start_date}
-                        onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })}
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    ) : (
-                      <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                        {globalParameters.data_collection_start_date || '—'}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Collection end date
-                    </label>
-                    {canEditSurvey ? (
-                      <input
-                        type="date"
-                        value={globalParameters.data_collection_end_date}
-                        onChange={(e) => setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })}
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    ) : (
-                      <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                        {globalParameters.data_collection_end_date || '—'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {!isBasicInfoDirty && <SavedNote at={savedAt.basicInfo} className="pt-2" />}
-                {canEditSurvey && isBasicInfoDirty && (
-                  <SectionActions controls={sections.controls('basicInfo')} className="pt-2" />
-                )}
-              </div>
-            </section>
-
-            <KoboFormSection
-              koboToolData={koboToolData}
-              fileName={koboToolFileName}
-              variableCount={availableVariables.length}
-              labelColumn={labelColumnSurvey}
-              onLabelColumnChange={(column) => {
-                // One language for both: showing questions in one language
-                // and their answers in another helps nobody.
-                setLabelColumnSurvey(column);
-                setLabelColumnChoices(column);
-              }}
-              onRefresh={handleRefreshFormFromProject}
-              isRefreshing={isLoadingTool}
-              canRefresh={Boolean(config?.kobo_asset_id)}
-              canEdit={canEditSurvey}
-              controls={sections.controls('koboTool')}
-              savedAt={savedAt.koboTool}
-            />
-
-            {/* Form readiness: about the Kobo form, so it sits right below it,
-                and re-runs on its own when the form is refreshed above. */}
-            {selectedSurvey && (
-              <FormLintPanel
-                surveyId={selectedSurvey.survey_id}
-                form={refreshedFormPayload}
-                canEdit={canEditSurvey}
-                onRulesAdopted={customChecks.reload}
-                autoRunKey={formCheckRunKey}
-                labelColumn={labelColumnSurvey}
-              />
-            )}
-
-            {/* Collection Targets */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Data collection targets</h2>
-                {!sections.isEditing('samplingFrame') && <SavedNote at={savedAt.samplingFrame} className="ml-auto mr-2" />}
-                {canEditSurvey && !sections.isEditing('samplingFrame') && (
-                  <SectionEditButton onClick={() => sections.edit('samplingFrame')} />
-                )}
-              </div>
-              {sections.isEditing('samplingFrame') ? (
-                <div className="space-y-4">
-                  <CollectionTargetsEditor
-                    targets={targets}
-                    koboToolData={koboToolData}
-                    labelColumnChoices={labelColumnChoices}
-                  />
-                  <SectionActions controls={sections.controls('samplingFrame')} className="mt-4" />
-                </div>
+      <div className={activeTab === 'settings' ? 'space-y-6' : 'hidden'}>
+        {/* Survey Profile */}
+        <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+          <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Survey profile</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Survey name *</label>
+              {canEditSurvey ? (
+                <input
+                  type="text"
+                  value={surveyName}
+                  onChange={(e) => setSurveyName(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
               ) : (
-                <div className="space-y-2">
-                  <CollectionTargets
-                    mode={targets.settings.mode}
-                    onModeChange={() => {}}
-                    totalTarget={targets.settings.total_target}
-                    onTotalTargetChange={() => {}}
-                    variable={targets.settings.variable}
-                    onVariableChange={() => {}}
-                    targetsByValue={targets.settings.targets_by_value}
-                    onTargetsByValueChange={() => {}}
-                    koboToolData={koboToolData}
-                    labelColumnChoices={labelColumnChoices}
-                    editable={false}
-                  />
-                  {targets.settings.mode === 'uploaded' && targets.frameData ? (
-                    <div className="text-sm text-gray-700 dark:text-gray-300">
-                      {targets.frameData.length} rows,{' '}
-                      {targets.settings.sampling_cols.length > 0
-                        ? `grouped by ${targets.settings.sampling_cols.join(', ')}`
-                        : 'no grouping columns matched'}
-                    </div>
-                  ) : null}
+                <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
+                  {surveyName}
                 </div>
               )}
-            </section>
-
-            {/* Core Identifiers */}
-            <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
-              <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Core identifiers</h2>
-              <div className="field-grid">
-                <VariableDropdown
-                  value={coreIdentifiers.enumerator}
-                  onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value })}
-                  label="Enumerator ID"
-                  helpKey="enumerator"
-                  availableVariables={availableVariables}
-                  readOnly={!canEditSurvey}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Kobo asset ID</label>
+              {canEditSurvey ? (
+                <input
+                  type="text"
+                  value={koboAssetId}
+                  onChange={(e) => setKoboAssetId(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g., a3wCWjYRXo46cSygF8gQAc"
                 />
-                <VariableDropdown
-                  value={coreIdentifiers.consent}
-                  onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value })}
-                  label="Consent"
-                  helpKey="consent"
-                  availableVariables={availableVariables}
-                  readOnly={!canEditSurvey}
-                />
-                <DkNumericCodes
-                  codes={specialValues.dk_value}
-                  onChange={(codes) => setSpecialValues({ ...specialValues, dk_value: codes })}
-                  readOnly={!canEditSurvey}
-                />
-                <DkStringValues
-                  values={specialValues.dk_string_value}
-                  onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
-                  survey={surveyRows}
-                  choices={choiceRows}
-                  readOnly={!canEditSurvey}
-                />
-              </div>
-              {!isCoreIdentifiersDirty && <SavedNote at={savedAt.coreIdentifiers} className="pt-4" />}
-              {canEditSurvey && isCoreIdentifiersDirty && (
-                <SectionActions controls={sections.controls('coreIdentifiers')} className="pt-4" />
+              ) : (
+                <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
+                  {koboAssetId || '—'}
+                </div>
               )}
-            </section>
-
-            {canDeleteSurvey && (
-              <DeleteSurveySection
-                surveyId={selectedSurvey.survey_id}
-                surveyName={config?.survey_name ?? selectedSurvey.survey_name}
-                onDeleted={handleSurveyDeleted}
-              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Collection start date
+                </label>
+                {canEditSurvey ? (
+                  <input
+                    type="date"
+                    value={globalParameters.data_collection_start_date}
+                    onChange={(e) =>
+                      setGlobalParameters({ ...globalParameters, data_collection_start_date: e.target.value })
+                    }
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                ) : (
+                  <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
+                    {globalParameters.data_collection_start_date || '—'}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Collection end date
+                </label>
+                {canEditSurvey ? (
+                  <input
+                    type="date"
+                    value={globalParameters.data_collection_end_date}
+                    onChange={(e) =>
+                      setGlobalParameters({ ...globalParameters, data_collection_end_date: e.target.value })
+                    }
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                ) : (
+                  <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
+                    {globalParameters.data_collection_end_date || '—'}
+                  </div>
+                )}
+              </div>
+            </div>
+            {!isBasicInfoDirty && <SavedNote at={savedAt.basicInfo} className="pt-2" />}
+            {canEditSurvey && isBasicInfoDirty && (
+              <SectionActions controls={sections.controls('basicInfo')} className="pt-2" />
             )}
           </div>
-        {activeTab === 'access' ? (
-          <SurveyAccessTab surveyId={selectedSurvey.survey_id} onError={setError} onSuccess={setSuccess} />
-        ) : activeTab === 'quality' ? (
-          <div className="space-y-6">
-            <GeneralChecksSection
-              checks={qualityChecks}
-              setChecks={setQualityChecks}
-              durations={globalParameters}
-              onDurationChange={(key, minutes) => setGlobalParameters((prev) => ({ ...prev, [key]: minutes }))}
-              hasCollectionDates={hasCollectionDates}
-              canEdit={canEditSurvey}
-              dirty={isGeneralFlagsDirty}
-              controls={sections.controls('generalFlags')}
-              savedAt={savedAt.generalFlags}
-            />
+        </section>
 
-            <OutlierChecksSection
-              checks={qualityChecks}
-              setChecks={setQualityChecks}
-              numericVariables={numericVariables}
-              questionLabel={questionLabel}
-              canEdit={canEditSurvey}
-              controls={sections.controls('outlier')}
-              savedAt={savedAt.outlier}
-            />
+        <KoboFormSection
+          koboToolData={koboToolData}
+          fileName={koboToolFileName}
+          variableCount={availableVariables.length}
+          labelColumn={labelColumnSurvey}
+          onLabelColumnChange={(column) => {
+            // One language for both: showing questions in one language
+            // and their answers in another helps nobody.
+            setLabelColumnSurvey(column);
+            setLabelColumnChoices(column);
+          }}
+          onRefresh={handleRefreshFormFromProject}
+          isRefreshing={isLoadingTool}
+          canRefresh={Boolean(config?.kobo_asset_id)}
+          canEdit={canEditSurvey}
+          controls={sections.controls('koboTool')}
+          savedAt={savedAt.koboTool}
+        />
 
-            <AiReviewSection
-              surveyId={selectedSurvey.survey_id}
-              // Not permission === 'owner': an admin's permission reads 'admin'
-              // even on their own surveys, which hid the key choice from them.
-              isOwner={selectedSurvey.is_owner === true}
-              checks={qualityChecks}
-              setChecks={setQualityChecks}
-              reviewableVariables={reviewableVariables}
-              canEdit={canEditSurvey}
-              controls={sections.controls('llm')}
-              savedAt={savedAt.llm}
-              onError={setError}
-              onSuccess={setSuccess}
-            />
+        {/* Form readiness: about the Kobo form, so it sits right below it,
+                and re-runs on its own when the form is refreshed above. */}
+        {selectedSurvey && (
+          <FormLintPanel
+            surveyId={selectedSurvey.survey_id}
+            form={refreshedFormPayload}
+            canEdit={canEditSurvey}
+            onRulesAdopted={customChecks.reload}
+            autoRunKey={formCheckRunKey}
+            labelColumn={labelColumnSurvey}
+          />
+        )}
 
-            {/* Custom checks */}
-            {selectedSurvey && (
-              <CustomChecks
-                key={selectedSurvey.survey_id}
-                surveyId={selectedSurvey.survey_id}
-                rules={customChecks.rules}
-                isLoading={customChecks.isLoading}
-                canEdit={canEditSurvey}
+        {/* Collection Targets */}
+        <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
+              Data collection targets
+            </h2>
+            {!sections.isEditing('samplingFrame') && <SavedNote at={savedAt.samplingFrame} className="ml-auto mr-2" />}
+            {canEditSurvey && !sections.isEditing('samplingFrame') && (
+              <SectionEditButton onClick={() => sections.edit('samplingFrame')} />
+            )}
+          </div>
+          {sections.isEditing('samplingFrame') ? (
+            <div className="space-y-4">
+              <CollectionTargetsEditor
+                targets={targets}
                 koboToolData={koboToolData}
-                onSave={customChecks.save}
-                onDelete={customChecks.remove}
-                onAddMany={customChecks.addMany}
+                labelColumnChoices={labelColumnChoices}
               />
-            )}
+              <SectionActions controls={sections.controls('samplingFrame')} className="mt-4" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <CollectionTargets
+                mode={targets.settings.mode}
+                onModeChange={() => {}}
+                totalTarget={targets.settings.total_target}
+                onTotalTargetChange={() => {}}
+                variable={targets.settings.variable}
+                onVariableChange={() => {}}
+                targetsByValue={targets.settings.targets_by_value}
+                onTargetsByValueChange={() => {}}
+                koboToolData={koboToolData}
+                labelColumnChoices={labelColumnChoices}
+                editable={false}
+              />
+              {targets.settings.mode === 'uploaded' && targets.frameData ? (
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  {targets.frameData.length} rows,{' '}
+                  {targets.settings.sampling_cols.length > 0
+                    ? `grouped by ${targets.settings.sampling_cols.join(', ')}`
+                    : 'no grouping columns matched'}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </section>
+
+        {/* Core Identifiers */}
+        <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
+          <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">
+            Core identifiers
+          </h2>
+          <div className="field-grid">
+            <VariableDropdown
+              value={coreIdentifiers.enumerator}
+              onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, enumerator: value })}
+              label="Enumerator ID"
+              helpKey="enumerator"
+              availableVariables={availableVariables}
+              readOnly={!canEditSurvey}
+            />
+            <VariableDropdown
+              value={coreIdentifiers.consent}
+              onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, consent: value })}
+              label="Consent"
+              helpKey="consent"
+              availableVariables={availableVariables}
+              readOnly={!canEditSurvey}
+            />
+            <DkNumericCodes
+              codes={specialValues.dk_value}
+              onChange={(codes) => setSpecialValues({ ...specialValues, dk_value: codes })}
+              readOnly={!canEditSurvey}
+            />
+            <DkStringValues
+              values={specialValues.dk_string_value}
+              onChange={(values) => setSpecialValues({ ...specialValues, dk_string_value: values })}
+              survey={surveyRows}
+              choices={choiceRows}
+              readOnly={!canEditSurvey}
+            />
           </div>
-        ) : activeTab === 'transcription' && selectedSurvey ? (
-          <AudioTranscriptionCard
-            key={`transcription-${selectedSurvey.survey_id}`}
+          {!isCoreIdentifiersDirty && <SavedNote at={savedAt.coreIdentifiers} className="pt-4" />}
+          {canEditSurvey && isCoreIdentifiersDirty && (
+            <SectionActions controls={sections.controls('coreIdentifiers')} className="pt-4" />
+          )}
+        </section>
+
+        {canDeleteSurvey && (
+          <DeleteSurveySection
             surveyId={selectedSurvey.survey_id}
-            surveyName={selectedSurvey.survey_name}
-            formKey={config?.updated_at}
-            onSettingsChange={(paths, enabled) => setTranscribed({ paths, enabled })}
+            surveyName={config?.survey_name ?? selectedSurvey.survey_name}
+            onDeleted={handleSurveyDeleted}
           />
-        ) : activeTab === 'translation' && selectedSurvey ? (
-          <TranslationCard
-            key={`translation-${selectedSurvey.survey_id}`}
+        )}
+      </div>
+      {activeTab === 'access' ? (
+        <SurveyAccessTab surveyId={selectedSurvey.survey_id} onError={setError} onSuccess={setSuccess} />
+      ) : activeTab === 'quality' ? (
+        <div className="space-y-6">
+          <GeneralChecksSection
+            checks={qualityChecks}
+            setChecks={setQualityChecks}
+            durations={globalParameters}
+            onDurationChange={(key, minutes) => setGlobalParameters((prev) => ({ ...prev, [key]: minutes }))}
+            hasCollectionDates={hasCollectionDates}
+            canEdit={canEditSurvey}
+            dirty={isGeneralFlagsDirty}
+            controls={sections.controls('generalFlags')}
+            savedAt={savedAt.generalFlags}
+          />
+
+          <OutlierChecksSection
+            checks={qualityChecks}
+            setChecks={setQualityChecks}
+            numericVariables={numericVariables}
+            questionLabel={questionLabel}
+            canEdit={canEditSurvey}
+            controls={sections.controls('outlier')}
+            savedAt={savedAt.outlier}
+          />
+
+          <AiReviewSection
             surveyId={selectedSurvey.survey_id}
-            formKey={config?.updated_at}
+            // Not permission === 'owner': an admin's permission reads 'admin'
+            // even on their own surveys, which hid the key choice from them.
+            isOwner={selectedSurvey.is_owner === true}
+            checks={qualityChecks}
+            setChecks={setQualityChecks}
+            reviewableVariables={reviewableVariables}
+            canEdit={canEditSurvey}
+            controls={sections.controls('llm')}
+            savedAt={savedAt.llm}
+            onError={setError}
+            onSuccess={setSuccess}
           />
-        ) : null}
+
+          {/* Custom checks */}
+          {selectedSurvey && (
+            <CustomChecks
+              key={selectedSurvey.survey_id}
+              surveyId={selectedSurvey.survey_id}
+              rules={customChecks.rules}
+              isLoading={customChecks.isLoading}
+              canEdit={canEditSurvey}
+              koboToolData={koboToolData}
+              onSave={customChecks.save}
+              onDelete={customChecks.remove}
+              onAddMany={customChecks.addMany}
+            />
+          )}
+        </div>
+      ) : activeTab === 'transcription' && selectedSurvey ? (
+        <AudioTranscriptionCard
+          key={`transcription-${selectedSurvey.survey_id}`}
+          surveyId={selectedSurvey.survey_id}
+          surveyName={selectedSurvey.survey_name}
+          formKey={config?.updated_at}
+          onSettingsChange={(paths, enabled) => setTranscribed({ paths, enabled })}
+        />
+      ) : activeTab === 'translation' && selectedSurvey ? (
+        <TranslationCard
+          key={`translation-${selectedSurvey.survey_id}`}
+          surveyId={selectedSurvey.survey_id}
+          formKey={config?.updated_at}
+        />
+      ) : null}
     </SettingsLayout>
   );
 };

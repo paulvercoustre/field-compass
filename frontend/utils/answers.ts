@@ -6,10 +6,7 @@
  * ending in '/<name>'. Mirrors backend/forms/answers.py, so the screen reads
  * the same answer the checks did. Undefined when absent.
  */
-export const findAnswer = (
-  data: Record<string, any> | null | undefined,
-  name: string | null | undefined
-): any => {
+export const findAnswer = (data: Record<string, any> | null | undefined, name: string | null | undefined): any => {
   if (!data || !name) return undefined;
   if (name in data) return data[name];
   const suffix = `/${name}`;

@@ -30,7 +30,10 @@ export const koboState = (
     case 'failed': {
       const [category, ...rest] = (item.kobo_last_error ?? '').split(': ');
       if (category === 'kobo_permission') {
-        return { tone: 'warn', text: `Couldn't send the ${what} to Kobo: your Kobo account can't edit this project's submissions` };
+        return {
+          tone: 'warn',
+          text: `Couldn't send the ${what} to Kobo: your Kobo account can't edit this project's submissions`,
+        };
       }
       return { tone: 'warn', text: `Couldn't send the ${what} to Kobo${rest.length ? `: ${rest.join(': ')}` : ''}` };
     }

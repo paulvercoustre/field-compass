@@ -1,4 +1,3 @@
-
 import { Submission, FilterState } from '../types';
 import { buildFilterParams } from '../utils/filterUtils';
 
@@ -40,10 +39,10 @@ export const api = {
 
   /** Free-text reviewer notes, or null to clear them. */
   updateReviewerNotes: (koboId: number, surveyId: string, reviewerNotes: string | null) =>
-    request<Submission>(
-      `/api/submissions/${koboId}/reviewer-notes?${new URLSearchParams({ survey_id: surveyId })}`,
-      { method: 'PATCH', body: json({ reviewer_notes: reviewerNotes }) }
-    ),
+    request<Submission>(`/api/submissions/${koboId}/reviewer-notes?${new URLSearchParams({ survey_id: surveyId })}`, {
+      method: 'PATCH',
+      body: json({ reviewer_notes: reviewerNotes }),
+    }),
 };
 
 // --- Kobo projects ----------------------------------------------------------

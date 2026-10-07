@@ -16,15 +16,15 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
   // Get all unique issue types from the data
   const allIssueTypes = useMemo(() => {
     const types = new Set<string>();
-    data.forEach(point => {
-      Object.keys(point.issue_counts).forEach(type => types.add(type));
+    data.forEach((point) => {
+      Object.keys(point.issue_counts).forEach((type) => types.add(type));
     });
     return Array.from(types);
   }, [data]);
 
   // Default to top 5 issues by frequency
   const top5Issues = useMemo(() => {
-    return issueFrequency.slice(0, 5).map(i => i.check);
+    return issueFrequency.slice(0, 5).map((i) => i.check);
   }, [issueFrequency]);
 
   const [selectedIssues, setSelectedIssues] = useState<string[]>(top5Issues);
@@ -42,9 +42,7 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
   }, []);
 
   const toggleIssue = (issue: string) => {
-    setSelectedIssues(prev =>
-      prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
-    );
+    setSelectedIssues((prev) => (prev.includes(issue) ? prev.filter((i) => i !== issue) : [...prev, issue]));
   };
 
   const selectTop5 = () => setSelectedIssues(top5Issues);
@@ -53,13 +51,13 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
 
   // Transform data for recharts - flatten issue_counts into top-level properties
   const chartData = useMemo(() => {
-    return data.map(point => {
+    return data.map((point) => {
       const displayDate = new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const flatPoint: Record<string, any> = { 
-        date: point.date, 
-        displayDate 
+      const flatPoint: Record<string, any> = {
+        date: point.date,
+        displayDate,
       };
-      selectedIssues.forEach(issue => {
+      selectedIssues.forEach((issue) => {
         flatPoint[issue] = point.issue_counts[issue] || 0;
       });
       return flatPoint;
@@ -69,9 +67,7 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-          Issues over time
-        </h3>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Issues over time</h3>
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"
@@ -79,19 +75,45 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
             className="h-7 text-xs font-medium px-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 flex items-center gap-1"
           >
             <span>Indicators</span>
-            <svg className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
           {dropdownOpen && (
             <div className="absolute right-0 mt-1 z-50 min-w-[200px] max-h-64 overflow-y-auto py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg">
               <div className="px-3 py-1.5 border-b border-gray-100 dark:border-gray-800 flex gap-3 sticky top-0 bg-white dark:bg-gray-800">
-                <button type="button" onClick={selectTop5} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Top 5</button>
-                <button type="button" onClick={selectAll} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">All</button>
-                <button type="button" onClick={selectNone} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">None</button>
+                <button
+                  type="button"
+                  onClick={selectTop5}
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Top 5
+                </button>
+                <button
+                  type="button"
+                  onClick={selectAll}
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={selectNone}
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  None
+                </button>
               </div>
               {allIssueTypes.map((issue, index) => (
-                <label key={issue} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-sm">
+                <label
+                  key={issue}
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer text-sm"
+                >
                   <input
                     type="checkbox"
                     checked={selectedIssues.includes(issue)}
@@ -109,11 +131,9 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
           )}
         </div>
       </div>
-      
+
       {data.length === 0 ? (
-        <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
-          No data available
-        </div>
+        <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">No data available</div>
       ) : selectedIssues.length === 0 ? (
         <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
           Select indicators from the dropdown to display
@@ -123,18 +143,9 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
           <ResponsiveContainer>
             <LineChart data={chartData} margin={{ top: 5, right: 8, left: -12, bottom: 5 }}>
               <CartesianGrid {...gridProps} />
-              <XAxis 
-                dataKey="displayDate" 
-                {...axisProps}
-              />
-              <YAxis 
-                {...axisProps}
-                allowDecimals={false}
-              />
-              <Tooltip
-                {...tooltipProps}
-                labelFormatter={(label) => `Date: ${label}`}
-              />
+              <XAxis dataKey="displayDate" {...axisProps} />
+              <YAxis {...axisProps} allowDecimals={false} />
+              <Tooltip {...tooltipProps} labelFormatter={(label) => `Date: ${label}`} />
               <Legend
                 iconType="circle"
                 iconSize={8}
@@ -142,12 +153,12 @@ const IssueTimeSeriesChart: React.FC<IssueTimeSeriesChartProps> = ({ data, issue
                 formatter={(value) => <span className="text-xs text-gray-600 dark:text-gray-300">{value}</span>}
               />
               {selectedIssues.map((issue) => (
-                <Line 
+                <Line
                   key={issue}
-                  type="monotone" 
+                  type="monotone"
                   dataKey={issue}
                   name={issueName(issue)}
-                  stroke={COLORS[allIssueTypes.indexOf(issue) % COLORS.length]} 
+                  stroke={COLORS[allIssueTypes.indexOf(issue) % COLORS.length]}
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 4, strokeWidth: 0 }}

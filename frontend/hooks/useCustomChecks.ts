@@ -1,5 +1,10 @@
 import { useCallback, useState } from 'react';
-import { createValidationRule, deleteValidationRule, getValidationRules, updateValidationRule } from '../services/progressApi';
+import {
+  createValidationRule,
+  deleteValidationRule,
+  getValidationRules,
+  updateValidationRule,
+} from '../services/progressApi';
 import { StagedRule } from '../types';
 import { dbFormatToStagedRule, stagedRuleToDbFormat } from '../utils/ruleConverter';
 

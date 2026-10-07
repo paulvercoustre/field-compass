@@ -1,9 +1,8 @@
-
 export enum QAStatus {
-  PENDING_APPROVAL = 'PENDING_APPROVAL',  // Passes HFC checks, waiting for approval in Kobo
-  FLAGGED = 'FLAGGED',  // Has HFC issues that need to be fixed
-  APPROVED = 'APPROVED',  // Approved in KoboToolbox
-  REJECTED = 'REJECTED',  // Rejected/Not Approved in KoboToolbox
+  PENDING_APPROVAL = 'PENDING_APPROVAL', // Passes HFC checks, waiting for approval in Kobo
+  FLAGGED = 'FLAGGED', // Has HFC issues that need to be fixed
+  APPROVED = 'APPROVED', // Approved in KoboToolbox
+  REJECTED = 'REJECTED', // Rejected/Not Approved in KoboToolbox
 }
 
 export interface QualityIssue {
@@ -38,17 +37,24 @@ export interface Submission {
   has_edit_history: boolean;
   data_quality_issues: QualityIssue[];
   qa_status: QAStatus;
-  kobo_validation_status?: string | null;  // Kobo's validation status (Approved, Not Approved, On Hold, etc.)
-  kobo_edit_url?: string | null;  // URL to view/edit this submission in KoboToolbox
+  kobo_validation_status?: string | null; // Kobo's validation status (Approved, Not Approved, On Hold, etc.)
+  kobo_edit_url?: string | null; // URL to view/edit this submission in KoboToolbox
   reviewer_notes?: string | null;
-  llm_check_status?: 'pending' | 'running' | 'waiting' | 'success' | 'failed' | 'not_run_allowance' | 'cancelled' | 'skipped' | null;
+  llm_check_status?:
+    'pending' | 'running' | 'waiting' | 'success' | 'failed' | 'not_run_allowance' | 'cancelled' | 'skipped' | null;
   llm_job_id?: string | null;
   llm_queued_at?: string | null;
   llm_started_at?: string | null;
   llm_checked_at?: string | null;
   llm_last_error?: string | null;
   /** Its audio transcripts, when the survey transcribes recordings. */
-  transcript_summary?: { count: number; success: number; failed: number; in_progress: number; no_speech: number } | null;
+  transcript_summary?: {
+    count: number;
+    success: number;
+    failed: number;
+    in_progress: number;
+    no_speech: number;
+  } | null;
 }
 
 // --- Rule Builder Types ---
@@ -70,10 +76,10 @@ export interface KoboChoice {
 }
 
 export interface KoboVariable {
-    type: string;
-    label: string;
-    choiceListName: string | null;
-    roster_name: string | null;
+  type: string;
+  label: string;
+  choiceListName: string | null;
+  roster_name: string | null;
 }
 
 export interface KoboToolData {
@@ -88,20 +94,20 @@ export interface KoboToolData {
 }
 
 export interface RuleCondition {
-    variable: string;
-    operator: string;
-    value: string;
-    valueType: 'static' | 'variable';
+  variable: string;
+  operator: string;
+  value: string;
+  valueType: 'static' | 'variable';
 }
 
 export type RulePart = RuleCondition | { joiner: '&' | '|' };
 
 export interface StagedRule {
-    id: string; // UUID
-    description: string;
-    issue_message: string;
-    conditions: RulePart[];
-    roster_name: string | null;
+  id: string; // UUID
+  description: string;
+  issue_message: string;
+  conditions: RulePart[];
+  roster_name: string | null;
 }
 
 // --- Progress Tracker Types ---
@@ -126,11 +132,11 @@ export interface ProgressByColumn {
   conducted: number;
   target: number | null;
   progress: number | null;
-  share: number | null;  // Percent of all submissions, when there is no target to compare against
+  share: number | null; // Percent of all submissions, when there is no target to compare against
 }
 
 export interface DetailedProgress {
-  values: Record<string, string>;  // Map of column name to value
+  values: Record<string, string>; // Map of column name to value
   target: number | null;
   conducted: number;
   progress: number | null;
@@ -139,7 +145,7 @@ export interface DetailedProgress {
 export interface ProgressData {
   mode: SamplingMode;
   overall: OverallProgress;
-  byColumn: Record<string, ProgressByColumn[]>;  // Key is column name, value is list of progress by column value
+  byColumn: Record<string, ProgressByColumn[]>; // Key is column name, value is list of progress by column value
   detailed: DetailedProgress[];
   samplingColumns: string[];
 }
@@ -183,8 +189,8 @@ export interface SamplingFilter {
 }
 
 export interface FilterState {
-  qaStatuses?: QAStatus[];  // Keep for backward compatibility if needed
-  validationStatuses?: string[];  // Kobo validation statuses: Approved, Not Approved, On Hold, Not Reviewed
+  qaStatuses?: QAStatus[]; // Keep for backward compatibility if needed
+  validationStatuses?: string[]; // Kobo validation statuses: Approved, Not Approved, On Hold, Not Reviewed
   enumerators?: string[];
   samplingFilters?: SamplingFilter[];
   /** AI review state: links from the activity panel use it. */

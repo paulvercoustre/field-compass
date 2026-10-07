@@ -76,23 +76,25 @@ const PercentThreshold: React.FC<{ value: number; canEdit: boolean; onChange: (p
 }) => {
   const id = useId();
   return (
-  <div className={PANEL}>
-    <label htmlFor={id} className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Threshold (%)</label>
-    {canEdit ? (
-      <input
-        id={id}
-        type="number"
-        min="0"
-        max="100"
-        step="0.1"
-        value={value}
-        onChange={(e) => onChange(Math.max(0, Math.min(100, Number.parseFloat(e.target.value) || 0)))}
-        className={SMALL_INPUT}
-      />
-    ) : (
-      <span className="text-sm text-gray-700 dark:text-gray-300">{value}%</span>
-    )}
-  </div>
+    <div className={PANEL}>
+      <label htmlFor={id} className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+        Threshold (%)
+      </label>
+      {canEdit ? (
+        <input
+          id={id}
+          type="number"
+          min="0"
+          max="100"
+          step="0.1"
+          value={value}
+          onChange={(e) => onChange(Math.max(0, Math.min(100, Number.parseFloat(e.target.value) || 0)))}
+          className={SMALL_INPUT}
+        />
+      ) : (
+        <span className="text-sm text-gray-700 dark:text-gray-300">{value}%</span>
+      )}
+    </div>
   );
 };
 
@@ -126,23 +128,23 @@ const MinutesField: React.FC<{
 }> = ({ label, value, placeholder, canEdit, onChange }) => {
   const id = useId();
   return (
-  <div>
-    <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-      {label}
-    </label>
-    {canEdit ? (
-      <input
-        id={id}
-        type="number"
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value ? parseInt(e.target.value) : null)}
-        className={INPUT}
-        placeholder={placeholder}
-      />
-    ) : (
-      <div className={READ_ONLY}>{value ?? '—'}</div>
-    )}
-  </div>
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+        {label}
+      </label>
+      {canEdit ? (
+        <input
+          id={id}
+          type="number"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value ? parseInt(e.target.value) : null)}
+          className={INPUT}
+          placeholder={placeholder}
+        />
+      ) : (
+        <div className={READ_ONLY}>{value ?? '—'}</div>
+      )}
+    </div>
   );
 };
 
@@ -190,7 +192,9 @@ const GeneralChecksSection: React.FC<GeneralChecksSectionProps> = ({
           onChange={(on) => set('flag_weekend', on)}
         >
           <div className={PANEL}>
-            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Weekend Days:</span>
+            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Select Weekend Days:
+            </span>
             <div className="flex flex-wrap gap-2">
               {DAYS_OF_WEEK.map((label, day) => (
                 <button

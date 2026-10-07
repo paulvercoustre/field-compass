@@ -16,7 +16,9 @@ const Meter: React.FC<MeterProps> = ({ used, limit, unit = '', label, inFlight =
   const full = used + inFlight >= limit;
   return (
     <div className="min-w-[8rem]">
-      <span className={`tabular text-sm ${full ? 'text-amber-700 dark:text-amber-300' : 'text-gray-900 dark:text-white'}`}>
+      <span
+        className={`tabular text-sm ${full ? 'text-amber-700 dark:text-amber-300' : 'text-gray-900 dark:text-white'}`}
+      >
         {Math.round((used + inFlight) * 10) / 10} of {limit}
         {unit}
       </span>
@@ -29,7 +31,10 @@ const Meter: React.FC<MeterProps> = ({ used, limit, unit = '', label, inFlight =
         aria-valuenow={used + inFlight}
         aria-label={label}
       >
-        <div className={`h-1.5 rounded-full ${full ? 'bg-amber-500' : 'bg-indigo-500'}`} style={{ width: `${share}%` }} />
+        <div
+          className={`h-1.5 rounded-full ${full ? 'bg-amber-500' : 'bg-indigo-500'}`}
+          style={{ width: `${share}%` }}
+        />
       </div>
     </div>
   );

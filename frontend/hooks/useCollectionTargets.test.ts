@@ -14,7 +14,9 @@ vi.mock('../utils/samplingFrameParser', async (original) => ({
 
 const tool = { variableMap: new Map([['district', {}]]) } as unknown as KoboToolData;
 const fileEvent = () =>
-  ({ target: { files: [new File(['x'], 'targets.csv')], value: 'targets.csv' } }) as unknown as React.ChangeEvent<HTMLInputElement>;
+  ({
+    target: { files: [new File(['x'], 'targets.csv')], value: 'targets.csv' },
+  }) as unknown as React.ChangeEvent<HTMLInputElement>;
 
 describe('useCollectionTargets', () => {
   it('loads a stored config, inferring the mode a config without one behaves as', () => {
@@ -31,7 +33,12 @@ describe('useCollectionTargets', () => {
     act(() => result.current.setTargetsByValue({ north: 5 }));
     expect(result.current.settings.sampling_cols).toEqual(['district']);
     act(() => result.current.changeMode('total'));
-    expect(result.current.settings).toMatchObject({ mode: 'total', variable: null, targets_by_value: {}, sampling_cols: [] });
+    expect(result.current.settings).toMatchObject({
+      mode: 'total',
+      variable: null,
+      targets_by_value: {},
+      sampling_cols: [],
+    });
   });
 
   it('reads an uploaded file, keeping only the columns that are questions', async () => {

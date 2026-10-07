@@ -33,10 +33,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ percentage }) => {
   return (
     <div className="flex w-44 items-center gap-3">
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
-        <div
-          className={`h-full rounded-full ${color}`}
-          style={{ width: `${widthPercentage}%` }}
-        ></div>
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${widthPercentage}%` }}></div>
       </div>
       <span className="tabular w-12 text-right text-xs font-medium text-gray-700 dark:text-gray-300">
         {percentage.toFixed(1)}%

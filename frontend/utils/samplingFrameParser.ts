@@ -106,7 +106,7 @@ const TARGET_COLUMN_NAMES = [
  */
 export const isTargetColumn = (columnName: string): boolean => {
   const normalized = columnName.toLowerCase().trim();
-  return TARGET_COLUMN_NAMES.some(name => normalized === name || normalized.includes(name));
+  return TARGET_COLUMN_NAMES.some((name) => normalized === name || normalized.includes(name));
 };
 
 /**
@@ -118,41 +118,41 @@ export const isTargetColumn = (columnName: string): boolean => {
 export const validateSamplingFrameColumns = (
   frameHeaders: string[],
   koboVariables: string[]
-): { 
-  isValid: boolean; 
-  matchingColumns: string[]; 
-  unmatchedColumns: string[]; 
+): {
+  isValid: boolean;
+  matchingColumns: string[];
+  unmatchedColumns: string[];
   targetColumn: string | null;
   hasUnmatchedColumns: boolean;
 } => {
   const matchingColumns: string[] = [];
   const unmatchedColumns: string[] = [];
   let targetColumn: string | null = null;
-  
+
   // Find target column if it exists
-  const targetCol = frameHeaders.find(col => isTargetColumn(col));
+  const targetCol = frameHeaders.find((col) => isTargetColumn(col));
   if (targetCol) {
     targetColumn = targetCol;
   }
-  
+
   // Categorize all columns (except target column)
-  frameHeaders.forEach(header => {
+  frameHeaders.forEach((header) => {
     if (header === targetColumn) {
       // Skip target column - it's handled separately
       return;
     }
-    
+
     if (koboVariables.includes(header)) {
       matchingColumns.push(header);
     } else {
       unmatchedColumns.push(header);
     }
   });
-  
+
   // File is valid as long as we have at least one matching column
   // or if the only column is a target column
   const isValid = matchingColumns.length > 0 || (frameHeaders.length === 1 && targetColumn !== null);
-  
+
   return {
     isValid,
     matchingColumns,
@@ -161,4 +161,3 @@ export const validateSamplingFrameColumns = (
     hasUnmatchedColumns: unmatchedColumns.length > 0,
   };
 };
-

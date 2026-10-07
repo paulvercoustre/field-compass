@@ -226,7 +226,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Fetch user profile
     const userResponse = await fetch(`${API_BASE_URL}/api/users/me`, {
       headers: {
-        'Authorization': `Bearer ${newToken}`,
+        Authorization: `Bearer ${newToken}`,
       },
     });
 
@@ -397,4 +397,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

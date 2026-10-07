@@ -81,7 +81,14 @@ export interface TranscriptionOverview {
     no_speech: number;
     /** Transcripts Kobo already had, typed or made there: never transcribed here. */
     from_kobo: number;
-    kobo: { sent: number; edited_in_kobo: number; failed: number; unsupported: number; pending: number; unsent: number };
+    kobo: {
+      sent: number;
+      edited_in_kobo: number;
+      failed: number;
+      unsupported: number;
+      pending: number;
+      unsent: number;
+    };
   };
   can_edit: boolean;
 }

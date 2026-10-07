@@ -24,9 +24,7 @@ const StatusCard: React.FC<StatusCardProps> = ({ label, count, percentage, dotCl
           {count.toLocaleString()}
         </span>
         {percentage !== undefined && (
-          <span className="tabular text-sm text-gray-500 dark:text-gray-400">
-            {percentage.toFixed(1)}%
-          </span>
+          <span className="tabular text-sm text-gray-500 dark:text-gray-400">{percentage.toFixed(1)}%</span>
         )}
       </span>
     </>
@@ -34,7 +32,10 @@ const StatusCard: React.FC<StatusCardProps> = ({ label, count, percentage, dotCl
   const cardClass =
     'flex flex-col items-start rounded-xl border border-gray-200 bg-white p-4 text-left shadow-card dark:border-gray-800 dark:bg-gray-900';
   return onClick ? (
-    <button onClick={onClick} className={`${cardClass} transition-colors hover:border-gray-300 hover:bg-gray-50/60 dark:hover:border-gray-700 dark:hover:bg-gray-900/60`}>
+    <button
+      onClick={onClick}
+      className={`${cardClass} transition-colors hover:border-gray-300 hover:bg-gray-50/60 dark:hover:border-gray-700 dark:hover:bg-gray-900/60`}
+    >
       {body}
     </button>
   ) : (
@@ -52,10 +53,7 @@ const StatusSummaryCards: React.FC<StatusSummaryCardsProps> = ({ data, onStatusC
     <div>
       <SectionLabel>Submission status</SectionLabel>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatusCard
-          label="Total"
-          count={data.total_submissions}
-        />
+        <StatusCard label="Total" count={data.total_submissions} />
         <StatusCard
           label="Approved"
           count={data.approved_count}

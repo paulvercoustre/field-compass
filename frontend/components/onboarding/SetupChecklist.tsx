@@ -63,9 +63,7 @@ const SetupChecklist: React.FC<{ onAddSurvey: () => void }> = ({ onAddSurvey }) 
           </Step>
 
           <Step number={2} state={connected ? 'current' : 'upcoming'} title="Add a survey">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Paste the link to your Kobo project.
-            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Paste the link to your Kobo project.</p>
             <button
               type="button"
               onClick={onAddSurvey}
@@ -74,15 +72,11 @@ const SetupChecklist: React.FC<{ onAddSurvey: () => void }> = ({ onAddSurvey }) 
             >
               + Add a survey
             </button>
-            {!connected && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Connect Kobo first.</p>
-            )}
+            {!connected && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Connect Kobo first.</p>}
           </Step>
 
           <Step number={3} state="upcoming" title="Choose quality checks">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Pick the checks to run on each submission.
-            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Pick the checks to run on each submission.</p>
           </Step>
         </ol>
       </div>

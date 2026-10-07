@@ -27,9 +27,7 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Outlier checks</h2>
       {!controls.editing && <SavedNote at={savedAt} className="ml-auto mr-2" />}
-      {canEdit && !controls.editing && (
-        <SectionEditButton onClick={controls.edit} />
-      )}
+      {canEdit && !controls.editing && <SectionEditButton onClick={controls.edit} />}
     </div>
     <div className="space-y-6">
       {/* Outlier Checks Flag */}
@@ -45,9 +43,7 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
             />
           </div>
           <div className="ml-3">
-            <label className="text-sm font-medium text-gray-900 dark:text-white">
-              Flag outlier values
-            </label>
+            <label className="text-sm font-medium text-gray-900 dark:text-white">Flag outlier values</label>
           </div>
         </div>
 
@@ -62,7 +58,10 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
                 <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
                   {numericVariables.length > 0 ? (
                     numericVariables.map((variable) => (
-                      <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
+                      <label
+                        key={variable}
+                        className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded"
+                      >
                         <input
                           type="checkbox"
                           checked={checks.outlier_variables.includes(variable)}
@@ -76,16 +75,18 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
                               setChecks({
                                 ...checks,
                                 outlier_variables: checks.outlier_variables.filter((v) => v !== variable),
-                                outlier_log_transform_variables: checks.outlier_log_transform_variables.filter((v) => v !== variable),
+                                outlier_log_transform_variables: checks.outlier_log_transform_variables.filter(
+                                  (v) => v !== variable
+                                ),
                               });
                             }
                           }}
                           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
                         />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{questionLabel(variable) || variable}</span>
-                        {questionLabel(variable) && (
-                          <span className="text-xs text-gray-500">({variable})</span>
-                        )}
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {questionLabel(variable) || variable}
+                        </span>
+                        {questionLabel(variable) && <span className="text-xs text-gray-500">({variable})</span>}
                       </label>
                     ))
                   ) : (
@@ -125,7 +126,10 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
                 {controls.editing ? (
                   <div className="space-y-2">
                     {checks.outlier_variables.map((variable) => (
-                      <label key={variable} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
+                      <label
+                        key={variable}
+                        className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded"
+                      >
                         <input
                           type="checkbox"
                           checked={checks.outlier_log_transform_variables.includes(variable)}
@@ -138,16 +142,18 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
                             } else {
                               setChecks({
                                 ...checks,
-                                outlier_log_transform_variables: checks.outlier_log_transform_variables.filter((v) => v !== variable),
+                                outlier_log_transform_variables: checks.outlier_log_transform_variables.filter(
+                                  (v) => v !== variable
+                                ),
                               });
                             }
                           }}
                           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
                         />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{questionLabel(variable) || variable}</span>
-                        {questionLabel(variable) && (
-                          <span className="text-xs text-gray-500">({variable})</span>
-                        )}
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {questionLabel(variable) || variable}
+                        </span>
+                        {questionLabel(variable) && <span className="text-xs text-gray-500">({variable})</span>}
                       </label>
                     ))}
                   </div>
@@ -204,24 +210,22 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
                   {checks.outlier_method === 'iqr'
                     ? 'IQR (Interquartile Range)'
                     : checks.outlier_method === 'mad'
-                    ? 'MAD (Median Absolute Deviation)'
-                    : 'Z-Score'}
+                      ? 'MAD (Median Absolute Deviation)'
+                      : 'Z-Score'}
                 </span>
               )}
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {checks.outlier_method === 'iqr'
                   ? 'Uses quartiles and IQR. Standard threshold: 1.5'
                   : checks.outlier_method === 'mad'
-                  ? 'Robust method using median and MAD. Standard threshold: 3.0'
-                  : 'Uses mean and standard deviation. Standard threshold: 2.0 (moderate) or 3.0 (strict)'}
+                    ? 'Robust method using median and MAD. Standard threshold: 3.0'
+                    : 'Uses mean and standard deviation. Standard threshold: 2.0 (moderate) or 3.0 (strict)'}
               </p>
             </div>
 
             {/* Threshold */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Threshold
-              </label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Threshold</label>
               {controls.editing ? (
                 <input
                   type="number"
@@ -237,24 +241,20 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
                   className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
               ) : (
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  {checks.outlier_threshold}
-                </span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">{checks.outlier_threshold}</span>
               )}
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {checks.outlier_method === 'iqr'
                   ? 'IQR multiplier (e.g., 1.5 = standard, 3.0 = more conservative)'
                   : checks.outlier_method === 'mad'
-                  ? 'Modified Z-score threshold (e.g., 3.0 = standard)'
-                  : 'Z-score threshold (e.g., 2.0 = moderate, 3.0 = strict)'}
+                    ? 'Modified Z-score threshold (e.g., 3.0 = standard)'
+                    : 'Z-score threshold (e.g., 2.0 = moderate, 3.0 = strict)'}
               </p>
             </div>
           </div>
         )}
       </div>
-      {controls.editing && (
-        <SectionActions controls={controls} className="pt-4" />
-      )}
+      {controls.editing && <SectionActions controls={controls} className="pt-4" />}
     </div>
   </section>
 );

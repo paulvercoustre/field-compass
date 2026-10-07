@@ -17,14 +17,22 @@ const describeTranslation = (translation: Translation): { tone: Tone; text: stri
     case 'running':
       return {
         tone: 'busy',
-        text: translation.last_error ? `Translating into ${language}… retrying after a temporary error.` : `Translating into ${language}…`,
+        text: translation.last_error
+          ? `Translating into ${language}… retrying after a temporary error.`
+          : `Translating into ${language}…`,
       };
     case 'success':
-      return { tone: 'ok', text: translation.origin === 'kobo' ? `${language} translation from Kobo` : `${language} translation` };
+      return {
+        tone: 'ok',
+        text: translation.origin === 'kobo' ? `${language} translation from Kobo` : `${language} translation`,
+      };
     case 'skipped':
       return null;
     case 'not_run_allowance':
-      return { tone: 'warn', text: message || 'Not translated: this survey has used its included translations for this month.' };
+      return {
+        tone: 'warn',
+        text: message || 'Not translated: this survey has used its included translations for this month.',
+      };
     case 'cancelled':
       return { tone: 'muted', text: 'Translation stopped before it ran. It runs again on the next pull.' };
     default: {
@@ -34,7 +42,10 @@ const describeTranslation = (translation: Translation): { tone: Tone; text: stri
         not_configured: "Couldn't translate: no AI key is set up for translation.",
         bad_request: `Couldn't translate${message ? `: ${message}` : '.'}`,
       };
-      return { tone: 'warn', text: reasons[category] ?? "Couldn't translate this time. It will be retried on the next pull." };
+      return {
+        tone: 'warn',
+        text: reasons[category] ?? "Couldn't translate this time. It will be retried on the next pull.",
+      };
     }
   }
 };
@@ -75,7 +86,10 @@ export const TranslationBlock: React.FC<TranslationBlockProps> = ({ translation,
  * A submission's translations, re-read as background work moves on. Null
  * until loaded, when it could not be, and when the survey doesn't translate.
  */
-export const useSubmissionTranslations = (koboId: number | null, refreshKey?: string): SubmissionTranslations | null => {
+export const useSubmissionTranslations = (
+  koboId: number | null,
+  refreshKey?: string
+): SubmissionTranslations | null => {
   const { version } = useActivity();
   const [data, setData] = useState<SubmissionTranslations | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);

@@ -51,9 +51,7 @@ const DkNumericCodes: React.FC<DkNumericCodesProps> = ({ codes, onChange, readOn
         ))}
       </div>
     ) : (
-      <p className="text-sm text-gray-500 mb-2">
-        {readOnly ? '—' : 'None — no number counts as don’t know.'}
-      </p>
+      <p className="text-sm text-gray-500 mb-2">{readOnly ? '—' : 'None — no number counts as don’t know.'}</p>
     );
 
   // Three children, matching the field-grid rows: label, control, extras.

@@ -21,11 +21,7 @@ export interface WorkBucket {
 }
 
 export type RunAction =
-  | 'open_ai_providers'
-  | 'open_ai_usage'
-  | 'open_transcription_settings'
-  | 'open_kobo_settings'
-  | null;
+  'open_ai_providers' | 'open_ai_usage' | 'open_transcription_settings' | 'open_kobo_settings' | null;
 
 export interface RunProblem {
   kind: string;
@@ -96,8 +92,7 @@ export const getActivity = () => request<Activity>('/api/activity');
 export const getSurveyRuns = (surveyId: string, limit = 10) =>
   request<{ runs: RunSummary[] }>(`/api/surveys/${surveyId}/runs?limit=${limit}`);
 
-export const stopRun = (runId: string) =>
-  request<RunSummary>(`/api/runs/${runId}/stop`, { method: 'POST' });
+export const stopRun = (runId: string) => request<RunSummary>(`/api/runs/${runId}/stop`, { method: 'POST' });
 
 /**
  * Start a pull from Kobo. Resolves with the new run; rejects with an ApiError

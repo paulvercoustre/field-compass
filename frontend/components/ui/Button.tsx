@@ -26,8 +26,7 @@ const variants: Record<Variant, string> = {
   ghost:
     'text-gray-700 hover:bg-gray-100 hover:text-gray-900 ' +
     'dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white',
-  danger:
-    'bg-red-600 text-white shadow-xs hover:bg-red-500 active:bg-red-700',
+  danger: 'bg-red-600 text-white shadow-xs hover:bg-red-500 active:bg-red-700',
 };
 
 const sizes: Record<Size, string> = {
@@ -40,7 +39,20 @@ const sizes: Record<Size, string> = {
  * action per view, secondary for the rest, ghost for toolbar-like actions.
  */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'secondary', size = 'md', loading = false, icon, className = '', children, disabled, type = 'button', ...rest }, ref) => (
+  (
+    {
+      variant = 'secondary',
+      size = 'md',
+      loading = false,
+      icon,
+      className = '',
+      children,
+      disabled,
+      type = 'button',
+      ...rest
+    },
+    ref
+  ) => (
     <button
       ref={ref}
       type={type}

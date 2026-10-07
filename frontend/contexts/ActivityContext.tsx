@@ -149,7 +149,6 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.user_id]);
 
-
   /** Poll sooner after something was started, rather than waiting a minute. */
   const pollSoon = useCallback(() => {
     if (timer.current) window.clearTimeout(timer.current);

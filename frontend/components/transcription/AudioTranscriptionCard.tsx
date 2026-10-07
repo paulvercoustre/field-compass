@@ -34,7 +34,16 @@ interface AudioTranscriptionCardProps {
 }
 
 const MicIcon: React.FC<{ className?: string }> = ({ className = 'h-4 w-4' }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.75}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <rect x="9" y="2" width="6" height="12" rx="3" />
     <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" />
   </svg>
@@ -82,7 +91,12 @@ const toInput = (overview: TranscriptionOverview): TranscriptionSettingsInput =>
  * questions, and lists only those. The language list puts the form's own
  * languages first, then every language Scribe v2 can transcribe.
  */
-const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyId, surveyName, formKey, onSettingsChange }) => {
+const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
+  surveyId,
+  surveyName,
+  formKey,
+  onSettingsChange,
+}) => {
   const { trackRun, setPanelOpen, navigate, version } = useActivity();
   const [overview, setOverview] = useState<TranscriptionOverview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -96,7 +110,10 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
   const [starting, setStarting] = useState(false);
   // Translation of the transcripts: the Translation settings, seen from here.
   const [translation, setTranslation] = useState<TranslationOverview | null>(null);
-  const [translateDraft, setTranslateDraft] = useState<{ on: boolean; language: string | null }>({ on: false, language: 'eng' });
+  const [translateDraft, setTranslateDraft] = useState<{ on: boolean; language: string | null }>({
+    on: false,
+    language: 'eng',
+  });
 
   const load = useCallback(async () => {
     try {
@@ -132,14 +149,8 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 
-  const suggested = useMemo(
-    () => (overview?.form_languages ?? []).filter((lang) => lang.code),
-    [overview]
-  );
-  const unsupported = useMemo(
-    () => (overview?.form_languages ?? []).filter((lang) => !lang.code),
-    [overview]
-  );
+  const suggested = useMemo(() => (overview?.form_languages ?? []).filter((lang) => lang.code), [overview]);
+  const unsupported = useMemo(() => (overview?.form_languages ?? []).filter((lang) => !lang.code), [overview]);
 
   // Nothing to show for a form without audio questions.
   if (loadError) {
@@ -155,7 +166,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
   const { settings, counts, allowance } = overview;
   const canEdit = overview.can_edit && overview.available;
   const languageName = (code: string | null) =>
-    code ? overview.languages.find((lang) => lang.code === code)?.name ?? code : 'Detect automatically';
+    code ? (overview.languages.find((lang) => lang.code === code)?.name ?? code) : 'Detect automatically';
   const names = questionNames(overview.audio_questions);
   const questionLabel = (path: string) => names.get(path)?.title ?? path;
   const selectable = overview.audio_questions.filter((q) => !q.in_repeat).map((q) => q.path);
@@ -351,8 +362,8 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
               {ownKey
                 ? `Runs on the key \u201c${overview.key.label}\u201d, with no Field Compass limit.`
                 : overview.key.source === 'operator'
-                ? `Runs on the included usage: ${allowance.limit_minutes} minutes a month, shared by all your surveys.`
-                : 'Needs an ElevenLabs key first.'}
+                  ? `Runs on the included usage: ${allowance.limit_minutes} minutes a month, shared by all your surveys.`
+                  : 'Needs an ElevenLabs key first.'}
             </p>
           </div>
         </div>
@@ -407,7 +418,9 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                       />
                       <span className="min-w-0">
                         <span className="text-gray-900 dark:text-white">{names.get(question.path)?.title}</span>
-                        <span className="block text-xs text-gray-500 dark:text-gray-400">{names.get(question.path)?.detail}</span>
+                        <span className="block text-xs text-gray-500 dark:text-gray-400">
+                          {names.get(question.path)?.detail}
+                        </span>
                         {question.in_repeat && (
                           <span className="block text-xs text-gray-500 dark:text-gray-400">
                             Inside a repeat group: can't be transcribed yet.
@@ -497,8 +510,8 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                   Send transcripts to Kobo
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Adds a transcript column next to the recording in Kobo's data table and exports. The submissions themselves
-                  are not changed, and corrections made in Kobo are kept.
+                  Adds a transcript column next to the recording in Kobo's data table and exports. The submissions
+                  themselves are not changed, and corrections made in Kobo are kept.
                 </p>
               </div>
             </div>
@@ -514,18 +527,24 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                   onChange={(e) => setTranslateDraft({ ...translateDraft, on: e.target.checked })}
                 />
                 <div className="ml-3 min-w-0">
-                  <label htmlFor="transcription-translate" className="text-sm font-medium text-gray-900 dark:text-white">
+                  <label
+                    htmlFor="transcription-translate"
+                    className="text-sm font-medium text-gray-900 dark:text-white"
+                  >
                     Translate the transcripts
                     {translation.settings.language && (
-                      <span className="font-normal text-gray-500 dark:text-gray-400"> into {languageName(translation.settings.language)}</span>
+                      <span className="font-normal text-gray-500 dark:text-gray-400">
+                        {' '}
+                        into {languageName(translation.settings.language)}
+                      </span>
                     )}
                   </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {!translation.available
                       ? 'Needs an AI key for translation first.'
                       : translation.settings.language
-                      ? 'Uses the Translation settings: the language is set there, and typed answers can be translated there too.'
-                      : 'Adds these questions to the Translation settings, where typed answers can be translated too.'}
+                        ? 'Uses the Translation settings: the language is set there, and typed answers can be translated there too.'
+                        : 'Adds these questions to the Translation settings, where typed answers can be translated too.'}
                   </p>
                   {translateDraft.on && !translation.settings.language && (
                     <select
@@ -551,8 +570,8 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
         {editing && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Recordings of the chosen questions are sent to ElevenLabs to be transcribed
-            {translateDraft.on && draft.enabled ? ', and their transcripts to the AI to be translated' : ''}. Nothing else
-            from the submission is sent. Make sure respondents' consent covers this.
+            {translateDraft.on && draft.enabled ? ', and their transcripts to the AI to be translated' : ''}. Nothing
+            else from the submission is sent. Make sure respondents' consent covers this.
           </p>
         )}
 
@@ -618,7 +637,9 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
               </>
             )}
             <dt className="text-gray-500 dark:text-gray-400">Kobo</dt>
-            <dd className="text-gray-900 dark:text-white">{settings.send_to_kobo ? 'Transcripts are sent to Kobo' : 'Kept in Field Compass only'}</dd>
+            <dd className="text-gray-900 dark:text-white">
+              {settings.send_to_kobo ? 'Transcripts are sent to Kobo' : 'Kept in Field Compass only'}
+            </dd>
           </dl>
         )}
 
@@ -634,7 +655,11 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
               {counts.failed > 0 && (
                 <>
                   {' · '}
-                  <button type="button" onClick={toSubmissions('failed')} className="text-amber-700 underline decoration-dotted underline-offset-2 dark:text-amber-300">
+                  <button
+                    type="button"
+                    onClick={toSubmissions('failed')}
+                    className="text-amber-700 underline decoration-dotted underline-offset-2 dark:text-amber-300"
+                  >
                     {counts.failed} failed
                   </button>
                 </>
@@ -643,20 +668,23 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
               {counts.no_speech > 0 && (
                 <>
                   {' · '}
-                  <button type="button" onClick={toSubmissions('no_speech')} className="underline decoration-dotted underline-offset-2">
+                  <button
+                    type="button"
+                    onClick={toSubmissions('no_speech')}
+                    className="underline decoration-dotted underline-offset-2"
+                  >
                     {counts.no_speech} with no speech
                   </button>
                 </>
               )}
-              {counts.skipped > 0 && <> · {counts.skipped} skipped (recording missing or too long)</>}
-              .
+              {counts.skipped > 0 && <> · {counts.skipped} skipped (recording missing or too long)</>}.
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {ownKey
                 ? `This month: ${overview.key.own_minutes ?? 0} minutes on \u201c${overview.key.label}\u201d.`
                 : `This month, across your surveys: ${allowance.used_minutes} of ${allowance.limit_minutes} included minutes used.`}{' '}
-              Recordings longer than {allowance.max_recording_minutes} minutes are skipped, and those
-              that already have a transcript in Kobo keep it.
+              Recordings longer than {allowance.max_recording_minutes} minutes are skipped, and those that already have
+              a transcript in Kobo keep it.
             </p>
 
             {settings.send_to_kobo && (
@@ -668,7 +696,10 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                     {counts.kobo.sent.toLocaleString()} sent to Kobo
                     {counts.kobo.edited_in_kobo > 0 && <> · {counts.kobo.edited_in_kobo} corrected in Kobo</>}
                     {counts.kobo.failed > 0 && (
-                      <span className="text-amber-700 dark:text-amber-300"> · {counts.kobo.failed} couldn't be sent</span>
+                      <span className="text-amber-700 dark:text-amber-300">
+                        {' '}
+                        · {counts.kobo.failed} couldn't be sent
+                      </span>
                     )}
                     {counts.kobo.pending > 0 && <> · {counts.kobo.pending} on the way</>}.
                   </p>
@@ -717,8 +748,9 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
         onCancel={() => setConfirmConsent(false)}
       >
         <p>
-          Respondents' recordings for the chosen questions in <strong className="text-gray-900 dark:text-white">{surveyName}</strong>{' '}
-          will be sent to ElevenLabs, a third party, to be transcribed.
+          Respondents' recordings for the chosen questions in{' '}
+          <strong className="text-gray-900 dark:text-white">{surveyName}</strong> will be sent to ElevenLabs, a third
+          party, to be transcribed.
         </p>
         <p>Only turn this on if respondents' consent and your organisation's data agreements allow it.</p>
       </ConfirmDialog>
@@ -747,14 +779,15 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({ surveyI
                   }.`}
             </p>
             <p>
-              {estimate.remaining_minutes} included minutes are left this month across your surveys; recordings beyond that
-              wait until next month.
+              {estimate.remaining_minutes} included minutes are left this month across your surveys; recordings beyond
+              that wait until next month.
             </p>
-            {estimate.mode === 'all' && <p>Transcripts already sent to Kobo are only replaced where nobody corrected them in Kobo.</p>}
+            {estimate.mode === 'all' && (
+              <p>Transcripts already sent to Kobo are only replaced where nobody corrected them in Kobo.</p>
+            )}
           </>
         )}
       </ConfirmDialog>
-
     </section>
   );
 };

@@ -11,68 +11,76 @@ interface ConditionRowProps {
 }
 
 const operators = [
-    { value: '==', label: 'is equal to' },
-    { value: '!=', label: 'is not equal to' },
-    { value: '>', label: 'is greater than' },
-    { value: '<', label: 'is less than' },
-    { value: '>=', label: 'is greater than or equal to' },
-    { value: '<=', label: 'is less than or equal to' },
-    { value: '%in%', label: 'is one of (comma-separated)' },
-    { value: 'is_empty', label: 'is empty' },
-    { value: 'is_not_empty', label: 'is not empty' },
+  { value: '==', label: 'is equal to' },
+  { value: '!=', label: 'is not equal to' },
+  { value: '>', label: 'is greater than' },
+  { value: '<', label: 'is less than' },
+  { value: '>=', label: 'is greater than or equal to' },
+  { value: '<=', label: 'is less than or equal to' },
+  { value: '%in%', label: 'is one of (comma-separated)' },
+  { value: 'is_empty', label: 'is empty' },
+  { value: 'is_not_empty', label: 'is not empty' },
 ];
 
 const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, onChange, onRemove, canRemove }) => {
-  
   const handleValueTypeToggle = (type: 'static' | 'variable') => {
     onChange({ ...condition, valueType: type, value: '' }); // Reset value on toggle
   };
 
   const selectedVarInfo = koboToolData.variableMap.get(condition.variable);
   const isSelectQuestion = selectedVarInfo?.type.startsWith('select');
-  const isNumericVariable = selectedVarInfo?.type === 'integer' || selectedVarInfo?.type === 'decimal' || selectedVarInfo?.type === 'calculate';
-  const choicesForVar = isSelectQuestion 
-    ? koboToolData.choices.filter(c => c.list_name === selectedVarInfo?.choiceListName)
+  const isNumericVariable =
+    selectedVarInfo?.type === 'integer' || selectedVarInfo?.type === 'decimal' || selectedVarInfo?.type === 'calculate';
+  const choicesForVar = isSelectQuestion
+    ? koboToolData.choices.filter((c) => c.list_name === selectedVarInfo?.choiceListName)
     : [];
   // Deduplicate choices just in case
-  const uniqueChoices = Array.from(new Map(choicesForVar.map(choice => [choice.name, choice])).values());
+  const uniqueChoices = Array.from(new Map(choicesForVar.map((choice) => [choice.name, choice])).values());
 
   const renderValueInput = () => {
     if (condition.valueType === 'variable') {
       return (
-        <select 
-            value={condition.value} 
-            onChange={e => onChange({ ...condition, value: e.target.value })}
-            className="flex-1 min-w-0 h-9 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs px-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        <select
+          value={condition.value}
+          onChange={(e) => onChange({ ...condition, value: e.target.value })}
+          className="flex-1 min-w-0 h-9 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs px-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
-            <option value="">Select variable...</option>
-            {koboToolData.survey.map(q => {
-                const context = q.roster_name ? `(${q.roster_name})` : '(Main)';
-                return <option key={q.name} value={q.name} title={q['label::English (en)']}>{`${context} ${q.name}`}</option>;
-            })}
+          <option value="">Select variable...</option>
+          {koboToolData.survey.map((q) => {
+            const context = q.roster_name ? `(${q.roster_name})` : '(Main)';
+            return (
+              <option key={q.name} value={q.name} title={q['label::English (en)']}>{`${context} ${q.name}`}</option>
+            );
+          })}
         </select>
       );
     }
-    
+
     if (isSelectQuestion && condition.operator !== '%in%') {
-        return (
-            <select
-                value={condition.value}
-                onChange={e => onChange({ ...condition, value: e.target.value })}
-                className="flex-1 min-w-0 h-9 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs px-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-                <option value="">Select choice...</option>
-                {uniqueChoices.map(c => <option key={c.name} value={c.name}>{c['label::English (en)'] || c.name}</option>)}
-            </select>
-        );
+      return (
+        <select
+          value={condition.value}
+          onChange={(e) => onChange({ ...condition, value: e.target.value })}
+          className="flex-1 min-w-0 h-9 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs px-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="">Select choice...</option>
+          {uniqueChoices.map((c) => (
+            <option key={c.name} value={c.name}>
+              {c['label::English (en)'] || c.name}
+            </option>
+          ))}
+        </select>
+      );
     }
 
     return (
       <input
-        type={isNumericVariable ? "number" : "text"}
-        placeholder={condition.operator === '%in%' ? 'value1, value2' : isNumericVariable ? 'Enter number' : 'Enter static value'}
+        type={isNumericVariable ? 'number' : 'text'}
+        placeholder={
+          condition.operator === '%in%' ? 'value1, value2' : isNumericVariable ? 'Enter number' : 'Enter static value'
+        }
         value={condition.value}
-        onChange={e => onChange({ ...condition, value: e.target.value })}
+        onChange={(e) => onChange({ ...condition, value: e.target.value })}
         className="flex-1 min-w-0 h-9 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs px-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       />
     );
@@ -81,22 +89,22 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Variable Select */}
-      <select 
-        value={condition.variable} 
-        onChange={e => onChange({ ...condition, variable: e.target.value, value: '' })} // Reset value on var change
+      <select
+        value={condition.variable}
+        onChange={(e) => onChange({ ...condition, variable: e.target.value, value: '' })} // Reset value on var change
         className="w-full sm:w-44 flex-shrink-0 min-w-0 h-9 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs px-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       >
         <option value="">Select variable...</option>
-        {koboToolData.survey.map(q => {
+        {koboToolData.survey.map((q) => {
           const context = q.roster_name ? `(${q.roster_name})` : '(Main)';
           return <option key={q.name} value={q.name} title={q['label::English (en)']}>{`${context} ${q.name}`}</option>;
         })}
       </select>
-      
+
       {/* Operator Select */}
-      <select 
-        value={condition.operator} 
-        onChange={e =>
+      <select
+        value={condition.operator}
+        onChange={(e) =>
           onChange({
             ...condition,
             operator: e.target.value,
@@ -106,22 +114,44 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         }
         className="flex-shrink-0 h-9 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs px-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       >
-        {operators.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+        {operators.map((op) => (
+          <option key={op.value} value={op.value}>
+            {op.label}
+          </option>
+        ))}
       </select>
-      
+
       {/* Value Input Area */}
       {isValuelessOperator(condition.operator) ? (
         <p className="flex-1 min-w-0 text-xs text-gray-500 dark:text-gray-400">
           Questions hidden by skip logic don’t count as empty.
         </p>
       ) : (
-      <div className="flex-1 basis-60 flex items-center gap-2 min-w-0">
-        <div className="flex-shrink-0 flex rounded-md bg-gray-100 dark:bg-gray-800 p-0.5" role="group" aria-label="Compare with">
-            <button type="button" aria-pressed={condition.valueType === 'static'} onClick={() => handleValueTypeToggle('static')} className={`px-2 py-1 text-xs font-medium rounded ${condition.valueType === 'static' ? 'bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}>Value</button>
-            <button type="button" aria-pressed={condition.valueType === 'variable'} onClick={() => handleValueTypeToggle('variable')} className={`px-2 py-1 text-xs font-medium rounded ${condition.valueType === 'variable' ? 'bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}>Variable</button>
+        <div className="flex-1 basis-60 flex items-center gap-2 min-w-0">
+          <div
+            className="flex-shrink-0 flex rounded-md bg-gray-100 dark:bg-gray-800 p-0.5"
+            role="group"
+            aria-label="Compare with"
+          >
+            <button
+              type="button"
+              aria-pressed={condition.valueType === 'static'}
+              onClick={() => handleValueTypeToggle('static')}
+              className={`px-2 py-1 text-xs font-medium rounded ${condition.valueType === 'static' ? 'bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
+            >
+              Value
+            </button>
+            <button
+              type="button"
+              aria-pressed={condition.valueType === 'variable'}
+              onClick={() => handleValueTypeToggle('variable')}
+              className={`px-2 py-1 text-xs font-medium rounded ${condition.valueType === 'variable' ? 'bg-white text-gray-900 shadow-xs dark:bg-gray-700 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`}
+            >
+              Variable
+            </button>
+          </div>
+          {renderValueInput()}
         </div>
-        {renderValueInput()}
-      </div>
       )}
 
       {/* Remove Button */}
@@ -133,7 +163,13 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         aria-label="Remove condition"
         className="flex-shrink-0 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:invisible dark:hover:bg-gray-800 dark:hover:text-gray-200"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>

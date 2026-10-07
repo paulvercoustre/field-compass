@@ -16,15 +16,15 @@ export const reconstructKoboToolData = (
   const pickerTypes = ['select_one', 'select_multiple', 'integer', 'decimal', 'calculate', 'text', 'date', 'datetime'];
   // Matched exactly: as a prefix, `end` would also take end_group/end_repeat.
   const metadataTypes = ['start', 'end', 'today'];
-  const pickerRows = survey.filter(q => {
+  const pickerRows = survey.filter((q) => {
     const qType = q.type || '';
-    return metadataTypes.includes(qType) || pickerTypes.some(t => qType.startsWith(t));
+    return metadataTypes.includes(qType) || pickerTypes.some((t) => qType.startsWith(t));
   });
 
   const labelCol = labelColumnSurvey || 'label::English (en)';
 
   const variableMap = new Map<string, KoboVariable>();
-  pickerRows.forEach(q => {
+  pickerRows.forEach((q) => {
     if (q.name) {
       const choiceListName = q.type?.includes('select_') ? q.list_name || null : null;
       const label = (q as any)[labelCol] || q['label::English (en)'] || q.name;
@@ -43,4 +43,3 @@ export const reconstructKoboToolData = (
     variableMap: variableMap,
   };
 };
-

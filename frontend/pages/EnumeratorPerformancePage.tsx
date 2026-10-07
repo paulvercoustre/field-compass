@@ -17,9 +17,7 @@ interface EnumeratorPerformancePageProps {
   onNavigateToSubmissions?: (filters?: { enumerators?: string[] }) => void;
 }
 
-const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
-  onNavigateToSubmissions,
-}) => {
+const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ onNavigateToSubmissions }) => {
   const { selectedSurvey } = useSurvey();
   const { navigate } = useNavigation();
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
@@ -27,21 +25,24 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   // `quiet`: re-read after a pull without swapping the page for a spinner.
-  const fetchData = useCallback(async (quiet = false) => {
-    if (!selectedSurvey) return;
+  const fetchData = useCallback(
+    async (quiet = false) => {
+      if (!selectedSurvey) return;
 
-    if (!quiet) setIsLoading(true);
-    setError(null);
-    try {
-      const performance = await progressApi.getPerformanceData(selectedSurvey.survey_id);
-      setPerformanceData(performance);
-    } catch (e) {
-      setError('Failed to fetch tracking data.');
-      console.error(e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedSurvey]);
+      if (!quiet) setIsLoading(true);
+      setError(null);
+      try {
+        const performance = await progressApi.getPerformanceData(selectedSurvey.survey_id);
+        setPerformanceData(performance);
+      } catch (e) {
+        setError('Failed to fetch tracking data.');
+        console.error(e);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [selectedSurvey]
+  );
 
   useEffect(() => {
     fetchData();
@@ -61,9 +62,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
     return (
       <div className="h-full flex items-center justify-center p-8">
         <div className="text-center">
-          <h2 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
-            No Survey Selected
-          </h2>
+          <h2 className="text-sm font-medium text-gray-900 dark:text-white mb-1">No Survey Selected</h2>
           <p className="text-gray-500 dark:text-gray-400">
             Please select a survey from the sidebar to view enumerator performance.
           </p>
@@ -106,35 +105,23 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
           <div className="max-w-screen-2xl mx-auto space-y-6">
             {/* Summary Cards */}
             <EnumeratorSummaryCards data={performanceData} />
-            
+
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
               <div className="lg:col-span-1 xl:col-span-2 flex">
-                <SubmissionsBarChart 
-                  data={performanceData.collection} 
-                  onEnumeratorClick={handleEnumeratorClick}
-                />
+                <SubmissionsBarChart data={performanceData.collection} onEnumeratorClick={handleEnumeratorClick} />
               </div>
               <div className="lg:col-span-1 flex">
-                <EnumeratorLeaderboard 
-                  data={performanceData}
-                  onEnumeratorClick={handleEnumeratorClick}
-                />
+                <EnumeratorLeaderboard data={performanceData} onEnumeratorClick={handleEnumeratorClick} />
               </div>
             </div>
-            
+
             {/* Scatter Plot */}
-            <QualityScatterPlot 
-              data={performanceData}
-              onEnumeratorClick={handleEnumeratorClick}
-            />
-            
+            <QualityScatterPlot data={performanceData} onEnumeratorClick={handleEnumeratorClick} />
+
             {/* Detailed Tables */}
             <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-lg p-4 md:p-6">
-              <PerformanceDataView 
-                data={performanceData}
-                onEnumeratorClick={handleEnumeratorClick}
-              />
+              <PerformanceDataView data={performanceData} onEnumeratorClick={handleEnumeratorClick} />
             </div>
           </div>
         ) : null}

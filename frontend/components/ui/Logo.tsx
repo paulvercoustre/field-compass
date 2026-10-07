@@ -2,7 +2,16 @@ import React from 'react';
 
 /** The compass mark, shared with the marketing site. */
 const LogoMark: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <circle cx="12" cy="12" r="9" />
     <path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z" />
   </svg>
