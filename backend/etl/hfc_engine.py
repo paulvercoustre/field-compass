@@ -156,6 +156,18 @@ def blank_checked_only(expression: str, variables: list[str]) -> set[str]:
     }
 
 
+def signed_log1p(x: float) -> float:
+    """sign(x) * log(1 + |x|): compresses a long tail, keeps zero and the sign."""
+    return (1 if x > 0 else -1 if x < 0 else 0) * math.log(1 + abs(x))
+
+
+def signed_log1p_inverse(y: float) -> float:
+    """The inverse of signed_log1p, to show bounds on the raw scale."""
+    if y >= 0:
+        return math.exp(y) - 1
+    return 1 - math.exp(-y)
+
+
 class HFCEngine:
     """High-Frequency Check engine for data quality validation."""
 
@@ -317,9 +329,7 @@ class HFCEngine:
                 # Build detection values: transformed when configured, else raw
                 use_log_transform = variable in self.outlier_log_transform_variables
                 detection_values = (
-                    [self._signed_log_transform(v) for v in raw_values]
-                    if use_log_transform
-                    else raw_values
+                    [signed_log1p(v) for v in raw_values] if use_log_transform else raw_values
                 )
 
                 # Compute detection stats (for IQR/MAD/Z-score) from detection values
@@ -428,16 +438,6 @@ class HFCEngine:
         except (ValueError, TypeError):
             # Not a numeric string, return original value
             return value
-
-    def _signed_log_transform(self, x: float) -> float:
-        """Signed log transform: sign(x) × log(1 + |x|). Handles zero, positive, and negative values."""
-        return (1 if x > 0 else -1 if x < 0 else 0) * math.log(1 + abs(x))
-
-    def _signed_log_inverse(self, y: float) -> float:
-        """Inverse of signed log transform for bounds display."""
-        if y >= 0:
-            return math.exp(y) - 1
-        return 1 - math.exp(-y)
 
     def run_checks(
         self,
@@ -1229,9 +1229,7 @@ class HFCEngine:
                 # Keep raw value for display; use transformed value only for detection
                 raw_value = float(numeric_value)
                 use_log_transform = variable in self.outlier_log_transform_variables
-                value_for_detection = (
-                    self._signed_log_transform(raw_value) if use_log_transform else raw_value
-                )
+                value_for_detection = signed_log1p(raw_value) if use_log_transform else raw_value
 
                 # Check if value is an outlier using the configured method
                 is_outlier = self._is_outlier(value_for_detection, stats, method, threshold)
@@ -1426,8 +1424,8 @@ class HFCEngine:
             lb = result.get("lower_bound")
             ub = result.get("upper_bound")
             if lb is not None and ub is not None:
-                result["lower_bound"] = round(self._signed_log_inverse(lb), 3)
-                result["upper_bound"] = round(self._signed_log_inverse(ub), 3)
+                result["lower_bound"] = round(signed_log1p_inverse(lb), 3)
+                result["upper_bound"] = round(signed_log1p_inverse(ub), 3)
 
         return result
 
