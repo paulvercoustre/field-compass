@@ -253,7 +253,7 @@ const ChoiceAnswer: React.FC<{
       {unknown && open && (
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           {unknown === 'columns-missing'
-            ? 'The options offered depend on earlier answers. Refresh the form in Settings › General to show only those.'
+            ? 'The options offered depend on earlier answers. The next pull from Kobo reads the form again and shows only those.'
             : 'The options offered depend on earlier answers in a way Field Compass can’t follow, so this is the whole list.'}
         </p>
       )}

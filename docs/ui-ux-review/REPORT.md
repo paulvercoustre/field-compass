@@ -10,14 +10,15 @@ Screenshot references such as `j4-03` mean `screenshots/j4-03-*.png` (journey 4,
 
 ## 0. Status — 2026-10-09
 
-Checked against `main` at `7b77770` (after PR #86; nothing has merged since), by reading the code and the PRs merged since the review, then updated for #87 (review loop v1, open, at `feae8bf`), which was checked in a browser against the mock Kobo. Contrast and keyboard figures are still the review's.
+Checked against `main` at `ed32785` (after #87), by reading the code and the PRs merged since the review, then updated for #88 (open). #87 and #88 were checked in a browser against the mock Kobo. Contrast and keyboard figures are still the review's.
 
-**Summary: 17 done, 15 partly done, 4 open.**
+**Summary: 18 done, 14 partly done, 4 open.**
 
 - Roadmap step 0 (data-loss bug) and step 1 (honesty quick wins) are **done**: #64, #67, #69, #73, #79.
 - Part of step 3 is in: tokens and shared components (#71), and persisted pull runs with an activity panel (#73).
 - Step 2, **Review loop v1**, is **done** in #87: review tabs, a filter menu with counts, a findings card next to the decision, auto-advance with Undo, keyboard shortcuts, and approving clean submissions together.
 - #87 then took several rounds of feedback from using it: clearer decision buttons, a wider focus layout, answers shown as the form showed them, and light motion between submissions ([below](#87-after-hands-on-testing)).
+- #88 keeps each survey's stored form in step with Kobo on every pull, so what #87 reads from the form (group titles, notes, the options a respondent was offered) reaches every survey; and the date, start and end questions can now be chosen (F-20).
 
 ### What changed since the review
 
@@ -33,6 +34,7 @@ Checked against `main` at `7b77770` (after PR #86; nothing has merged since), by
 | #79 | Step 1: one `PullButton` on four pages, outcome in the top bar (F-13). Field Team relabelled; podium, medals and verdicts removed; neutral ranking by issues per submission (F-08 A, part of B). Sign-in dialog on 401 that retries the request (F-35). Each settings section saves only its own fields, shows "Saved hh:mm", and errors stay until dismissed (F-15, F-21). |
 | #83, #85 | `NavigationContext` holds all navigation, which makes a router easier (F-32). `SurveySettingsPage` split into sections with one section editor (F-22). Settings labels bound to inputs; delete dialog has `role="dialog"` (F-27, F-30). Dead code removed, including the unused `HistoryViewer` (F-06). |
 | #87 | Review loop v1, built from the [design canvas](https://claude.ai/artifact/DB3CT24FcFGXTW5NB4AehD) (layout A with the focus toggle). Tabs Needs review · On hold · Reviewed · All with counts; search; one filter menu (issue, enumerator, groups) with counts per option; sort (F-01 A+B). A findings card at the top of the submission: one sentence per finding, the note and the decision buttons together; the four check sections become one "All checks" list (F-02). After a decision the submission leaves a tab it no longer fits, the next opens, Undo for 8 s; A/N/H, J/K, Z, / (F-03, F-26). Both are per-account settings, on by default. Data quality bars open the list filtered to their issue (F-09 B). Approve clean submissions together, in Kobo's bulk endpoint. |
+| #88 | Each pull reads the form from Kobo and stores it when it changed, keeping the chosen label language; one builder (`services/kobo_form.py`) makes the stored rows for the pull and the form endpoint. Pickers for the interview date, start and end questions on Create and Settings (F-20 B). |
 
 #66 (the first step-1 PR) was closed unmerged and redone as #79. Three things in #66 were not carried over: per-view `document.title`, the 8 s Undo on rule delete, and the amber "pulled 800 of 1 000" partial pull. Today a Kobo error part-way through fails the whole pull (`kobo_fetcher.py`, `KoboFetchError`), which is honest, but the pages already read are not kept.
 
@@ -68,13 +70,13 @@ What changed in #87 after the first version, from using the queue on the mock Ko
 | F-05 | No detail pane below 768 px / 200 % zoom | ✅ | #87: below 768 px the list gives way to the submission, with "← List". |
 | F-10 | Counts disagree across screens | 🟡 | B done (#67): AI-only findings set `qa_status`. Progress no longer filters by validation status. Left: A, one glossary of named counts used on every screen. |
 | F-14 | No data-freshness indicator | 🟡 | Runs are stored and the activity panel lists recent ones (#73). Left: an always-visible "Last pulled 3 h ago" on each data page. |
-| F-20 | Date / start / end identifiers invisible | 🟡 | #87: the submission's "All checks" list says when a check couldn't run and links to Settings. Left: pickers for them on Create and Settings; still auto-filled. #70 noted that surveys created on 2026-10-02 between #68 and #70 may have them empty. |
+| F-20 | Date / start / end identifiers invisible | ✅ | #87: the submission's "All checks" list says when a check couldn't run and links to Settings. #88: pickers on Create and Settings, conventional names suggested. Surveys created on 2026-10-02 between #68 and #70 (#70) may have them empty; Settings can now fix them. |
 | F-23 | New surveys start with checks off | ⬜ | Every `flag_*` defaults to `False` (`services/survey_config.py:273-289`). Needs Q6. |
 | F-26 | Keyboard: 147 Tabs to decide | 🟡 | #87: shortcuts to move and decide, a setting (WCAG 2.1.4). Left: the charts are still mouse-only. |
 | F-32 | No URLs | ⬜ | `NavigationContext` (#83) is the one place a router would plug in. |
 | F-36 | Queue downloads everything twice | 🟡 | #87: once, not twice (filter options come from the counts endpoint). Left: it still pages through the whole tab. Urgency depends on Q10. |
 | F-04 | Rows lack who / where / what | ✅ | #71, #87: enumerator name and place on the row, the issue count with the names in its tooltip (a row can have several). |
-| F-11 | Enumerator codes; phantom "Unknown" | 🟡 | #87: names (choice labels) on Submissions rows, detail and filter. Left: Field Team still shows codes, and blank values still make an "Unknown" enumerator there (`services/progress.py:428`). |
+| F-11 | Enumerator codes; phantom "Unknown" | 🟡 | #87: names (choice labels) on Submissions rows, detail and filter. Decided 2026-10-09: Field Team keeps enumerator IDs. Left: blank values still make an "Unknown" enumerator there (`services/progress.py:428`). |
 | F-12 | Jargon and check IDs | 🟡 | Mostly done (#72, #79). Left: "Avg. DK Rate (%)" (`PerformanceDataView.tsx:38, 372`) and "run ETL" in the Access tab's role text (`SurveyAccessTab.tsx:202`). |
 | F-16 | Failed pull replaces the list | ✅ | #73, #79. |
 | F-22 | Four save models on one page | 🟡 | One section editor and tabbed layout (#72, #83, #85). Every section still needs Edit first; whether to drop that is validate-first. |
@@ -90,10 +92,18 @@ What changed in #87 after the first version, from using the queue on the mock Ko
 
 ### Next five
 
-Items 1–3 and 5 of the earlier list are done in #87 (open); item 4 is partly done (see F-20). What is left, in order:
+Item 1 of the earlier list is done in #88. Agreed on 2026-10-09: Field Team keeps enumerator IDs rather than names. Under way, in order:
 
 | # | Change | Findings | Effort | Why now |
 |---|---|---|---|---|
+| 1 | **Blank enumerator values on Field Team** as "No enumerator recorded", not an "Unknown" enumerator | F-11 | XS | Finishes F-11 as decided. |
+| 2 | **"Last pulled 3 h ago"** on every data page | F-14 A | S | Runs are stored; only the line is missing. |
+| 3 | **Pull button hidden from viewers** | F-34 | XS | They can't pull, so the button only fails for them. |
+| 4 | **URLs for views and submissions**, with a page title per view | F-32, F-31 | M | Links into a submission, Back, and a reviewer's place kept across reloads; the title follows the same view. |
+
+Then F-36 server pagination once Q10 gives survey sizes, and F-23 recommended defaults once Q6 is answered.
+
+---|---|---|---|---|
 | 1 | **Pickers for the date, start and end questions** on Create and Settings, and check the surveys created on 2026-10-02 for empty ones | F-20 B | S | The checks list now says when they're missing, but they still can't be set by hand. |
 | 2 | **Enumerator names on Field Team**, and blank values as "No enumerator recorded" rather than an "Unknown" enumerator | F-11 A | S | Submissions shows names now; Field Team should match. |
 | 3 | **"Last pulled 3 h ago"** on every data page | F-14 A | S | Runs are stored; only the line is missing. |
