@@ -210,6 +210,10 @@ class Question:
         return self.name
 
 
+# Columns every choice row has; the rest are the form's own.
+_CHOICE_OWN_KEYS = frozenset({"list_name", "name"})
+
+
 @dataclass(frozen=True)
 class Choice:
     """A single row of the choices sheet."""
@@ -218,6 +222,24 @@ class Choice:
     name: str
     label: dict[str, str]
     raw: dict[str, Any]
+
+    def columns(self) -> dict[str, str]:
+        """
+        The row's own extra columns, as text: what a question's
+        ``choice_filter`` tests (``province=${province}``). Labels, media and
+        Kobo's ``$`` bookkeeping are left out.
+        """
+        out: dict[str, str] = {}
+        for key, value in self.raw.items():
+            if (
+                key in _CHOICE_OWN_KEYS
+                or key.startswith(("$", "label", "media", "image", "audio", "video"))
+                or value is None
+                or isinstance(value, dict | list)
+            ):
+                continue
+            out[key] = str(value)
+        return out
 
     def label_for(self, language: str | None = None) -> str:
         """Best available label, falling back to the choice value."""

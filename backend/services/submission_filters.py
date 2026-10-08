@@ -37,11 +37,17 @@ def parse_sampling_filters(text: str | None) -> dict[str, list[str]]:
     return filters
 
 
-def _answered_one_of(data: dict[str, Any] | None, question: str, values: Sequence[str]) -> bool:
+def answer_text(data: dict[str, Any] | None, question: str) -> str | None:
+    """The answer to ``question`` as the filters compare it: text, or None when blank."""
     answer = answer_value(data, question)
     if answer is None or (isinstance(answer, str) and not answer.strip()):
-        return False
-    return str(answer) in values
+        return None
+    return str(answer)
+
+
+def _answered_one_of(data: dict[str, Any] | None, question: str, values: Sequence[str]) -> bool:
+    answer = answer_text(data, question)
+    return answer is not None and answer in values
 
 
 def filter_by_answers(

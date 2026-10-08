@@ -1,4 +1,4 @@
-import { Submission, FilterState } from '../types';
+import { Submission, FilterState, QueueSort, ReviewTab, SubmissionFacets } from '../types';
 import { buildFilterParams } from '../utils/filterUtils';
 
 import { orMessage, request } from './apiBase';
@@ -8,20 +8,38 @@ interface SubmissionListResponse {
   total: number;
   page: number;
   page_size: number;
+  /** The tab and order used: the defaults when the filters named none. */
+  review: ReviewTab;
+  sort: QueueSort;
 }
 
 const json = (body: unknown): RequestInit['body'] => JSON.stringify(body);
 
+const queueParams = (filters: FilterState, surveyId: string, options?: { withSort?: boolean }) => {
+  const params = buildFilterParams(filters, options);
+  params.append('survey_id', surveyId);
+  return params;
+};
+
 export const api = {
-  /** A page of a survey's submissions, narrowed by the filters. */
-  getSubmissions: (filters?: FilterState, surveyId?: string, page = 1, pageSize = 50) => {
-    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
-    if (surveyId) params.append('survey_id', surveyId);
-    if (filters) {
-      for (const [key, value] of buildFilterParams(filters)) params.append(key, value);
-    }
+  /** A page of a survey's submissions in one review tab, filtered and sorted. */
+  getSubmissions: (filters: FilterState, surveyId: string, page = 1, pageSize = 50) => {
+    const params = queueParams(filters, surveyId);
+    params.append('page', String(page));
+    params.append('page_size', String(pageSize));
     return request<SubmissionListResponse>(`/api/submissions?${params}`);
   },
+
+  /** The counts behind the tabs and the filter menu, for the same filters. */
+  getSubmissionFacets: (filters: FilterState, surveyId: string) =>
+    request<SubmissionFacets>(`/api/submissions/facets?${queueParams(filters, surveyId, { withSort: false })}`),
+
+  /** Approve in Kobo every clean submission under the filters whose checks have finished. */
+  approveCleanSubmissions: (filters: FilterState, surveyId: string) =>
+    request<{ approved: number; failed: number }>(
+      `/api/submissions/approve-clean?${queueParams(filters, surveyId, { withSort: false })}`,
+      { method: 'POST' }
+    ),
 
   /** A link that opens the submission for editing in Kobo (Enketo). */
   getKoboEditUrl: async (koboId: number, surveyId: string): Promise<string> => {
@@ -84,11 +102,15 @@ export interface KoboFormQuestion {
   group_path?: string | null;
   /** `relevant` conditions of those groups — a consent gate, usually. */
   group_relevant?: string[];
+  /** The innermost group's label, by language: its title in the answers. */
+  group_labels?: Record<string, string>;
 }
 
 export interface KoboFormChoice {
   name: string;
   labels: Record<string, string>;
+  /** The form's own columns on the choice row, which choice filters test. */
+  columns?: Record<string, string>;
 }
 
 export interface KoboProjectForm {

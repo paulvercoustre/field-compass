@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from etl.kobo_fetcher import KoboFetcher
 from forms import load_form_schema
+from forms.schema import GROUP_OPEN_TYPES
 from linter.questions import enclosing_relevants
 from schemas import FormChoice, FormQuestion, KoboProject, SurveyFormResponse
 from services.auth import CurrentUser, get_user_kobo_token
@@ -28,10 +29,6 @@ router = APIRouter()
 # Kobo asset UIDs are an "a" followed by base62. Validated rather than trusted
 # because the value is interpolated into the upstream request path.
 ASSET_UID_PATTERN = re.compile(r"^a[A-Za-z0-9]{6,40}$")
-
-# Rows that are not answerable questions. Callers here are populating pickers,
-# not rendering the form, so structural markers and notes are noise.
-NON_QUESTION_TYPES = frozenset({"begin_group", "end_group", "begin_repeat", "end_repeat", "note"})
 
 # Order of the picker's groups: projects collecting data first.
 PROJECT_STATUS_ORDER = {"deployed": 0, "draft": 1, "archived": 2}
@@ -163,6 +160,11 @@ async def get_kobo_asset_form(
             ),
         )
 
+    # A group's own label titles it in a submission's answers.
+    group_labels = {
+        row.path: row.label for row in schema.questions if row.type in GROUP_OPEN_TYPES and row.path
+    }
+
     questions = [
         {
             "path": question.path,
@@ -181,13 +183,16 @@ async def get_kobo_asset_form(
             # conditions those groups put on it (a consent gate, usually).
             "group_path": question.group_path or None,
             "group_relevant": enclosing_relevants(schema, question),
+            "group_labels": group_labels.get(question.group_path, {}),
         }
         for question in schema.questions
-        if question.name and question.type not in NON_QUESTION_TYPES
+        # Group and repeat markers are left out: what they hold travels on each
+        # question. Notes stay, to show with a submission's answers.
+        if question.name and not question.is_structural
     ]
 
     choice_lists = {
-        list_name: [{"name": c.name, "labels": c.label} for c in choices]
+        list_name: [{"name": c.name, "labels": c.label, "columns": c.columns()} for c in choices]
         for list_name, choices in schema.choices_by_list.items()
     }
 

@@ -89,6 +89,27 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserPreferences(BaseModel):
+    """How the app behaves for a user; stored in users.preferences, unset keys take these defaults."""
+
+    # After a decision on the Submissions page, open the next submission.
+    auto_advance: bool = True
+    # A/N/H to decide and J/K to move on the Submissions page.
+    review_shortcuts: bool = True
+
+
+class UserPreferencesUpdate(BaseModel):
+    auto_advance: bool | None = None
+    review_shortcuts: bool | None = None
+
+
+def user_preferences(user: User) -> UserPreferences:
+    """The user's preferences, with defaults for anything never set."""
+    stored = user.preferences if isinstance(user.preferences, dict) else {}
+    known = {key: value for key, value in stored.items() if key in UserPreferences.model_fields}
+    return UserPreferences(**known)
+
+
 class UserResponse(BaseModel):
     user_id: str
     email: str
@@ -101,6 +122,7 @@ class UserResponse(BaseModel):
     can_view_usage: bool = False
     created_at: datetime
     last_login_at: datetime | None
+    preferences: UserPreferences = UserPreferences()
 
     class Config:
         from_attributes = True
@@ -110,6 +132,8 @@ class UserUpdate(BaseModel):
     username: str | None = None
     full_name: str | None = None
     kobo_api_url: str | None = None
+    # Only the preferences given change.
+    preferences: UserPreferencesUpdate | None = None
 
 
 class KoboApiKeyUpdate(BaseModel):
@@ -318,4 +342,5 @@ def user_to_response(user: User) -> dict:
         "can_view_usage": can_view_usage(user),
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+        "preferences": user_preferences(user).model_dump(),
     }

@@ -60,7 +60,15 @@ ASSET_PAYLOAD = {
             },
         ],
         "choices": [
-            {"list_name": "enums", "name": "E01", "label": ["Amina", "امینه"]},
+            {
+                "list_name": "enums",
+                "name": "E01",
+                "label": ["Amina", "امینه"],
+                "province": "kabul",
+                "team": 2,
+                "$kuid": "c1",
+                "media::image": ["a.png", None],
+            },
             {"list_name": "enums", "name": "E02", "label": ["Bilal", "بلال"]},
         ],
     },
@@ -105,10 +113,14 @@ class TestKoboAssetForm:
         assert payload["asset_name"] == "Market Assessment"
         assert payload["languages"] == ["English (en)", "Dari (da)"]
         assert payload["has_audit"] is True
+        # The choice's own columns come along, as text, for choice filters;
+        # Kobo's bookkeeping and media do not.
         assert payload["choice_lists"]["enums"][0] == {
             "name": "E01",
             "labels": {"English (en)": "Amina", "Dari (da)": "امینه"},
+            "columns": {"province": "kabul", "team": "2"},
         }
+        assert payload["choice_lists"]["enums"][1]["columns"] == {}
 
     def test_questions_carry_group_qualified_paths(self, client):
         """Paths must match submission_data keys, not bare names."""
@@ -125,6 +137,12 @@ class TestKoboAssetForm:
             "Dari (da)": "شماره",
         }
         assert by_name["enumerator_id"]["list_name"] == "enums"
+        # Each question carries its group's label, which the group row no longer can.
+        assert by_name["enumerator_id"]["group_labels"] == {
+            "English (en)": "Intro",
+            "Dari (da)": "مقدمه",
+        }
+        assert by_name["age"]["group_labels"] == {}
         assert by_name["age"]["constraint"] == ". <= 120"
         assert by_name["age"]["required"] is True
 
@@ -143,16 +161,21 @@ class TestKoboAssetForm:
         assert by_name["age"]["group_path"] is None
         assert by_name["age"]["group_relevant"] == []
 
-    def test_structural_rows_and_notes_are_excluded(self, client):
-        """The caller is populating pickers, not rendering the form."""
+    def test_structural_rows_are_excluded_and_notes_kept(self, client):
+        """Group markers travel on each question; notes are shown with a submission's answers."""
         with (
             patch("routers.kobo.get_user_kobo_token", return_value="tok"),
             patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
         ):
-            types = {q["type"] for q in _get(client).json()["questions"]}
+            questions = _get(client).json()["questions"]
 
-        assert types.isdisjoint({"begin_group", "end_group", "note"})
+        types = {q["type"] for q in questions}
+        assert types.isdisjoint({"begin_group", "end_group"})
         assert "select_one" in types and "integer" in types
+        note = next(q for q in questions if q["type"] == "note")
+        assert note["name"] == "read_this"
+        assert note["labels"] == {"English (en)": "Read aloud", "Dari (da)": "بخوان"}
+        assert note["group_path"] == "intro"
 
     def test_every_translation_is_returned(self, client):
         """

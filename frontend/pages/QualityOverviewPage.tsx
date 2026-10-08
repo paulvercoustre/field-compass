@@ -1,9 +1,10 @@
 import React from 'react';
+import { FilterState } from '../types';
 import { useSurvey } from '../contexts/SurveyContext';
 import QualityOverviewDashboard from '../components/quality-dashboard/QualityOverviewDashboard';
 
 interface QualityOverviewPageProps {
-  onNavigateToSubmissions?: (filters?: { validationStatuses?: string[] }) => void;
+  onNavigateToSubmissions?: (filters?: FilterState) => void;
 }
 
 const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({ onNavigateToSubmissions }) => {
@@ -22,18 +23,18 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({ onNavigateToS
     );
   }
 
+  // A status card opens its tab; Approved and Not approved share Reviewed, so
+  // they also filter to their status.
   const handleStatusClick = (status: string) => {
-    if (onNavigateToSubmissions) {
-      onNavigateToSubmissions({ validationStatuses: [status] });
-    }
+    if (!onNavigateToSubmissions) return;
+    if (status === 'On Hold') onNavigateToSubmissions({ review: 'on_hold' });
+    else if (status === 'Not Reviewed') onNavigateToSubmissions({ review: 'all', validationStatuses: [status] });
+    else onNavigateToSubmissions({ review: 'reviewed', validationStatuses: [status] });
   };
 
-  const handleIssueClick = () => {
-    // For now, just navigate to submissions
-    // TODO: Could extend to filter by issue type
-    if (onNavigateToSubmissions) {
-      onNavigateToSubmissions();
-    }
+  // An issue bar opens every submission with that issue, so the count matches the bar.
+  const handleIssueClick = (check: string) => {
+    onNavigateToSubmissions?.({ review: 'all', issues: [check] });
   };
 
   return (

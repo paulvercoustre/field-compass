@@ -1,5 +1,7 @@
 import { KoboQuestion, KoboChoice } from '../types';
 import type { SurveyConfig } from '../services/progressApi';
+import { formText } from './formText';
+import { findAnswer } from './answers';
 
 /**
  * Get the label for a question variable from Kobo survey data
@@ -48,6 +50,26 @@ export const getChoiceLabel = (
 
   // Try the specified label column, fallback to default, then to choice name
   return (choice as any)[labelCol] || choice['label::English (en)'] || choice.name || choiceValue;
+};
+
+/**
+ * A choice list's options, in the form's order: name, label, and the whole
+ * stored row, whose other columns are what a choice filter tests.
+ */
+export const getChoices = (
+  listName: string | null | undefined,
+  surveyConfig: SurveyConfig | null
+): Array<{ name: string; label: string; row: Record<string, unknown> }> => {
+  const tool = surveyConfig?.config_data.kobo_tool;
+  if (!listName || !tool) return [];
+  const labelCol = tool.label_column_choices || 'label::English (en)';
+  return (tool.choices || [])
+    .filter((c: KoboChoice) => c.list_name === listName)
+    .map((c: KoboChoice) => ({
+      name: String(c.name),
+      label: (c as any)[labelCol] || c['label::English (en)'] || String(c.name),
+      row: c as unknown as Record<string, unknown>,
+    }));
 };
 
 /**
@@ -107,3 +129,24 @@ export const formatValueForDisplay = (value: any, variableName: string, surveyCo
   // For other types (integer, decimal, text, date, etc.), return as-is
   return String(value);
 };
+
+/**
+ * A question's label as plain text: references filled from the submission's
+ * answers when there is one (otherwise shown as "…"), markdown dropped.
+ */
+export const questionText = (
+  variableName: string,
+  surveyConfig: SurveyConfig | null,
+  data?: Record<string, unknown> | null
+): string =>
+  formText(
+    getQuestionLabel(variableName, surveyConfig),
+    data
+      ? (question) => {
+          const value = findAnswer(data, question);
+          return value === undefined || value === null || value === ''
+            ? undefined
+            : formatValueForDisplay(value, question, surveyConfig);
+        }
+      : undefined
+  );

@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSurvey } from '../../contexts/SurveyContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { Spinner } from '../Spinner';
+import { FilterState } from '../../types';
 
 const number = (n: number) => n.toLocaleString();
 const plural = (n: number, one: string, many = `${one}s`) => `${number(n)} ${n === 1 ? one : many}`;
@@ -193,7 +194,7 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
     isOpen(run) &&
     !run.stop_requested &&
     (run.started_by.user_id === user?.user_id || permission === 'owner' || permission === 'admin');
-  const toSubmissions = (filters: Record<string, unknown>) => () =>
+  const toSubmissions = (filters: FilterState) => () =>
     navigate({ view: 'dashboard', survey_id: run.survey_id, filters });
 
   const handleStop = async () => {
@@ -286,7 +287,7 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
                 {run.status === 'running' && pull ? (
                   `${number(pull.processed ?? 0)} of ${number(pull.fetched)}`
                 ) : pull ? (
-                  <CountLink count={pull.flagged} text="flagged" onClick={toSubmissions({ qaStatuses: ['FLAGGED'] })} />
+                  <CountLink count={pull.flagged} text="flagged" onClick={toSubmissions({ review: 'needs_review' })} />
                 ) : null}
                 {run.status !== 'running' && pull && pull.flagged === 0 && 'nothing flagged'}
               </Step>
@@ -313,14 +314,18 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
                   count={ai.failed}
                   text="failed"
                   tone="warn"
-                  onClick={toSubmissions({ aiReview: 'failed' })}
+                  onClick={toSubmissions({ review: 'all', aiReview: 'failed' })}
                 />
               </>
             )}
             {ai.not_run > 0 && (
               <>
                 {sep}
-                <CountLink count={ai.not_run} text="not run" onClick={toSubmissions({ aiReview: 'not_run' })} />
+                <CountLink
+                  count={ai.not_run}
+                  text="not run"
+                  onClick={toSubmissions({ review: 'all', aiReview: 'not_run' })}
+                />
               </>
             )}
             {formatEta(ai.eta_seconds) && (
@@ -360,7 +365,7 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
                   count={transcripts.flagged ?? 0}
                   text="flagged"
                   tone="warn"
-                  onClick={toSubmissions({ qaStatuses: ['FLAGGED'], transcript: 'any' })}
+                  onClick={toSubmissions({ review: 'needs_review', transcript: 'any' })}
                 />
               </>
             )}
@@ -371,7 +376,7 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
                   count={transcripts.failed}
                   text="failed"
                   tone="warn"
-                  onClick={toSubmissions({ transcript: 'failed' })}
+                  onClick={toSubmissions({ review: 'all', transcript: 'failed' })}
                 />
               </>
             )}

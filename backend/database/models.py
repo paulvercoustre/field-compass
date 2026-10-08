@@ -59,6 +59,8 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Last authenticated request; moves at most once a day (services/app_events.py)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # How the app behaves for this user (services/auth.py UserPreferences); null = defaults
+    preferences: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
 
     # Relationships
     owned_surveys: Mapped[list["SurveyConfig"]] = relationship(

@@ -65,6 +65,10 @@ export interface KoboQuestion {
   'label::English (en)'?: string;
   roster_name: string | null;
   list_name?: string | null;
+  /** XLSForm choice_filter: which options of the list a respondent is offered. */
+  choice_filter?: string;
+  /** XLSForm relevant: when the question (or note) was shown. */
+  relevant?: string;
   group_path?: string;
   group_relevant?: string[];
 }
@@ -188,15 +192,46 @@ export interface SamplingFilter {
   values: string[];
 }
 
+/** The Submissions page's tabs (backend services/review_queue.py). */
+export type ReviewTab = 'needs_review' | 'on_hold' | 'reviewed' | 'all';
+
+export type QueueSort = 'issues' | 'newest' | 'oldest' | 'enumerator';
+
 export interface FilterState {
-  qaStatuses?: QAStatus[]; // Keep for backward compatibility if needed
-  validationStatuses?: string[]; // Kobo validation statuses: Approved, Not Approved, On Hold, Not Reviewed
+  /** The review tab. Unset: Needs review when anything needs it, otherwise All. */
+  review?: ReviewTab;
+  /** Only submissions with one of these checks. */
+  issues?: string[];
   enumerators?: string[];
   samplingFilters?: SamplingFilter[];
-  /** AI review state: links from the activity panel use it. */
+  /** Searched in the submission ID and every answer. */
+  search?: string;
+  /** Unset: most issues first in Needs review and On hold, newest first otherwise. */
+  sort?: QueueSort;
+  // Context filters. Links from elsewhere set them, and the queue shows them
+  // as a banner saying what is shown, rather than in the filter menu.
+  /** Kobo validation statuses: Approved, Not Approved, On Hold, Not Reviewed. */
+  validationStatuses?: string[];
+  /** AI review state. */
   aiReview?: 'failed' | 'in_progress' | 'not_run';
   /** Audio transcript state. */
   transcript?: 'any' | 'failed' | 'no_speech' | 'in_progress';
+}
+
+export interface FacetCount {
+  value: string;
+  count: number;
+}
+
+/** The counts behind the Submissions tabs and filter menu; each leaves out its own filter. */
+export interface SubmissionFacets {
+  review: ReviewTab;
+  tabs: Record<ReviewTab, number>;
+  issues: FacetCount[];
+  enumerators: FacetCount[];
+  sampling: Array<{ variable: string; values: FacetCount[] }>;
+  /** Clean submissions with no decision: ready to approve together, or still being checked. */
+  clean: { ready: number; waiting: number };
 }
 
 // --- Quality Overview Types ---

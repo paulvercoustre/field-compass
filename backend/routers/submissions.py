@@ -4,32 +4,47 @@ Handles CRUD operations for survey submissions with permission checks.
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID as UUIDType
 
 import requests
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from database.models import AI_REVIEW_OPEN, ITEM_OPEN, AudioTranscript, SubmissionCurrent
+from database.models import (
+    AI_REVIEW_OPEN,
+    ITEM_OPEN,
+    AudioTranscript,
+    SubmissionCurrent,
+    SurveyConfig,
+    User,
+)
 from database.models import SubmissionHistory as SubmissionHistoryORM
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
 from schemas import (
+    ApproveCleanResult,
+    CleanCounts,
+    FacetCount,
     JsonPatch,
     QualityIssue,
     ReviewerNotesUpdate,
+    SamplingFacet,
     Submission,
+    SubmissionFacets,
     SubmissionHistory,
     SubmissionListResponse,
+    TabCounts,
     ValidationStatusUpdate,
 )
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
-from services.permissions import parse_uuid, require_survey_access
-from services.submission_filters import filter_by_answers, parse_list, parse_sampling_filters
+from services.permissions import AccessLevel, parse_uuid, require_survey_access
+from services.review_queue import QueueFilters, ReviewQueue
+from services.submission_filters import parse_list, parse_sampling_filters
 from services.survey_config import get_enumerator_field, get_sampling_cols
 
 router = APIRouter()
@@ -110,10 +125,22 @@ def _transcript_summaries(
     return out
 
 
-@router.get("/submissions", response_model=SubmissionListResponse)
-async def get_submissions(
-    db: DbSession,
-    current_user: CurrentUser,
+@dataclass(frozen=True)
+class _QueueParams:
+    survey_id: str | None
+    qa_status: str | None
+    validation_status: str | None
+    enumerator: str | None
+    sampling_filters: str | None
+    ai_review: str | None
+    transcript: str | None
+    review: str | None
+    issue: str | None
+    q: str | None
+
+
+def _queue_params(
+    survey_id: Annotated[str | None, Query(description="Survey ID (UUID); required")] = None,
     qa_status: Annotated[
         str | None, Query(description="Filter by QA status (comma-separated for multiple)")
     ] = None,
@@ -123,7 +150,6 @@ async def get_submissions(
             description="Filter by validation status (comma-separated: Approved,Not Approved,On Hold,Not Reviewed)"
         ),
     ] = None,
-    survey_id: Annotated[str | None, Query(description="Filter by survey ID (UUID)")] = None,
     enumerator: Annotated[
         str | None,
         Query(description="Filter by enumerator ID/value (comma-separated for multiple)"),
@@ -145,62 +171,70 @@ async def get_submissions(
             description="Filter by audio transcript state",
         ),
     ] = None,
-    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
-):
-    """
-    Get list of submissions with optional filtering and pagination.
+    review: Annotated[
+        str | None,
+        Query(
+            pattern="^(needs_review|on_hold|reviewed|all)$",
+            description="Review tab; Needs review when it isn't empty, otherwise All",
+        ),
+    ] = None,
+    issue: Annotated[
+        str | None, Query(description="Only submissions with one of these checks (comma-separated)")
+    ] = None,
+    q: Annotated[
+        str | None,
+        Query(max_length=200, description="Search the submission ID and every answer"),
+    ] = None,
+) -> _QueueParams:
+    return _QueueParams(
+        survey_id=survey_id,
+        qa_status=qa_status,
+        validation_status=validation_status,
+        enumerator=enumerator,
+        sampling_filters=sampling_filters,
+        ai_review=ai_review,
+        transcript=transcript,
+        review=review,
+        issue=issue,
+        q=q,
+    )
 
-    Requires authentication and access to the specified survey.
 
-    Supports filtering by:
-    - qa_status: Comma-separated QA statuses (e.g., "FLAGGED,PENDING_APPROVAL")
-    - validation_status: Comma-separated validation statuses (e.g., "Approved,Not Approved,On Hold,Not Reviewed")
-    - survey_id: Filter by specific survey (UUID) - REQUIRED
-    - enumerator: Comma-separated enumerator IDs/values (e.g., "enum1,enum2")
-    - sampling_filters: Sampling filters in format "variable1=value1,value2;variable2=value3"
-      (e.g., "district=kamdesh,nangarhar;livelihood=farming,trading")
+QueueParams = Annotated[_QueueParams, Depends(_queue_params)]
 
-    Returns paginated results with total count.
-    """
-    # survey_id is required for access control
-    if not survey_id:
-        raise HTTPException(status_code=400, detail="survey_id is required")
 
-    survey_uuid = parse_uuid(survey_id)
-    survey_config = require_survey_access(db, current_user, survey_uuid, min_level="viewer")
-
-    # Build query
+def _context_query(db: Session, survey_uuid: UUIDType, params: _QueueParams):
+    """The survey's submissions narrowed by the filters a link can carry (status, AI review, transcripts)."""
     query = db.query(SubmissionCurrent).filter(SubmissionCurrent.survey_id == survey_uuid)
 
-    if qa_statuses := parse_list(qa_status):
+    if qa_statuses := parse_list(params.qa_status):
         query = query.filter(SubmissionCurrent.qa_status.in_(qa_statuses))
 
     # "Not Reviewed" is a submission Kobo has no validation status for.
-    if validation_statuses := parse_list(validation_status):
+    if validation_statuses := parse_list(params.validation_status):
         reviewed = [v for v in validation_statuses if v != "Not Reviewed"]
         conditions = [SubmissionCurrent.kobo_validation_status.in_(reviewed)] if reviewed else []
         if "Not Reviewed" in validation_statuses:
             conditions.append(SubmissionCurrent.kobo_validation_status.is_(None))
         query = query.filter(or_(*conditions))
 
-    if ai_review:
+    if params.ai_review:
         statuses = {
             "failed": ("failed",),
             "in_progress": AI_REVIEW_OPEN,
             "not_run": ("not_run_allowance", "cancelled"),
-        }[ai_review]
+        }[params.ai_review]
         query = query.filter(SubmissionCurrent.llm_check_status.in_(statuses))
 
-    if transcript:
+    if params.transcript:
         transcripts = db.query(AudioTranscript.submission_id).filter(
             AudioTranscript.survey_id == survey_uuid
         )
-        if transcript == "failed":
+        if params.transcript == "failed":
             transcripts = transcripts.filter(AudioTranscript.status == "failed")
-        elif transcript == "in_progress":
+        elif params.transcript == "in_progress":
             transcripts = transcripts.filter(AudioTranscript.status.in_(ITEM_OPEN))
-        elif transcript == "no_speech":
+        elif params.transcript == "no_speech":
             transcripts = transcripts.filter(
                 AudioTranscript.status == "success",
                 func.coalesce(func.trim(AudioTranscript.text), "") == "",
@@ -209,29 +243,81 @@ async def get_submissions(
             transcripts = transcripts.filter(AudioTranscript.status == "success")
         query = query.filter(SubmissionCurrent._id.in_(transcripts))
 
-    # Get all submissions (we'll filter by JSONB fields in Python)
-    # Note: This could be optimized with PostgreSQL JSONB queries, but filtering
-    # in Python is more reliable for path-based field matching
-    orm_submissions = query.order_by(SubmissionCurrent._submission_time.desc()).all()
+    return query
 
+
+def _review_queue(
+    db: Session, current_user: User, params: _QueueParams, *, min_level: AccessLevel = "viewer"
+) -> tuple[SurveyConfig, ReviewQueue]:
+    """The survey's review queue under the request's filters, once the user may see it."""
+    # survey_id is required for access control
+    if not params.survey_id:
+        raise HTTPException(status_code=400, detail="survey_id is required")
+
+    survey_uuid = parse_uuid(params.survey_id)
+    survey_config = require_survey_access(db, current_user, survey_uuid, min_level=min_level)
     config = survey_config.config_data or {}
-    orm_submissions = filter_by_answers(
-        orm_submissions,
+    queue = ReviewQueue(
+        _context_query(db, survey_uuid, params).all(),
+        QueueFilters(
+            tab=params.review,
+            issues=parse_list(params.issue),
+            enumerators=parse_list(params.enumerator),
+            sampling=parse_sampling_filters(params.sampling_filters),
+            search=params.q,
+        ),
         enumerator_field=get_enumerator_field(config),
-        enumerators=parse_list(enumerator),
-        sampling_filters=parse_sampling_filters(sampling_filters),
         sampling_cols=get_sampling_cols(config),
     )
+    return survey_config, queue
 
-    # Get total count after JSONB filtering
+
+def _recordings_unfinished(db: Session, survey_uuid: UUIDType) -> set[int]:
+    """Submissions with a recording still being transcribed, or that could not be."""
+    rows = (
+        db.query(AudioTranscript.submission_id)
+        .filter(
+            AudioTranscript.survey_id == survey_uuid,
+            AudioTranscript.status.in_((*ITEM_OPEN, "failed")),
+        )
+        .distinct()
+        .all()
+    )
+    return {submission_id for (submission_id,) in rows}
+
+
+@router.get("/submissions", response_model=SubmissionListResponse)
+async def get_submissions(
+    db: DbSession,
+    current_user: CurrentUser,
+    params: QueueParams,
+    sort: Annotated[
+        str | None,
+        Query(
+            pattern="^(issues|newest|oldest|enumerator)$",
+            description="Order; most issues first in Needs review and On hold, newest first otherwise",
+        ),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
+):
+    """
+    A survey's submissions in one review tab, filtered, sorted and paginated.
+
+    Requires authentication and access to the survey. The tabs, filters and
+    defaults are described in services/review_queue.py; the response says
+    which tab and order were used.
+    """
+    survey_config, queue = _review_queue(db, current_user, params)
+    orm_submissions, used_sort = queue.submissions(sort)
+
     total = len(orm_submissions)
-
-    # Apply pagination
     offset = (page - 1) * page_size
     paginated_submissions = orm_submissions[offset : offset + page_size]
 
-    # Convert to Pydantic models
-    summaries = _transcript_summaries(db, survey_uuid, [sub._id for sub in paginated_submissions])
+    summaries = _transcript_summaries(
+        db, survey_config.survey_id, [sub._id for sub in paginated_submissions]
+    )
     submissions = []
     for sub in paginated_submissions:
         item = _orm_to_pydantic_submission(sub)
@@ -243,7 +329,91 @@ async def get_submissions(
         total=total,
         page=page,
         page_size=page_size,
+        review=queue.tab,
+        sort=used_sort,
     )
+
+
+@router.get("/submissions/facets", response_model=SubmissionFacets)
+async def get_submission_facets(db: DbSession, current_user: CurrentUser, params: QueueParams):
+    """
+    The counts behind the Submissions tabs and filter menu, for the same filters
+    as the list. Each count leaves out its own filter: it is what selecting
+    that option would show.
+    """
+    survey_config, queue = _review_queue(db, current_user, params)
+    ready, waiting = queue.clean(_recordings_unfinished(db, survey_config.survey_id))
+    return SubmissionFacets(
+        review=queue.tab,
+        tabs=TabCounts(**queue.tab_counts),
+        issues=[FacetCount(value=check, count=n) for check, n in queue.issue_counts()],
+        enumerators=[FacetCount(value=value, count=n) for value, n in queue.enumerator_counts()],
+        sampling=[
+            SamplingFacet(
+                variable=variable,
+                values=[FacetCount(value=value, count=n) for value, n in counts],
+            )
+            for variable, counts in queue.sampling_counts()
+        ],
+        clean=CleanCounts(ready=len(ready), waiting=waiting),
+    )
+
+
+def _kobo_fetcher_for(current_user: User) -> KoboFetcher:
+    kobo_token = get_user_kobo_token(current_user)
+    if not kobo_token:
+        raise HTTPException(
+            status_code=400, detail="You need to configure your Kobo API key in user settings"
+        )
+    kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+    return KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
+
+
+@router.post("/submissions/approve-clean", response_model=ApproveCleanResult)
+def approve_clean_submissions(db: DbSession, current_user: CurrentUser, params: QueueParams):
+    """
+    Approve, in Kobo and here, every clean submission under the filters: no
+    findings, no decision yet, and every check finished. Submissions still
+    waiting for an AI review or a transcript are left alone. Requires editor
+    access. A plain function, so Kobo's answers don't hold up other requests.
+    """
+    survey_config, queue = _review_queue(db, current_user, params, min_level="editor")
+    if not survey_config.kobo_asset_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Survey {survey_config.survey_id} does not have a kobo_asset_id configured",
+        )
+    ready, _ = queue.clean(_recordings_unfinished(db, survey_config.survey_id))
+    if not ready:
+        return ApproveCleanResult(approved=0, failed=0)
+
+    fetcher = _kobo_fetcher_for(current_user)
+    try:
+        approved = set(
+            fetcher.update_validation_statuses(
+                survey_config.kobo_asset_id, [sub._id for sub in ready], "Approved"
+            )
+        )
+    except requests.RequestException as e:
+        logger.error(f"Kobo API error approving clean submissions: {e}")
+        raise HTTPException(
+            status_code=502, detail="Kobo did not accept the approvals. Nothing was changed."
+        ) from e
+
+    now = datetime.utcnow()
+    for sub in ready:
+        if sub._id in approved:
+            sub.kobo_validation_status = "Approved"
+            # No findings and approved: what HFCEngine.determine_qa_status answers.
+            sub.qa_status = "APPROVED"
+            sub.updated_at = now
+    db.commit()
+
+    logger.info(
+        f"Approved {len(approved)} clean submissions of survey {survey_config.survey_id} "
+        f"({len(ready) - len(approved)} refused by Kobo) by user {current_user.email}"
+    )
+    return ApproveCleanResult(approved=len(approved), failed=len(ready) - len(approved))
 
 
 @router.get("/submissions/{kobo_id}", response_model=Submission)

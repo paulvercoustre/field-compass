@@ -6,12 +6,12 @@ import { labelColumnFor } from './koboUrl';
 /**
  * Persist a form fetched from Kobo in the same sheet-row shape an uploaded
  * XLSForm produces, including the columns the linter reads (constraint,
- * relevant, required, calculation, and the enclosing groups' path and
- * conditions — group rows themselves are not stored).
+ * relevant, required, calculation, and the enclosing groups' path,
+ * conditions and label — group rows themselves are not stored).
  */
 export function projectFormToKoboTool(form: KoboProjectForm, language: string): KoboToolData {
-  const labelColumns = (labels: Record<string, string>) =>
-    Object.fromEntries(Object.entries(labels).map(([lang, text]) => [labelColumnFor(lang), text]));
+  const labelColumns = (labels: Record<string, string>, prefix = '') =>
+    Object.fromEntries(Object.entries(labels).map(([lang, text]) => [`${prefix}${labelColumnFor(lang)}`, text]));
 
   const survey = form.questions.map((q) => ({
     type: q.type,
@@ -26,10 +26,14 @@ export function projectFormToKoboTool(form: KoboProjectForm, language: string): 
     choice_filter: q.choice_filter || undefined,
     group_path: q.group_path || undefined,
     group_relevant: q.group_relevant?.length ? q.group_relevant : undefined,
+    // `group_label::English (en)`: the title of the group the question sits in.
+    ...labelColumns(q.group_labels ?? {}, 'group_'),
   }));
 
   const choices = Object.entries(form.choice_lists).flatMap(([list_name, options]) =>
     options.map((option) => ({
+      // The form's own columns first, so they can never replace the name or a label.
+      ...option.columns,
       list_name,
       name: option.name,
       ...labelColumns(option.labels),

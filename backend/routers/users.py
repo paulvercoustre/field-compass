@@ -32,6 +32,7 @@ from services.auth import (
     get_user_by_email,
     get_user_by_username,
     get_user_kobo_token,
+    user_preferences,
     user_to_response,
     verify_password,
 )
@@ -209,6 +210,11 @@ async def update_current_user_profile(
 
     if user_update.kobo_api_url is not None:
         current_user.kobo_api_url = user_update.kobo_api_url.strip()
+
+    if user_update.preferences is not None:
+        changes = user_update.preferences.model_dump(exclude_none=True)
+        # A new dict, so SQLAlchemy sees the JSON column change.
+        current_user.preferences = {**user_preferences(current_user).model_dump(), **changes}
 
     current_user.updated_at = datetime.utcnow()
     db.commit()

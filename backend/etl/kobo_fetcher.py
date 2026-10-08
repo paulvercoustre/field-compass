@@ -21,6 +21,16 @@ logger = logging.getLogger(__name__)
 MAX_ATTACHMENT_BYTES = 200 * 1024 * 1024
 
 
+# Kobo's identifiers for the validation statuses Field Compass sets.
+VALIDATION_STATUS_UIDS = {
+    "Approved": "validation_status_approved",
+    "Not Approved": "validation_status_not_approved",
+    "On Hold": "validation_status_on_hold",
+}
+# Submissions per bulk validation request.
+BULK_VALIDATION_BATCH = 200
+
+
 class KoboFetchError(Exception):
     """
     Kobo could not be read. ``status`` is the HTTP status when Kobo answered.
@@ -390,14 +400,8 @@ class KoboFetcher:
             response.raise_for_status()
             # DELETE may return empty response
             return {} if not response.content else response.json()
-        # Map labels to Kobo UIDs
-        uid_map = {
-            "Approved": "validation_status_approved",
-            "Not Approved": "validation_status_not_approved",
-            "On Hold": "validation_status_on_hold",
-        }
         # Build the payload - Kobo expects dot notation key: "validation_status.uid"
-        payload = {"validation_status.uid": uid_map.get(validation_status)}
+        payload = {"validation_status.uid": VALIDATION_STATUS_UIDS.get(validation_status)}
 
         logger.debug(f"Sending validation status update to {url} with payload: {payload}")
 
@@ -412,6 +416,55 @@ class KoboFetcher:
 
         response.raise_for_status()
         return response.json()
+
+    def update_validation_statuses(
+        self, asset_uid: str, submission_ids: list[int], validation_status: str
+    ) -> list[int]:
+        """
+        Set one validation status on many submissions; returns the ids Kobo took.
+
+        Kobo's bulk endpoint takes them a few hundred at a time. A server without
+        it (404 or 405) gets one request per submission instead, and a
+        submission refused there is left out of the result. If a later batch
+        fails, the ones already done are returned rather than lost; if the
+        first one fails, the error is raised.
+        """
+        url = f"{self.api_url}/assets/{asset_uid}/data/validation_statuses/"
+        uid = VALIDATION_STATUS_UIDS[validation_status]
+        done: list[int] = []
+        for start in range(0, len(submission_ids), BULK_VALIDATION_BATCH):
+            batch = submission_ids[start : start + BULK_VALIDATION_BATCH]
+            try:
+                response = self.session.patch(
+                    url,
+                    json={"payload": {"submission_ids": batch, "validation_status.uid": uid}},
+                    timeout=60,
+                )
+                if response.status_code in (404, 405):
+                    return done + self._update_one_at_a_time(
+                        asset_uid, submission_ids[start:], validation_status
+                    )
+                response.raise_for_status()
+            except requests.RequestException:
+                if not done:
+                    raise
+                logger.exception(f"Kobo stopped after {len(done)} validation status updates")
+                return done
+            done.extend(batch)
+        return done
+
+    def _update_one_at_a_time(
+        self, asset_uid: str, submission_ids: list[int], validation_status: str
+    ) -> list[int]:
+        done = []
+        for submission_id in submission_ids:
+            try:
+                self.update_validation_status(asset_uid, submission_id, validation_status)
+            except requests.RequestException:
+                logger.warning(f"Kobo refused the validation status for submission {submission_id}")
+                continue
+            done.append(submission_id)
+        return done
 
 
 def create_fetcher_from_env() -> KoboFetcher:
