@@ -411,6 +411,27 @@ const CreateSurveyPage: React.FC = () => {
                 helpKey="consent"
                 availableVariables={availableVariables}
               />
+              <VariableDropdown
+                value={coreIdentifiers.start_time}
+                onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, start_time: value })}
+                label="Start time"
+                helpKey="start_time"
+                availableVariables={availableVariables}
+              />
+              <VariableDropdown
+                value={coreIdentifiers.end_time}
+                onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, end_time: value })}
+                label="End time"
+                helpKey="end_time"
+                availableVariables={availableVariables}
+              />
+              <VariableDropdown
+                value={coreIdentifiers.date_interview}
+                onChange={(value) => setCoreIdentifiers({ ...coreIdentifiers, date_interview: value })}
+                label="Interview date"
+                helpKey="date_interview"
+                availableVariables={availableVariables}
+              />
               <DkNumericCodes
                 codes={specialValues.dk_value}
                 onChange={(codes) => setSpecialValues({ ...specialValues, dk_value: codes })}
