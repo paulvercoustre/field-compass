@@ -19,6 +19,7 @@ from etl.data_merger import merge_submission, parse_kobo_submission
 from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
 from services.ai_review_queue import AIReviewQueuer
+from services.kobo_form import refresh_stored_form
 from services.transcription_queue import TranscriptionQueuer
 from services.translation_queue import TranslationQueuer
 
@@ -170,6 +171,13 @@ class ETLPipeline:
             stats["fetched"] = len(kobo_submissions)
             logger.info(f"Fetched {stats['fetched']} submissions from Kobo")
             self._report(stage="checking", fetched=stats["fetched"], processed=0)
+
+            # The stored form follows the one in Kobo, so a submission's answers
+            # read as the respondent saw them, and the checks use today's skip
+            # logic. A form Kobo can't give stays as it was.
+            if refresh_stored_form(survey_config, self.kobo_fetcher.get_asset_info):
+                logger.info("The form changed in Kobo; stored the new version")
+                self.db.commit()
 
             # Step 2: Initialize HFC engine
             hfc_engine = HFCEngine(

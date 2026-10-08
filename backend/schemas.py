@@ -269,42 +269,6 @@ class EnumeratorQualityStats(BaseModel):
     avgIssuesPerSurvey: float
 
 
-class FormQuestion(BaseModel):
-    """One answerable question, shaped for configuration pickers."""
-
-    path: str
-    name: str
-    # Every translation the form carries, keyed by language name. Returning all
-    # of them rather than one resolved string lets a client offer a language
-    # picker without refetching, and lets a fetched form be stored in exactly
-    # the same shape an uploaded XLSForm produces.
-    labels: dict[str, str] = {}
-    type: str
-    list_name: str | None = None
-    repeat_name: str | None = None
-    # Needed so a form fetched from Kobo can be linted without a second
-    # round-trip: the create/settings screens persist these onto kobo_tool.
-    required: bool = False
-    constraint: str | None = None
-    relevant: str | None = None
-    calculation: str | None = None
-    choice_filter: str | None = None
-    # Group rows are not returned, so each question carries its enclosing
-    # groups' path and `relevant` conditions for the linter.
-    group_path: str | None = None
-    group_relevant: list[str] = []
-    # The innermost enclosing group's labels, by language: its title in the
-    # answers, where the group's name ("hh") would mean little.
-    group_labels: dict[str, str] = {}
-
-
-class FormChoice(BaseModel):
-    name: str
-    labels: dict[str, str] = {}
-    # The form's own columns on the choice row, which choice filters test.
-    columns: dict[str, str] = {}
-
-
 class SurveyFormResponse(BaseModel):
     """A Kobo project's form structure, for populating configuration UIs."""
 
@@ -315,8 +279,10 @@ class SurveyFormResponse(BaseModel):
     deployed_version_id: str | None = None
     languages: list[str] = []
     has_audit: bool | None = None
-    questions: list[FormQuestion] = []
-    choice_lists: dict[str, list[FormChoice]] = {}
+    # The form as a survey stores it (services/kobo_form.py): question and
+    # choice rows, translations in `label::<language>` columns.
+    survey: list[dict[str, Any]] = []
+    choices: list[dict[str, Any]] = []
 
 
 class KoboProject(BaseModel):

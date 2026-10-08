@@ -99,7 +99,7 @@ def _get(client, uid=ASSET, **params):
 
 
 class TestKoboAssetForm:
-    def test_returns_questions_and_choices(self, client):
+    def test_returns_the_form_as_a_survey_stores_it(self, client):
         with (
             patch("routers.kobo.get_user_kobo_token", return_value="tok"),
             patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
@@ -115,84 +115,72 @@ class TestKoboAssetForm:
         assert payload["has_audit"] is True
         # The choice's own columns come along, as text, for choice filters;
         # Kobo's bookkeeping and media do not.
-        assert payload["choice_lists"]["enums"][0] == {
-            "name": "E01",
-            "labels": {"English (en)": "Amina", "Dari (da)": "امینه"},
-            "columns": {"province": "kabul", "team": "2"},
-        }
-        assert payload["choice_lists"]["enums"][1]["columns"] == {}
+        assert payload["choices"] == [
+            {
+                "list_name": "enums",
+                "name": "E01",
+                "label::English (en)": "Amina",
+                "label::Dari (da)": "امینه",
+                "province": "kabul",
+                "team": "2",
+            },
+            {
+                "list_name": "enums",
+                "name": "E02",
+                "label::English (en)": "Bilal",
+                "label::Dari (da)": "بلال",
+            },
+        ]
 
-    def test_questions_carry_group_qualified_paths(self, client):
-        """Paths must match submission_data keys, not bare names."""
+    def test_questions_are_rows_with_every_translation(self, client):
         with (
             patch("routers.kobo.get_user_kobo_token", return_value="tok"),
             patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
         ):
-            questions = _get(client).json()["questions"]
+            by_name = {row["name"]: row for row in _get(client).json()["survey"]}
 
-        by_name = {q["name"]: q for q in questions}
-        assert by_name["enumerator_id"]["path"] == "intro/enumerator_id"
-        assert by_name["enumerator_id"]["labels"] == {
-            "English (en)": "Enumerator ID:",
-            "Dari (da)": "شماره",
+        assert by_name["enumerator_id"] == {
+            "type": "select_one",
+            "name": "enumerator_id",
+            "label::English (en)": "Enumerator ID:",
+            "label::Dari (da)": "شماره",
+            "roster_name": None,
+            "list_name": "enums",
+            "group_path": "intro",
+            # Each question carries its group's label, which the group row no longer can.
+            "group_label::English (en)": "Intro",
+            "group_label::Dari (da)": "مقدمه",
         }
-        assert by_name["enumerator_id"]["list_name"] == "enums"
-        # Each question carries its group's label, which the group row no longer can.
-        assert by_name["enumerator_id"]["group_labels"] == {
-            "English (en)": "Intro",
-            "Dari (da)": "مقدمه",
-        }
-        assert by_name["age"]["group_labels"] == {}
         assert by_name["age"]["constraint"] == ". <= 120"
-        assert by_name["age"]["required"] is True
+        assert by_name["age"]["required"] == "yes"
+        assert "group_path" not in by_name["age"]
 
     def test_questions_carry_their_groups_conditions(self, client):
-        """Group rows are dropped, so the linter needs their `relevant` per question."""
+        """Group rows are dropped, so the checks and linter need their `relevant` per question."""
         payload = deepcopy(ASSET_PAYLOAD)
         payload["content"]["survey"][1]["relevant"] = "${consent} = 'yes'"
         with (
             patch("routers.kobo.get_user_kobo_token", return_value="tok"),
             patch("routers.kobo.KoboFetcher.get_asset_info", return_value=payload),
         ):
-            by_name = {q["name"]: q for q in _get(client).json()["questions"]}
+            by_name = {row["name"]: row for row in _get(client).json()["survey"]}
 
-        assert by_name["enumerator_id"]["group_path"] == "intro"
         assert by_name["enumerator_id"]["group_relevant"] == ["${consent} = 'yes'"]
-        assert by_name["age"]["group_path"] is None
-        assert by_name["age"]["group_relevant"] == []
+        assert "group_relevant" not in by_name["age"]
 
-    def test_structural_rows_are_excluded_and_notes_kept(self, client):
+    def test_group_rows_are_left_out_and_notes_kept(self, client):
         """Group markers travel on each question; notes are shown with a submission's answers."""
         with (
             patch("routers.kobo.get_user_kobo_token", return_value="tok"),
             patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
         ):
-            questions = _get(client).json()["questions"]
+            survey = _get(client).json()["survey"]
 
-        types = {q["type"] for q in questions}
-        assert types.isdisjoint({"begin_group", "end_group"})
-        assert "select_one" in types and "integer" in types
-        note = next(q for q in questions if q["type"] == "note")
-        assert note["name"] == "read_this"
-        assert note["labels"] == {"English (en)": "Read aloud", "Dari (da)": "بخوان"}
+        assert [row["name"] for row in survey] == ["audit", "enumerator_id", "read_this", "age"]
+        note = survey[2]
+        assert note["type"] == "note"
+        assert note["label::English (en)"] == "Read aloud"
         assert note["group_path"] == "intro"
-
-    def test_every_translation_is_returned(self, client):
-        """
-        All languages, not one resolved string: the client offers a language
-        picker without refetching, and a fetched form can be stored in the same
-        shape an uploaded XLSForm produces.
-        """
-        with (
-            patch("routers.kobo.get_user_kobo_token", return_value="tok"),
-            patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
-        ):
-            questions = _get(client).json()["questions"]
-
-        assert {q["name"]: q["labels"] for q in questions}["age"] == {
-            "English (en)": "Age",
-            "Dari (da)": "سن",
-        }
 
     def test_missing_kobo_token_is_actionable(self, client):
         with patch("routers.kobo.get_user_kobo_token", return_value=None):

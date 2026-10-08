@@ -14,11 +14,10 @@ from fastapi import APIRouter, HTTPException, Request
 
 from etl.kobo_fetcher import KoboFetcher
 from forms import load_form_schema
-from forms.schema import GROUP_OPEN_TYPES
-from linter.questions import enclosing_relevants
-from schemas import FormChoice, FormQuestion, KoboProject, SurveyFormResponse
+from schemas import KoboProject, SurveyFormResponse
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
+from services.kobo_form import stored_form
 from services.permissions import get_accessible_surveys
 from services.rate_limit import limiter
 
@@ -112,10 +111,11 @@ async def get_kobo_asset_form(
     current_user: CurrentUser,
 ):
     """
-    Fetch a Kobo project's form structure, normalized for configuration UIs.
+    Fetch a Kobo project's form, in the shape a survey stores it.
 
     Lets a user configure a survey straight from their Kobo project instead of
-    exporting the XLSForm and uploading it by hand.
+    exporting the XLSForm and uploading it by hand. Each pull later keeps the
+    stored copy in step (services/kobo_form.py).
     """
     if not ASSET_UID_PATTERN.match(asset_uid or ""):
         raise HTTPException(
@@ -160,51 +160,13 @@ async def get_kobo_asset_form(
             ),
         )
 
-    # A group's own label titles it in a submission's answers.
-    group_labels = {
-        row.path: row.label for row in schema.questions if row.type in GROUP_OPEN_TYPES and row.path
-    }
-
-    questions = [
-        {
-            "path": question.path,
-            "name": question.name,
-            "labels": question.label,
-            "type": question.type,
-            "list_name": question.list_name,
-            "repeat_name": question.repeat_name,
-            "required": question.required,
-            "constraint": question.constraint,
-            "relevant": question.relevant,
-            "calculation": question.calculation,
-            "choice_filter": (question.raw or {}).get("choice_filter") or None,
-            # Group rows are dropped below, so carry what the linter needs
-            # from them on each question: which groups enclose it, and the
-            # conditions those groups put on it (a consent gate, usually).
-            "group_path": question.group_path or None,
-            "group_relevant": enclosing_relevants(schema, question),
-            "group_labels": group_labels.get(question.group_path, {}),
-        }
-        for question in schema.questions
-        # Group and repeat markers are left out: what they hold travels on each
-        # question. Notes stay, to show with a submission's answers.
-        if question.name and not question.is_structural
-    ]
-
-    choice_lists = {
-        list_name: [{"name": c.name, "labels": c.label, "columns": c.columns()} for c in choices]
-        for list_name, choices in schema.choices_by_list.items()
-    }
-
+    form = stored_form(schema)
     return SurveyFormResponse(
         asset_uid=asset_uid,
         asset_name=asset.get("name"),
         deployed_version_id=asset.get("deployed_version_id"),
         languages=schema.languages,
         has_audit=schema.has_audit,
-        questions=[FormQuestion.model_validate(q) for q in questions],
-        choice_lists={
-            name: [FormChoice.model_validate(c) for c in choices]
-            for name, choices in choice_lists.items()
-        },
+        survey=form["survey"],
+        choices=form["choices"],
     )
