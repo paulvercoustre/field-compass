@@ -17,6 +17,9 @@ import { Spinner } from './Spinner';
 import PageHeader from './ui/PageHeader';
 
 const MAX_PAGE_SIZE = 100; // Matches backend validation limit for page_size
+// After a decision the chosen button shows its colour this long before the
+// submission leaves the list and the next one opens.
+const SETTLE_MS = 600;
 const FOCUS_KEY = 'submissionsFocus';
 
 const readFocus = (): boolean => {
@@ -104,6 +107,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
 
   // A new survey, or a link from elsewhere, starts the queue afresh.
   useEffect(() => {
+    cancelAdvance();
     setFilters(initialFilters ?? {});
     setSubmissions([]);
     setFacets(null);
@@ -228,8 +232,31 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
 
   const index = selected ? submissions.findIndex((s) => s._id === selected._id) : -1;
 
+  // The move to the next submission a decision has scheduled, while its
+  // button shows the decision.
+  const pendingAdvance = useRef<{ timer: number; run: () => void } | null>(null);
+  const cancelAdvance = () => {
+    if (pendingAdvance.current) window.clearTimeout(pendingAdvance.current.timer);
+    pendingAdvance.current = null;
+  };
+  /** Do the scheduled move now; says whether there was one. */
+  const flushAdvance = (): boolean => {
+    const pending = pendingAdvance.current;
+    if (!pending) return false;
+    cancelAdvance();
+    pending.run();
+    return true;
+  };
+  useEffect(() => cancelAdvance, []);
+
+  // What the scheduled move reads when it runs, not when it was scheduled.
+  const latest = useRef({ submissions, selected, filters, autoAdvance });
+  latest.current = { submissions, selected, filters, autoAdvance };
+
   const move = useCallback(
     (step: 1 | -1) => {
+      // Moving while a decision settles: with auto-advance, that move is the one.
+      if (flushAdvance() && latest.current.autoAdvance) return;
       if (submissions.length === 0) return;
       if (index < 0) {
         select(submissions[step > 0 ? 0 : submissions.length - 1]);
@@ -246,6 +273,8 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
 
   const decide = async (status: Decision | null) => {
     if (!selected || !surveyId || saving) return;
+    // A second decision on the same submission replaces the first's move.
+    cancelAdvance();
     const before = selected;
     const position = index;
     setSaving(status ?? 'clear');
@@ -263,15 +292,29 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       // Back in a tab it had left (e.g. on hold, then not reviewed again): the
       // list is read again so it sits in its place.
       if (stays && position < 0) loadRef.current(true);
-      const rest = submissions.filter((s) => s._id !== after._id);
-      setSubmissions(stays ? submissions.map((s) => (s._id === after._id ? after : s)) : rest);
-      if (autoAdvance && position >= 0) {
-        // The next row: still after it if it stayed, in its place if it left.
-        const next = stays ? submissions[position + 1] : (rest[position] ?? rest[position - 1]);
-        select(next ?? (stays ? after : null));
-      } else {
-        select(after);
-      }
+      // The decision shows on this submission first, its button in colour.
+      replaceInList(after);
+      select(after);
+      // Then it leaves a tab it no longer belongs in and, with auto-advance,
+      // the next one opens, unless the reviewer has already moved elsewhere.
+      const run = () => {
+        const { submissions: list, selected: open, filters: now, autoAdvance: advance } = latest.current;
+        const at = list.findIndex((s) => s._id === after._id);
+        const leaves = !stillMatches(after, now);
+        const rest = list.filter((s) => s._id !== after._id);
+        if (leaves) setSubmissions(rest);
+        if (!advance || at < 0 || open?._id !== after._id) return;
+        const next = leaves ? (rest[at] ?? rest[at - 1]) : list[at + 1];
+        if (next) select(next);
+        else if (leaves) select(null);
+      };
+      pendingAdvance.current = {
+        timer: window.setTimeout(() => {
+          pendingAdvance.current = null;
+          run();
+        }, SETTLE_MS),
+        run,
+      };
       setNotice(null);
       setLastDecision({
         before,
@@ -288,6 +331,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
 
   const undo = async () => {
     if (!lastDecision || !surveyId || saving) return;
+    cancelAdvance();
     const { before, index: position } = lastDecision;
     setLastDecision(null);
     setSaving('clear');

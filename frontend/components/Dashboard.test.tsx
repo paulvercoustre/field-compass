@@ -134,7 +134,12 @@ describe('Dashboard review loop', () => {
     await key('j');
     expect(heading(view.container)).toBe('#1');
 
-    fireEvent.click(view.getByRole('button', { name: /^Approve/ }));
+    fireEvent.click(view.getByRole('button', { name: /^Approved/ }));
+    // The decision shows on this submission first, then the next one opens.
+    await waitFor(() =>
+      expect(view.getByRole('button', { name: /^Approved/ }).getAttribute('aria-pressed')).toBe('true')
+    );
+    expect(heading(view.container)).toBe('#1');
     await waitFor(() => expect(heading(view.container)).toBe('#2'));
     expect(api.updateValidationStatus).toHaveBeenCalledWith(1, 's1', 'Approved');
     expect(rows(view.container)).toEqual([2]);

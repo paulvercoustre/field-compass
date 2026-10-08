@@ -5,7 +5,7 @@ import { SparkleIcon } from '../ui/icons';
 export type Decision = 'Approved' | 'Not Approved' | 'On Hold';
 
 const DECISIONS: Array<{ status: Decision; label: string; key: string }> = [
-  { status: 'Approved', label: 'Approve', key: 'A' },
+  { status: 'Approved', label: 'Approved', key: 'A' },
   { status: 'Not Approved', label: 'Not approved', key: 'N' },
   { status: 'On Hold', label: 'On hold', key: 'H' },
 ];
