@@ -4,19 +4,20 @@ Commit reviewed: `2e4d096` (main, 2026-09-29) · Review date: 2026-09-29 · Evid
 Companion files: [`findings.json`](findings.json) (same 36 findings, machine-readable) · [`00-inventory.md`](00-inventory.md) · [`wireframes/`](wireframes/) (W1–W5) · [`screenshots/`](screenshots/) · [`fixtures/`](fixtures/) (mock Kobo/OpenAI, stack script, findings builder).
 Screenshot references such as `j4-03` mean `screenshots/j4-03-*.png` (journey 4, step 3); `state-*`, `reflow-*`, `dark-*` and `kbd-*` are named in full.
 
-**Progress is tracked in [§0](#0-status--2026-10-08).** Sections 1–10 are the original review and are left as written; their file and line references point at `2e4d096`.
+**Progress is tracked in [§0](#0-status--2026-10-09).** Sections 1–10 are the original review and are left as written; their file and line references point at `2e4d096`.
 
 ---
 
-## 0. Status — 2026-10-08
+## 0. Status — 2026-10-09
 
-Checked against `main` at `7b77770` (after PR #86), by reading the code and the PRs merged since the review, then updated for #87 (review loop v1), which was checked in a browser against the mock Kobo. Contrast and keyboard figures are still the review's.
+Checked against `main` at `7b77770` (after PR #86; nothing has merged since), by reading the code and the PRs merged since the review, then updated for #87 (review loop v1, open, at `feae8bf`), which was checked in a browser against the mock Kobo. Contrast and keyboard figures are still the review's.
 
 **Summary: 17 done, 15 partly done, 4 open.**
 
 - Roadmap step 0 (data-loss bug) and step 1 (honesty quick wins) are **done**: #64, #67, #69, #73, #79.
 - Part of step 3 is in: tokens and shared components (#71), and persisted pull runs with an activity panel (#73).
 - Step 2, **Review loop v1**, is **done** in #87: review tabs, a filter menu with counts, a findings card next to the decision, auto-advance with Undo, keyboard shortcuts, and approving clean submissions together.
+- #87 then took several rounds of feedback from using it: clearer decision buttons, a wider focus layout, answers shown as the form showed them, and light motion between submissions ([below](#87-after-hands-on-testing)).
 
 ### What changed since the review
 
@@ -35,6 +36,15 @@ Checked against `main` at `7b77770` (after PR #86), by reading the code and the 
 
 #66 (the first step-1 PR) was closed unmerged and redone as #79. Three things in #66 were not carried over: per-view `document.title`, the 8 s Undo on rule delete, and the amber "pulled 800 of 1 000" partial pull. Today a Kobo error part-way through fails the whole pull (`kobo_fetcher.py`, `KoboFetchError`), which is honest, but the pages already read are not kept.
 
+### #87 after hands-on testing
+
+What changed in #87 after the first version, from using the queue on the mock Kobo:
+
+- **Decisions read at a glance.** Undecided buttons are neutral; the chosen one fills with its colour (green, rose, amber) and a tick, so colour means "chosen". The first button reads "Approved". After a decision only that button changes: it shows for 600 ms, then the next submission opens. The heading keeps "N things to check", and "Marked … in Kobo" appears only on a submission that arrived already decided, so nothing on the card moves.
+- **Focus layout.** With the list hidden, the findings and the answers sit side by side on wide screens and scroll separately, and the decision buttons stay pinned at the bottom of the findings column however long it is. The answers toggle reads "With issues / All", the words the list uses.
+- **Answers as the form showed them.** A select-one or select-multiple question lists every option, the chosen ones marked; a list longer than six folds to the chosen ones with "Show all N options". Labels fill `${question}` references with the submission's answers and keep bold and italic. A question with a `choice_filter` lists only the options that respondent was offered (the backend now keeps the choice sheet's extra columns); an option the respondent chose that the current form would no longer offer is still shown, as chosen. When a filter can't be followed, the whole list folds and a line suggests refreshing the form.
+- **Light motion.** The next submission rises 8 px into place over 280 ms (and drops in when moving back up), the selected row's highlight glides from row to row, and a decided row folds away in its decision's colour in the last 200 ms of the pause. None of it plays with reduced motion.
+
 ### Finding status
 
 ✅ done · 🟡 partly done · ⬜ open. Sorted by the original priority.
@@ -51,10 +61,10 @@ Checked against `main` at `7b77770` (after PR #86), by reading the code and the 
 | F-15 | Save confirmations wiped; errors auto-hide | ✅ | #79. |
 | F-19 | No first-run path | ✅ | #69 checklist, #75 project picker. |
 | F-21 | One section's save commits others' edits | ✅ | #79. |
-| F-27 | Labels not bound to fields | 🟡 | 38 of 68 `<label>`s have `htmlFor` (Settings sections done in #85). Left: e.g. the survey name and "Kobo asset ID" in `SurveySettingsPage.tsx`, Create survey, filters. |
+| F-27 | Labels not bound to fields | 🟡 | 40 of 68 `<label>`s have `htmlFor` (Settings sections done in #85; #87 binds its own). Left: e.g. the survey name and "Kobo asset ID" in `SurveySettingsPage.tsx`, Create survey, filters. |
 | F-28 | Invisible focus on queue rows | ✅ | #71 global ring; queue rows keep it. |
 | F-35 | Expired session not detected | ✅ | #79. |
-| F-29 | Contrast failures | 🟡 | Palette and issue chip fixed in #71 (amber-800). Not re-measured. |
+| F-29 | Contrast failures | 🟡 | Palette and issue chip fixed in #71 (amber-800). #87's chosen decision buttons are white on emerald-, rose- and amber-700 (about 5:1 or better). Not re-measured. |
 | F-05 | No detail pane below 768 px / 200 % zoom | ✅ | #87: below 768 px the list gives way to the submission, with "← List". |
 | F-10 | Counts disagree across screens | 🟡 | B done (#67): AI-only findings set `qa_status`. Progress no longer filters by validation status. Left: A, one glossary of named counts used on every screen. |
 | F-14 | No data-freshness indicator | 🟡 | Runs are stored and the activity panel lists recent ones (#73). Left: an always-visible "Last pulled 3 h ago" on each data page. |
@@ -69,9 +79,9 @@ Checked against `main` at `7b77770` (after PR #86), by reading the code and the 
 | F-16 | Failed pull replaces the list | ✅ | #73, #79. |
 | F-22 | Four save models on one page | 🟡 | One section editor and tabbed layout (#72, #83, #85). Every section still needs Edit first; whether to drop that is validate-first. |
 | F-24 | AI "Add to editor" saves live | ✅ | #72. |
-| F-30 | Dialogs lack semantics | 🟡 | 6 of 9 overlays have `role="dialog"`. `ConfirmDialog` closes on Escape. Left: `InfoModal`, `QualityCheckPromptModal`, the dialog in `UserSettingsPage`; focus trap and focus return not checked. |
-| F-31 | Title, live regions, autocomplete | 🟡 | Autocomplete done (#71). 11 live regions. Left: `document.title` per view (dropped with #66). |
-| F-33 | No tokens / shared components | 🟡 | Tokens and components exist (#71). Adoption is partial: 21 `<Button>` against 148 raw `<button>`. Move screens over as they are touched. |
+| F-30 | Dialogs lack semantics | 🟡 | 7 of 10 overlays have `role="dialog"` (#87's filter menu is one). `ConfirmDialog` closes on Escape. Left: `InfoModal`, `QualityCheckPromptModal`, the dialog in `UserSettingsPage`; focus trap and focus return not checked. |
+| F-31 | Title, live regions, autocomplete | 🟡 | Autocomplete done (#71). 17 live regions (#87 added 6, among them the decision toast). Left: `document.title` per view (dropped with #66). |
+| F-33 | No tokens / shared components | 🟡 | Tokens and components exist (#71). Adoption is partial: 25 `<Button>` against 156 raw `<button>`. Move screens over as they are touched. |
 | F-34 | Viewers see actions they can't perform | 🟡 | Settings sections check `canEdit`; #87 hides decisions, notes, "Open in Kobo" and bulk approval from viewers. Left: the pull button. |
 | F-06 | Edit history not viewable | ⬜ | `HistoryViewer` was removed as dead code in #83. `GET /submissions/{id}/history` still exists; option B now starts from scratch. |
 | F-07 | Kobo call on every click | ✅ | #87: the edit link is asked for when "Open in Kobo" is clicked, and a failure says so. |
@@ -80,7 +90,7 @@ Checked against `main` at `7b77770` (after PR #86), by reading the code and the 
 
 ### Next five
 
-Items 1–3 and 5 of the earlier list shipped in #87; item 4 is partly done (see F-20). What is left, in order:
+Items 1–3 and 5 of the earlier list are done in #87 (open); item 4 is partly done (see F-20). What is left, in order:
 
 | # | Change | Findings | Effort | Why now |
 |---|---|---|---|---|
