@@ -14,7 +14,7 @@ import { useSubmissionTranscripts } from './transcription/AudioAnswers';
 import { useSubmissionTranslations } from './translation/TranslationBlock';
 import { findAnswer } from '../utils/answers';
 import { answerAnchor, describeFindings } from '../utils/findings';
-import { EASE_OUT, play } from '../utils/motion';
+import { play } from '../utils/motion';
 
 interface SubmissionDetailProps {
   submission: Submission | null;
@@ -156,8 +156,9 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
     };
   }, [surveyId]);
 
-  // A new submission starts at the top, with its checks folded.
-  useEffect(() => {
+  // A new submission starts at the top, with its checks folded; before it
+  // paints, so it never shows at the last one's scroll position.
+  useLayoutEffect(() => {
     setAllChecksOpen(false);
     setKoboError(null);
     const container = scrollRef.current;
@@ -179,10 +180,10 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
     play(
       contentRef.current,
       [
-        { opacity: 0, transform: `translateY(${12 * step}px)` },
+        { opacity: 0, transform: `translateY(${8 * step}px)` },
         { opacity: 1, transform: 'none' },
       ],
-      { duration: 180, easing: EASE_OUT }
+      { duration: 280, easing: 'ease' }
     );
   }, [submission?._id, position.index]);
 

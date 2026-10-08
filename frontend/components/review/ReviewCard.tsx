@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Finding, FindingSource } from '../../utils/findings';
 import { SparkleIcon } from '../ui/icons';
 
@@ -10,7 +10,6 @@ const DECISIONS: Array<{ status: Decision; label: string; key: string }> = [
   { status: 'On Hold', label: 'On hold', key: 'H' },
 ];
 
-// As it reads in "Marked … in Kobo."
 // The decision in force is filled in its status colour; the others stay
 // neutral, so nothing looks chosen before a decision is made.
 const CHOSEN: Record<Decision, string> = {
@@ -19,6 +18,7 @@ const CHOSEN: Record<Decision, string> = {
   'On Hold': 'border-amber-700 bg-amber-700 text-white hover:bg-amber-800',
 };
 
+// As it reads in "Marked … in Kobo."
 const DECIDED_LABEL: Record<string, string> = {
   Approved: 'approved',
   'Not Approved': 'not approved',
@@ -194,14 +194,18 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
   onFilterIssue,
 }) => {
   const noteDirty = note.trim() !== savedNote.trim();
-  const decided = status && DECIDED_LABEL[status];
+
+  // A decision made here shows only on its button, so nothing else on the
+  // card moves (the toast offers to undo it). The line saying where the
+  // submission stands is for one that arrived already decided.
+  const [opened, setOpened] = useState({ id: submissionId, status });
+  if (opened.id !== submissionId) setOpened({ id: submissionId, status });
+  const decided = opened.id === submissionId && opened.status && status ? DECIDED_LABEL[status] : undefined;
 
   const heading =
     findings.length === 0
       ? 'Nothing to check'
-      : decided
-        ? `${findings.length} ${findings.length === 1 ? 'thing was' : 'things were'} flagged`
-        : `${findings.length} ${findings.length === 1 ? 'thing' : 'things'} to check`;
+      : `${findings.length} ${findings.length === 1 ? 'thing' : 'things'} to check`;
 
   return (
     <section

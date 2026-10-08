@@ -161,7 +161,10 @@ describe('Dashboard review loop', () => {
     await waitFor(() => expect(api.updateValidationStatus).toHaveBeenCalledWith(1, 's1', 'On Hold'));
     await waitFor(() => expect(rows(view.container)).toEqual([2]));
     expect(heading(view.container)).toBe('#1');
-    expect(view.container.textContent).toContain('Marked on hold in Kobo.');
+    // Only the button changes, so the card doesn't shift under the reviewer.
+    expect(view.getByRole('button', { name: /^On hold/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(view.container.textContent).toContain('2 things to check');
+    expect(view.container.textContent).not.toContain('Marked on hold in Kobo.');
   });
 
   it('ignores letter keys when shortcuts are off, but arrows still move', async () => {
