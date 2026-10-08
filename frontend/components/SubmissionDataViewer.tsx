@@ -6,7 +6,7 @@ import { SubmissionTranslations, Translation } from '../services/translationApi'
 import { getChoices, getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
 import { Finding, answerAnchor } from '../utils/findings';
 import { AnswerText, formText } from '../utils/formText';
-import { FilterUnknown, offeredChoices } from '../utils/choiceFilter';
+import { FilterUnknown, holds, offeredChoices } from '../utils/choiceFilter';
 import FormText from './ui/FormText';
 import { Player, RecordingDetails, RecordingStatus } from './transcription/AudioAnswers';
 import { TranslationBlock } from './translation/TranslationBlock';
@@ -57,7 +57,7 @@ const findTranslation = (
   );
 };
 
-// Form rows Kobo fills in itself, or that hold no answer.
+// Form rows Kobo fills in itself.
 const NOT_ANSWERS = new Set([
   'start',
   'end',
@@ -68,7 +68,6 @@ const NOT_ANSWERS = new Set([
   'simserial',
   'phonenumber',
   'username',
-  'note',
 ]);
 
 /** The column a survey's labels are read from (`label::English (en)`). */
@@ -336,6 +335,40 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
   );
 };
 
+/**
+ * A note's text, when the enumerator was shown it: its own condition and its
+ * groups' held, or can't be told. None for a note with no text of its own.
+ */
+const noteText = (note: KoboQuestion, surveyConfig: SurveyConfig | null, answers: Answers): string | null => {
+  const label = getQuestionLabel(note.name, surveyConfig);
+  if (!label.trim() || label === note.name) return null;
+  const conditions = [note.relevant, ...(note.group_relevant ?? [])].filter((c): c is string => !!c);
+  return conditions.some((condition) => holds(condition, answers.raw) === false) ? null : label;
+};
+
+/** A note the form showed: an instruction, text to read aloud, a figure worked out from earlier answers. */
+const NoteRow: React.FC<{ text: string; answers: Answers }> = ({ text, answers }) => (
+  <div className="flex items-start gap-2 px-4 py-2.5 text-sm leading-snug text-gray-600 dark:text-gray-400">
+    <svg
+      className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-400 dark:text-gray-500"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8h.01" />
+    </svg>
+    <p className="min-w-0 whitespace-pre-line break-words">
+      <span className="sr-only">Note: </span>
+      <FormText text={text} answer={answers.text} />
+    </p>
+  </div>
+);
+
 interface RecordingRowProps {
   label: string;
   /** For \`${…}\` in the label. */
@@ -458,6 +491,12 @@ const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, ro
               </div>
             )}
             {questions.map((q) => {
+              // An item's own answers first, then the rest of the submission's.
+              const itemAnswers = answersOf(item, surveyConfig, answers);
+              if (q.type === 'note') {
+                const text = noteText(q, surveyConfig, itemAnswers);
+                return text ? <NoteRow key={q.name} text={text} answers={itemAnswers} /> : null;
+              }
               const value = item[q.name] ?? lookupValue(item, q.name);
               return (
                 <QuestionRow
@@ -465,8 +504,7 @@ const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, ro
                   question={q}
                   value={value}
                   surveyConfig={surveyConfig}
-                  // An item's own answers first, then the rest of the submission's.
-                  answers={answersOf(item, surveyConfig, answers)}
+                  answers={itemAnswers}
                 />
               );
             })}
@@ -501,14 +539,16 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
 
   // Separate top-level and roster questions; the header already says when
   // the interview was, and notes hold no answer.
-  const topLevelQuestions = survey.filter((q) => !q.roster_name && !NOT_ANSWERS.has(q.type));
+  const topLevelRows = survey.filter((q) => !q.roster_name && !NOT_ANSWERS.has(q.type));
+  // Notes show where the enumerator saw them, but aren't answers to count or filter.
+  const topLevelQuestions = topLevelRows.filter((q) => q.type !== 'note');
   const rosterNames: string[] = Array.from(
     new Set(survey.filter((q) => q.roster_name).map((q) => q.roster_name as string))
   );
   const flaggedQuestions = topLevelQuestions.filter((q) => findingsFor.has(q.name));
   // The choice outlives the submission; one with no flagged answers shows them all.
   const onlyFlagged = flaggedChosen && flaggedQuestions.length > 0;
-  const shownQuestions = onlyFlagged ? flaggedQuestions : topLevelQuestions;
+  const shownRows = onlyFlagged ? flaggedQuestions : topLevelRows;
 
   // Metadata keys (start with '_')
   const metadataEntries = Object.entries(data).filter(([k]) => k.startsWith('_'));
@@ -595,7 +635,9 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
             )}
           </div>
           <div className="divide-y divide-gray-50 dark:divide-gray-800/60">
-            {shownQuestions.map((q) => {
+            {shownRows.map((q) => {
+              const note = q.type === 'note' ? noteText(q, surveyConfig, answers) : undefined;
+              if (note === null) return null;
               const group = groupOf(q, labelColumn, answers.text);
               const heading =
                 group && group.path !== lastGroup ? (
@@ -606,7 +648,9 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
               lastGroup = group?.path ?? null;
               const recording = q.type === 'audio' ? findRecording(recordings, q) : undefined;
               const row =
-                recording && recordings ? (
+                note !== undefined ? (
+                  <NoteRow text={note} answers={answers} />
+                ) : recording && recordings ? (
                   <RecordingRow
                     label={getQuestionLabel(q.name, surveyConfig)}
                     answerText={answers.text}

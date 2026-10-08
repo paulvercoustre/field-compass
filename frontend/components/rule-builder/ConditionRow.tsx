@@ -27,6 +27,8 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
     onChange({ ...condition, valueType: type, value: '' }); // Reset value on toggle
   };
 
+  // Notes hold no answer to test.
+  const variables = koboToolData.survey.filter((q) => q.type !== 'note');
   const selectedVarInfo = koboToolData.variableMap.get(condition.variable);
   const isSelectQuestion = selectedVarInfo?.type.startsWith('select');
   const isNumericVariable =
@@ -46,7 +48,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
           className="flex-1 min-w-0 h-9 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs px-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="">Select variable...</option>
-          {koboToolData.survey.map((q) => {
+          {variables.map((q) => {
             const context = q.roster_name ? `(${q.roster_name})` : '(Main)';
             return (
               <option key={q.name} value={q.name} title={q['label::English (en)']}>{`${context} ${q.name}`}</option>
@@ -95,7 +97,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         className="w-full sm:w-44 flex-shrink-0 min-w-0 h-9 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs px-3 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       >
         <option value="">Select variable...</option>
-        {koboToolData.survey.map((q) => {
+        {variables.map((q) => {
           const context = q.roster_name ? `(${q.roster_name})` : '(Main)';
           return <option key={q.name} value={q.name} title={q['label::English (en)']}>{`${context} ${q.name}`}</option>;
         })}

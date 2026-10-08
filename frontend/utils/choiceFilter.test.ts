@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { offeredChoices } from './choiceFilter';
+import { holds, offeredChoices } from './choiceFilter';
 
 const districts = [
   { name: 'kabul_city', province: 'kabul', size: '5' },
@@ -42,5 +42,22 @@ describe('offeredChoices', () => {
     expect(offered('position(..) = 1')).toBe('unsupported');
     expect(offered('jr:choice-name(${province}, "x")')).toBe('unsupported');
     expect(offered('province=')).toBe('unsupported');
+  });
+});
+
+describe('holds', () => {
+  const answers: Record<string, unknown> = { consent: 'yes', age: 34, crops: 'maize rice' };
+  const answer = (question: string) => answers[question];
+
+  it('tells whether a relevant condition held', () => {
+    expect(holds("${consent} = 'yes'", answer)).toBe(true);
+    expect(holds("${consent} = 'no'", answer)).toBe(false);
+    expect(holds("${age} >= 18 and selected(${crops}, 'rice')", answer)).toBe(true);
+    expect(holds("${missing} != ''", answer)).toBe(false);
+  });
+
+  it('can’t tell for what it doesn’t understand', () => {
+    expect(holds('. > 0', answer)).toBeUndefined();
+    expect(holds('jr:choice-name(${consent}, "x")', answer)).toBeUndefined();
   });
 });

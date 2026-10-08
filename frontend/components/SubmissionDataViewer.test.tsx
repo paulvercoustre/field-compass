@@ -144,3 +144,48 @@ describe('SubmissionDataViewer group titles', () => {
     expect(titles).toEqual(['Ménage', 'Livelihoods', 'HH']);
   });
 });
+
+describe('SubmissionDataViewer notes', () => {
+  afterEach(cleanup);
+
+  const withNotes = {
+    survey_id: 's',
+    survey_name: 'S',
+    kobo_asset_id: null,
+    config_data: {
+      kobo_tool: {
+        survey: [
+          { name: 'consent', type: 'select_one', list_name: 'yn', roster_name: null, ...label('Consent?') },
+          { name: 'intro_note', type: 'note', roster_name: null, ...label('Read aloud: **thank** the respondent.') },
+          { name: 'hh_size', type: 'integer', roster_name: null, ...label('Household size') },
+          { name: 'total_note', type: 'note', roster_name: null, ...label('So ${hh_size} people live here.') },
+          {
+            name: 'refused_note',
+            type: 'note',
+            relevant: "${consent} = 'no'",
+            roster_name: null,
+            ...label('End the interview.'),
+          },
+          { name: 'bare_note', type: 'note', roster_name: null },
+        ],
+        choices: [
+          { list_name: 'yn', name: 'yes', ...label('Yes') },
+          { list_name: 'yn', name: 'no', ...label('No') },
+        ],
+      },
+    },
+  } as unknown as SurveyConfig;
+
+  it('shows the notes the enumerator saw, filled in, without counting them as answers', () => {
+    const view = render(
+      <SubmissionDataViewer data={{ consent: 'yes', hh_size: 6 }} surveyConfig={withNotes} findings={[]} />
+    );
+    const text = view.container.textContent ?? '';
+    expect(text).toContain('Note: Read aloud: thank the respondent.');
+    expect(view.getByText('thank', { selector: 'strong' })).toBeTruthy();
+    expect(text).toContain('So 6 people live here.');
+    // Its condition says it wasn't shown; and a note with no text says nothing.
+    expect(text).not.toContain('End the interview.');
+    expect(text).not.toContain('bare_note');
+  });
+});

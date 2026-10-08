@@ -30,10 +30,6 @@ router = APIRouter()
 # because the value is interpolated into the upstream request path.
 ASSET_UID_PATTERN = re.compile(r"^a[A-Za-z0-9]{6,40}$")
 
-# Rows that are not answerable questions. Callers here are populating pickers,
-# not rendering the form, so structural markers and notes are noise.
-NON_QUESTION_TYPES = frozenset({"begin_group", "end_group", "begin_repeat", "end_repeat", "note"})
-
 # Order of the picker's groups: projects collecting data first.
 PROJECT_STATUS_ORDER = {"deployed": 0, "draft": 1, "archived": 2}
 
@@ -190,7 +186,9 @@ async def get_kobo_asset_form(
             "group_labels": group_labels.get(question.group_path, {}),
         }
         for question in schema.questions
-        if question.name and question.type not in NON_QUESTION_TYPES
+        # Group and repeat markers are left out: what they hold travels on each
+        # question. Notes stay, to show with a submission's answers.
+        if question.name and not question.is_structural
     ]
 
     choice_lists = {

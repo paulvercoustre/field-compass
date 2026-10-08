@@ -1,7 +1,8 @@
 /**
  * Which options of a list a respondent was offered, from the question's
  * XLSForm `choice_filter`: `province=${province}`, `selected(${crops}, name)`,
- * `not(selected(${first}, name)) and type='food'`, and the like.
+ * `not(selected(${first}, name)) and type='food'`, and the like. The same
+ * evaluator tells whether a `relevant` condition held (`${consent} = 'yes'`).
  *
  * The filter is XPath, evaluated once per option with the option's own
  * columns in scope and `${…}` read from the submission's answers. Enough of
@@ -183,6 +184,15 @@ function evaluate(node: Node, choice: Choice, answer: (name: string) => unknown,
           throw new Unsupported(node.name);
       }
     }
+  }
+}
+
+/** Whether a `relevant` condition held for these answers; undefined when it can't be told. */
+export function holds(expression: string, answer: (question: string) => unknown): boolean | undefined {
+  try {
+    return truthy(evaluate(parse(expression), { name: '' }, answer, new Set()));
+  } catch {
+    return undefined;
   }
 }
 

@@ -161,16 +161,21 @@ class TestKoboAssetForm:
         assert by_name["age"]["group_path"] is None
         assert by_name["age"]["group_relevant"] == []
 
-    def test_structural_rows_and_notes_are_excluded(self, client):
-        """The caller is populating pickers, not rendering the form."""
+    def test_structural_rows_are_excluded_and_notes_kept(self, client):
+        """Group markers travel on each question; notes are shown with a submission's answers."""
         with (
             patch("routers.kobo.get_user_kobo_token", return_value="tok"),
             patch("routers.kobo.KoboFetcher.get_asset_info", return_value=ASSET_PAYLOAD),
         ):
-            types = {q["type"] for q in _get(client).json()["questions"]}
+            questions = _get(client).json()["questions"]
 
-        assert types.isdisjoint({"begin_group", "end_group", "note"})
+        types = {q["type"] for q in questions}
+        assert types.isdisjoint({"begin_group", "end_group"})
         assert "select_one" in types and "integer" in types
+        note = next(q for q in questions if q["type"] == "note")
+        assert note["name"] == "read_this"
+        assert note["labels"] == {"English (en)": "Read aloud", "Dari (da)": "بخوان"}
+        assert note["group_path"] == "intro"
 
     def test_every_translation_is_returned(self, client):
         """
