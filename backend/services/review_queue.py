@@ -32,6 +32,9 @@ CLEAN = "clean"  # a state, not a tab
 TABS = (NEEDS_REVIEW, ON_HOLD, REVIEWED, ALL)
 SORTS = ("issues", "newest", "oldest", "enumerator")
 
+# The enumerator filter's value for submissions with no enumerator recorded.
+NO_ENUMERATOR = "__none__"
+
 # AI review states that leave nothing unchecked: done, or nothing to review.
 _AI_REVIEW_DONE = ("success", "skipped")
 
@@ -148,7 +151,11 @@ class ReviewQueue:
             return False
         if skip != "issues" and self._issues and not (row.checks & self._issues):
             return False
-        if skip != "enumerators" and self._enumerators and row.enumerator not in self._enumerators:
+        if (
+            skip != "enumerators"
+            and self._enumerators
+            and (row.enumerator or NO_ENUMERATOR) not in self._enumerators
+        ):
             return False
         return all(
             col == skip or row.groups.get(col) in values for col, values in self._sampling.items()
@@ -194,11 +201,14 @@ class ReviewQueue:
         if not self._enumerator_field:
             return []
         counts = Counter(
-            row.enumerator
+            row.enumerator or NO_ENUMERATOR
             for row in self._rows
-            if row.enumerator is not None and self._keeps(row, skip="enumerators")
+            if self._keeps(row, skip="enumerators")
         )
-        return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        # Those with none recorded come last, however many.
+        return sorted(
+            counts.items(), key=lambda item: (item[0] == NO_ENUMERATOR, -item[1], item[0])
+        )
 
     def sampling_counts(self) -> list[tuple[str, list[tuple[str, int]]]]:
         out = []

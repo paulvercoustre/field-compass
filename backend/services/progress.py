@@ -22,6 +22,7 @@ from schemas import (
     ProgressData,
     UnavailableCapability,
 )
+from services.submission_filters import answer_text
 from services.survey_config import (
     CAPABILITY_ENUMERATOR_PERFORMANCE,
     SAMPLING_MODE_BY_VARIABLE,
@@ -424,9 +425,14 @@ def compute_performance(
         }
     )
 
+    no_enumerator = 0
     for sub in submissions:
-        enum_id = answer_value(sub.submission_data, enumerator_field) or "Unknown"
-        enum_id = str(enum_id) if enum_id else "Unknown"
+        enum_id = answer_text(sub.submission_data, enumerator_field) if enumerator_field else None
+        if enum_id is None:
+            # Not an enumerator called "Unknown": that would join the team
+            # count and the rankings as if it were someone.
+            no_enumerator += 1
+            continue
 
         enum_collection_stats[enum_id]["total"] += 1
 
@@ -519,4 +525,5 @@ def compute_performance(
     return PerformanceData(
         collection=collection,
         quality=quality,
+        no_enumerator=no_enumerator,
     )

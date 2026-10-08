@@ -1,5 +1,8 @@
 import { FilterState, ReviewTab, Submission } from '../types';
 
+/** The enumerator filter's value for submissions with no enumerator recorded. */
+export const NO_ENUMERATOR = '__none__';
+
 /**
  * The query parameters for /api/submissions and /api/submissions/facets.
  * Sort only orders the list, so the counts leave it out.
