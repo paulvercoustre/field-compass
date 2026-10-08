@@ -23,6 +23,7 @@ import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import FieldLabel from '../ui/FieldLabel';
 import SurveyKeyPicker from '../ai/SurveyKeyPicker';
+import { FilterState } from '../../types';
 
 interface AudioTranscriptionCardProps {
   surveyId: string;
@@ -265,8 +266,8 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
     }
   };
 
-  const toSubmissions = (transcript: string) => () =>
-    navigate({ view: 'dashboard', survey_id: surveyId, filters: { transcript } });
+  const toSubmissions = (transcript: FilterState['transcript']) => () =>
+    navigate({ view: 'dashboard', survey_id: surveyId, filters: { review: 'all', transcript } });
 
   const pause = settings.send_to_kobo ? settings.kobo_pause : null;
   const editable = editing && canEdit;

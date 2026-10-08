@@ -44,9 +44,15 @@ export const aiFindingName = (check: string): string => {
   return AI_FINDING_NAMES[type] ?? humanize(type);
 };
 
-/** A check ID as a reviewer should read it, with its source where that is not obvious. */
-export const issueName = (check: string): string => {
+/**
+ * A check ID as a reviewer should read it, with its source where that is not
+ * obvious. `questionLabel` names an outlier's question by its text.
+ */
+export const issueName = (check: string, questionLabel?: (name: string) => string): string => {
   if (isAiReviewCheck(check)) return `${AI_REVIEW} · ${aiFindingName(check)}`;
-  if (check.startsWith('outlier_')) return `Outlier · ${check.replace(/^outlier_/, '')}`;
+  if (check.startsWith('outlier_')) {
+    const name = check.replace(/^outlier_/, '');
+    return `Outlier · ${questionLabel ? questionLabel(name) : name}`;
+  }
   return GENERAL_CHECK_NAMES[check] ?? humanize(check);
 };

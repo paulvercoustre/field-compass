@@ -3,16 +3,18 @@ import { useAuth } from '../contexts/AuthContext';
 import KoboConnection from '../components/kobo/KoboConnection';
 import AIIntegrationTab from '../components/ai/AIIntegrationTab';
 import NotificationSettings from '../components/activity/NotificationSettings';
+import ReviewSettings from '../components/review/ReviewSettings';
 import SettingsLayout, { SettingsNavItem } from '../components/ui/SettingsLayout';
 import UsageTab from '../components/admin/UsageTab';
 import { RequestedTab } from '../contexts/NavigationContext';
 
-type AccountTab = 'profile' | 'kobo' | 'ai' | 'notifications' | 'usage';
+type AccountTab = 'profile' | 'kobo' | 'ai' | 'reviewing' | 'notifications' | 'usage';
 
 const NAV_ITEMS: SettingsNavItem<AccountTab>[] = [
   { id: 'profile', label: 'Profile' },
   { id: 'kobo', label: 'Kobo connection' },
   { id: 'ai', label: 'AI integration' },
+  { id: 'reviewing', label: 'Reviewing' },
   { id: 'notifications', label: 'Notifications' },
 ];
 
@@ -364,6 +366,8 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
             <AIIntegrationTab />
           </>
         )}
+
+        {activeTab === 'reviewing' && <ReviewSettings />}
 
         {activeTab === 'notifications' && <NotificationSettings />}
 

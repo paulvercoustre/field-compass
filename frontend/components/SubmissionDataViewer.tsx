@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { KoboQuestion, QualityIssue } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { AudioAnswer } from '../services/transcriptionApi';
 import { SubmissionTranslations, Translation } from '../services/translationApi';
 import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
+import { Finding, answerAnchor } from '../utils/findings';
 import { Player, RecordingDetails, RecordingStatus } from './transcription/AudioAnswers';
 import { TranslationBlock } from './translation/TranslationBlock';
 
@@ -22,6 +23,8 @@ interface SubmissionDataViewerProps {
   recordings?: Recordings | null;
   /** The submission's translations, shown under the answers they translate. */
   translations?: SubmissionTranslations | null;
+  /** The submission's findings; each shows under the answer it is about. */
+  findings?: Finding[];
 }
 
 const questionPath = (question: KoboQuestion) =>
@@ -58,6 +61,26 @@ const humanize = (str: string): string =>
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
+// Form rows Kobo fills in itself, or that hold no answer.
+const NOT_ANSWERS = new Set([
+  'start',
+  'end',
+  'today',
+  'audit',
+  'deviceid',
+  'subscriberid',
+  'simserial',
+  'phonenumber',
+  'username',
+  'note',
+]);
+
+// The group a question sits in, by its innermost group's name: "household/income" reads "Income".
+const groupTitle = (question: KoboQuestion): string | null => {
+  const last = (question.group_path ?? '').split('/').filter(Boolean).pop();
+  return last ? humanize(last) : null;
+};
+
 // Look up a value from submission_data using path-based matching
 const lookupValue = (data: Record<string, any>, fieldName: string): any => {
   if (!data || !fieldName) return undefined;
@@ -74,25 +97,53 @@ const displayValue = (value: any, fieldName: string, surveyConfig: SurveyConfig 
   return formatValueForDisplay(value, fieldName, surveyConfig);
 };
 
+/** The findings about an answer, as short lines under it. */
+const InlineFindings: React.FC<{ findings: Finding[] }> = ({ findings }) =>
+  findings.length === 0 ? null : (
+    <ul className="col-span-2 space-y-0.5">
+      {findings.map((finding) => (
+        <li key={finding.key} className="flex gap-2 text-xs leading-snug text-amber-800 dark:text-amber-300">
+          <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+          <span>
+            <span className="font-medium">
+              {finding.source === 'AI review' ? `AI review: ${finding.title}` : finding.title}
+            </span>
+            {/* The card above has the rest; here the value against what was expected is enough. */}
+            {finding.detail && finding.source === 'Outlier' && <span>. {finding.detail}</span>}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+
+const rowClass = (flagged: boolean) =>
+  `grid grid-cols-2 gap-x-4 gap-y-1.5 px-4 py-2.5 scroll-mt-24 transition-shadow ${
+    flagged ? 'bg-amber-50/70 dark:bg-amber-500/[0.07]' : ''
+  }`;
+
 interface QuestionRowProps {
   question: KoboQuestion;
   value: any;
   surveyConfig: SurveyConfig | null;
-  isEven: boolean;
   translation?: Translation;
+  findings?: Finding[];
+  anchor?: boolean;
 }
 
-const QuestionRow: React.FC<QuestionRowProps> = ({ question, value, surveyConfig, isEven, translation }) => {
+const QuestionRow: React.FC<QuestionRowProps> = ({
+  question,
+  value,
+  surveyConfig,
+  translation,
+  findings = [],
+  anchor,
+}) => {
   const label = getQuestionLabel(question.name, surveyConfig);
   const formatted = displayValue(value, question.name, surveyConfig);
   const isEmpty = value === null || value === undefined || value === '';
 
   return (
-    <div
-      className={`grid grid-cols-2 gap-4 px-4 py-2.5 ${
-        isEven ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900/20'
-      }`}
-    >
+    <div id={anchor ? answerAnchor(question.name) : undefined} className={rowClass(findings.length > 0)}>
       <span className="text-sm text-gray-500 dark:text-gray-400 break-words leading-snug">{label}</span>
       <span
         className={`text-sm font-medium break-words leading-snug ${
@@ -106,34 +157,34 @@ const QuestionRow: React.FC<QuestionRowProps> = ({ question, value, surveyConfig
           <TranslationBlock translation={translation} />
         </div>
       )}
+      <InlineFindings findings={findings} />
     </div>
   );
 };
 
 interface RecordingRowProps {
   label: string;
+  name: string;
   answer: AudioAnswer;
   recordings: Recordings;
-  isEven: boolean;
   translation?: Translation;
   translationsToKobo?: boolean;
+  findings?: Finding[];
 }
 
 // An audio question: the player in place of the file name, and its
-// transcript across the full width underneath.
+// transcript across the full width underneath. Its own findings (no speech,
+// another language) show with the transcript; others as lines below.
 const RecordingRow: React.FC<RecordingRowProps> = ({
   label,
+  name,
   answer,
   recordings,
-  isEven,
   translation,
   translationsToKobo,
+  findings = [],
 }) => (
-  <div
-    className={`grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-2.5 ${
-      isEven ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900/20'
-    }`}
-  >
+  <div id={answerAnchor(name)} className={rowClass(findings.length > 0)}>
     <span className="flex items-start gap-1.5 text-sm text-gray-500 dark:text-gray-400 break-words leading-snug">
       <svg
         className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-indigo-500 dark:text-indigo-400"
@@ -163,6 +214,7 @@ const RecordingRow: React.FC<RecordingRowProps> = ({
         translationsToKobo={translationsToKobo}
       />
     </div>
+    <InlineFindings findings={findings.filter((f) => f.source !== 'Audio')} />
   </div>
 );
 
@@ -176,12 +228,12 @@ const SectionCard: React.FC<SectionCardProps> = ({ title, children, defaultOpen 
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+    <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden bg-white dark:bg-gray-900">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors text-left"
+        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors text-left"
       >
         <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</span>
         <svg
@@ -194,18 +246,14 @@ const SectionCard: React.FC<SectionCardProps> = ({ title, children, defaultOpen 
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && <div className="divide-y divide-gray-100 dark:divide-gray-800">{children}</div>}
+      {open && (
+        <div className="divide-y divide-gray-100 border-t border-gray-100 dark:divide-gray-800 dark:border-gray-800">
+          {children}
+        </div>
+      )}
     </div>
   );
 };
-
-// Column header row for question/answer grid
-const GridHeader: React.FC = () => (
-  <div className="grid grid-cols-2 gap-4 px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950">
-    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Question</span>
-    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Answer</span>
-  </div>
-);
 
 interface RosterSectionProps {
   rosterName: string;
@@ -221,24 +269,15 @@ const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, ro
         <div className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500 italic">No entries recorded</div>
       ) : (
         rosterItems.map((item, itemIdx) => (
-          <div key={itemIdx} className="border-b last:border-b-0 border-gray-100 dark:border-gray-700/50">
+          <div key={itemIdx} className="divide-y divide-gray-50 dark:divide-gray-800/60">
             {rosterItems.length > 1 && (
-              <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-xs font-medium text-blue-600 dark:text-blue-400">
+              <div className="px-4 py-1.5 bg-gray-50 dark:bg-gray-800/50 text-xs font-medium text-gray-500 dark:text-gray-400">
                 Item {itemIdx + 1}
               </div>
             )}
-            <GridHeader />
-            {questions.map((q, qIdx) => {
+            {questions.map((q) => {
               const value = item[q.name] ?? lookupValue(item, q.name);
-              return (
-                <QuestionRow
-                  key={q.name}
-                  question={q}
-                  value={value}
-                  surveyConfig={surveyConfig}
-                  isEven={qIdx % 2 === 0}
-                />
-              );
+              return <QuestionRow key={q.name} question={q} value={value} surveyConfig={surveyConfig} />;
             })}
           </div>
         ))
@@ -247,19 +286,37 @@ const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, ro
   );
 };
 
+/** The findings about each question, by question name. */
+const byQuestion = (findings: Finding[]): Map<string, Finding[]> => {
+  const map = new Map<string, Finding[]>();
+  for (const finding of findings) {
+    if (!finding.question) continue;
+    map.set(finding.question, [...(map.get(finding.question) ?? []), finding]);
+  }
+  return map;
+};
+
 const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
   data,
   surveyConfig,
   recordings,
   translations,
+  findings = [],
 }) => {
-  const survey = surveyConfig?.config_data.kobo_tool?.survey ?? [];
+  const survey: KoboQuestion[] = surveyConfig?.config_data.kobo_tool?.survey ?? [];
+  const findingsFor = useMemo(() => byQuestion(findings), [findings]);
+  const [flaggedChosen, setOnlyFlagged] = useState(false);
 
-  // Separate top-level and roster questions
-  const topLevelQuestions = survey.filter((q: KoboQuestion) => !q.roster_name);
+  // Separate top-level and roster questions; the header already says when
+  // the interview was, and notes hold no answer.
+  const topLevelQuestions = survey.filter((q) => !q.roster_name && !NOT_ANSWERS.has(q.type));
   const rosterNames: string[] = Array.from(
-    new Set(survey.filter((q: KoboQuestion) => q.roster_name).map((q: KoboQuestion) => q.roster_name as string))
+    new Set(survey.filter((q) => q.roster_name).map((q) => q.roster_name as string))
   );
+  const flaggedQuestions = topLevelQuestions.filter((q) => findingsFor.has(q.name));
+  // The choice outlives the submission; one with no flagged answers shows them all.
+  const onlyFlagged = flaggedChosen && flaggedQuestions.length > 0;
+  const shownQuestions = onlyFlagged ? flaggedQuestions : topLevelQuestions;
 
   // Metadata keys (start with '_')
   const metadataEntries = Object.entries(data).filter(([k]) => k.startsWith('_'));
@@ -270,9 +327,8 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
     return (
       <div className="space-y-4">
         {nonMeta.length > 0 && (
-          <SectionCard title="Submission Data">
-            <GridHeader />
-            {nonMeta.map(([key, val], idx) => {
+          <SectionCard title="Answers">
+            {nonMeta.map(([key, val]) => {
               const question = { name: key, type: 'text', roster_name: null };
               const recording = findRecording(recordings, question);
               const translation = findTranslation(translations, question);
@@ -280,11 +336,12 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
                 <RecordingRow
                   key={key}
                   label={key}
+                  name={key}
                   answer={recording}
                   recordings={recordings}
-                  isEven={idx % 2 === 0}
                   translation={translation}
                   translationsToKobo={translations?.send_to_kobo}
+                  findings={findingsFor.get(key)}
                 />
               ) : (
                 <QuestionRow
@@ -292,8 +349,9 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
                   question={question}
                   value={val}
                   surveyConfig={null}
-                  isEven={idx % 2 === 0}
                   translation={translation}
+                  findings={findingsFor.get(key)}
+                  anchor
                 />
               );
             })}
@@ -304,66 +362,111 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
     );
   }
 
+  let lastGroup: string | null = null;
   return (
     <div className="space-y-4">
-      {/* Top-level questions */}
       {topLevelQuestions.length > 0 && (
-        <SectionCard title="Survey Responses">
-          <GridHeader />
-          {topLevelQuestions.map((q: KoboQuestion, idx: number) => {
-            const recording = q.type === 'audio' ? findRecording(recordings, q) : undefined;
-            if (recording && recordings) {
+        <section
+          aria-label="Answers"
+          className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-2.5 dark:border-gray-800">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Answers</h3>
+            {flaggedQuestions.length > 0 && (
+              <div
+                className="inline-flex overflow-hidden rounded-lg border border-gray-200 text-xs dark:border-gray-700"
+                role="group"
+                aria-label="Which answers to show"
+              >
+                {[
+                  { flagged: true, label: `With findings ${flaggedQuestions.length}` },
+                  { flagged: false, label: `All ${topLevelQuestions.length}` },
+                ].map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    aria-pressed={onlyFlagged === option.flagged}
+                    onClick={() => setOnlyFlagged(option.flagged)}
+                    className={`px-2.5 py-1 ${
+                      onlyFlagged === option.flagged
+                        ? 'bg-gray-100 font-medium text-gray-900 dark:bg-gray-800 dark:text-white'
+                        : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800/60'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="divide-y divide-gray-50 dark:divide-gray-800/60">
+            {shownQuestions.map((q) => {
+              const group = groupTitle(q);
+              const heading =
+                group && group !== lastGroup ? (
+                  <h4 className="bg-white px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:bg-gray-900 dark:text-gray-500">
+                    {group}
+                  </h4>
+                ) : null;
+              lastGroup = group;
+              const recording = q.type === 'audio' ? findRecording(recordings, q) : undefined;
+              const row =
+                recording && recordings ? (
+                  <RecordingRow
+                    label={getQuestionLabel(q.name, surveyConfig)}
+                    name={q.name}
+                    answer={recording}
+                    recordings={recordings}
+                    translation={findTranslation(translations, q)}
+                    translationsToKobo={translations?.send_to_kobo}
+                    findings={findingsFor.get(q.name)}
+                  />
+                ) : (
+                  <QuestionRow
+                    question={q}
+                    value={lookupValue(data, q.name)}
+                    surveyConfig={surveyConfig}
+                    translation={q.type === 'text' ? findTranslation(translations, q) : undefined}
+                    findings={findingsFor.get(q.name)}
+                    anchor
+                  />
+                );
               return (
-                <RecordingRow
-                  key={q.name}
-                  label={getQuestionLabel(q.name, surveyConfig)}
-                  answer={recording}
-                  recordings={recordings}
-                  isEven={idx % 2 === 0}
-                  translation={findTranslation(translations, q)}
-                  translationsToKobo={translations?.send_to_kobo}
-                />
+                <React.Fragment key={q.name}>
+                  {heading}
+                  {row}
+                </React.Fragment>
               );
-            }
-            const value = lookupValue(data, q.name);
-            return (
-              <QuestionRow
-                key={q.name}
-                question={q}
-                value={value}
-                surveyConfig={surveyConfig}
-                isEven={idx % 2 === 0}
-                translation={q.type === 'text' ? findTranslation(translations, q) : undefined}
-              />
-            );
-          })}
-        </SectionCard>
+            })}
+          </div>
+        </section>
       )}
 
       {/* Roster / repeat group sections */}
-      {rosterNames.map((rosterName) => {
-        const rosterQuestions = survey.filter((q: KoboQuestion) => q.roster_name === rosterName);
-        // Kobo stores repeat items as an array under the roster name key
-        const rawRosterValue = data[rosterName];
-        const rosterItems: Record<string, any>[] = Array.isArray(rawRosterValue)
-          ? rawRosterValue
-          : rawRosterValue != null
-            ? [rawRosterValue]
-            : [];
+      {!onlyFlagged &&
+        rosterNames.map((rosterName) => {
+          const rosterQuestions = survey.filter((q) => q.roster_name === rosterName);
+          // Kobo stores repeat items as an array under the roster name key
+          const rawRosterValue = data[rosterName];
+          const rosterItems: Record<string, any>[] = Array.isArray(rawRosterValue)
+            ? rawRosterValue
+            : rawRosterValue != null
+              ? [rawRosterValue]
+              : [];
 
-        return (
-          <RosterSection
-            key={rosterName}
-            rosterName={rosterName}
-            questions={rosterQuestions}
-            rosterItems={rosterItems}
-            surveyConfig={surveyConfig}
-          />
-        );
-      })}
+          return (
+            <RosterSection
+              key={rosterName}
+              rosterName={rosterName}
+              questions={rosterQuestions}
+              rosterItems={rosterItems}
+              surveyConfig={surveyConfig}
+            />
+          );
+        })}
 
       {/* Metadata section */}
-      {metadataEntries.length > 0 && <MetadataSection entries={metadataEntries} />}
+      {!onlyFlagged && metadataEntries.length > 0 && <MetadataSection entries={metadataEntries} />}
     </div>
   );
 };
@@ -374,15 +477,9 @@ interface MetadataSectionProps {
 }
 
 const MetadataSection: React.FC<MetadataSectionProps> = ({ entries }) => (
-  <SectionCard title="Metadata" defaultOpen={false}>
-    <GridHeader />
-    {entries.map(([key, val], idx) => (
-      <div
-        key={key}
-        className={`grid grid-cols-2 gap-4 px-4 py-2.5 ${
-          idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900/20'
-        }`}
-      >
+  <SectionCard title="Kobo metadata" defaultOpen={false}>
+    {entries.map(([key, val]) => (
+      <div key={key} className="grid grid-cols-2 gap-4 px-4 py-2.5">
         <span className="text-sm text-gray-400 dark:text-gray-500 font-mono break-words">{key}</span>
         <span className="text-sm text-gray-600 dark:text-gray-400 break-words">
           {val === null || val === undefined || val === '' ? '—' : String(val)}

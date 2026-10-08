@@ -31,7 +31,7 @@ export interface NavigationTarget {
   /** Survey settings: 'settings' | 'access' | 'quality' | ...; account: 'profile' | 'kobo' | 'ai' | ... */
   tab?: string;
   /** Submissions filters, for the dashboard. */
-  filters?: Record<string, unknown>;
+  filters?: FilterState;
 }
 
 /** A tab a link asked for; `at` makes the same tab asked for twice still switch. */
@@ -95,7 +95,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // A link without a tab clears the last one, so plain navigation lands on
       // the page's first tab rather than wherever an old link pointed.
       setRequestedTab(target.tab ? { tab: target.tab, at: Date.now() } : undefined);
-      if (target.view === 'dashboard') setDashboardFilters((target.filters as FilterState) ?? {});
+      if (target.view === 'dashboard') setDashboardFilters(target.filters ?? {});
       setView(target.view);
     },
     [surveys, setSelectedSurvey]

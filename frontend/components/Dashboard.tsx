@@ -1,285 +1,582 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Submission, FilterState } from '../types';
+import { Submission, FilterState, QueueSort, SubmissionFacets } from '../types';
 import { api } from '../services/api';
 import { useSurvey } from '../contexts/SurveyContext';
 import { useActivity } from '../contexts/ActivityContext';
+import { useReviewPreferences } from '../contexts/AuthContext';
 import { getSurveyConfig, SurveyConfig } from '../services/progressApi';
+import { menuFilterCount, stillMatches } from '../utils/filterUtils';
 import { PullButton, PullStartError, usePull } from './activity/PullButton';
 import SubmissionList from './SubmissionList';
 import SubmissionDetail from './SubmissionDetail';
-import SubmissionFilters from './SubmissionFilters';
+import QueueHeader from './review/QueueHeader';
+import ReviewToast from './review/ReviewToast';
+import { Decision } from './review/ReviewCard';
+import ConfirmDialog from './ui/ConfirmDialog';
 import { Spinner } from './Spinner';
 import PageHeader from './ui/PageHeader';
 
 const MAX_PAGE_SIZE = 100; // Matches backend validation limit for page_size
+const FOCUS_KEY = 'submissionsFocus';
+
+const readFocus = (): boolean => {
+  try {
+    return localStorage.getItem(FOCUS_KEY) === 'on';
+  } catch {
+    return false;
+  }
+};
+
+/** A decision that can still be undone. */
+interface LastDecision {
+  before: Submission;
+  /** Where it was in the list. */
+  index: number;
+  message: string;
+}
+
+const DONE: Record<string, string> = {
+  Approved: 'Approved',
+  'Not Approved': 'Marked not approved',
+  'On Hold': 'Put on hold',
+};
+
+/** Every page of the list for these filters, and the order the server used. */
+async function fetchQueue(filters: FilterState, surveyId: string) {
+  const first = await api.getSubmissions(filters, surveyId, 1, MAX_PAGE_SIZE);
+  const submissions = [...first.submissions];
+  for (let page = 2; submissions.length < first.total; page += 1) {
+    const next = await api.getSubmissions(filters, surveyId, page, MAX_PAGE_SIZE);
+    if (next.submissions.length === 0) break;
+    submissions.push(...next.submissions);
+  }
+  return { submissions, sort: first.sort };
+}
 
 interface DashboardProps {
   initialFilters?: FilterState;
 }
 
+/**
+ * The Submissions page: a queue organised by review state, and the selected
+ * submission with what was found, the decision and the answers. After a
+ * decision the submission leaves a tab it no longer belongs in and, unless
+ * the user turned it off, the next one opens.
+ */
 const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   const { selectedSurvey } = useSurvey();
+  const surveyId = selectedSurvey?.survey_id;
+  const canEdit = selectedSurvey?.permission !== 'viewer';
+  const { autoAdvance, shortcuts } = useReviewPreferences();
+
+  const [filters, setFilters] = useState<FilterState>(initialFilters ?? {});
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [allSubmissions, setAllSubmissions] = useState<Submission[]>([]); // For filter options
-  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
-  const [filterState, setFilterState] = useState<FilterState>(initialFilters || {});
-  const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
-  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
+  const [facets, setFacets] = useState<SubmissionFacets | null>(null);
+  const [sort, setSort] = useState<QueueSort | undefined>();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
+
+  const [selected, setSelected] = useState<Submission | null>(null);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState<Decision | 'clear' | 'note' | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [lastDecision, setLastDecision] = useState<LastDecision | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const [focus, setFocus] = useState(readFocus);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
+
+  const searchRef = useRef<HTMLInputElement>(null);
   const { runs } = useActivity();
   // Progress and outcome are in the activity indicator in the top bar; the
   // list below is re-read as the run moves on.
   const pull = usePull();
 
-  const fetchSubmissionsAcrossPages = useCallback(
-    async (filters?: FilterState): Promise<Submission[]> => {
-      if (!selectedSurvey) return [];
+  const select = useCallback((submission: Submission | null) => {
+    setSelected(submission);
+    setNote(submission?.reviewer_notes ?? '');
+    setDecisionError(null);
+  }, []);
 
-      const combined: Submission[] = [];
-      let page = 1;
-      let total = 0;
+  // A new survey, or a link from elsewhere, starts the queue afresh.
+  useEffect(() => {
+    setFilters(initialFilters ?? {});
+    setSubmissions([]);
+    setFacets(null);
+    setLoading(true);
+    select(null);
+    setLastDecision(null);
+  }, [surveyId, initialFilters, select]);
 
-      while (true) {
-        const response = await api.getSubmissions(filters, selectedSurvey.survey_id, page, MAX_PAGE_SIZE);
-
-        combined.push(...response.submissions);
-        total = response.total;
-
-        const effectivePageSize = response.page_size ?? MAX_PAGE_SIZE;
-        const reachedTotal = combined.length >= total;
-        const lastPage = response.submissions.length < effectivePageSize;
-
-        if (reachedTotal || lastPage) {
-          break;
-        }
-
-        page += 1;
-      }
-
-      return combined;
-    },
-    [selectedSurvey]
-  );
-
-  // Fetch all submissions for filter options
-  const fetchAllSubmissions = useCallback(async () => {
-    if (!selectedSurvey) return;
-
-    try {
-      setError(null);
-      const data = await fetchSubmissionsAcrossPages();
-      setAllSubmissions(data);
-    } catch (err) {
-      setError('Failed to fetch submissions.');
-      console.error(err);
-    }
-  }, [selectedSurvey, fetchSubmissionsAcrossPages]);
+  useEffect(() => {
+    if (!surveyId) return;
+    getSurveyConfig(surveyId)
+      .then(setSurveyConfig)
+      .catch((err) => console.error('Failed to fetch survey config:', err));
+  }, [surveyId]);
 
   // Several reads can be in flight (a filter change, a run moving on): only
   // the latest one may set the list, whichever answers last.
-  const filteredRequest = useRef(0);
+  const request = useRef(0);
+  const load = useCallback(
+    async (quiet: boolean) => {
+      if (!surveyId) return;
+      const id = ++request.current;
+      if (!filters.review) {
+        // No tab asked for: the server says which one to open on, and the
+        // queue stays on it, even once a last decision empties it.
+        try {
+          const counts = await api.getSubmissionFacets(filters, surveyId);
+          if (id === request.current)
+            setFilters((current) => (current === filters ? { ...filters, review: counts.review } : current));
+        } catch (err) {
+          console.error(err);
+          if (id === request.current) {
+            setError('Couldn’t load the submissions.');
+            setLoading(false);
+          }
+        }
+        return;
+      }
+      setRefreshing(true);
+      try {
+        const [queue, counts] = await Promise.all([
+          fetchQueue(filters, surveyId),
+          api.getSubmissionFacets(filters, surveyId),
+        ]);
+        if (id !== request.current) return;
+        setSubmissions(queue.submissions);
+        setSort(queue.sort);
+        setFacets(counts);
+        setError(null);
+        // Keep the open submission, fresh from the list; a filter change that
+        // leaves it out closes it, a background refresh doesn't.
+        setSelected((current) => {
+          if (!current) return current;
+          const fresh = queue.submissions.find((s) => s._id === current._id);
+          return fresh ?? (quiet ? current : null);
+        });
+      } catch (err) {
+        console.error(err);
+        if (id === request.current) setError('Couldn’t load the submissions.');
+      } finally {
+        if (id === request.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    [surveyId, filters]
+  );
 
-  // Fetch filtered submissions
-  const fetchFilteredSubmissions = useCallback(async () => {
-    if (!selectedSurvey) return;
-    const request = ++filteredRequest.current;
-
-    try {
-      setIsLoadingSubmissions(true);
-      setError(null);
-      const data = await fetchSubmissionsAcrossPages(filterState);
-      if (request !== filteredRequest.current) return;
-      setSubmissions(data);
-
-      // Clear selected submission if it's no longer in the filtered results
-      setSelectedSubmission((prev) => (prev && !data.some((s) => s._id === prev._id) ? null : prev));
-    } catch (err) {
-      if (request !== filteredRequest.current) return;
-      setError('Failed to fetch submissions.');
-      console.error(err);
-    } finally {
-      if (request === filteredRequest.current) setIsLoadingSubmissions(false);
-    }
-  }, [selectedSurvey, filterState, fetchSubmissionsAcrossPages]);
-
-  // Fetch survey config
-  const fetchSurveyConfig = useCallback(async () => {
-    if (!selectedSurvey) return;
-
-    try {
-      const config = await getSurveyConfig(selectedSurvey.survey_id);
-      setSurveyConfig(config);
-    } catch (err) {
-      console.error('Failed to fetch survey config:', err);
-      // Don't set error for config loading as it's not critical
-    }
-  }, [selectedSurvey]);
-
-  // Fetch all submissions and survey config when survey changes
   useEffect(() => {
-    if (selectedSurvey) {
-      fetchAllSubmissions();
-      fetchSurveyConfig();
-      // Reset to initial filters or empty when survey changes
-      setFilterState(initialFilters || {});
-    }
-  }, [selectedSurvey, fetchAllSubmissions, fetchSurveyConfig]);
+    load(false);
+  }, [load]);
 
-  // Update filter state when initialFilters prop changes (cross-navigation)
-  useEffect(() => {
-    if (initialFilters) {
-      setFilterState(initialFilters);
-    }
-  }, [initialFilters]);
-
-  // Fetch filtered submissions when filters change
-  useEffect(() => {
-    if (selectedSurvey) {
-      fetchFilteredSubmissions();
-    }
-  }, [selectedSurvey, filterState, fetchFilteredSubmissions]);
-
-  // This survey's latest run (a pull under way, or one just finished).
-  const { run, pulling: pullBusy } = pull;
+  const refreshCounts = useCallback(() => {
+    if (!surveyId || !filters.review) return;
+    api
+      .getSubmissionFacets(filters, surveyId)
+      .then(setFacets)
+      .catch(() => undefined);
+  }, [surveyId, filters]);
 
   // Re-read submissions as the survey's background work moves on, rather
   // than on a timer: when the pull lands, and as reviews and transcripts
   // finish. At most every few seconds.
+  const { run, pulling: pullBusy } = pull;
   const surveyRunsKey = useMemo(
     () =>
       runs
-        .filter((r) => r.survey_id === selectedSurvey?.survey_id)
+        .filter((r) => r.survey_id === surveyId)
         .map(
           (r) =>
             `${r.run_id}:${r.status}:${r.ai_checks?.done}:${r.ai_checks?.failed}:${r.transcripts?.done}:${r.transcripts?.failed}:${r.kobo?.done}`
         )
         .join('|'),
-    [runs, selectedSurvey?.survey_id]
+    [runs, surveyId]
   );
   const lastRefetch = useRef(0);
   const pendingRefetch = useRef<number | null>(null);
   const previousStatus = useRef<string | undefined>(undefined);
-  // The timer below fires later: it must call the fetches as they are then,
-  // with the filters then in force, not as they were when it was set.
-  const fetchFilteredRef = useRef(fetchFilteredSubmissions);
-  fetchFilteredRef.current = fetchFilteredSubmissions;
-  const fetchAllRef = useRef(fetchAllSubmissions);
-  fetchAllRef.current = fetchAllSubmissions;
+  // The timer below fires later: it must load with the filters then in force.
+  const loadRef = useRef(load);
+  loadRef.current = load;
   useEffect(() => {
-    if (!selectedSurvey || !surveyRunsKey) return;
+    if (!surveyId || !surveyRunsKey) return;
     const landed = !!previousStatus.current && previousStatus.current !== run?.status && !pullBusy;
     previousStatus.current = run?.status;
-    const refetch = () => {
-      lastRefetch.current = Date.now();
-      pendingRefetch.current = null;
-      if (landed) fetchAllRef.current();
-      fetchFilteredRef.current();
-    };
     if (pendingRefetch.current) window.clearTimeout(pendingRefetch.current);
     const wait = Math.max(0, 5000 - (Date.now() - lastRefetch.current));
-    pendingRefetch.current = window.setTimeout(refetch, landed ? 0 : wait);
+    pendingRefetch.current = window.setTimeout(
+      () => {
+        lastRefetch.current = Date.now();
+        pendingRefetch.current = null;
+        loadRef.current(true);
+      },
+      landed ? 0 : wait
+    );
     return () => {
       if (pendingRefetch.current) window.clearTimeout(pendingRefetch.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [surveyRunsKey]);
 
-  const handleSelectSubmission = useCallback(
-    async (submissionId: number) => {
-      const submission = submissions.find((s) => s._id === submissionId);
-      if (submission) {
-        if (selectedSubmission?._id === submissionId) return; // Avoid refetching for the same submission
-        setSelectedSubmission(submission);
+  const index = selected ? submissions.findIndex((s) => s._id === selected._id) : -1;
+
+  const move = useCallback(
+    (step: 1 | -1) => {
+      if (submissions.length === 0) return;
+      if (index < 0) {
+        select(submissions[step > 0 ? 0 : submissions.length - 1]);
+        return;
       }
+      const next = submissions[index + step];
+      if (next) select(next);
     },
-    [submissions, selectedSubmission]
+    [submissions, index, select]
   );
 
-  const handleFiltersChange = useCallback((newFilters: FilterState) => {
-    setFilterState(newFilters);
-  }, []);
+  const replaceInList = (after: Submission) =>
+    setSubmissions((list) => list.map((s) => (s._id === after._id ? after : s)));
 
-  const handleSubmissionUpdate = useCallback((updatedSubmission: Submission) => {
-    setSelectedSubmission(updatedSubmission);
-    setSubmissions((prev) => prev.map((s) => (s._id === updatedSubmission._id ? updatedSubmission : s)));
-  }, []);
+  const decide = async (status: Decision | null) => {
+    if (!selected || !surveyId || saving) return;
+    const before = selected;
+    const position = index;
+    setSaving(status ?? 'clear');
+    setDecisionError(null);
+    try {
+      if (note.trim() !== (before.reviewer_notes ?? '').trim()) {
+        await api.updateReviewerNotes(before._id, surveyId, note.trim() || null);
+      }
+      // The update answers without the list's transcript summary.
+      const after = {
+        ...(await api.updateValidationStatus(before._id, surveyId, status)),
+        transcript_summary: before.transcript_summary,
+      };
+      const stays = stillMatches(after, filters);
+      const rest = submissions.filter((s) => s._id !== after._id);
+      setSubmissions(stays ? submissions.map((s) => (s._id === after._id ? after : s)) : rest);
+      if (autoAdvance && position >= 0) {
+        // The next row: still after it if it stayed, in its place if it left.
+        const next = stays ? submissions[position + 1] : (rest[position] ?? rest[position - 1]);
+        select(next ?? (stays ? after : null));
+      } else {
+        select(after);
+      }
+      setNotice(null);
+      setLastDecision({
+        before,
+        index: position,
+        message: `${status ? DONE[status] : 'Marked not reviewed'} #${after._id}`,
+      });
+      refreshCounts();
+    } catch (err) {
+      setDecisionError(err instanceof Error ? err.message : 'Couldn’t save the decision.');
+    } finally {
+      setSaving(null);
+    }
+  };
 
-  // Keyboard navigation for submissions
+  const undo = async () => {
+    if (!lastDecision || !surveyId || saving) return;
+    const { before, index: position } = lastDecision;
+    setLastDecision(null);
+    setSaving('clear');
+    try {
+      const restored = {
+        ...(await api.updateValidationStatus(before._id, surveyId, before.kobo_validation_status ?? null)),
+        transcript_summary: before.transcript_summary,
+      };
+      setSubmissions((list) => {
+        const without = list.filter((s) => s._id !== restored._id);
+        if (!stillMatches(restored, filters)) return without;
+        const at = Math.min(Math.max(position, 0), without.length);
+        return [...without.slice(0, at), restored, ...without.slice(at)];
+      });
+      select(restored);
+      refreshCounts();
+    } catch (err) {
+      setDecisionError(err instanceof Error ? err.message : 'Couldn’t undo the decision.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const saveNote = async () => {
+    if (!selected || !surveyId || saving) return;
+    setSaving('note');
+    setDecisionError(null);
+    try {
+      const after = {
+        ...(await api.updateReviewerNotes(selected._id, surveyId, note.trim() || null)),
+        transcript_summary: selected.transcript_summary,
+      };
+      replaceInList(after);
+      setSelected(after);
+    } catch (err) {
+      setDecisionError(err instanceof Error ? err.message : 'Couldn’t save the note.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const approveClean = async () => {
+    if (!surveyId) return;
+    setApproving(true);
+    setApproveError(null);
+    try {
+      const result = await api.approveCleanSubmissions(filters, surveyId);
+      setApproveOpen(false);
+      setLastDecision(null);
+      setNotice(
+        result.failed > 0
+          ? `Approved ${result.approved} in Kobo; Kobo refused ${result.failed}.`
+          : `Approved ${result.approved} clean submission${result.approved === 1 ? '' : 's'} in Kobo.`
+      );
+      load(true);
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Kobo did not accept the approvals.');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  // Keys: J/K or arrows to move, A/N/H to decide, Z to undo, / to search.
+  // The letters are a setting (WCAG 2.1.4), and never act while typing or in a dialog.
+  const keys = useRef({ move, decide, undo, shortcuts, canEdit, selected, lastDecision });
+  keys.current = { move, decide, undo, shortcuts, canEdit, selected, lastDecision };
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Only handle arrow keys when a submission is selected and there are submissions
-      if (!selectedSubmission || submissions.length === 0) {
-        return;
-      }
-
-      // Don't handle if user is typing in an input field
-      const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      const currentIndex = submissions.findIndex((s) => s._id === selectedSubmission._id);
-
-      if (event.key === 'ArrowDown' && currentIndex < submissions.length - 1) {
-        event.preventDefault();
-        const nextSubmission = submissions[currentIndex + 1];
-        handleSelectSubmission(nextSubmission._id);
-      } else if (event.key === 'ArrowUp' && currentIndex > 0) {
-        event.preventDefault();
-        const prevSubmission = submissions[currentIndex - 1];
-        handleSelectSubmission(prevSubmission._id);
-      }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]')) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      const k = keys.current;
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      let handled = true;
+      if (key === 'ArrowDown' || (k.shortcuts && key === 'j')) k.move(1);
+      else if (key === 'ArrowUp' || (k.shortcuts && key === 'k')) k.move(-1);
+      else if (!k.shortcuts || event.shiftKey) handled = false;
+      else if (key === '/') searchRef.current?.focus();
+      else if (key === 'z' && k.lastDecision) k.undo();
+      else if (k.selected && k.canEdit && (key === 'a' || key === 'n' || key === 'h'))
+        k.decide(({ a: 'Approved', n: 'Not Approved', h: 'On Hold' } as const)[key]);
+      else handled = false;
+      if (handled) event.preventDefault();
     };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [selectedSubmission, submissions, handleSelectSubmission]);
+  const toggleFocus = () =>
+    setFocus((on) => {
+      try {
+        localStorage.setItem(FOCUS_KEY, on ? 'off' : 'on');
+      } catch {
+        // The choice then lasts this visit.
+      }
+      return !on;
+    });
+
+  const changeFilters = useCallback((next: FilterState) => setFilters(next), []);
+  const dismissToast = useCallback(() => {
+    setLastDecision(null);
+    setNotice(null);
+  }, []);
+
+  // With nothing open, the list stays, whatever the setting.
+  const focused = focus && !!selected;
+  const tab = filters.review;
+  const clean = facets?.clean ?? { ready: 0, waiting: 0 };
+  const narrowed = menuFilterCount(filters) > 0 || !!filters.search || !!filters.validationStatuses?.length;
+  const offerApprove = canEdit && clean.ready > 0;
+
+  const approveButton = (
+    <button
+      type="button"
+      onClick={() => {
+        setApproveError(null);
+        setApproveOpen(true);
+      }}
+      className="text-xs font-medium text-indigo-700 hover:text-indigo-900 hover:underline dark:text-indigo-300"
+    >
+      Approve {clean.ready} clean…
+    </button>
+  );
+
+  const summary = !loading && !error && submissions.length > 0 && (
+    <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+      <span className="tabular" aria-live="polite">
+        {submissions.length.toLocaleString()}{' '}
+        {tab === 'needs_review'
+          ? 'to review'
+          : tab === 'on_hold'
+            ? 'on hold'
+            : tab === 'reviewed'
+              ? 'reviewed'
+              : submissions.length === 1
+                ? 'submission'
+                : 'submissions'}
+      </span>
+      {tab === 'all' && offerApprove && approveButton}
+    </div>
+  );
+
+  const empty = loading ? (
+    <div className="flex h-full items-center justify-center">
+      <Spinner />
+    </div>
+  ) : error ? (
+    <div className="flex flex-col items-center gap-2 p-6 text-center text-sm">
+      <p className="text-red-700 dark:text-red-400">{error}</p>
+      <button
+        type="button"
+        onClick={() => load(false)}
+        className="text-indigo-700 hover:underline dark:text-indigo-300"
+      >
+        Try again
+      </button>
+    </div>
+  ) : narrowed || filters.aiReview || filters.transcript ? (
+    <div className="flex flex-col items-center gap-2 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+      <p className="font-medium text-gray-900 dark:text-white">No submissions match</p>
+      <button
+        type="button"
+        onClick={() => setFilters({ review: filters.review, sort: filters.sort })}
+        className="text-indigo-700 hover:underline dark:text-indigo-300"
+      >
+        Clear filters and search
+      </button>
+    </div>
+  ) : (
+    <div className="flex flex-col items-center gap-1.5 px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+      <p className="font-medium text-gray-900 dark:text-white">
+        {tab === 'needs_review'
+          ? 'Nothing needs review'
+          : tab === 'on_hold'
+            ? 'Nothing on hold'
+            : tab === 'reviewed'
+              ? 'No decisions yet'
+              : 'No submissions yet'}
+      </p>
+      <p>
+        {tab === 'needs_review'
+          ? 'Every submission with findings has a decision.'
+          : tab === 'all'
+            ? 'Refresh from Kobo to pull them in.'
+            : null}
+      </p>
+      {tab === 'needs_review' && offerApprove && (
+        <p className="mt-2">
+          {clean.ready} clean submission{clean.ready === 1 ? ' has' : 's have'} no decision yet. {approveButton}
+        </p>
+      )}
+      {tab !== 'all' && (
+        <button
+          type="button"
+          onClick={() => setFilters({ ...filters, review: 'all' })}
+          className="mt-1 text-indigo-700 hover:underline dark:text-indigo-300"
+        >
+          See all submissions
+        </button>
+      )}
+    </div>
+  );
+
+  const toast = lastDecision ? (
+    <ReviewToast message={lastDecision.message} onUndo={undo} shortcuts={shortcuts} onDismiss={dismissToast} />
+  ) : notice ? (
+    <ReviewToast message={notice} shortcuts={shortcuts} onDismiss={dismissToast} />
+  ) : null;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       <PageHeader title="Submissions" actions={<PullButton pull={pull} />}>
         <PullStartError pull={pull} />
       </PageHeader>
 
-      {/* Main Content */}
-      <div className="flex flex-1 min-h-0">
-        <div className="flex flex-col flex-shrink-0 w-full border-r border-gray-200 dark:border-gray-800 md:w-80 xl:w-96 bg-white dark:bg-gray-950 min-h-0">
-          {/* Filters */}
-          <SubmissionFilters
-            submissions={allSubmissions}
+      <div className="flex min-h-0 flex-1">
+        <section
+          aria-label="Queue"
+          className={`${selected ? 'hidden md:flex' : 'flex'} ${focused ? 'md:hidden' : ''} min-h-0 w-full flex-shrink-0 flex-col border-r border-gray-200 bg-white md:w-[22rem] lg:w-[24rem] dark:border-gray-800 dark:bg-gray-950`}
+        >
+          <QueueHeader
+            filters={filters}
+            facets={facets}
             surveyConfig={surveyConfig}
-            activeFilters={filterState}
-            onFiltersChange={handleFiltersChange}
-            isLoading={isLoadingSubmissions}
+            sort={sort}
+            loading={refreshing && !loading}
+            onChange={changeFilters}
+            searchRef={searchRef}
           />
-
-          {isLoadingSubmissions ? (
-            <div className="flex items-center justify-center flex-1 min-h-0">
-              <Spinner />
-            </div>
-          ) : error ? (
-            <div className="p-4 text-center text-sm text-red-600 dark:text-red-400">{error}</div>
-          ) : (
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <SubmissionList
-                submissions={submissions}
-                onSelect={handleSelectSubmission}
-                selectedSubmissionId={selectedSubmission?._id ?? null}
-              />
-            </div>
-          )}
-        </div>
-        <div className="flex-1 hidden md:block min-w-0">
+          <div className="min-h-0 flex-1">
+            <SubmissionList
+              submissions={submissions}
+              onSelect={(id) => select(submissions.find((s) => s._id === id) ?? null)}
+              selectedSubmissionId={selected?._id ?? null}
+              surveyConfig={surveyConfig}
+              showStatus={tab !== 'needs_review'}
+              summary={summary}
+              empty={empty}
+            />
+          </div>
+        </section>
+        <div className={`${selected ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
           <SubmissionDetail
-            submission={selectedSubmission}
-            isLoading={false}
+            submission={selected}
             surveyConfig={surveyConfig}
-            onSubmissionUpdate={handleSubmissionUpdate}
+            position={{ index, total: submissions.length }}
+            onPrevious={() => move(-1)}
+            onNext={() => move(1)}
+            onBack={() => select(null)}
+            canEdit={canEdit}
+            shortcuts={shortcuts}
+            note={note}
+            onNoteChange={setNote}
+            saving={saving}
+            error={decisionError}
+            onDecide={decide}
+            onSaveNote={saveNote}
+            onFilterIssue={(check) => setFilters({ ...filters, issues: [check] })}
+            focus={focused}
+            onToggleFocus={toggleFocus}
           />
         </div>
       </div>
+
+      {toast}
+
+      <ConfirmDialog
+        open={approveOpen}
+        title={`Approve ${clean.ready} clean submission${clean.ready === 1 ? '' : 's'}?`}
+        confirmLabel={`Approve ${clean.ready}`}
+        tone="primary"
+        busy={approving}
+        onConfirm={approveClean}
+        onCancel={() => setApproveOpen(false)}
+      >
+        <p>They have no findings, and every check on them has finished. Each is marked Approved in Kobo.</p>
+        {clean.waiting > 0 && (
+          <p>
+            {clean.waiting} more {clean.waiting === 1 ? 'is' : 'are'} still waiting for an AI review or a transcript,
+            and {clean.waiting === 1 ? 'is' : 'are'} left alone.
+          </p>
+        )}
+        {(narrowed || filters.aiReview || filters.transcript) && (
+          <p>Only submissions that match the current filters are included.</p>
+        )}
+        {approveError && (
+          <p role="alert" className="text-red-700 dark:text-red-400">
+            {approveError}
+          </p>
+        )}
+      </ConfirmDialog>
     </div>
   );
 };

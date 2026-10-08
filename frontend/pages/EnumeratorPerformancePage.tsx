@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { progressApi } from '../services/progressApi';
 import { useSurvey } from '../contexts/SurveyContext';
 import { useNavigation } from '../contexts/NavigationContext';
-import { PerformanceData } from '../types';
+import { FilterState, PerformanceData } from '../types';
 import { Spinner } from '../components/Spinner';
 import PageHeader from '../components/ui/PageHeader';
 import { PullButton, PullStartError, usePull } from '../components/activity/PullButton';
@@ -14,7 +14,7 @@ import EnumeratorLeaderboard from '../components/progress-tracker/EnumeratorLead
 import CapabilityNotice from '../components/ui/CapabilityNotice';
 
 interface EnumeratorPerformancePageProps {
-  onNavigateToSubmissions?: (filters?: { enumerators?: string[] }) => void;
+  onNavigateToSubmissions?: (filters?: FilterState) => void;
 }
 
 const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ onNavigateToSubmissions }) => {
@@ -52,7 +52,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ o
 
   const handleEnumeratorClick = (enumeratorId: string) => {
     if (onNavigateToSubmissions) {
-      onNavigateToSubmissions({ enumerators: [enumeratorId] });
+      onNavigateToSubmissions({ review: 'all', enumerators: [enumeratorId] });
     }
   };
 

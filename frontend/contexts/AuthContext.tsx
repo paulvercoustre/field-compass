@@ -19,7 +19,23 @@ interface User {
   can_view_usage?: boolean;
   created_at: string;
   last_login_at: string | null;
+  /** How the app behaves for this user; the server fills in defaults. */
+  preferences?: UserPreferences;
 }
+
+export interface UserPreferences {
+  /** After a decision on the Submissions page, open the next submission. */
+  auto_advance: boolean;
+  /** A/N/H to decide, J/K to move, Z to undo, / to search. */
+  review_shortcuts: boolean;
+}
+
+type UserUpdates = {
+  username?: string;
+  full_name?: string;
+  kobo_api_url?: string;
+  preferences?: Partial<UserPreferences>;
+};
 
 /** The Kobo account an API key belongs to, when Kobo says. */
 export interface KoboUser {
@@ -37,7 +53,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, username: string, password: string, fullName?: string) => Promise<void>;
   logout: () => void;
-  updateUser: (updates: { username?: string; full_name?: string; kobo_api_url?: string }) => Promise<void>;
+  updateUser: (updates: UserUpdates) => Promise<void>;
   connectKobo: (apiUrl: string, apiKey: string) => Promise<KoboUser | null>;
   deleteKoboApiKey: () => Promise<void>;
   testKoboApiKey: () => Promise<{ status: string; message: string; kobo_user?: KoboUser | null }>;
@@ -268,7 +284,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     forgetSurveyId();
   };
 
-  const updateUser = async (updates: { username?: string; full_name?: string; kobo_api_url?: string }) => {
+  const updateUser = async (updates: UserUpdates) => {
     const response = await authFetch('/api/users/me', {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -396,4 +412,13 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+};
+
+/** The review queue's settings for the signed-in user, defaults included. */
+export const useReviewPreferences = (): { autoAdvance: boolean; shortcuts: boolean } => {
+  const { user } = useAuth();
+  return {
+    autoAdvance: user?.preferences?.auto_advance ?? true,
+    shortcuts: user?.preferences?.review_shortcuts ?? true,
+  };
 };

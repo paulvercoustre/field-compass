@@ -1,129 +1,62 @@
-import { Submission, FilterState } from '../types';
-import { SurveyConfig } from '../services/progressApi';
-import { findAnswer } from './answers';
+import { FilterState, ReviewTab, Submission } from '../types';
 
 /**
- * Extract unique enumerator values from submissions based on survey config.
- *
- * @param submissions All submissions to extract from
- * @param config Survey configuration
- * @returns Array of unique enumerator values (strings)
+ * The query parameters for /api/submissions and /api/submissions/facets.
+ * Sort only orders the list, so the counts leave it out.
  */
-export function extractUniqueEnumerators(submissions: Submission[], config: SurveyConfig | null): string[] {
-  if (!config?.config_data?.core_identifiers?.enumerator) {
-    return [];
-  }
-
-  const enumeratorField = config.config_data.core_identifiers.enumerator;
-  const uniqueValues = new Set<string>();
-
-  for (const submission of submissions) {
-    const value = findAnswer(submission.submission_data, enumeratorField);
-    if (value !== null && value !== undefined && value !== '') {
-      uniqueValues.add(String(value));
-    }
-  }
-
-  return Array.from(uniqueValues).sort();
-}
-
-/**
- * Extract unique sampling values for a specific variable from submissions.
- *
- * @param submissions All submissions to extract from
- * @param variable Sampling variable name (e.g., 'district')
- * @param config Survey configuration
- * @returns Array of unique values for the sampling variable
- */
-export function extractUniqueSamplingValues(
-  submissions: Submission[],
-  variable: string,
-  config: SurveyConfig | null
-): string[] {
-  if (!config?.config_data?.sampling_frame?.sampling_cols?.includes(variable)) {
-    return [];
-  }
-
-  const uniqueValues = new Set<string>();
-
-  for (const submission of submissions) {
-    const value = findAnswer(submission.submission_data, variable);
-    if (value !== null && value !== undefined && value !== '') {
-      uniqueValues.add(String(value));
-    }
-  }
-
-  return Array.from(uniqueValues).sort();
-}
-
-/**
- * Build URL search parameters from filter state for API calls.
- *
- * @param filters Current filter state
- * @returns URLSearchParams object with filter parameters
- */
-export function buildFilterParams(filters: FilterState): URLSearchParams {
+export function buildFilterParams(filters: FilterState, { withSort = true } = {}): URLSearchParams {
   const params = new URLSearchParams();
 
-  if (filters.qaStatuses && filters.qaStatuses.length > 0) {
-    params.append('qa_status', filters.qaStatuses.join(','));
-  }
+  if (filters.review) params.append('review', filters.review);
+  if (filters.issues?.length) params.append('issue', filters.issues.join(','));
+  if (filters.enumerators?.length) params.append('enumerator', filters.enumerators.join(','));
 
-  if (filters.validationStatuses && filters.validationStatuses.length > 0) {
-    params.append('validation_status', filters.validationStatuses.join(','));
-  }
+  // Format: "variable1=value1,value2;variable2=value3"
+  const samplingParts = (filters.samplingFilters ?? [])
+    .filter((f) => f.values.length > 0)
+    .map((f) => `${f.variable}=${f.values.join(',')}`);
+  if (samplingParts.length > 0) params.append('sampling_filters', samplingParts.join(';'));
 
-  if (filters.enumerators && filters.enumerators.length > 0) {
-    params.append('enumerator', filters.enumerators.join(','));
-  }
+  const search = filters.search?.trim();
+  if (search) params.append('q', search);
+  if (withSort && filters.sort) params.append('sort', filters.sort);
 
-  if (filters.samplingFilters && filters.samplingFilters.length > 0) {
-    // Format: "variable1=value1,value2;variable2=value3"
-    const samplingParts = filters.samplingFilters
-      .filter((f) => f.values.length > 0)
-      .map((f) => `${f.variable}=${f.values.join(',')}`);
-    if (samplingParts.length > 0) {
-      params.append('sampling_filters', samplingParts.join(';'));
-    }
-  }
-
-  if (filters.aiReview) {
-    params.append('ai_review', filters.aiReview);
-  }
-
-  if (filters.transcript) {
-    params.append('transcript', filters.transcript);
-  }
+  if (filters.validationStatuses?.length) params.append('validation_status', filters.validationStatuses.join(','));
+  if (filters.aiReview) params.append('ai_review', filters.aiReview);
+  if (filters.transcript) params.append('transcript', filters.transcript);
 
   return params;
 }
 
-/**
- * Check if the survey configuration supports enumerator filtering.
- *
- * @param config Survey configuration
- * @returns True if enumerator filtering is supported
- */
-export function supportsEnumeratorFiltering(config: SurveyConfig | null): boolean {
-  return !!config?.config_data?.core_identifiers?.enumerator;
+/** How many filter-menu choices are on (issues, enumerators, groups); not the tab, search or context. */
+export function menuFilterCount(filters: FilterState): number {
+  return (
+    (filters.issues?.length ?? 0) +
+    (filters.enumerators?.length ?? 0) +
+    (filters.samplingFilters ?? []).reduce((sum, f) => sum + f.values.length, 0)
+  );
+}
+
+/** Where a submission stands in review; mirrors review_state() in backend/services/review_queue.py. */
+export function reviewState(submission: Submission): ReviewTab | 'clean' {
+  const status = (submission.kobo_validation_status ?? '').trim();
+  if (status.toLowerCase() === 'on hold') return 'on_hold';
+  if (status) return 'reviewed';
+  return submission.data_quality_issues.length > 0 ? 'needs_review' : 'clean';
 }
 
 /**
- * Check if the survey configuration supports sampling variable filtering.
- *
- * @param config Survey configuration
- * @returns True if sampling variable filtering is supported
+ * Whether a submission still belongs in the list after its status changed:
+ * its tab, and a validation-status filter a link may have set. The other
+ * filters look at answers and findings, which a decision doesn't change.
  */
-export function supportsSamplingFiltering(config: SurveyConfig | null): boolean {
-  return !!config?.config_data?.sampling_frame?.sampling_cols?.length;
-}
-
-/**
- * Get available sampling variables from survey config.
- *
- * @param config Survey configuration
- * @returns Array of sampling variable names
- */
-export function getSamplingVariables(config: SurveyConfig | null): string[] {
-  return config?.config_data?.sampling_frame?.sampling_cols || [];
+export function stillMatches(submission: Submission, filters: FilterState): boolean {
+  const tab = filters.review ?? 'all';
+  if (tab !== 'all' && reviewState(submission) !== tab) return false;
+  const statuses = filters.validationStatuses;
+  if (statuses?.length) {
+    const status = submission.kobo_validation_status || 'Not Reviewed';
+    if (!statuses.includes(status)) return false;
+  }
+  return true;
 }
