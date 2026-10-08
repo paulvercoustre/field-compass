@@ -7,7 +7,7 @@ import { useReviewPreferences } from '../contexts/AuthContext';
 import { getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import { menuFilterCount, stillMatches } from '../utils/filterUtils';
 import { PullButton, PullStartError, usePull } from './activity/PullButton';
-import SubmissionList from './SubmissionList';
+import SubmissionList, { TUCK_MS } from './SubmissionList';
 import SubmissionDetail from './SubmissionDetail';
 import QueueHeader from './review/QueueHeader';
 import ReviewToast from './review/ReviewToast';
@@ -18,7 +18,8 @@ import PageHeader from './ui/PageHeader';
 
 const MAX_PAGE_SIZE = 100; // Matches backend validation limit for page_size
 // After a decision the chosen button shows its colour this long before the
-// submission leaves the list and the next one opens.
+// submission leaves the list and the next one opens; its row folds away in
+// the last part of it.
 const SETTLE_MS = 600;
 const FOCUS_KEY = 'submissionsFocus';
 
@@ -86,6 +87,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   const [saving, setSaving] = useState<Decision | 'clear' | 'note' | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [lastDecision, setLastDecision] = useState<LastDecision | null>(null);
+  const [leavingId, setLeavingId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [focus, setFocus] = useState(readFocus);
@@ -234,10 +236,11 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
 
   // The move to the next submission a decision has scheduled, while its
   // button shows the decision.
-  const pendingAdvance = useRef<{ timer: number; run: () => void } | null>(null);
+  const pendingAdvance = useRef<{ timers: number[]; run: () => void } | null>(null);
   const cancelAdvance = () => {
-    if (pendingAdvance.current) window.clearTimeout(pendingAdvance.current.timer);
+    pendingAdvance.current?.timers.forEach((timer) => window.clearTimeout(timer));
     pendingAdvance.current = null;
+    setLeavingId(null);
   };
   /** Do the scheduled move now; says whether there was one. */
   const flushAdvance = (): boolean => {
@@ -309,10 +312,12 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
         else if (leaves) select(null);
       };
       pendingAdvance.current = {
-        timer: window.setTimeout(() => {
-          pendingAdvance.current = null;
-          run();
-        }, SETTLE_MS),
+        timers: [
+          window.setTimeout(() => {
+            if (!stillMatches(after, latest.current.filters)) setLeavingId(after._id);
+          }, SETTLE_MS - TUCK_MS),
+          window.setTimeout(flushAdvance, SETTLE_MS),
+        ],
         run,
       };
       setNotice(null);
@@ -571,6 +576,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
               showStatus={tab !== 'needs_review'}
               summary={summary}
               empty={empty}
+              leavingId={leavingId}
             />
           </div>
         </section>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Submission } from '../types';
 import SubmissionDataViewer from './SubmissionDataViewer';
 import { statusDotClass } from './Badge';
@@ -14,6 +14,7 @@ import { useSubmissionTranscripts } from './transcription/AudioAnswers';
 import { useSubmissionTranslations } from './translation/TranslationBlock';
 import { findAnswer } from '../utils/answers';
 import { answerAnchor, describeFindings } from '../utils/findings';
+import { EASE_OUT, play } from '../utils/motion';
 
 interface SubmissionDetailProps {
   submission: Submission | null;
@@ -139,6 +140,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   const [openingKobo, setOpeningKobo] = useState(false);
   const [koboError, setKoboError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const shown = useRef<{ id: number; index: number } | null>(null);
 
   // Custom checks name their own findings; read once per survey.
   const surveyId = selectedSurvey?.survey_id;
@@ -164,6 +167,24 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
       column.scrollTop = 0;
     });
   }, [submission?._id]);
+
+  // The next submission rises into place, and one further up the queue drops
+  // in, so the move reads in the same direction as the list. Not on opening
+  // the first one, which has nothing to move from.
+  useLayoutEffect(() => {
+    const previous = shown.current;
+    shown.current = submission ? { id: submission._id, index: position.index } : null;
+    if (!submission || !previous || previous.id === submission._id) return;
+    const step = position.index >= 0 && position.index < previous.index ? -1 : 1;
+    play(
+      contentRef.current,
+      [
+        { opacity: 0, transform: `translateY(${12 * step}px)` },
+        { opacity: 1, transform: 'none' },
+      ],
+      { duration: 180, easing: EASE_OUT }
+    );
+  }, [submission?._id, position.index]);
 
   // Recorded answers, shown in their place among the survey responses; re-read
   // when a transcript or an AI review moves on.
@@ -335,6 +356,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
           side by side and each scrolls on its own. */}
       <div ref={scrollRef} className={`relative min-h-0 flex-1 overflow-y-auto ${focus ? 'xl:overflow-hidden' : ''}`}>
         <div
+          ref={contentRef}
           className={`mx-auto flex w-full flex-col gap-4 px-4 py-5 md:px-6 ${
             focus
               ? 'max-w-[110rem] xl:grid xl:h-full xl:grid-cols-[minmax(26rem,5fr)_minmax(0,7fr)] xl:gap-6 xl:py-0'

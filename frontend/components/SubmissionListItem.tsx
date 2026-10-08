@@ -10,6 +10,8 @@ interface SubmissionListItemProps {
   submission: Submission;
   onSelect: (id: number) => void;
   isSelected: boolean;
+  /** Decided and folding away: tinted in the decision's colour. */
+  leaving?: boolean;
   surveyConfig: SurveyConfig | null;
   showStatus: boolean;
 }
@@ -22,6 +24,13 @@ const formatSubmitted = (iso: string): string => {
     month: 'short',
     ...(date.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}),
   });
+};
+
+// A decided row's colour as it leaves, matching its decision button.
+const LEAVING_TINT: Record<string, string> = {
+  Approved: 'bg-emerald-50 dark:bg-emerald-500/15',
+  'Not Approved': 'bg-rose-50 dark:bg-rose-500/15',
+  'On Hold': 'bg-amber-50 dark:bg-amber-500/15',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -47,6 +56,7 @@ const SubmissionListItem: React.FC<SubmissionListItemProps> = ({
   submission,
   onSelect,
   isSelected,
+  leaving = false,
   surveyConfig,
   showStatus,
 }) => {
@@ -68,18 +78,21 @@ const SubmissionListItem: React.FC<SubmissionListItemProps> = ({
     )
   );
 
+  // The selected row has no background of its own: the list's marker, which
+  // glides from row to row, sits behind it.
   return (
     <button
       type="button"
       onClick={() => onSelect(_id)}
       aria-current={isSelected ? 'true' : undefined}
       className={`relative block w-full border-b border-gray-100 px-4 py-2.5 text-left transition-colors duration-100 focus-visible:ring-inset focus-visible:ring-offset-0 dark:border-gray-800/80 ${
-        isSelected ? 'bg-indigo-50/70 dark:bg-indigo-500/10' : 'hover:bg-gray-50 dark:hover:bg-gray-900'
+        leaving
+          ? (LEAVING_TINT[status] ?? 'bg-gray-50 dark:bg-gray-900')
+          : isSelected
+            ? ''
+            : 'hover:bg-gray-50 dark:hover:bg-gray-900'
       }`}
     >
-      {isSelected && (
-        <span className="absolute inset-y-0 left-0 w-0.5 bg-indigo-600 dark:bg-indigo-400" aria-hidden="true" />
-      )}
       <div className="flex items-baseline gap-2">
         <span className="tabular text-sm font-semibold text-gray-900 dark:text-white">
           <span className="font-normal text-gray-400 dark:text-gray-500">#</span>
