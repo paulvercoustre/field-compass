@@ -260,6 +260,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
         transcript_summary: before.transcript_summary,
       };
       const stays = stillMatches(after, filters);
+      // Back in a tab it had left (e.g. on hold, then not reviewed again): the
+      // list is read again so it sits in its place.
+      if (stays && position < 0) loadRef.current(true);
       const rest = submissions.filter((s) => s._id !== after._id);
       setSubmissions(stays ? submissions.map((s) => (s._id === after._id ? after : s)) : rest);
       if (autoAdvance && position >= 0) {

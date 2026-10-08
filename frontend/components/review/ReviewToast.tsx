@@ -10,7 +10,10 @@ interface ReviewToastProps {
 
 const SHOWN_FOR_MS = 8000;
 
-/** What just happened, at the bottom of the page, with Undo for a while. */
+/**
+ * What just happened, with Undo for a while. Bottom right on wide screens,
+ * clear of the decision buttons; centred on a phone.
+ */
 const ReviewToast: React.FC<ReviewToastProps> = ({ message, onUndo, shortcuts, onDismiss }) => {
   useEffect(() => {
     const timer = window.setTimeout(onDismiss, SHOWN_FOR_MS);
@@ -20,7 +23,7 @@ const ReviewToast: React.FC<ReviewToastProps> = ({ message, onUndo, shortcuts, o
   return (
     <div
       role="status"
-      className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-xl bg-gray-900 py-2.5 pl-4 pr-2.5 text-sm text-white shadow-popover animate-fade-in dark:bg-white dark:text-gray-900"
+      className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center md:left-auto md:right-6 md:translate-x-0 gap-4 rounded-xl bg-gray-900 py-2.5 pl-4 pr-2.5 text-sm text-white shadow-popover animate-fade-in dark:bg-white dark:text-gray-900"
     >
       <span>{message}</span>
       {onUndo && (

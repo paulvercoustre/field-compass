@@ -3,7 +3,7 @@ import { KoboQuestion, QualityIssue } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { AudioAnswer } from '../services/transcriptionApi';
 import { SubmissionTranslations, Translation } from '../services/translationApi';
-import { getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
+import { getChoices, getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
 import { Finding, answerAnchor } from '../utils/findings';
 import { Player, RecordingDetails, RecordingStatus } from './transcription/AudioAnswers';
 import { TranslationBlock } from './translation/TranslationBlock';
@@ -116,6 +116,95 @@ const InlineFindings: React.FC<{ findings: Finding[] }> = ({ findings }) =>
     </ul>
   );
 
+// A choice list longer than this shows the chosen options until asked for the rest.
+const OPTIONS_SHOWN = 6;
+
+const OptionMark: React.FC<{ chosen: boolean; multiple: boolean }> = ({ chosen, multiple }) =>
+  multiple ? (
+    <span
+      className={`mt-[3px] flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-[4px] border ${
+        chosen ? 'border-gray-900 bg-gray-900 dark:border-white dark:bg-white' : 'border-gray-300 dark:border-gray-600'
+      }`}
+      aria-hidden="true"
+    >
+      {chosen && (
+        <svg
+          className="h-2.5 w-2.5 text-white dark:text-gray-900"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={4}
+        >
+          <path d="M5 12l5 5 9-10" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </span>
+  ) : (
+    <span
+      className={`mt-[3px] flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border ${
+        chosen ? 'border-gray-900 dark:border-white' : 'border-gray-300 dark:border-gray-600'
+      }`}
+      aria-hidden="true"
+    >
+      {chosen && <span className="h-1.5 w-1.5 rounded-full bg-gray-900 dark:bg-white" />}
+    </span>
+  );
+
+/**
+ * A select question's answer: every option of its list, the chosen ones
+ * marked, so a reviewer sees what else the respondent could have said. A long
+ * list shows the chosen options and folds the rest behind "Show all".
+ */
+const ChoiceAnswer: React.FC<{
+  options: Array<{ name: string; label: string }>;
+  chosen: string[];
+  multiple: boolean;
+}> = ({ options, chosen, multiple }) => {
+  const [open, setOpen] = useState(false);
+  // An answer outside the list (an old form version, say) is still shown.
+  const all = [
+    ...options,
+    ...chosen.filter((value) => !options.some((o) => o.name === value)).map((value) => ({ name: value, label: value })),
+  ];
+  const long = all.length > OPTIONS_SHOWN;
+  const shown = long && !open ? all.filter((o) => chosen.includes(o.name)) : all;
+  return (
+    <div className="min-w-0">
+      <ul
+        className="space-y-1"
+        aria-label={multiple ? 'Options, chosen ones ticked' : 'Options, the chosen one marked'}
+      >
+        {shown.map((option) => {
+          const isChosen = chosen.includes(option.name);
+          return (
+            <li key={option.name} className="relative flex items-start gap-2 text-sm leading-snug">
+              <OptionMark chosen={isChosen} multiple={multiple} />
+              <span
+                className={
+                  isChosen ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'
+                }
+              >
+                {option.label}
+                {isChosen && <span className="sr-only"> (chosen)</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="mt-1 text-xs text-indigo-700 hover:underline dark:text-indigo-300"
+        >
+          {open ? 'Show chosen only' : `Show all ${all.length} options`}
+        </button>
+      )}
+    </div>
+  );
+};
+
 const rowClass = (flagged: boolean) =>
   `grid grid-cols-2 gap-x-4 gap-y-1.5 px-4 py-2.5 scroll-mt-24 transition-shadow ${
     flagged ? 'bg-amber-50/70 dark:bg-amber-500/[0.07]' : ''
@@ -141,17 +230,28 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
   const label = getQuestionLabel(question.name, surveyConfig);
   const formatted = displayValue(value, question.name, surveyConfig);
   const isEmpty = value === null || value === undefined || value === '';
+  const multiple = question.type === 'select_multiple';
+  const options =
+    !isEmpty && (multiple || question.type === 'select_one') ? getChoices(question.list_name, surveyConfig) : [];
 
   return (
     <div id={anchor ? answerAnchor(question.name) : undefined} className={rowClass(findings.length > 0)}>
       <span className="text-sm text-gray-500 dark:text-gray-400 break-words leading-snug">{label}</span>
-      <span
-        className={`text-sm font-medium break-words leading-snug ${
-          isEmpty ? 'text-gray-300 dark:text-gray-600' : 'text-gray-900 dark:text-gray-100'
-        }`}
-      >
-        {formatted}
-      </span>
+      {options.length > 0 ? (
+        <ChoiceAnswer
+          options={options}
+          chosen={multiple ? String(value).split(' ').filter(Boolean) : [String(value)]}
+          multiple={multiple}
+        />
+      ) : (
+        <span
+          className={`text-sm font-medium break-words leading-snug ${
+            isEmpty ? 'text-gray-300 dark:text-gray-600' : 'text-gray-900 dark:text-gray-100'
+          }`}
+        >
+          {formatted}
+        </span>
+      )}
       {translation && !isEmpty && (
         <div className="col-span-2 empty:hidden">
           <TranslationBlock translation={translation} />
@@ -379,7 +479,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
                 aria-label="Which answers to show"
               >
                 {[
-                  { flagged: true, label: `With findings ${flaggedQuestions.length}` },
+                  { flagged: true, label: `With issues ${flaggedQuestions.length}` },
                   { flagged: false, label: `All ${topLevelQuestions.length}` },
                 ].map((option) => (
                   <button

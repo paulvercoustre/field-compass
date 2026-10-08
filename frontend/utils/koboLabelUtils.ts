@@ -50,6 +50,22 @@ export const getChoiceLabel = (
   return (choice as any)[labelCol] || choice['label::English (en)'] || choice.name || choiceValue;
 };
 
+/** A choice list's options, in the form's order, with their labels. */
+export const getChoices = (
+  listName: string | null | undefined,
+  surveyConfig: SurveyConfig | null
+): Array<{ name: string; label: string }> => {
+  const tool = surveyConfig?.config_data.kobo_tool;
+  if (!listName || !tool) return [];
+  const labelCol = tool.label_column_choices || 'label::English (en)';
+  return (tool.choices || [])
+    .filter((c: KoboChoice) => c.list_name === listName)
+    .map((c: KoboChoice) => ({
+      name: String(c.name),
+      label: (c as any)[labelCol] || c['label::English (en)'] || String(c.name),
+    }));
+};
+
 /**
  * Get the question type and list name for a variable
  */

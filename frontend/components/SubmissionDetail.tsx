@@ -157,7 +157,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   useEffect(() => {
     setAllChecksOpen(false);
     setKoboError(null);
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    const container = scrollRef.current;
+    if (!container) return;
+    container.scrollTop = 0;
+    container.querySelectorAll<HTMLElement>('[data-scroll-column]').forEach((column) => {
+      column.scrollTop = 0;
+    });
   }, [submission?._id]);
 
   // Recorded answers, shown in their place among the survey responses; re-read
@@ -326,16 +331,19 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
         )}
       </header>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      {/* With the list hidden on a wide screen, the review and the answers sit
+          side by side and each scrolls on its own. */}
+      <div ref={scrollRef} className={`relative min-h-0 flex-1 overflow-y-auto ${focus ? 'xl:overflow-hidden' : ''}`}>
         <div
           className={`mx-auto flex w-full flex-col gap-4 px-4 py-5 md:px-6 ${
             focus
-              ? 'max-w-7xl xl:grid xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] xl:items-start xl:gap-6'
+              ? 'max-w-[110rem] xl:grid xl:h-full xl:grid-cols-[minmax(26rem,5fr)_minmax(0,7fr)] xl:gap-6 xl:py-0'
               : 'max-w-4xl'
           }`}
         >
           <div
-            className={`flex flex-col gap-4 ${focus ? 'xl:sticky xl:top-0 xl:max-h-[calc(100vh-11rem)] xl:overflow-y-auto' : ''}`}
+            data-scroll-column
+            className={`relative flex flex-col gap-4 ${focus ? 'xl:min-h-0 xl:overflow-y-auto xl:pt-5' : ''}`}
           >
             <ReviewCard
               submissionId={submission._id}
@@ -359,21 +367,26 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
               onFilterIssue={onFilterIssue}
             />
             {allChecksOpen && <AllChecks groups={checkGroups} />}
+            {/* Bottom space as an element, not padding: the decision buttons
+                stick to the column's edge, and nothing shows beneath them. */}
+            {focus && <div aria-hidden="true" className="hidden h-1 flex-shrink-0 xl:block" />}
           </div>
-          <SubmissionDataViewer
-            data={submission.submission_data}
-            surveyConfig={surveyConfig}
-            recordings={
-              transcripts && {
-                koboId: submission._id,
-                answers: transcripts.answers,
-                sendToKobo: transcripts.send_to_kobo,
-                issues: submission.data_quality_issues,
+          <div data-scroll-column className={`relative ${focus ? 'xl:min-h-0 xl:overflow-y-auto xl:py-5' : ''}`}>
+            <SubmissionDataViewer
+              data={submission.submission_data}
+              surveyConfig={surveyConfig}
+              recordings={
+                transcripts && {
+                  koboId: submission._id,
+                  answers: transcripts.answers,
+                  sendToKobo: transcripts.send_to_kobo,
+                  issues: submission.data_quality_issues,
+                }
               }
-            }
-            translations={translations}
-            findings={findings}
-          />
+              translations={translations}
+              findings={findings}
+            />
+          </div>
         </div>
       </div>
     </div>

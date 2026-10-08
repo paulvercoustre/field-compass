@@ -11,6 +11,14 @@ const DECISIONS: Array<{ status: Decision; label: string; key: string }> = [
 ];
 
 // As it reads in "Marked … in Kobo."
+// The decision in force is filled in its status colour; the others stay
+// neutral, so nothing looks chosen before a decision is made.
+const CHOSEN: Record<Decision, string> = {
+  Approved: 'border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800',
+  'Not Approved': 'border-rose-700 bg-rose-700 text-white hover:bg-rose-800',
+  'On Hold': 'border-amber-700 bg-amber-700 text-white hover:bg-amber-800',
+};
+
 const DECIDED_LABEL: Record<string, string> = {
   Approved: 'approved',
   'Not Approved': 'not approved',
@@ -248,7 +256,8 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
         </p>
       )}
 
-      <div className="flex flex-col gap-2.5 rounded-b-xl border-t border-gray-200 bg-gray-50/70 px-4 py-3 dark:border-gray-800 dark:bg-gray-900/60">
+      {/* Stays in view at the bottom while a long list of findings scrolls. */}
+      <div className="sticky bottom-0 z-10 flex flex-col gap-2.5 rounded-b-xl border-t border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-800 dark:bg-gray-900">
         {decided && (
           <p className="text-sm text-gray-700 dark:text-gray-300">
             Marked <span className="font-medium text-gray-900 dark:text-white">{decided}</span> in Kobo.
@@ -283,7 +292,6 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               {DECISIONS.map((d) => {
                 const current = status === d.status;
-                const primary = d.status === 'Approved';
                 return (
                   <button
                     key={d.status}
@@ -291,18 +299,30 @@ const ReviewCard: React.FC<ReviewCardProps> = ({
                     onClick={() => onDecide(d.status)}
                     disabled={saving !== null}
                     aria-pressed={current}
-                    className={`inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                      primary
-                        ? 'bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200'
-                        : 'border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800'
-                    } ${current ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-gray-900' : ''}`}
+                    className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      current
+                        ? CHOSEN[d.status]
+                        : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800'
+                    }`}
                   >
+                    {current && (
+                      <svg
+                        className="h-3.5 w-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                        aria-hidden="true"
+                      >
+                        <path d="M5 12l5 5 9-10" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
                     {saving === d.status ? 'Saving…' : d.label}
                     {shortcuts && (
                       <kbd
                         className={`hidden rounded border px-1 font-sans text-[11px] leading-4 md:inline ${
-                          primary
-                            ? 'border-gray-600 text-gray-300 dark:border-gray-300 dark:text-gray-500'
+                          current
+                            ? 'border-white/40 text-white/80'
                             : 'border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-400'
                         }`}
                       >
