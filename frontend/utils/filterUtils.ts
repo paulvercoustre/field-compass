@@ -1,4 +1,4 @@
-import { FilterState, ReviewTab, Submission } from '../types';
+import { FilterState, QueueSort, ReviewTab, Submission } from '../types';
 
 /**
  * The query parameters for /api/submissions and /api/submissions/facets.
@@ -26,6 +26,42 @@ export function buildFilterParams(filters: FilterState, { withSort = true } = {}
   if (filters.transcript) params.append('transcript', filters.transcript);
 
   return params;
+}
+
+const REVIEW_TABS: readonly ReviewTab[] = ['needs_review', 'on_hold', 'reviewed', 'all'];
+const SORTS: readonly QueueSort[] = ['issues', 'newest', 'oldest', 'enumerator'];
+const AI_REVIEW: readonly NonNullable<FilterState['aiReview']>[] = ['failed', 'in_progress', 'not_run'];
+const TRANSCRIPT: readonly NonNullable<FilterState['transcript']>[] = ['any', 'failed', 'no_speech', 'in_progress'];
+
+const oneOf = <T extends string>(value: string | null, allowed: readonly T[]): T | undefined =>
+  allowed.includes(value as T) ? (value as T) : undefined;
+
+const listOf = (value: string | null): string[] | undefined => {
+  const items = (value ?? '').split(',').filter(Boolean);
+  return items.length ? items : undefined;
+};
+
+/** Filters back from the parameters buildFilterParams wrote (in the page's address); what doesn't fit is left out. */
+export function filtersFromParams(params: URLSearchParams): FilterState {
+  const sampling = (params.get('sampling_filters') ?? '')
+    .split(';')
+    .map((part) => {
+      const at = part.indexOf('=');
+      return { variable: part.slice(0, at), values: listOf(part.slice(at + 1)) ?? [] };
+    })
+    .filter((f) => f.variable && f.values.length);
+  const filters: FilterState = {
+    review: oneOf(params.get('review'), REVIEW_TABS),
+    issues: listOf(params.get('issue')),
+    enumerators: listOf(params.get('enumerator')),
+    samplingFilters: sampling.length ? sampling : undefined,
+    search: params.get('q') || undefined,
+    sort: oneOf(params.get('sort'), SORTS),
+    validationStatuses: listOf(params.get('validation_status')),
+    aiReview: oneOf(params.get('ai_review'), AI_REVIEW),
+    transcript: oneOf(params.get('transcript'), TRANSCRIPT),
+  };
+  return Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined)) as FilterState;
 }
 
 /** How many filter-menu choices are on (issues, enumerators, groups); not the tab, search or context. */

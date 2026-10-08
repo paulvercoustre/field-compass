@@ -49,6 +49,10 @@ export const api = {
   },
 
   /** Sets Kobo's validation status: 'Approved', 'Not Approved', 'On Hold', or null. */
+  /** One submission of a survey, for a link to one that isn't in the list. */
+  getSubmission: (koboId: number, surveyId: string) =>
+    request<Submission>(`/api/submissions/${koboId}?${new URLSearchParams({ survey_id: surveyId })}`),
+
   updateValidationStatus: (koboId: number, surveyId: string, validationStatus: string | null) =>
     request<Submission>(
       `/api/submissions/${koboId}/validation-status?${new URLSearchParams({ survey_id: surveyId })}`,

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { SurveyProvider, useSurvey } from './contexts/SurveyContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { forgetView, NavigationProvider, useNavigation, View } from './contexts/NavigationContext';
+import { NavigationProvider, useNavigation, View } from './contexts/NavigationContext';
+import { VIEW_LABELS } from './utils/appUrl';
 import Dashboard from './components/Dashboard';
 import DataCollectionProgressPage from './pages/DataCollectionProgressPage';
 import EnumeratorPerformancePage from './pages/EnumeratorPerformancePage';
@@ -100,18 +101,19 @@ const NavButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
   </button>
 );
 
-const SURVEY_NAV: Array<{ view: View; label: string }> = [
-  { view: 'dashboard', label: 'Submissions' },
-  { view: 'qualityOverview', label: 'Data quality' },
-  { view: 'dataCollectionProgress', label: 'Progress' },
-  { view: 'enumeratorPerformance', label: 'Field team' },
-  { view: 'settings', label: 'Settings' },
+const SURVEY_NAV: View[] = [
+  'dashboard',
+  'qualityOverview',
+  'dataCollectionProgress',
+  'enumeratorPerformance',
+  'settings',
 ];
 
 // The signed-in app: sidebar, view tabs and the current page.
 const Shell: React.FC = () => {
   const { user, logout } = useAuth();
-  const { view, requestedTab, dashboardFilters, navigate } = useNavigation();
+  const { view, requestedTab, dashboardFilters, navigate, reportPlace } = useNavigation();
+  const onTabChange = useCallback((tab: string) => reportPlace({ tab }), [reportPlace]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     // On a phone-width screen an open sidebar covers most of the page, so
     // start collapsed there whatever was saved; it is one tap to open.
@@ -146,8 +148,8 @@ const Shell: React.FC = () => {
     enumeratorPerformance: <EnumeratorPerformancePage onNavigateToSubmissions={toSubmissions} />,
     qualityOverview: <QualityOverviewPage onNavigateToSubmissions={toSubmissions} />,
     createSurvey: <CreateSurveyPage />,
-    settings: <SurveySettingsPage requestedTab={requestedTab} />,
-    userSettings: <UserSettingsPage requestedTab={requestedTab} />,
+    settings: <SurveySettingsPage requestedTab={requestedTab} onTabChange={onTabChange} />,
+    userSettings: <UserSettingsPage requestedTab={requestedTab} onTabChange={onTabChange} />,
   };
 
   return (
@@ -158,7 +160,11 @@ const Shell: React.FC = () => {
           onSurveySelect={handleSurveySelect}
           user={user!}
           onUserSettings={() => navigate({ view: 'userSettings' })}
-          onLogout={logout}
+          onLogout={() => {
+            // Signing out leaves the start address, so the next sign-in starts afresh.
+            window.history.replaceState(null, '', '/');
+            logout();
+          }}
           isUserSettingsActive={view === 'userSettings'}
           isOpen={isSidebarOpen}
           onToggle={handleSidebarToggle}
@@ -172,8 +178,8 @@ const Shell: React.FC = () => {
                 className="-mb-px flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto"
               >
                 {SURVEY_NAV.map((item) => (
-                  <NavButton key={item.view} active={view === item.view} onClick={() => navigate({ view: item.view })}>
-                    {item.label}
+                  <NavButton key={item} active={view === item} onClick={() => navigate({ view: item })}>
+                    {VIEW_LABELS[item]}
                   </NavButton>
                 ))}
               </nav>
@@ -201,6 +207,10 @@ const Shell: React.FC = () => {
 const AppContent: React.FC = () => {
   const { user, isLoading } = useAuth();
 
+  useEffect(() => {
+    if (!user && !isLoading) document.title = 'Sign in · Field Compass';
+  }, [user, isLoading]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-white dark:bg-gray-950">
@@ -210,7 +220,8 @@ const AppContent: React.FC = () => {
   }
 
   if (!user) {
-    return <LoginPage onLoginSuccess={forgetView} />;
+    // The address stays as it was: a link followed while signed out opens once signed in.
+    return <LoginPage />;
   }
 
   return (
