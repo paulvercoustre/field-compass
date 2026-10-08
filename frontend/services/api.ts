@@ -102,6 +102,8 @@ export interface KoboFormQuestion {
   group_path?: string | null;
   /** `relevant` conditions of those groups — a consent gate, usually. */
   group_relevant?: string[];
+  /** The innermost group's label, by language: its title in the answers. */
+  group_labels?: Record<string, string>;
 }
 
 export interface KoboFormChoice {

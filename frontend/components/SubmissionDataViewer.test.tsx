@@ -106,3 +106,41 @@ describe('SubmissionDataViewer select answers', () => {
     expect(view.getByText(/Refresh the form in Settings/)).toBeTruthy();
   });
 });
+
+describe('SubmissionDataViewer group titles', () => {
+  afterEach(cleanup);
+
+  const grouped = {
+    survey_id: 's',
+    survey_name: 'S',
+    kobo_asset_id: null,
+    config_data: {
+      kobo_tool: {
+        label_column_survey: 'label::French (fr)',
+        survey: [
+          {
+            name: 'resp_age',
+            type: 'integer',
+            roster_name: null,
+            group_path: 'hh',
+            'label::French (fr)': 'Âge',
+            'group_label::English (en)': 'Household',
+            'group_label::French (fr)': '**Ménage**',
+          },
+          { name: 'crop', type: 'text', roster_name: null, group_path: 'hh/grp_livelihoods', ...label('Main crop') },
+          { name: 'notes', type: 'text', roster_name: null, group_path: 'hh', ...label('Notes') },
+        ],
+        choices: [],
+      },
+    },
+  } as unknown as SurveyConfig;
+
+  it('titles each group with its label in the survey’s language, or its name tidied', () => {
+    const view = render(
+      <SubmissionDataViewer data={{ resp_age: 30, crop: 'rice', notes: 'ok' }} surveyConfig={grouped} />
+    );
+    const titles = Array.from(view.container.querySelectorAll('h4')).map((h) => h.textContent);
+    // A form saved before group labels were kept falls back on the group's name.
+    expect(titles).toEqual(['Ménage', 'Livelihoods', 'HH']);
+  });
+});

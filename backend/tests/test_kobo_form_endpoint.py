@@ -137,6 +137,12 @@ class TestKoboAssetForm:
             "Dari (da)": "شماره",
         }
         assert by_name["enumerator_id"]["list_name"] == "enums"
+        # Each question carries its group's label, which the group row no longer can.
+        assert by_name["enumerator_id"]["group_labels"] == {
+            "English (en)": "Intro",
+            "Dari (da)": "مقدمه",
+        }
+        assert by_name["age"]["group_labels"] == {}
         assert by_name["age"]["constraint"] == ". <= 120"
         assert by_name["age"]["required"] is True
 

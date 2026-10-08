@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from etl.kobo_fetcher import KoboFetcher
 from forms import load_form_schema
+from forms.schema import GROUP_OPEN_TYPES
 from linter.questions import enclosing_relevants
 from schemas import FormChoice, FormQuestion, KoboProject, SurveyFormResponse
 from services.auth import CurrentUser, get_user_kobo_token
@@ -163,6 +164,11 @@ async def get_kobo_asset_form(
             ),
         )
 
+    # A group's own label titles it in a submission's answers.
+    group_labels = {
+        row.path: row.label for row in schema.questions if row.type in GROUP_OPEN_TYPES and row.path
+    }
+
     questions = [
         {
             "path": question.path,
@@ -181,6 +187,7 @@ async def get_kobo_asset_form(
             # conditions those groups put on it (a consent gate, usually).
             "group_path": question.group_path or None,
             "group_relevant": enclosing_relevants(schema, question),
+            "group_labels": group_labels.get(question.group_path, {}),
         }
         for question in schema.questions
         if question.name and question.type not in NON_QUESTION_TYPES

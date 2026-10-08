@@ -5,7 +5,7 @@ import { AudioAnswer } from '../services/transcriptionApi';
 import { SubmissionTranslations, Translation } from '../services/translationApi';
 import { getChoices, getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
 import { Finding, answerAnchor } from '../utils/findings';
-import { AnswerText } from '../utils/formText';
+import { AnswerText, formText } from '../utils/formText';
 import { FilterUnknown, offeredChoices } from '../utils/choiceFilter';
 import FormText from './ui/FormText';
 import { Player, RecordingDetails, RecordingStatus } from './transcription/AudioAnswers';
@@ -57,13 +57,6 @@ const findTranslation = (
   );
 };
 
-// Humanize a snake_case or camelCase string into title case
-const humanize = (str: string): string =>
-  str
-    .replace(/_/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-
 // Form rows Kobo fills in itself, or that hold no answer.
 const NOT_ANSWERS = new Set([
   'start',
@@ -78,10 +71,41 @@ const NOT_ANSWERS = new Set([
   'note',
 ]);
 
-// The group a question sits in, by its innermost group's name: "household/income" reads "Income".
-const groupTitle = (question: KoboQuestion): string | null => {
-  const last = (question.group_path ?? '').split('/').filter(Boolean).pop();
-  return last ? humanize(last) : null;
+/** The column a survey's labels are read from (`label::English (en)`). */
+const labelColumnOf = (config: SurveyConfig | null): string =>
+  config?.config_data.kobo_tool?.label_column_survey || 'label::English (en)';
+
+/** A group's name tidied, for forms saved before group labels were kept: "grp_livelihoods" reads "Livelihoods", "hh" "HH". */
+const groupName = (name: string): string => {
+  const words = name
+    .replace(/^(grp|group|g|sec|section|module|mod)[_-]+(?=[a-z])/i, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(/[_\s-]+/)
+    .filter(Boolean);
+  if (words.length === 0) return name;
+  if (words.length === 1 && words[0].length <= 3) return words[0].toUpperCase();
+  const text = words.join(' ').toLowerCase();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+/** The innermost group a question sits in: its path, and its title as the form labels it. */
+const groupOf = (
+  question: KoboQuestion,
+  labelColumn: string,
+  answer: AnswerText
+): { path: string; title: string } | null => {
+  const path = (question.group_path ?? '').replace(/^\/+|\/+$/g, '');
+  const name = path.split('/').pop();
+  if (!name) return null;
+  const row = question as unknown as Record<string, unknown>;
+  const label =
+    row[`group_${labelColumn}`] ??
+    row['group_label::English (en)'] ??
+    Object.entries(row).find(([key]) => key.startsWith('group_label'))?.[1];
+  return {
+    path,
+    title: typeof label === 'string' && label.trim() ? formText(label, answer) : groupName(name),
+  };
 };
 
 // Look up a value from submission_data using path-based matching
@@ -417,8 +441,12 @@ interface RosterSectionProps {
 }
 
 const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, rosterItems, surveyConfig, answers }) => {
+  // Titled with the repeat's label, which its own questions carry.
+  const group = questions
+    .map((q) => groupOf(q, labelColumnOf(surveyConfig), answers.text))
+    .find((g) => g?.path.split('/').pop() === rosterName);
   return (
-    <SectionCard title={humanize(rosterName)}>
+    <SectionCard title={group?.title ?? groupName(rosterName)}>
       {rosterItems.length === 0 ? (
         <div className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500 italic">No entries recorded</div>
       ) : (
@@ -528,6 +556,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
     );
   }
 
+  const labelColumn = labelColumnOf(surveyConfig);
   let lastGroup: string | null = null;
   return (
     <div className="space-y-4">
@@ -567,14 +596,14 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
           </div>
           <div className="divide-y divide-gray-50 dark:divide-gray-800/60">
             {shownQuestions.map((q) => {
-              const group = groupTitle(q);
+              const group = groupOf(q, labelColumn, answers.text);
               const heading =
-                group && group !== lastGroup ? (
-                  <h4 className="bg-white px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:bg-gray-900 dark:text-gray-500">
-                    {group}
+                group && group.path !== lastGroup ? (
+                  <h4 className="bg-gray-50 px-4 py-2 text-[13px] font-semibold text-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
+                    {group.title}
                   </h4>
                 ) : null;
-              lastGroup = group;
+              lastGroup = group?.path ?? null;
               const recording = q.type === 'audio' ? findRecording(recordings, q) : undefined;
               const row =
                 recording && recordings ? (

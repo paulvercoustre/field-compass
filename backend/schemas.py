@@ -293,6 +293,9 @@ class FormQuestion(BaseModel):
     # groups' path and `relevant` conditions for the linter.
     group_path: str | None = None
     group_relevant: list[str] = []
+    # The innermost enclosing group's labels, by language: its title in the
+    # answers, where the group's name ("hh") would mean little.
+    group_labels: dict[str, str] = {}
 
 
 class FormChoice(BaseModel):
