@@ -5,6 +5,9 @@ import { AudioAnswer } from '../services/transcriptionApi';
 import { SubmissionTranslations, Translation } from '../services/translationApi';
 import { getChoices, getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
 import { Finding, answerAnchor } from '../utils/findings';
+import { AnswerText } from '../utils/formText';
+import { FilterUnknown, offeredChoices } from '../utils/choiceFilter';
+import FormText from './ui/FormText';
 import { Player, RecordingDetails, RecordingStatus } from './transcription/AudioAnswers';
 import { TranslationBlock } from './translation/TranslationBlock';
 
@@ -97,6 +100,25 @@ const displayValue = (value: any, fieldName: string, surveyConfig: SurveyConfig 
   return formatValueForDisplay(value, fieldName, surveyConfig);
 };
 
+/** A submission's answers by question name: as stored, and as they read in a sentence. */
+interface Answers {
+  raw: (question: string) => unknown;
+  text: AnswerText;
+}
+
+const answersOf = (data: Record<string, any>, surveyConfig: SurveyConfig | null, fallback?: Answers): Answers => {
+  const raw = (question: string) => lookupValue(data, question) ?? fallback?.raw(question);
+  return {
+    raw,
+    text: (question) => {
+      const value = raw(question);
+      return value === null || value === undefined || value === ''
+        ? undefined
+        : formatValueForDisplay(value, question, surveyConfig);
+    },
+  };
+};
+
 /** The findings about an answer, as short lines under it. */
 const InlineFindings: React.FC<{ findings: Finding[] }> = ({ findings }) =>
   findings.length === 0 ? null : (
@@ -159,15 +181,19 @@ const ChoiceAnswer: React.FC<{
   options: Array<{ name: string; label: string }>;
   chosen: string[];
   multiple: boolean;
-}> = ({ options, chosen, multiple }) => {
+  answer: AnswerText;
+  /** The question filters its options and that couldn't be followed: \`options\` is the whole list. */
+  unknown?: FilterUnknown;
+}> = ({ options, chosen, multiple, answer, unknown }) => {
   const [open, setOpen] = useState(false);
   // An answer outside the list (an old form version, say) is still shown.
   const all = [
     ...options,
     ...chosen.filter((value) => !options.some((o) => o.name === value)).map((value) => ({ name: value, label: value })),
   ];
-  const long = all.length > OPTIONS_SHOWN;
-  const shown = long && !open ? all.filter((o) => chosen.includes(o.name)) : all;
+  // The whole list, when the respondent saw only part of it, would mislead: fold it too.
+  const folds = all.length > OPTIONS_SHOWN || (!!unknown && all.length > chosen.length);
+  const shown = folds && !open ? all.filter((o) => chosen.includes(o.name)) : all;
   return (
     <div className="min-w-0">
       <ul
@@ -184,22 +210,29 @@ const ChoiceAnswer: React.FC<{
                   isChosen ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'
                 }
               >
-                {option.label}
+                <FormText text={option.label} answer={answer} />
                 {isChosen && <span className="sr-only"> (chosen)</span>}
               </span>
             </li>
           );
         })}
       </ul>
-      {long && (
+      {folds && (
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           className="mt-1 text-xs text-indigo-700 hover:underline dark:text-indigo-300"
         >
-          {open ? 'Show chosen only' : `Show all ${all.length} options`}
+          {open ? 'Show chosen only' : `Show all ${all.length} options${unknown ? ' in the list' : ''}`}
         </button>
+      )}
+      {unknown && open && (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {unknown === 'columns-missing'
+            ? 'The options offered depend on earlier answers. Refresh the form in Settings › General to show only those.'
+            : 'The options offered depend on earlier answers in a way Field Compass can’t follow, so this is the whole list.'}
+        </p>
       )}
     </div>
   );
@@ -214,6 +247,8 @@ interface QuestionRowProps {
   question: KoboQuestion;
   value: any;
   surveyConfig: SurveyConfig | null;
+  /** The submission's answers, for \`${…}\` in labels and for choice filters. */
+  answers: Answers;
   translation?: Translation;
   findings?: Finding[];
   anchor?: boolean;
@@ -223,6 +258,7 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
   question,
   value,
   surveyConfig,
+  answers,
   translation,
   findings = [],
   anchor,
@@ -231,18 +267,32 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
   const formatted = displayValue(value, question.name, surveyConfig);
   const isEmpty = value === null || value === undefined || value === '';
   const multiple = question.type === 'select_multiple';
-  const options =
+  const list =
     !isEmpty && (multiple || question.type === 'select_one') ? getChoices(question.list_name, surveyConfig) : [];
+  const chosen = multiple ? String(value).split(' ').filter(Boolean) : [String(value)];
+  // Only the options this respondent was offered, when the question filters
+  // them. What they chose always stays, under its label: the form may have
+  // changed since, so that the filter would no longer offer it.
+  let options = list;
+  let unknown: FilterUnknown | undefined;
+  if (list.length > 0 && question.choice_filter) {
+    const result = offeredChoices(
+      question.choice_filter,
+      list.map((choice) => ({ ...choice.row, name: choice.name })),
+      answers.raw
+    );
+    if ('offered' in result)
+      options = list.filter((choice) => result.offered.has(choice.name) || chosen.includes(choice.name));
+    else unknown = result.unknown;
+  }
 
   return (
     <div id={anchor ? answerAnchor(question.name) : undefined} className={rowClass(findings.length > 0)}>
-      <span className="text-sm text-gray-500 dark:text-gray-400 break-words leading-snug">{label}</span>
-      {options.length > 0 ? (
-        <ChoiceAnswer
-          options={options}
-          chosen={multiple ? String(value).split(' ').filter(Boolean) : [String(value)]}
-          multiple={multiple}
-        />
+      <span className="text-sm text-gray-500 dark:text-gray-400 break-words leading-snug">
+        <FormText text={label} answer={answers.text} />
+      </span>
+      {list.length > 0 ? (
+        <ChoiceAnswer options={options} chosen={chosen} multiple={multiple} answer={answers.text} unknown={unknown} />
       ) : (
         <span
           className={`text-sm font-medium break-words leading-snug ${
@@ -264,6 +314,8 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
 
 interface RecordingRowProps {
   label: string;
+  /** For \`${…}\` in the label. */
+  answerText?: AnswerText;
   name: string;
   answer: AudioAnswer;
   recordings: Recordings;
@@ -277,6 +329,7 @@ interface RecordingRowProps {
 // another language) show with the transcript; others as lines below.
 const RecordingRow: React.FC<RecordingRowProps> = ({
   label,
+  answerText,
   name,
   answer,
   recordings,
@@ -299,7 +352,7 @@ const RecordingRow: React.FC<RecordingRowProps> = ({
         <rect x="9" y="2" width="6" height="12" rx="3" />
         <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" />
       </svg>
-      {label}
+      <FormText text={label} answer={answerText} />
     </span>
     <div className="min-w-0">
       <RecordingStatus answer={answer} sendToKobo={recordings.sendToKobo} />
@@ -357,12 +410,13 @@ const SectionCard: React.FC<SectionCardProps> = ({ title, children, defaultOpen 
 
 interface RosterSectionProps {
   rosterName: string;
+  answers: Answers;
   questions: KoboQuestion[];
   rosterItems: Record<string, any>[];
   surveyConfig: SurveyConfig | null;
 }
 
-const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, rosterItems, surveyConfig }) => {
+const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, rosterItems, surveyConfig, answers }) => {
   return (
     <SectionCard title={humanize(rosterName)}>
       {rosterItems.length === 0 ? (
@@ -377,7 +431,16 @@ const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, ro
             )}
             {questions.map((q) => {
               const value = item[q.name] ?? lookupValue(item, q.name);
-              return <QuestionRow key={q.name} question={q} value={value} surveyConfig={surveyConfig} />;
+              return (
+                <QuestionRow
+                  key={q.name}
+                  question={q}
+                  value={value}
+                  surveyConfig={surveyConfig}
+                  // An item's own answers first, then the rest of the submission's.
+                  answers={answersOf(item, surveyConfig, answers)}
+                />
+              );
             })}
           </div>
         ))
@@ -405,6 +468,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
 }) => {
   const survey: KoboQuestion[] = surveyConfig?.config_data.kobo_tool?.survey ?? [];
   const findingsFor = useMemo(() => byQuestion(findings), [findings]);
+  const answers = useMemo(() => answersOf(data, surveyConfig), [data, surveyConfig]);
   const [flaggedChosen, setOnlyFlagged] = useState(false);
 
   // Separate top-level and roster questions; the header already says when
@@ -436,6 +500,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
                 <RecordingRow
                   key={key}
                   label={key}
+                  answerText={answers.text}
                   name={key}
                   answer={recording}
                   recordings={recordings}
@@ -449,6 +514,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
                   question={question}
                   value={val}
                   surveyConfig={null}
+                  answers={answers}
                   translation={translation}
                   findings={findingsFor.get(key)}
                   anchor
@@ -514,6 +580,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
                 recording && recordings ? (
                   <RecordingRow
                     label={getQuestionLabel(q.name, surveyConfig)}
+                    answerText={answers.text}
                     name={q.name}
                     answer={recording}
                     recordings={recordings}
@@ -526,6 +593,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
                     question={q}
                     value={lookupValue(data, q.name)}
                     surveyConfig={surveyConfig}
+                    answers={answers}
                     translation={q.type === 'text' ? findTranslation(translations, q) : undefined}
                     findings={findingsFor.get(q.name)}
                     anchor
@@ -557,6 +625,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
           return (
             <RosterSection
               key={rosterName}
+              answers={answers}
               rosterName={rosterName}
               questions={rosterQuestions}
               rosterItems={rosterItems}

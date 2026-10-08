@@ -60,7 +60,15 @@ ASSET_PAYLOAD = {
             },
         ],
         "choices": [
-            {"list_name": "enums", "name": "E01", "label": ["Amina", "امینه"]},
+            {
+                "list_name": "enums",
+                "name": "E01",
+                "label": ["Amina", "امینه"],
+                "province": "kabul",
+                "team": 2,
+                "$kuid": "c1",
+                "media::image": ["a.png", None],
+            },
             {"list_name": "enums", "name": "E02", "label": ["Bilal", "بلال"]},
         ],
     },
@@ -105,10 +113,14 @@ class TestKoboAssetForm:
         assert payload["asset_name"] == "Market Assessment"
         assert payload["languages"] == ["English (en)", "Dari (da)"]
         assert payload["has_audit"] is True
+        # The choice's own columns come along, as text, for choice filters;
+        # Kobo's bookkeeping and media do not.
         assert payload["choice_lists"]["enums"][0] == {
             "name": "E01",
             "labels": {"English (en)": "Amina", "Dari (da)": "امینه"},
+            "columns": {"province": "kabul", "team": "2"},
         }
+        assert payload["choice_lists"]["enums"][1]["columns"] == {}
 
     def test_questions_carry_group_qualified_paths(self, client):
         """Paths must match submission_data keys, not bare names."""

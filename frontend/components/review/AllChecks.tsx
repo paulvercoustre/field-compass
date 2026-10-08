@@ -2,7 +2,7 @@ import React from 'react';
 import { Submission } from '../../types';
 import { SurveyConfig, ValidationRule } from '../../services/progressApi';
 import { issueName } from '../../utils/issueNames';
-import { getQuestionLabel } from '../../utils/koboLabelUtils';
+import { questionText } from '../../utils/koboLabelUtils';
 import { inferSamplingMode } from '../../utils/samplingMode';
 import { describeAiCheck } from '../../utils/aiReviewStatus';
 import { isAiReviewIssue } from '../../utils/findings';
@@ -71,7 +71,7 @@ export function buildCheckList({ submission, config, rules }: Inputs): CheckGrou
     for (const variable of flagged) {
       answers.push({
         key: `outlier_${variable}`,
-        label: `Outlier · ${getQuestionLabel(variable, config)}`,
+        label: `Outlier · ${questionText(variable, config, submission.submission_data)}`,
         state: 'flagged',
       });
     }

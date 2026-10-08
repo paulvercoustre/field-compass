@@ -1,7 +1,7 @@
 import { QualityIssue } from '../types';
 import { SurveyConfig, ValidationRule } from '../services/progressApi';
 import { aiFindingName, issueName } from './issueNames';
-import { formatValueForDisplay, getQuestionLabel } from './koboLabelUtils';
+import { formatValueForDisplay, questionText } from './koboLabelUtils';
 import { findAnswer } from './answers';
 
 /**
@@ -82,8 +82,9 @@ const asNumber = (value: unknown): number | undefined => {
 
 const metadataOf = (issue: QualityIssue): Record<string, any> => (issue.metadata ?? {}) as Record<string, any>;
 
-const label = (name: string | undefined, config: SurveyConfig | null): string =>
-  name ? getQuestionLabel(name, config) : '';
+// A question's label as it read to the respondent: references filled, markdown dropped.
+const label = (name: string | undefined, ctx: Context): string =>
+  name ? questionText(name, ctx.config, ctx.data) : '';
 
 function describeCheck(issue: QualityIssue, ctx: Context): Pick<Finding, 'title' | 'detail'> {
   const params = ctx.config?.config_data?.global_parameters ?? {};
@@ -147,7 +148,7 @@ function describeOutlier(issue: QualityIssue, ctx: Context): Partial<Finding> {
   const value = asNumber(issue.value ?? findAnswer(ctx.data, variable));
   const lower = asNumber(meta.bounds?.lower_bound);
   const upper = asNumber(meta.bounds?.upper_bound);
-  const name = label(variable, ctx.config);
+  const name = label(variable, ctx);
   const stats = meta.statistics
     ? [
         meta.statistics.mean != null && `Mean ${number(meta.statistics.mean)}`,
@@ -183,7 +184,7 @@ function describeCustom(issue: QualityIssue, ctx: Context): Partial<Finding> {
         answer === undefined || answer === null || answer === ''
           ? '—'
           : formatValueForDisplay(answer, variable, ctx.config);
-      const name = label(variable, ctx.config);
+      const name = label(variable, ctx);
       return /[?:]$/.test(name) ? `${name} ${shown}` : `${name}: ${shown}`;
     })
     .join(' · ');
@@ -208,7 +209,7 @@ export function describeFindings(issues: QualityIssue[], ctx: Context): Finding[
           detail: reasoning,
           quote:
             answer !== undefined && answer !== null
-              ? { question: label(base.question, ctx.config), answer: String(answer) }
+              ? { question: label(base.question, ctx), answer: String(answer) }
               : undefined,
         };
       }

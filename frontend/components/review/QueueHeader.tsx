@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FilterState, QueueSort, ReviewTab, SubmissionFacets } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { issueName } from '../../utils/issueNames';
-import { formatValueForDisplay, getQuestionLabel } from '../../utils/koboLabelUtils';
+import { formatValueForDisplay, questionText } from '../../utils/koboLabelUtils';
 import { menuFilterCount } from '../../utils/filterUtils';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { Spinner } from '../Spinner';
@@ -279,7 +279,7 @@ const QueueHeader: React.FC<QueueHeaderProps> = ({
             <Chip
               key={`issue-${check}`}
               kind="Issue"
-              label={issueName(check, (name) => getQuestionLabel(name, surveyConfig))}
+              label={issueName(check, (name) => questionText(name, surveyConfig))}
               onRemove={() => onChange({ ...filters, issues: filters.issues!.filter((c) => c !== check) })}
             />
           ))}

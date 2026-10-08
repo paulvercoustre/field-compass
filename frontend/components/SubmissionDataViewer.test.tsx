@@ -23,6 +23,15 @@ const config = {
         { name: 'water', type: 'select_one', list_name: 'water', roster_name: null, ...label('Main water source') },
         { name: 'assets', type: 'select_multiple', list_name: 'assets', roster_name: null, ...label('Assets owned') },
         { name: 'crop', type: 'select_one', list_name: 'crops', roster_name: null, ...label('Main crop') },
+        { name: 'province', type: 'select_one', list_name: 'provinces', roster_name: null, ...label('Province') },
+        {
+          name: 'district',
+          type: 'select_one',
+          list_name: 'districts',
+          choice_filter: 'province=${province}',
+          roster_name: null,
+          ...label('District in **${province}**'),
+        },
       ],
       choices: [
         { list_name: 'water', name: 'piped', ...label('Piped water') },
@@ -30,6 +39,11 @@ const config = {
         { list_name: 'assets', name: 'radio', ...label('Radio') },
         { list_name: 'assets', name: 'phone', ...label('Phone') },
         { list_name: 'assets', name: 'bike', ...label('Bicycle') },
+        { list_name: 'provinces', name: 'kabul', ...label('Kabul') },
+        { list_name: 'provinces', name: 'herat', ...label('Herat') },
+        { list_name: 'districts', name: 'kabul_city', province: 'kabul', ...label('Kabul city') },
+        { list_name: 'districts', name: 'paghman', province: 'kabul', ...label('Paghman') },
+        { list_name: 'districts', name: 'herat_city', province: 'herat', ...label('Herat city') },
         ...['maize', 'rice', 'wheat', 'sorghum', 'millet', 'beans', 'cassava', 'potato'].map((name) => ({
           list_name: 'crops',
           name,
@@ -63,5 +77,32 @@ describe('SubmissionDataViewer select answers', () => {
     expect(options(view, 'Main crop')).toEqual(['Rice (chosen)']);
     fireEvent.click(view.getByRole('button', { name: 'Show all 8 options' }));
     expect(options(view, 'Main crop')).toHaveLength(8);
+  });
+
+  it('fills references in labels and shows only the options offered', () => {
+    const view = render(
+      <SubmissionDataViewer data={{ province: 'kabul', district: 'paghman' }} surveyConfig={config} />
+    );
+    const heading = view.getByText('Kabul', { selector: 'strong' });
+    expect(heading.parentElement!.textContent).toBe('District in Kabul');
+    expect(options(view, 'District in')).toEqual(['Kabul city', 'Paghman (chosen)']);
+  });
+
+  it('keeps a chosen option the filter would no longer offer', () => {
+    const view = render(
+      <SubmissionDataViewer data={{ province: 'kabul', district: 'herat_city' }} surveyConfig={config} />
+    );
+    expect(options(view, 'District in')).toEqual(['Kabul city', 'Paghman', 'Herat city (chosen)']);
+  });
+
+  it('folds the whole list when the filter can’t be followed', () => {
+    const old = structuredClone(config);
+    // Saved before choice columns were kept.
+    old.config_data.kobo_tool!.choices = old.config_data.kobo_tool!.choices.map(({ province: _p, ...rest }) => rest);
+    const view = render(<SubmissionDataViewer data={{ province: 'kabul', district: 'paghman' }} surveyConfig={old} />);
+    expect(options(view, 'District in')).toEqual(['Paghman (chosen)']);
+    fireEvent.click(view.getByRole('button', { name: 'Show all 3 options in the list' }));
+    expect(options(view, 'District in')).toHaveLength(3);
+    expect(view.getByText(/Refresh the form in Settings/)).toBeTruthy();
   });
 });

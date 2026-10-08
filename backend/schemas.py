@@ -298,6 +298,8 @@ class FormQuestion(BaseModel):
 class FormChoice(BaseModel):
     name: str
     labels: dict[str, str] = {}
+    # The form's own columns on the choice row, which choice filters test.
+    columns: dict[str, str] = {}
 
 
 class SurveyFormResponse(BaseModel):

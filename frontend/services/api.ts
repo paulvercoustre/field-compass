@@ -107,6 +107,8 @@ export interface KoboFormQuestion {
 export interface KoboFormChoice {
   name: string;
   labels: Record<string, string>;
+  /** The form's own columns on the choice row, which choice filters test. */
+  columns?: Record<string, string>;
 }
 
 export interface KoboProjectForm {

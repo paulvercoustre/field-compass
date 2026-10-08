@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FacetCount, FilterState, SamplingFilter, SubmissionFacets } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { issueName } from '../../utils/issueNames';
-import { formatValueForDisplay, getQuestionLabel } from '../../utils/koboLabelUtils';
+import { formatValueForDisplay, questionText } from '../../utils/koboLabelUtils';
 
 interface FilterMenuProps {
   facets: SubmissionFacets | null;
@@ -158,7 +158,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({ facets, filters, surveyConfig, 
             name="filter-issue"
             options={issues}
             chosen={filters.issues ?? []}
-            label={(check) => issueName(check, (name) => getQuestionLabel(name, surveyConfig))}
+            label={(check) => issueName(check, (name) => questionText(name, surveyConfig))}
             onToggle={(value) => onChange({ ...filters, issues: toggle(filters.issues, value) })}
             bars
           />
@@ -180,7 +180,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({ facets, filters, surveyConfig, 
         const options = withChosen(values, chosen);
         if (!options.length) return null;
         return (
-          <Section key={variable} title={getQuestionLabel(variable, surveyConfig)}>
+          <Section key={variable} title={questionText(variable, surveyConfig)}>
             <div className="flex flex-wrap gap-1.5">
               {options.map((option) => {
                 const on = chosen.includes(option.value);

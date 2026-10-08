@@ -30,6 +30,8 @@ export function projectFormToKoboTool(form: KoboProjectForm, language: string): 
 
   const choices = Object.entries(form.choice_lists).flatMap(([list_name, options]) =>
     options.map((option) => ({
+      // The form's own columns first, so they can never replace the name or a label.
+      ...option.columns,
       list_name,
       name: option.name,
       ...labelColumns(option.labels),

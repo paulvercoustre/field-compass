@@ -187,7 +187,7 @@ async def get_kobo_asset_form(
     ]
 
     choice_lists = {
-        list_name: [{"name": c.name, "labels": c.label} for c in choices]
+        list_name: [{"name": c.name, "labels": c.label, "columns": c.columns()} for c in choices]
         for list_name, choices in schema.choices_by_list.items()
     }
 

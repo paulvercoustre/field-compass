@@ -65,6 +65,8 @@ export interface KoboQuestion {
   'label::English (en)'?: string;
   roster_name: string | null;
   list_name?: string | null;
+  /** XLSForm choice_filter: which options of the list a respondent is offered. */
+  choice_filter?: string;
   group_path?: string;
   group_relevant?: string[];
 }

@@ -3,7 +3,7 @@ import { Submission } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { statusDotClass } from './Badge';
 import { findAnswer } from '../utils/answers';
-import { formatValueForDisplay, getQuestionLabel } from '../utils/koboLabelUtils';
+import { formatValueForDisplay, questionText } from '../utils/koboLabelUtils';
 import { issueName } from '../utils/issueNames';
 
 interface SubmissionListItemProps {
@@ -61,7 +61,11 @@ const SubmissionListItem: React.FC<SubmissionListItemProps> = ({
   const status = kobo_validation_status || 'Not Reviewed';
   const issueCount = data_quality_issues.length;
   const issueNames = Array.from(
-    new Set(data_quality_issues.map((i) => issueName(i.check, (name) => getQuestionLabel(name, surveyConfig))))
+    new Set(
+      data_quality_issues.map((i) =>
+        issueName(i.check, (name) => questionText(name, surveyConfig, submission.submission_data))
+      )
+    )
   );
 
   return (
