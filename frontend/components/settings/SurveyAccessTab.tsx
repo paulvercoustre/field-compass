@@ -202,8 +202,8 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
               </div>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              <strong>Viewer:</strong> Can view data and reports. <strong>Editor:</strong> Can also run ETL and resolve
-              flags.
+              <strong>Viewer:</strong> Can see the submissions and reports. <strong>Editor:</strong> Can also pull from
+              Kobo and review submissions.
             </p>
           </form>
         )}
