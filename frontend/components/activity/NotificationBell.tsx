@@ -1,16 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useActivity } from '../../contexts/ActivityContext';
 import { AppNotification, getNotifications, markNotificationsRead } from '../../services/activityApi';
-
-const when = (iso: string | null): string => {
-  if (!iso) return '';
-  const date = new Date(iso);
-  const minutes = Math.round((Date.now() - date.getTime()) / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`;
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-};
+import { timeAgo } from '../../utils/timeAgo';
 
 /**
  * Header bell: notifications for runs that finished or failed, and work that
@@ -119,7 +110,7 @@ const NotificationBell: React.FC = () => {
                           <span className="mt-0.5 block text-xs text-gray-600 dark:text-gray-400">{item.body}</span>
                         )}
                         <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">
-                          {when(item.created_at)}
+                          {timeAgo(item.created_at)}
                         </span>
                       </span>
                     </button>

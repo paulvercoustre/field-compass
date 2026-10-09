@@ -183,6 +183,8 @@ export interface PerformanceData {
   // Present when a required survey setting is missing, so the view can
   // explain itself instead of rendering an empty chart.
   unavailable?: UnavailableCapability[];
+  /** Submissions with no enumerator recorded, counted apart from the team. */
+  no_enumerator?: number;
 }
 
 // --- Filtering Types ---

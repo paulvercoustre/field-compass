@@ -14,6 +14,7 @@ import requests
 import routers.submissions as submissions_router
 from database.models import AudioTranscript, SubmissionCurrent, SurveyAccess, SurveyConfig, User
 from etl.kobo_fetcher import KoboFetcher
+from services.review_queue import NO_ENUMERATOR
 from tests.test_api_endpoints import (  # noqa: F401 -- fixture
     TEST_USER_ID,
     TestingSessionLocal,
@@ -185,6 +186,18 @@ class TestFacets:
         # The enumerator counts ignore the enumerator filter but keep the issue one.
         assert facets["enumerators"] == [{"value": "e1", "count": 1}, {"value": "e2", "count": 1}]
         assert facets["tabs"] == {"needs_review": 0, "on_hold": 1, "reviewed": 0, "all": 1}
+
+    def test_no_enumerator_recorded_is_its_own_filter_value(self, client, queue):  # noqa: F811
+        blank = _add(queue.survey, {"district": "north"}, day=7)
+        _add(queue.survey, {"enumerator_id": "  ", "district": "north"}, day=8)
+
+        facets = _facets(client, queue.survey, review="all")
+        # Last, whatever its count.
+        assert facets["enumerators"][-1] == {"value": NO_ENUMERATOR, "count": 2}
+        body = _list(client, queue.survey, review="all", enumerator=NO_ENUMERATOR)
+        assert blank in _ids_of(body) and len(_ids_of(body)) == 2
+        both = _list(client, queue.survey, review="all", enumerator=f"e2,{NO_ENUMERATOR}")
+        assert len(_ids_of(both)) == 2 + 3
 
     def test_sampling_counts(self, client, queue):  # noqa: F811
         facets = _facets(client, queue.survey, review="all")

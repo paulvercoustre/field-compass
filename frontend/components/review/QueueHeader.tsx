@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FilterState, QueueSort, ReviewTab, SubmissionFacets } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { issueName } from '../../utils/issueNames';
-import { formatValueForDisplay, questionText } from '../../utils/koboLabelUtils';
+import { enumeratorLabel, formatValueForDisplay, questionText } from '../../utils/koboLabelUtils';
 import { menuFilterCount } from '../../utils/filterUtils';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { Spinner } from '../Spinner';
@@ -120,7 +120,6 @@ const QueueHeader: React.FC<QueueHeaderProps> = ({
   }, [sortOpen]);
 
   const count = menuFilterCount(filters);
-  const enumeratorField = surveyConfig?.config_data?.core_identifiers?.enumerator;
   const context = contextOf(filters);
   const activeSort = SORTS.find((s) => s.id === sort);
 
@@ -287,7 +286,7 @@ const QueueHeader: React.FC<QueueHeaderProps> = ({
             <Chip
               key={`enumerator-${value}`}
               kind="By"
-              label={enumeratorField ? formatValueForDisplay(value, enumeratorField, surveyConfig) : value}
+              label={enumeratorLabel(value, surveyConfig)}
               onRemove={() => onChange({ ...filters, enumerators: filters.enumerators!.filter((v) => v !== value) })}
             />
           ))}

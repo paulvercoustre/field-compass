@@ -12,6 +12,7 @@ import SubmissionsBarChart from '../components/progress-tracker/SubmissionsBarCh
 import QualityScatterPlot from '../components/progress-tracker/QualityScatterPlot';
 import EnumeratorLeaderboard from '../components/progress-tracker/EnumeratorLeaderboard';
 import CapabilityNotice from '../components/ui/CapabilityNotice';
+import { NO_ENUMERATOR } from '../utils/filterUtils';
 
 interface EnumeratorPerformancePageProps {
   onNavigateToSubmissions?: (filters?: FilterState) => void;
@@ -57,6 +58,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ o
   };
 
   const unavailable = performanceData?.unavailable ?? [];
+  const noEnumerator = performanceData?.no_enumerator ?? 0;
 
   if (!selectedSurvey) {
     return (
@@ -105,6 +107,22 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ o
           <div className="max-w-screen-2xl mx-auto space-y-6">
             {/* Summary Cards */}
             <EnumeratorSummaryCards data={performanceData} />
+            {/* Not an enumerator of their own: they would count as one of the team. */}
+            {noEnumerator > 0 && (
+              <p className="-mt-2 text-sm text-gray-600 dark:text-gray-400">
+                {noEnumerator} submission{noEnumerator === 1 ? ' has' : 's have'} no enumerator recorded, so{' '}
+                {noEnumerator === 1 ? 'it isn’t' : 'they aren’t'} counted here.{' '}
+                {onNavigateToSubmissions && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToSubmissions({ review: 'all', enumerators: [NO_ENUMERATOR] })}
+                    className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+                  >
+                    See {noEnumerator === 1 ? 'it' : 'them'}
+                  </button>
+                )}
+              </p>
+            )}
 
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">

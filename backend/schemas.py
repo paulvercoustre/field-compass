@@ -311,6 +311,9 @@ class UnavailableCapability(BaseModel):
 class PerformanceData(BaseModel):
     collection: list[EnumeratorCollectionStats]
     quality: list[EnumeratorQualityStats]
+    # Submissions with no enumerator recorded: counted apart, never as an
+    # enumerator of their own.
+    no_enumerator: int = 0
     # Populated when a required setting is missing, so the client can
     # explain an empty result instead of rendering a blank chart.
     unavailable: list[UnavailableCapability] = []

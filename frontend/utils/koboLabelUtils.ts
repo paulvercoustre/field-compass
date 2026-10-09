@@ -2,6 +2,7 @@ import { KoboQuestion, KoboChoice } from '../types';
 import type { SurveyConfig } from '../services/progressApi';
 import { formText } from './formText';
 import { findAnswer } from './answers';
+import { NO_ENUMERATOR } from './filterUtils';
 
 /**
  * Get the label for a question variable from Kobo survey data
@@ -150,3 +151,10 @@ export const questionText = (
         }
       : undefined
   );
+
+/** An enumerator as the queue's filter shows it: the answer's label, or "No enumerator recorded". */
+export const enumeratorLabel = (value: string, surveyConfig: SurveyConfig | null): string => {
+  if (value === NO_ENUMERATOR) return 'No enumerator recorded';
+  const field = surveyConfig?.config_data?.core_identifiers?.enumerator;
+  return field ? formatValueForDisplay(value, field, surveyConfig) : value;
+};

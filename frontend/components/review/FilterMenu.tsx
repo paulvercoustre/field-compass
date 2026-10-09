@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FacetCount, FilterState, SamplingFilter, SubmissionFacets } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { issueName } from '../../utils/issueNames';
-import { formatValueForDisplay, questionText } from '../../utils/koboLabelUtils';
+import { enumeratorLabel, formatValueForDisplay, questionText } from '../../utils/koboLabelUtils';
 
 interface FilterMenuProps {
   facets: SubmissionFacets | null;
@@ -170,7 +170,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({ facets, filters, surveyConfig, 
             name="filter-enumerator"
             options={enumerators}
             chosen={filters.enumerators ?? []}
-            label={(value) => formatValueForDisplay(value, enumeratorField, surveyConfig)}
+            label={(value) => enumeratorLabel(value, surveyConfig)}
             onToggle={(value) => onChange({ ...filters, enumerators: toggle(filters.enumerators, value) })}
           />
         </Section>
