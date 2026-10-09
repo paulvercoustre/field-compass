@@ -10,15 +10,35 @@ Screenshot references such as `j4-03` mean `screenshots/j4-03-*.png` (journey 4,
 
 ## 0. Status — 2026-10-09
 
-Checked against `main` at `ed32785` (after #87), by reading the code and the PRs merged since the review, then updated for #88 (open). #87 and #88 were checked in a browser against the mock Kobo. Contrast and keyboard figures are still the review's.
+Checked against `main` at `6930af5` (after #95), by reading the code and the PRs merged since the review. #87 to #95 were checked in a browser against the mock Kobo. Contrast figures are still the review's.
 
-**Summary: 18 done, 14 partly done, 4 open.**
+**Summary: 31 done, 4 partly done, 0 open, 1 decided against (F-23).** What is left is mostly design work on Field Team, Data quality and Progress ([Next five](#next-five)).
 
 - Roadmap step 0 (data-loss bug) and step 1 (honesty quick wins) are **done**: #64, #67, #69, #73, #79.
 - Part of step 3 is in: tokens and shared components (#71), and persisted pull runs with an activity panel (#73).
 - Step 2, **Review loop v1**, is **done** in #87: review tabs, a filter menu with counts, a findings card next to the decision, auto-advance with Undo, keyboard shortcuts, and approving clean submissions together.
 - #87 then took several rounds of feedback from using it: clearer decision buttons, a wider focus layout, answers shown as the form showed them, and light motion between submissions ([below](#87-after-hands-on-testing)).
-- #88 keeps each survey's stored form in step with Kobo on every pull, so what #87 reads from the form (group titles, notes, the options a respondent was offered) reaches every survey; and the date, start and end questions can now be chosen (F-20).
+- #88 to #90 did the next steps agreed on 2026-10-09:
+  - each survey's stored form follows Kobo on every pull, so what #87 reads from the form (group titles, notes, the options a respondent was offered) reaches every survey;
+  - the date, start and end questions can be chosen (F-20);
+  - Field Team counts submissions with no enumerator apart (F-11);
+  - every data page says when it was last pulled (F-14);
+  - viewers no longer get the pull button (F-34);
+  - every page and submission has its own address and browser-tab title (F-32, F-31).
+- #92 to #95 did the smaller items, also on 2026-10-09:
+  - Survey settings has no Edit step (F-22), the Kobo project is chosen as on Create (F-25), and every form label points at its field (F-27);
+  - one dialog that holds keyboard focus, used by every confirmation and the last three overlays (F-30); Field Team's tables and Data quality's issue chart work from the keyboard (F-26); the last jargon is gone (F-12);
+  - "Edited in Kobo" opens what each edit changed (F-06);
+  - the Submissions queue loads in parts, about 0.35 s instead of 2 to 6 s at 2,000 submissions (F-36).
+
+### Decisions and answers, 2026-10-09
+
+- **Field Team keeps enumerator IDs**, not names (F-11). Submissions still shows the answer's label.
+- **Settings sections need no Edit step** (F-22): done in #92.
+- **Q4.** Not sure what the methodology calls "validated". Field Team should probably keep showing review progress, but Field Team, Data quality and Progress need thinking about together.
+- **Q5.** Coordinators act on interview duration, the don't-know rate, the share of submissions flagged, and specific checks.
+- **Q6.** New surveys keep their checks off: F-23 is decided against.
+- **Q10.** The largest survey is probably under 2,000 submissions; the queue was made faster anyway (#95).
 
 ### What changed since the review
 
@@ -35,6 +55,13 @@ Checked against `main` at `ed32785` (after #87), by reading the code and the PRs
 | #83, #85 | `NavigationContext` holds all navigation, which makes a router easier (F-32). `SurveySettingsPage` split into sections with one section editor (F-22). Settings labels bound to inputs; delete dialog has `role="dialog"` (F-27, F-30). Dead code removed, including the unused `HistoryViewer` (F-06). |
 | #87 | Review loop v1, built from the [design canvas](https://claude.ai/artifact/DB3CT24FcFGXTW5NB4AehD) (layout A with the focus toggle). Tabs Needs review · On hold · Reviewed · All with counts; search; one filter menu (issue, enumerator, groups) with counts per option; sort (F-01 A+B). A findings card at the top of the submission: one sentence per finding, the note and the decision buttons together; the four check sections become one "All checks" list (F-02). After a decision the submission leaves a tab it no longer fits, the next opens, Undo for 8 s; A/N/H, J/K, Z, / (F-03, F-26). Both are per-account settings, on by default. Data quality bars open the list filtered to their issue (F-09 B). Approve clean submissions together, in Kobo's bulk endpoint. |
 | #88 | Each pull reads the form from Kobo and stores it when it changed, keeping the chosen label language; one builder (`services/kobo_form.py`) makes the stored rows for the pull and the form endpoint. Pickers for the interview date, start and end questions on Create and Settings (F-20 B). |
+| #89 | Field Team counts submissions with no enumerator apart and links to them; the queue's enumerator filter gains "No enumerator recorded" (F-11). "Last pulled 3 h ago" beside the pull button on every data page (F-14 A). Viewers don't get the pull button (F-34). |
+| #91 | This status update. |
+| #92 | Survey settings without an Edit step: Save and Cancel appear once a section changes (F-22). The Kobo project picker from Create in Settings (F-25). The 21 remaining form labels bound to their fields (F-27). |
+| #93 | `ui/Dialog`: announced by its title, focus moved in, kept inside and given back, Escape to close; `ConfirmDialog` built on it, and the Field Team explanations, "Set up quality checks" and "Delete your account?" moved onto it (F-30). Field Team's tables sort and open enumerators from the keyboard; Data quality's issue chart has a Table view (F-26). "Avg. don't-know rate", and plain role descriptions (F-12). |
+| #94 | "Edited in Kobo" opens each edit's changed answers as old → new; edits now keep the old values (F-06 B). |
+| #95 | The queue loads 50 at a time, more on scroll, Load more, or ahead of J and auto-advance; reads on from where the list ends (`offset`) (F-36). |
+| #90 | An address for every page and submission (`/surveys/<id>/submissions/<kobo id>?review=…`): links, reloads, Back and Forward land in the same place (F-32). A browser-tab title per page and open submission (F-31). |
 
 #66 (the first step-1 PR) was closed unmerged and redone as #79. Three things in #66 were not carried over: per-view `document.title`, the 8 s Undo on rule delete, and the amber "pulled 800 of 1 000" partial pull. Today a Kobo error part-way through fails the whole pull (`kobo_fetcher.py`, `KoboFetchError`), which is honest, but the pages already read are not kept.
 
@@ -49,13 +76,13 @@ What changed in #87 after the first version, from using the queue on the mock Ko
 
 ### Finding status
 
-✅ done · 🟡 partly done · ⬜ open. Sorted by the original priority.
+✅ done · 🟡 partly done · ⬜ open · — decided against. Sorted by the original priority.
 
 | ID | Finding (short) | Status | Where it stands / what is left |
 |---|---|---|---|
 | F-13 | Failed pulls shown as success | ✅ | #64, #67, #73, #79. Partial pulls now fail outright instead of keeping the pages read (see above). |
 | F-18 | Kobo server can't be saved | ✅ | #69. Server picker, key checked before saving. |
-| F-08 | Field Team ranks review progress as quality | 🟡 | A done (#79). Ranking by issues per submission is in. Left: W2 table of coordinator signals, which needs validating first (Q4, Q5). |
+| F-08 | Field Team ranks review progress as quality | 🟡 | A done (#79). Ranking by issues per submission is in. Left: the W2 table of coordinator signals; Q4 and Q5 are answered, and it is part of the design pass on Field Team, Data quality and Progress. |
 | F-01 | Can't isolate flagged submissions | ✅ | #87: review tabs (On hold has its own), issue filter, sort. Counts come from `/api/submissions/facets`. |
 | F-02 | Flag reason below the fold | ✅ | #87: findings card with the decision; findings also sit under their answers. |
 | F-03 | No auto-advance; filtered list goes stale | ✅ | #87. Auto-advance and shortcuts are settings in Account settings › Reviewing. |
@@ -63,54 +90,44 @@ What changed in #87 after the first version, from using the queue on the mock Ko
 | F-15 | Save confirmations wiped; errors auto-hide | ✅ | #79. |
 | F-19 | No first-run path | ✅ | #69 checklist, #75 project picker. |
 | F-21 | One section's save commits others' edits | ✅ | #79. |
-| F-27 | Labels not bound to fields | 🟡 | 40 of 68 `<label>`s have `htmlFor` (Settings sections done in #85; #87 binds its own). Left: e.g. the survey name and "Kobo asset ID" in `SurveySettingsPage.tsx`, Create survey, filters. |
+| F-27 | Labels not bound to fields | ✅ | #92: all 65 `<label>`s point at their field, or wrap it; headings over a list of choices are group headings. |
 | F-28 | Invisible focus on queue rows | ✅ | #71 global ring; queue rows keep it. |
 | F-35 | Expired session not detected | ✅ | #79. |
 | F-29 | Contrast failures | 🟡 | Palette and issue chip fixed in #71 (amber-800). #87's chosen decision buttons are white on emerald-, rose- and amber-700 (about 5:1 or better). Not re-measured. |
 | F-05 | No detail pane below 768 px / 200 % zoom | ✅ | #87: below 768 px the list gives way to the submission, with "← List". |
-| F-10 | Counts disagree across screens | 🟡 | B done (#67): AI-only findings set `qa_status`. Progress no longer filters by validation status. Left: A, one glossary of named counts used on every screen. |
-| F-14 | No data-freshness indicator | 🟡 | Runs are stored and the activity panel lists recent ones (#73). Left: an always-visible "Last pulled 3 h ago" on each data page. |
+| F-10 | Counts disagree across screens | 🟡 | B done (#67): AI-only findings set `qa_status`. Progress no longer filters by validation status. Left: A, one glossary of named counts used on every screen, best settled in the design pass. |
+| F-14 | No data-freshness indicator | ✅ | Runs are stored and the activity panel lists recent ones (#73). #89: "Last pulled 3 h ago" beside the pull button on every data page. |
 | F-20 | Date / start / end identifiers invisible | ✅ | #87: the submission's "All checks" list says when a check couldn't run and links to Settings. #88: pickers on Create and Settings, conventional names suggested. Surveys created on 2026-10-02 between #68 and #70 (#70) may have them empty; Settings can now fix them. |
-| F-23 | New surveys start with checks off | ⬜ | Every `flag_*` defaults to `False` (`services/survey_config.py:273-289`). Needs Q6. |
-| F-26 | Keyboard: 147 Tabs to decide | 🟡 | #87: shortcuts to move and decide, a setting (WCAG 2.1.4). Left: the charts are still mouse-only. |
-| F-32 | No URLs | ⬜ | `NavigationContext` (#83) is the one place a router would plug in. |
-| F-36 | Queue downloads everything twice | 🟡 | #87: once, not twice (filter options come from the counts endpoint). Left: it still pages through the whole tab. Urgency depends on Q10. |
+| F-23 | New surveys start with checks off | — | Decided against (Q6, 2026-10-09): new surveys keep their checks off. |
+| F-26 | Keyboard: 147 Tabs to decide | ✅ | #87: shortcuts to move and decide, a setting (WCAG 2.1.4); they stand in for option B's single Tab stop. #93: Field Team's tables sort and open enumerators from the keyboard, and Data quality's issue chart has a Table view. |
+| F-32 | No URLs | ✅ | #90: an address for every page, settings tab and submission, with the queue's tab and filters; links, reloads, Back and Forward land in the same place. |
+| F-36 | Queue downloads everything twice | ✅ | #87: once, not twice. #95: 50 at a time, more as needed; about 0.35 s to show at 2,000 submissions, from 2 s (Needs review) or 6 s (All). The server still reads the survey's submissions for each request (0.22 s at 2,000); reading only what the queue filters on would cut that if surveys grow. |
 | F-04 | Rows lack who / where / what | ✅ | #71, #87: enumerator name and place on the row, the issue count with the names in its tooltip (a row can have several). |
-| F-11 | Enumerator codes; phantom "Unknown" | 🟡 | #87: names (choice labels) on Submissions rows, detail and filter. Decided 2026-10-09: Field Team keeps enumerator IDs. Left: blank values still make an "Unknown" enumerator there (`services/progress.py:428`). |
-| F-12 | Jargon and check IDs | 🟡 | Mostly done (#72, #79). Left: "Avg. DK Rate (%)" (`PerformanceDataView.tsx:38, 372`) and "run ETL" in the Access tab's role text (`SurveyAccessTab.tsx:202`). |
+| F-11 | Enumerator codes; phantom "Unknown" | ✅ | #87: names (choice labels) on Submissions rows, detail and filter. Field Team keeps enumerator IDs (decided 2026-10-09). #89: blank values are counted apart, with a link to them, rather than as an "Unknown" enumerator. |
+| F-12 | Jargon and check IDs | ✅ | #72, #79; #93 the last two: "Avg. don't-know rate (%)", and roles that say what editors can do. |
 | F-16 | Failed pull replaces the list | ✅ | #73, #79. |
-| F-22 | Four save models on one page | 🟡 | One section editor and tabbed layout (#72, #83, #85). Every section still needs Edit first; whether to drop that is validate-first. |
+| F-22 | Four save models on one page | ✅ | One section editor and tabbed layout (#72, #83, #85). #92: no Edit step; Save and Cancel appear once a section changes, in every section and the transcription and translation cards. |
 | F-24 | AI "Add to editor" saves live | ✅ | #72. |
-| F-30 | Dialogs lack semantics | 🟡 | 7 of 10 overlays have `role="dialog"` (#87's filter menu is one). `ConfirmDialog` closes on Escape. Left: `InfoModal`, `QualityCheckPromptModal`, the dialog in `UserSettingsPage`; focus trap and focus return not checked. |
-| F-31 | Title, live regions, autocomplete | 🟡 | Autocomplete done (#71). 17 live regions (#87 added 6, among them the decision toast). Left: `document.title` per view (dropped with #66). |
-| F-33 | No tokens / shared components | 🟡 | Tokens and components exist (#71). Adoption is partial: 25 `<Button>` against 156 raw `<button>`. Move screens over as they are touched. |
-| F-34 | Viewers see actions they can't perform | 🟡 | Settings sections check `canEdit`; #87 hides decisions, notes, "Open in Kobo" and bulk approval from viewers. Left: the pull button. |
-| F-06 | Edit history not viewable | ⬜ | `HistoryViewer` was removed as dead code in #83. `GET /submissions/{id}/history` still exists; option B now starts from scratch. |
+| F-30 | Dialogs lack semantics | ✅ | #93: `ui/Dialog` (title, focus in, kept inside, given back, Escape); every `ConfirmDialog` and the last three overlays use it. Four others (session expired, delete survey, AI key, Kobo connection) have dialog semantics but their own focus handling. |
+| F-31 | Title, live regions, autocomplete | ✅ | Autocomplete done (#71). 17 live regions (#87 added 6, among them the decision toast). #90: `document.title` per page and open submission. |
+| F-33 | No tokens / shared components | 🟡 | Tokens and components exist (#71); `ui/Dialog` added in #93. Adoption is partial: 26 `<Button>` against 159 raw `<button>`. Move screens over as they are touched. |
+| F-34 | Viewers see actions they can't perform | ✅ | Settings sections check `canEdit`; #87 hides decisions, notes, "Open in Kobo" and bulk approval from viewers, #89 the pull button. |
+| F-06 | Edit history not viewable | ✅ | #94: "Edited in Kobo" opens each edit as "Question: old → new". Edits stored before #94 show the new value only. |
 | F-07 | Kobo call on every click | ✅ | #87: the edit link is asked for when "Open in Kobo" is clicked, and a failure says so. |
 | F-17 | AI check can hang forever | ✅ | #67 beat task. |
-| F-25 | "Kobo asset ID" in Settings | ⬜ | Still a free-text field (`SurveySettingsPage.tsx:688`). |
+| F-25 | "Kobo asset ID" in Settings | ✅ | #92: the project picker from Create; changing it says pulled submissions stay, and reads the new form once saved. |
 
 ### Next five
 
-Item 1 of the earlier list is done in #88. Agreed on 2026-10-09: Field Team keeps enumerator IDs rather than names. Under way, in order:
+Everything listed on 2026-10-09 is done (#88 to #95). What is left, in order:
 
 | # | Change | Findings | Effort | Why now |
 |---|---|---|---|---|
-| 1 | **Blank enumerator values on Field Team** as "No enumerator recorded", not an "Unknown" enumerator | F-11 | XS | Finishes F-11 as decided. |
-| 2 | **"Last pulled 3 h ago"** on every data page | F-14 A | S | Runs are stored; only the line is missing. |
-| 3 | **Pull button hidden from viewers** | F-34 | XS | They can't pull, so the button only fails for them. |
-| 4 | **URLs for views and submissions**, with a page title per view | F-32, F-31 | M | Links into a submission, Back, and a reviewer's place kept across reloads; the title follows the same view. |
-
-Then F-36 server pagination once Q10 gives survey sizes, and F-23 recommended defaults once Q6 is answered.
-
----|---|---|---|---|
-| 1 | **Pickers for the date, start and end questions** on Create and Settings, and check the surveys created on 2026-10-02 for empty ones | F-20 B | S | The checks list now says when they're missing, but they still can't be set by hand. |
-| 2 | **Enumerator names on Field Team**, and blank values as "No enumerator recorded" rather than an "Unknown" enumerator | F-11 A | S | Submissions shows names now; Field Team should match. |
-| 3 | **"Last pulled 3 h ago"** on every data page | F-14 A | S | Runs are stored; only the line is missing. |
-| 4 | **Per-view titles and viewer gating of the pull button** | F-31, F-34 | XS–S | Small, and finishes both findings. |
-| 5 | **URLs for views and submissions** | F-32 | M | Links into a submission, Back, and a reviewer's place kept across reloads. |
-
-Then F-36 server pagination once Q10 gives survey sizes, and F-23 recommended defaults once Q6 is answered.
+| 1 | **Design pass on Field Team, Data quality and Progress**: what each page is for, the coordinator signals from Q5 (duration, don't-know rate, share flagged, specific checks), where review progress lives, and one set of named counts across the three | F-08 B, F-10 A | L | The three pages grew separately; Q4 and Q5 give the starting point. Wireframes first, no code. |
+| 2 | **Name outlier findings by their question** on Data quality ("Outlier · livestock_count" today) | F-12 follow-up | XS | The queue already names them by question; the chart doesn't. |
+| 3 | **Re-measure contrast** and fix what still fails | F-29 | S | The palette changed twice (#71, #87) since the review measured it. |
+| 4 | **Move the four other overlays onto `ui/Dialog`** | F-30 follow-up | S | One focus behaviour everywhere. |
+| 5 | **Shared buttons as screens are touched** | F-33 | ongoing | 26 of 185 buttons use `<Button>`. |
 
 ---
 
