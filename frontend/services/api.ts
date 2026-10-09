@@ -1,5 +1,6 @@
 import { Submission, FilterState, KoboChoice, KoboQuestion, QueueSort, ReviewTab, SubmissionFacets } from '../types';
 import { buildFilterParams } from '../utils/filterUtils';
+import type { EditRecord } from '../utils/editHistory';
 
 import { orMessage, request } from './apiBase';
 
@@ -49,6 +50,9 @@ export const api = {
   },
 
   /** Sets Kobo's validation status: 'Approved', 'Not Approved', 'On Hold', or null. */
+  /** A submission's edits in Kobo, newest first (utils/editHistory.ts reads them). */
+  getSubmissionHistory: (koboId: number) => request<EditRecord[]>(`/api/submissions/${koboId}/history`),
+
   /** One submission of a survey, for a link to one that isn't in the list. */
   getSubmission: (koboId: number, surveyId: string) =>
     request<Submission>(`/api/submissions/${koboId}?${new URLSearchParams({ survey_id: surveyId })}`),

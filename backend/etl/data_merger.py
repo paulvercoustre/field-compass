@@ -44,6 +44,9 @@ def calculate_json_diff(old_data: dict[str, Any], new_data: dict[str, Any]) -> l
     """
     Calculate JSON patch diff between old and new data.
 
+    A replaced or removed value also keeps what it was (``old``), which a
+    JSON patch alone doesn't, so an edit can be shown as "old → new".
+
     Args:
         old_data: Previous submission data
         new_data: New submission data
@@ -66,6 +69,8 @@ def calculate_json_diff(old_data: dict[str, Any], new_data: dict[str, Any]) -> l
                 patch_dict["value"] = op["value"]
             if "from" in op:
                 patch_dict["from"] = op["from"]
+            if op["op"] in ("replace", "remove"):
+                patch_dict["old"] = jsonpatch.JsonPointer(op["path"]).resolve(old_data, None)
             patches.append(patch_dict)
 
         return patches
