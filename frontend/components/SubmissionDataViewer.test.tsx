@@ -103,7 +103,7 @@ describe('SubmissionDataViewer select answers', () => {
     expect(options(view, 'District in')).toEqual(['Paghman (chosen)']);
     fireEvent.click(view.getByRole('button', { name: 'Show all 3 options in the list' }));
     expect(options(view, 'District in')).toHaveLength(3);
-    expect(view.getByText(/Refresh the form in Settings/)).toBeTruthy();
+    expect(view.getByText(/The next pull from Kobo reads the form again/)).toBeTruthy();
   });
 });
 

@@ -4,48 +4,16 @@ import { reconstructKoboToolData } from './koboDataUtils';
 import { labelColumnFor } from './koboUrl';
 
 /**
- * Persist a form fetched from Kobo in the same sheet-row shape an uploaded
- * XLSForm produces, including the columns the linter reads (constraint,
- * relevant, required, calculation, and the enclosing groups' path,
- * conditions and label — group rows themselves are not stored).
+ * A form fetched from Kobo, ready to save: the rows come as a survey stores
+ * them (backend/services/kobo_form.py), and each pull keeps them in step.
+ * The variable list is built the same way a saved tool is rebuilt on load, so
+ * the count shown after a refresh matches the one shown after Save.
  */
 export function projectFormToKoboTool(form: KoboProjectForm, language: string): KoboToolData {
-  const labelColumns = (labels: Record<string, string>, prefix = '') =>
-    Object.fromEntries(Object.entries(labels).map(([lang, text]) => [`${prefix}${labelColumnFor(lang)}`, text]));
-
-  const survey = form.questions.map((q) => ({
-    type: q.type,
-    name: q.name,
-    ...labelColumns(q.labels),
-    roster_name: q.repeat_name,
-    list_name: q.list_name,
-    required: q.required ? 'yes' : undefined,
-    constraint: q.constraint || undefined,
-    relevant: q.relevant || undefined,
-    calculation: q.calculation || undefined,
-    choice_filter: q.choice_filter || undefined,
-    group_path: q.group_path || undefined,
-    group_relevant: q.group_relevant?.length ? q.group_relevant : undefined,
-    // `group_label::English (en)`: the title of the group the question sits in.
-    ...labelColumns(q.group_labels ?? {}, 'group_'),
-  }));
-
-  const choices = Object.entries(form.choice_lists).flatMap(([list_name, options]) =>
-    options.map((option) => ({
-      // The form's own columns first, so they can never replace the name or a label.
-      ...option.columns,
-      list_name,
-      name: option.name,
-      ...labelColumns(option.labels),
-    }))
-  );
-
-  // Build the variable list the same way a saved tool is rebuilt on load, so
-  // the count shown after a refresh matches the one shown after Save. Every
-  // question is kept in `survey`; only answerable types become variables.
-  const { variableMap } = reconstructKoboToolData(survey, choices, labelColumnFor(language));
-
-  return { survey, choices, variableMap, has_audit: form.has_audit } as KoboToolData;
+  return {
+    ...reconstructKoboToolData(form.survey, form.choices, labelColumnFor(language)),
+    has_audit: form.has_audit,
+  };
 }
 
 export function koboToolPayload(tool: KoboToolData | null): Record<string, unknown> | null {

@@ -1,4 +1,4 @@
-import { Submission, FilterState, QueueSort, ReviewTab, SubmissionFacets } from '../types';
+import { Submission, FilterState, KoboChoice, KoboQuestion, QueueSort, ReviewTab, SubmissionFacets } from '../types';
 import { buildFilterParams } from '../utils/filterUtils';
 
 import { orMessage, request } from './apiBase';
@@ -85,46 +85,19 @@ export const listKoboProjects = () =>
 
 // --- Kobo project form ------------------------------------------------------
 
-export interface KoboFormQuestion {
-  path: string;
-  name: string;
-  /** Every translation the form carries, keyed by language name. */
-  labels: Record<string, string>;
-  type: string;
-  list_name: string | null;
-  repeat_name: string | null;
-  required?: boolean;
-  constraint?: string | null;
-  relevant?: string | null;
-  calculation?: string | null;
-  choice_filter?: string | null;
-  /** Enclosing groups, since group rows themselves are not returned. */
-  group_path?: string | null;
-  /** `relevant` conditions of those groups — a consent gate, usually. */
-  group_relevant?: string[];
-  /** The innermost group's label, by language: its title in the answers. */
-  group_labels?: Record<string, string>;
-}
-
-export interface KoboFormChoice {
-  name: string;
-  labels: Record<string, string>;
-  /** The form's own columns on the choice row, which choice filters test. */
-  columns?: Record<string, string>;
-}
-
 export interface KoboProjectForm {
   asset_uid: string;
   asset_name: string | null;
   languages: string[];
   has_audit: boolean | null;
-  questions: KoboFormQuestion[];
-  choice_lists: Record<string, KoboFormChoice[]>;
+  /** The form as a survey stores it: question rows, translations in `label::<language>` columns. */
+  survey: KoboQuestion[];
+  choices: KoboChoice[];
 }
 
 /**
- * Fetch a Kobo project's form structure so configuration pickers can be
- * populated without the user exporting and uploading the XLSForm.
+ * Fetch a Kobo project's form, in the shape a survey stores it, so a survey
+ * can be set up without the user exporting and uploading the XLSForm.
  */
 export const getKoboProjectForm = (assetUid: string) =>
   orMessage(

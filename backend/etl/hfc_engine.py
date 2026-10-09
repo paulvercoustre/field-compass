@@ -1577,8 +1577,9 @@ class HFCEngine:
         """
         Digest of the stored form's skip logic and answerable questions.
 
-        Labels and choices are left out: rewording a question changes no
-        blank check's result, and should not revalidate every submission.
+        Labels, choices and notes are left out: rewording a question or adding
+        a note changes no blank check's result, and should not revalidate
+        every submission.
         """
         import hashlib
         import json
@@ -1589,7 +1590,7 @@ class HFCEngine:
         rows = [
             {column: row.get(column) for column in _FORM_LOGIC_COLUMNS if row.get(column)}
             for row in (content.get("survey") or [])
-            if isinstance(row, dict)
+            if isinstance(row, dict) and row.get("type") != "note"
         ]
         return hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()[:16]
 
