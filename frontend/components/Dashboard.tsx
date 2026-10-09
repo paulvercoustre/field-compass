@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Submission, FilterState, QueueSort, SubmissionFacets } from '../types';
+import { Submission, FilterState, QueueSort, ReviewTab, SubmissionFacets } from '../types';
 import { api } from '../services/api';
 import { useSurvey } from '../contexts/SurveyContext';
 import { useActivity } from '../contexts/ActivityContext';
@@ -17,7 +17,10 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import { Spinner } from './Spinner';
 import PageHeader from './ui/PageHeader';
 
-const MAX_PAGE_SIZE = 100; // Matches backend validation limit for page_size
+// The list loads this many at a time, more as the reviewer gets near its end.
+const PAGE = 50;
+// A background refresh re-reads what is on screen, up to this (the API's limit).
+const MOST = 500;
 // After a decision the chosen button shows its colour this long before the
 // submission leaves the list and the next one opens; its row folds away in
 // the last part of it.
@@ -46,18 +49,6 @@ const DONE: Record<string, string> = {
   'On Hold': 'Put on hold',
 };
 
-/** Every page of the list for these filters, and the order the server used. */
-async function fetchQueue(filters: FilterState, surveyId: string) {
-  const first = await api.getSubmissions(filters, surveyId, 1, MAX_PAGE_SIZE);
-  const submissions = [...first.submissions];
-  for (let page = 2; submissions.length < first.total; page += 1) {
-    const next = await api.getSubmissions(filters, surveyId, page, MAX_PAGE_SIZE);
-    if (next.submissions.length === 0) break;
-    submissions.push(...next.submissions);
-  }
-  return { submissions, sort: first.sort };
-}
-
 interface DashboardProps {
   initialFilters?: FilterState;
 }
@@ -77,6 +68,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
 
   const [filters, setFilters] = useState<FilterState>(initialFilters ?? {});
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  // How many the tab holds under these filters; the list may have loaded fewer.
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [facets, setFacets] = useState<SubmissionFacets | null>(null);
   const [sort, setSort] = useState<QueueSort | undefined>();
   const [loading, setLoading] = useState(true);
@@ -114,6 +108,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     cancelAdvance();
     setFilters(initialFilters ?? {});
     setSubmissions([]);
+    setTotal(0);
     setFacets(null);
     setLoading(true);
     select(null);
@@ -130,34 +125,39 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   // Several reads can be in flight (a filter change, a run moving on): only
   // the latest one may set the list, whichever answers last.
   const request = useRef(0);
+  const loaded = useRef<Submission[]>([]);
+  loaded.current = submissions;
+  const totalRef = useRef(total);
+  totalRef.current = total;
+  // The tab the server opened on, now in the filters: the list is already read for it.
+  const adopted = useRef<FilterState | null>(null);
   const load = useCallback(
     async (quiet: boolean) => {
       if (!surveyId) return;
-      const id = ++request.current;
-      if (!filters.review) {
-        // No tab asked for: the server says which one to open on, and the
-        // queue stays on it, even once a last decision empties it.
-        try {
-          const counts = await api.getSubmissionFacets(filters, surveyId);
-          if (id === request.current)
-            setFilters((current) => (current === filters ? { ...filters, review: counts.review } : current));
-        } catch (err) {
-          console.error(err);
-          if (id === request.current) {
-            setError('Couldn’t load the submissions.');
-            setLoading(false);
-          }
-        }
+      if (adopted.current === filters) {
+        adopted.current = null;
         return;
       }
+      const id = ++request.current;
       setRefreshing(true);
       try {
+        // The first part of the list and the counts, together. A background
+        // refresh re-reads as much as is on screen, so the list doesn't shrink.
+        const limit = quiet ? Math.min(Math.max(PAGE, loaded.current.length), MOST) : PAGE;
         const [queue, counts] = await Promise.all([
-          fetchQueue(filters, surveyId),
+          api.getSubmissions(filters, surveyId, { offset: 0, limit }),
           api.getSubmissionFacets(filters, surveyId),
         ]);
         if (id !== request.current) return;
+        if (!filters.review && queue.review) {
+          // No tab asked for: the server opened on one, and the queue stays on
+          // it, even once a last decision empties it.
+          const withTab = { ...filters, review: queue.review as ReviewTab };
+          adopted.current = withTab;
+          setFilters((current) => (current === filters ? withTab : current));
+        }
         setSubmissions(queue.submissions);
+        setTotal(queue.total);
         setSort(queue.sort);
         setFacets(counts);
         setError(null);
@@ -214,8 +214,44 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
     if (!surveyId || !filters.review) return;
     api
       .getSubmissionFacets(filters, surveyId)
-      .then(setFacets)
+      .then((counts) => {
+        setFacets(counts);
+        // The tab's count is the list's total under the same filters.
+        if (filters.review) setTotal(counts.tabs[filters.review]);
+      })
       .catch(() => undefined);
+  }, [surveyId, filters]);
+
+  // More of the list, from where it ends: decisions shorten it, so it reads
+  // on from there rather than by page. Resolves with what it added.
+  // One read at a time; asked again meanwhile, it answers with the same one.
+  const fetchingMore = useRef<Promise<Submission[]> | null>(null);
+  const loadMore = useCallback((): Promise<Submission[]> => {
+    if (fetchingMore.current) return fetchingMore.current;
+    if (!surveyId || loaded.current.length >= totalRef.current) return Promise.resolve([]);
+    setLoadingMore(true);
+    const id = request.current;
+    const reading = (async () => {
+      try {
+        const page = await api.getSubmissions(filters, surveyId, { offset: loaded.current.length, limit: PAGE });
+        // Read again meanwhile: that list stands.
+        if (id !== request.current) return [];
+        const known = new Set(loaded.current.map((s) => s._id));
+        const more = page.submissions.filter((s) => !known.has(s._id));
+        loaded.current = [...loaded.current, ...more];
+        setSubmissions(loaded.current);
+        setTotal(page.total);
+        return more;
+      } catch (err) {
+        console.error(err);
+        return [];
+      } finally {
+        fetchingMore.current = null;
+        setLoadingMore(false);
+      }
+    })();
+    fetchingMore.current = reading;
+    return reading;
   }, [surveyId, filters]);
 
   // Re-read submissions as the survey's background work moves on, rather
@@ -260,6 +296,12 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   }, [surveyRunsKey]);
 
   const index = selected ? submissions.findIndex((s) => s._id === selected._id) : -1;
+  const hasMore = submissions.length < total;
+
+  // Near the end of what is loaded, the next part comes in ahead of J or auto-advance.
+  useEffect(() => {
+    if (hasMore && index >= 0 && index >= submissions.length - 5) loadMore();
+  }, [hasMore, index, submissions.length, loadMore]);
 
   // The move to the next submission a decision has scheduled, while its
   // button shows the decision.
@@ -280,8 +322,8 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   useEffect(() => cancelAdvance, []);
 
   // What the scheduled move reads when it runs, not when it was scheduled.
-  const latest = useRef({ submissions, selected, filters, autoAdvance });
-  latest.current = { submissions, selected, filters, autoAdvance };
+  const latest = useRef({ submissions, selected, filters, autoAdvance, hasMore, loadMore });
+  latest.current = { submissions, selected, filters, autoAdvance, hasMore, loadMore };
 
   const move = useCallback(
     (step: 1 | -1) => {
@@ -294,8 +336,10 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       }
       const next = submissions[index + step];
       if (next) select(next);
+      // Past the end of what is loaded: the next part, then its first.
+      else if (step > 0 && hasMore) loadMore().then((more) => more[0] && select(more[0]));
     },
-    [submissions, index, select]
+    [submissions, index, select, hasMore, loadMore]
   );
 
   const replaceInList = (after: Submission) =>
@@ -328,15 +372,28 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
       // Then it leaves a tab it no longer belongs in and, with auto-advance,
       // the next one opens, unless the reviewer has already moved elsewhere.
       const run = () => {
-        const { submissions: list, selected: open, filters: now, autoAdvance: advance } = latest.current;
+        const {
+          submissions: list,
+          selected: open,
+          filters: now,
+          autoAdvance: advance,
+          hasMore: more,
+          loadMore: readMore,
+        } = latest.current;
         const at = list.findIndex((s) => s._id === after._id);
         const leaves = !stillMatches(after, now);
         const rest = list.filter((s) => s._id !== after._id);
-        if (leaves) setSubmissions(rest);
+        // The counts read after the decision bring the total down.
+        if (leaves) {
+          loaded.current = rest;
+          setSubmissions(rest);
+        }
         if (!advance || at < 0 || open?._id !== after._id) return;
-        const next = leaves ? (rest[at] ?? rest[at - 1]) : list[at + 1];
+        const next = leaves ? rest[at] : list[at + 1];
         if (next) select(next);
-        else if (leaves) select(null);
+        // The last one loaded: the next part, then its first.
+        else if (more) readMore().then((added) => select(added[0] ?? (leaves ? (rest[at - 1] ?? null) : open)));
+        else if (leaves) select(rest[at - 1] ?? null);
       };
       pendingAdvance.current = {
         timers: [
@@ -378,6 +435,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
         const at = Math.min(Math.max(position, 0), without.length);
         return [...without.slice(0, at), restored, ...without.slice(at)];
       });
+      // Back in the tab: refreshCounts below brings the total back too.
       select(restored);
       refreshCounts();
     } catch (err) {
@@ -492,14 +550,14 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   const summary = !loading && !error && submissions.length > 0 && (
     <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
       <span className="tabular" aria-live="polite">
-        {submissions.length.toLocaleString()}{' '}
+        {total.toLocaleString()}{' '}
         {tab === 'needs_review'
           ? 'to review'
           : tab === 'on_hold'
             ? 'on hold'
             : tab === 'reviewed'
               ? 'reviewed'
-              : submissions.length === 1
+              : total === 1
                 ? 'submission'
                 : 'submissions'}
       </span>
@@ -604,6 +662,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
               summary={summary}
               empty={empty}
               leavingId={leavingId}
+              more={hasMore ? { left: total - submissions.length, loading: loadingMore, load: loadMore } : undefined}
             />
           </div>
         </section>
@@ -611,7 +670,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
           <SubmissionDetail
             submission={selected}
             surveyConfig={surveyConfig}
-            position={{ index, total: submissions.length }}
+            position={{ index, total }}
             onPrevious={() => move(-1)}
             onNext={() => move(1)}
             onBack={() => select(null)}

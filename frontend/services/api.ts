@@ -23,10 +23,11 @@ const queueParams = (filters: FilterState, surveyId: string, options?: { withSor
 
 export const api = {
   /** A page of a survey's submissions in one review tab, filtered and sorted. */
-  getSubmissions: (filters: FilterState, surveyId: string, page = 1, pageSize = 50) => {
+  /** Part of a tab's list: `limit` submissions from `offset`, with the total and the tab and order used. */
+  getSubmissions: (filters: FilterState, surveyId: string, { offset = 0, limit = 50 } = {}) => {
     const params = queueParams(filters, surveyId);
-    params.append('page', String(page));
-    params.append('page_size', String(pageSize));
+    params.append('offset', String(offset));
+    params.append('page_size', String(limit));
     return request<SubmissionListResponse>(`/api/submissions?${params}`);
   },
 

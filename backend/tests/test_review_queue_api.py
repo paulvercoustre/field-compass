@@ -199,6 +199,12 @@ class TestFacets:
         both = _list(client, queue.survey, review="all", enumerator=f"e2,{NO_ENUMERATOR}")
         assert len(_ids_of(both)) == 2 + 3
 
+    def test_an_offset_reads_on_from_where_the_list_ends(self, client, queue):  # noqa: F811
+        everything = _ids_of(_list(client, queue.survey, review="all"))
+        rest = _list(client, queue.survey, review="all", offset=2, page_size=3)
+        assert _ids_of(rest) == everything[2:5]
+        assert rest["total"] == len(everything)
+
     def test_sampling_counts(self, client, queue):  # noqa: F811
         facets = _facets(client, queue.survey, review="all")
         assert facets["sampling"] == [

@@ -86,18 +86,13 @@ beforeEach(() => {
     facets(filters.review ?? 'needs_review')
   );
   vi.mocked(api.getSubmissions).mockImplementation(async (filters: FilterState) => {
+    // Like the server: with no tab asked for, it opens on Needs review.
+    const review = filters.review ?? 'needs_review';
     const shown =
-      filters.review === 'needs_review'
+      review === 'needs_review'
         ? store.filter((s) => !s.kobo_validation_status && s.data_quality_issues.length)
         : store;
-    return {
-      submissions: shown,
-      total: shown.length,
-      page: 1,
-      page_size: 100,
-      review: filters.review!,
-      sort: 'issues',
-    };
+    return { submissions: shown, total: shown.length, page: 1, page_size: 50, review, sort: 'issues' };
   });
   vi.mocked(api.updateValidationStatus).mockImplementation(
     async (id: number, _survey: string, status: string | null) => {
@@ -196,5 +191,30 @@ describe('Dashboard review loop', () => {
     fireEvent.click(view.getByRole('button', { name: 'Approve 1' }));
     await waitFor(() => expect(api.approveCleanSubmissions).toHaveBeenCalled());
     await waitFor(() => expect(view.getByRole('status').textContent).toContain('Approved 1 clean submission in Kobo.'));
+  });
+
+  it('loads a long queue in parts, and J reads on past the end of what is loaded', async () => {
+    store = Array.from({ length: 60 }, (_, i) => submission(i + 1, ['duration_too_short']));
+    vi.mocked(api.getSubmissions).mockImplementation(async (_filters: FilterState, _survey, part) => {
+      const { offset = 0, limit = 50 } = part ?? {};
+      return {
+        submissions: store.slice(offset, offset + limit),
+        total: store.length,
+        page: 1,
+        page_size: limit,
+        review: 'needs_review',
+        sort: 'issues',
+      };
+    });
+    const view = render(<Dashboard />);
+    await waitFor(() => expect(rows(view.container)).toHaveLength(50));
+    expect(view.container.textContent).toContain('60 to review');
+
+    // Opening the 50th brings the next part in ahead of J.
+    fireEvent.click(view.container.querySelector('[data-submission-id="50"] button')!);
+    await waitFor(() => expect(rows(view.container)).toHaveLength(60));
+    await key('j');
+    expect(heading(view.container)).toBe('#51');
+    expect(view.queryByRole('button', { name: /Load more/ })).toBeNull();
   });
 });
