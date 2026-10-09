@@ -6,7 +6,7 @@ import { KoboToolData } from '../types';
 import { Spinner } from '../components/Spinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
-import QualityCheckPromptModal from '../components/QualityCheckPromptModal';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { parseKoboAssetId, labelColumnFor } from '../utils/koboUrl';
 import { getKoboProjectForm, KoboProject } from '../services/api';
 import KoboProjectPicker from '../components/ui/KoboProjectPicker';
@@ -458,9 +458,17 @@ const CreateSurveyPage: React.FC = () => {
         </div>
       </div>
 
-      {showQualityCheckPrompt && (
-        <QualityCheckPromptModal onConfigureNow={handleConfigureNow} onConfigureLater={handleConfigureLater} />
-      )}
+      <ConfirmDialog
+        open={showQualityCheckPrompt}
+        title="Set up quality checks"
+        tone="primary"
+        confirmLabel="Set up now"
+        cancelLabel="Later"
+        onConfirm={handleConfigureNow}
+        onCancel={handleConfigureLater}
+      >
+        <p>Survey created. Set up its quality checks now?</p>
+      </ConfirmDialog>
     </div>
   );
 };
