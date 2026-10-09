@@ -171,9 +171,12 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
         ) : (
           <form onSubmit={handleShare} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Invite by email</label>
+              <label htmlFor="invite-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Invite by email
+              </label>
               <div className="flex gap-2">
                 <input
+                  id="invite-email"
                   type="email"
                   value={shareEmail}
                   onChange={(e) => setShareEmail(e.target.value)}
@@ -199,8 +202,8 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
               </div>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              <strong>Viewer:</strong> Can view data and reports. <strong>Editor:</strong> Can also run ETL and resolve
-              flags.
+              <strong>Viewer:</strong> Can see the submissions and reports. <strong>Editor:</strong> Can also pull from
+              Kobo and review submissions.
             </p>
           </form>
         )}

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { PerformanceData } from '../../types';
-import InfoModal from './InfoModal';
+import Dialog from '../ui/Dialog';
+import Button from '../ui/Button';
 import { SubTabButton } from '../ui/SubTabButton';
 
 type PerformanceSubTab = 'collected' | 'quality';
@@ -35,8 +36,8 @@ const DEFINITIONS: Record<string, { title: string; text: string }> = {
     text: 'The average total time from the first event to the last event in the audit log.',
   },
   avgDkRate: {
-    title: 'Avg. DK Rate (%)',
-    text: "The average percentage of 'Don\\'t Know' or equivalent answers across all questions for this enumerator.",
+    title: "Avg. don't-know rate (%)",
+    text: "The average share of this enumerator's answers that were \"don't know\" or one of your survey's don't-know codes.",
   },
   avgIssuesPerSurvey: {
     title: 'Issues per submission',
@@ -44,13 +45,15 @@ const DEFINITIONS: Record<string, { title: string; text: string }> = {
   },
 };
 
-const InfoIcon: React.FC<{ onClick: (e: React.MouseEvent) => void }> = ({ onClick }) => (
-  <span
+const InfoIcon: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => (
+  <button
+    type="button"
     onClick={onClick}
-    className="cursor-pointer text-gray-600 dark:text-gray-400 font-bold ml-1 hover:text-gray-900 dark:hover:text-white"
+    aria-label={`What “${label}” means`}
+    className="ml-1 rounded font-bold text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
   >
-    &#9432;
-  </span>
+    <span aria-hidden="true">&#9432;</span>
+  </button>
 );
 
 const SortIcon: React.FC<{ direction: SortDirection | null }> = ({ direction }) => {
@@ -58,6 +61,37 @@ const SortIcon: React.FC<{ direction: SortDirection | null }> = ({ direction }) 
     return <span className="ml-1 text-gray-400">↕</span>;
   }
   return <span className="ml-1 text-indigo-500">{direction === 'asc' ? '↑' : '↓'}</span>;
+};
+
+/** A column title that sorts the table, with what the column means behind the info button. */
+const SortableHeader: React.FC<{
+  label: string;
+  sortKey: CollectionSortKey | QualitySortKey;
+  currentSort: { key: string; dir: SortDirection };
+  onSort: (key: any) => void;
+  infoKey?: string;
+  onInfo: (key: string) => void;
+}> = ({ label, sortKey, currentSort, onSort, infoKey, onInfo }) => {
+  const direction = currentSort.key === sortKey ? currentSort.dir : null;
+  return (
+    <th
+      aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
+      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400"
+    >
+      <div className="flex items-center">
+        {/* A button, so the column sorts from the keyboard too. */}
+        <button
+          type="button"
+          onClick={() => onSort(sortKey)}
+          className="-mx-1 flex items-center rounded px-1 py-0.5 text-left hover:bg-gray-100 dark:hover:bg-gray-800"
+        >
+          {label}
+          <SortIcon direction={direction} />
+        </button>
+        {infoKey && <InfoIcon label={label} onClick={() => onInfo(infoKey)} />}
+      </div>
+    </th>
+  );
 };
 
 interface PerformanceDataViewProps {
@@ -236,32 +270,6 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
     );
   };
 
-  const SortableHeader: React.FC<{
-    label: string;
-    sortKey: CollectionSortKey | QualitySortKey;
-    currentSort: { key: string; dir: SortDirection };
-    onSort: (key: any) => void;
-    infoKey?: string;
-  }> = ({ label, sortKey, currentSort, onSort, infoKey }) => (
-    <th
-      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none"
-      onClick={() => onSort(sortKey)}
-    >
-      <div className="flex items-center">
-        {label}
-        <SortIcon direction={currentSort.key === sortKey ? currentSort.dir : null} />
-        {infoKey && (
-          <InfoIcon
-            onClick={(e) => {
-              e.stopPropagation();
-              handleShowModal(infoKey);
-            }}
-          />
-        )}
-      </div>
-    </th>
-  );
-
   const renderContent = () => {
     if (activeSubTab === 'collected') {
       return (
@@ -269,12 +277,14 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
               <SortableHeader
+                onInfo={handleShowModal}
                 label="Enumerator ID"
                 sortKey="id"
                 currentSort={collectionSort}
                 onSort={handleCollectionSort}
               />
               <SortableHeader
+                onInfo={handleShowModal}
                 label="Flagged, not yet approved"
                 sortKey="needsReview"
                 currentSort={collectionSort}
@@ -282,6 +292,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 infoKey="needsReview"
               />
               <SortableHeader
+                onInfo={handleShowModal}
                 label="Approved by reviewer"
                 sortKey="validated"
                 currentSort={collectionSort}
@@ -289,6 +300,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 infoKey="validated"
               />
               <SortableHeader
+                onInfo={handleShowModal}
                 label="Total"
                 sortKey="total"
                 currentSort={collectionSort}
@@ -296,6 +308,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 infoKey="totalSurveys"
               />
               <SortableHeader
+                onInfo={handleShowModal}
                 label="% Approved"
                 sortKey="percentValidated"
                 currentSort={collectionSort}
@@ -303,6 +316,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 infoKey="percentValidated"
               />
               <SortableHeader
+                onInfo={handleShowModal}
                 label="% Flagged, not yet approved"
                 sortKey="percentNeedsReview"
                 currentSort={collectionSort}
@@ -319,7 +333,20 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 onClick={() => onEnumeratorClick?.(row.id)}
               >
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
-                  {row.id}
+                  {onEnumeratorClick ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEnumeratorClick(row.id);
+                      }}
+                      className="rounded font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+                    >
+                      {row.id}
+                    </button>
+                  ) : (
+                    row.id
+                  )}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.needsReview}
@@ -353,8 +380,15 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
         <table className="min-w-full">
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <SortableHeader label="Enumerator ID" sortKey="id" currentSort={qualitySort} onSort={handleQualitySort} />
               <SortableHeader
+                onInfo={handleShowModal}
+                label="Enumerator ID"
+                sortKey="id"
+                currentSort={qualitySort}
+                onSort={handleQualitySort}
+              />
+              <SortableHeader
+                onInfo={handleShowModal}
                 label="Avg Active Time (min)"
                 sortKey="avgActiveTime"
                 currentSort={qualitySort}
@@ -362,6 +396,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 infoKey="avgActiveTime"
               />
               <SortableHeader
+                onInfo={handleShowModal}
                 label="Avg Total Time (min)"
                 sortKey="avgTotalTime"
                 currentSort={qualitySort}
@@ -369,13 +404,15 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 infoKey="avgTotalTime"
               />
               <SortableHeader
-                label="Avg DK Rate (%)"
+                onInfo={handleShowModal}
+                label="Avg. don't-know rate (%)"
                 sortKey="avgDkRate"
                 currentSort={qualitySort}
                 onSort={handleQualitySort}
                 infoKey="avgDkRate"
               />
               <SortableHeader
+                onInfo={handleShowModal}
                 label="Issues per submission"
                 sortKey="avgIssuesPerSurvey"
                 currentSort={qualitySort}
@@ -392,7 +429,20 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 onClick={() => onEnumeratorClick?.(row.id)}
               >
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
-                  {row.id}
+                  {onEnumeratorClick ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEnumeratorClick(row.id);
+                      }}
+                      className="rounded font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+                    >
+                      {row.id}
+                    </button>
+                  ) : (
+                    row.id
+                  )}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
                   {row.avgActiveTime}
@@ -423,9 +473,18 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
 
   return (
     <div>
-      {modalContent && (
-        <InfoModal title={modalContent.title} text={modalContent.text} onClose={() => setModalContent(null)} />
-      )}
+      <Dialog
+        open={!!modalContent}
+        title={modalContent?.title ?? ''}
+        onClose={() => setModalContent(null)}
+        actions={
+          <Button variant="secondary" onClick={() => setModalContent(null)}>
+            Close
+          </Button>
+        }
+      >
+        <p>{modalContent?.text}</p>
+      </Dialog>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Detailed Data</h2>
@@ -433,6 +492,7 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
+          aria-label="Filter by enumerator ID"
           placeholder="Filter by Enumerator ID..."
           className="w-full sm:w-64 px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs placeholder-gray-500 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
         />

@@ -13,8 +13,6 @@ interface GeneralChecksSectionProps {
   /** The out-of-period check compares against the saved collection dates. */
   hasCollectionDates: boolean;
   canEdit: boolean;
-  /** Edited since the last save: Save and Cancel show instead of the saved note. */
-  dirty: boolean;
   controls: SectionControls;
   savedAt?: Date;
 }
@@ -156,7 +154,6 @@ const GeneralChecksSection: React.FC<GeneralChecksSectionProps> = ({
   onDurationChange,
   hasCollectionDates,
   canEdit,
-  dirty,
   controls,
   savedAt,
 }) => {
@@ -291,8 +288,8 @@ const GeneralChecksSection: React.FC<GeneralChecksSectionProps> = ({
             />
           </div>
         </div>
-        {!dirty && <SavedNote at={savedAt} className="pt-4" />}
-        {canEdit && dirty && <SectionActions controls={controls} className="pt-4" />}
+        {!controls.dirty && <SavedNote at={savedAt} className="pt-4" />}
+        {canEdit && controls.dirty && <SectionActions controls={controls} className="pt-4" />}
       </div>
     </section>
   );

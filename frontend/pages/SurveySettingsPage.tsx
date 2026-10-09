@@ -9,7 +9,7 @@ import SettingsLayout from '../components/ui/SettingsLayout';
 import ErrorMessage from '../components/ui/ErrorMessage';
 import SuccessMessage from '../components/ui/SuccessMessage';
 import { getKoboProjectForm } from '../services/api';
-import { labelColumnFor } from '../utils/koboUrl';
+import { labelColumnFor, parseKoboAssetId } from '../utils/koboUrl';
 import CollectionTargets from '../components/ui/CollectionTargets';
 import CollectionTargetsEditor from '../components/ui/CollectionTargetsEditor';
 import { useCollectionTargets } from '../hooks/useCollectionTargets';
@@ -37,11 +37,15 @@ import AiReviewSection from '../components/settings/AiReviewSection';
 import GeneralChecksSection from '../components/settings/GeneralChecksSection';
 import KoboFormSection from '../components/settings/KoboFormSection';
 import DeleteSurveySection from '../components/settings/DeleteSurveySection';
-import { SavedNote, SectionActions, SectionEditButton } from '../components/settings/SectionControls';
+import { SavedNote, SectionActions } from '../components/settings/SectionControls';
+import KoboProjectPicker from '../components/ui/KoboProjectPicker';
 import { RequestedTab } from '../contexts/NavigationContext';
 
 type SurveySettingsTab = 'settings' | 'access' | 'quality' | 'transcription' | 'translation';
 const SURVEY_SETTINGS_TABS: string[] = ['settings', 'access', 'quality', 'transcription', 'translation'];
+
+// The label language a form saved without one is shown in.
+const DEFAULT_LABEL_COLUMN = 'label::English (en)';
 
 interface SurveySettingsPageProps {
   /** A tab asked for by a link elsewhere in the app (a notification, the activity panel). */
@@ -116,7 +120,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
   // Outlier detection is the only picker that genuinely needs numbers.
   const [numericVariables, setNumericVariables] = useState<string[]>([]);
   const [textVariables, setTextVariables] = useState<Array<{ name: string; label: string; type: string }>>([]);
-  const [labelColumnSurvey, setLabelColumnSurvey] = useState<string>('label::English (en)');
+  const [labelColumnSurvey, setLabelColumnSurvey] = useState<string>(DEFAULT_LABEL_COLUMN);
   // The question text in the chosen label language, or null when the form
   // has none beyond the variable name.
   const questionLabel = (name: string): string | null => {
@@ -139,7 +143,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
       }));
     return [...text, ...audio];
   }, [textVariables, transcribed, koboToolData, labelColumnSurvey]);
-  const [labelColumnChoices, setLabelColumnChoices] = useState<string>('label::English (en)');
+  const [labelColumnChoices, setLabelColumnChoices] = useState<string>(DEFAULT_LABEL_COLUMN);
 
   // Sampling frame CSV state
 
@@ -176,9 +180,10 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
   });
 
   // Dirty flags for Basic Info and Core Identifiers (Save/Cancel appear when user edits)
+  const pickedAssetId = parseKoboAssetId(koboAssetId) ?? '';
   const isBasicInfoDirty =
     surveyName !== (config?.survey_name || '') ||
-    koboAssetId !== (config?.kobo_asset_id || '') ||
+    (pickedAssetId || koboAssetId.trim()) !== (config?.kobo_asset_id || '') ||
     globalParameters.data_collection_start_date !==
       (config?.config_data?.global_parameters?.data_collection_start_date || '') ||
     globalParameters.data_collection_end_date !==
@@ -216,6 +221,10 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
       globalParameters.max_survey_duration_minutes !==
         (config?.config_data?.global_parameters?.max_survey_duration_minutes ?? null)
     : false;
+  const changedSince = (keys: ReadonlyArray<keyof typeof DEFAULT_QUALITY_CHECKS>) =>
+    keys.some((key) => !sameSetting(qualityChecks[key], savedQc?.[key] ?? DEFAULT_QUALITY_CHECKS[key]));
+  const isOutlierDirty = changedSince(OUTLIER_KEYS);
+  const isLlmDirty = changedSince(LLM_KEYS);
 
   useEffect(() => {
     if (selectedSurvey) {
@@ -227,7 +236,6 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
     } else {
       // Keep the success message visible: a deleted survey ends up here.
       setError(null);
-      sections.closeAll();
     }
     // Keyed on the id, not the object.
     //
@@ -287,9 +295,9 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
       setKoboToolData(null);
       return;
     }
-    // Load label column settings first
-    if (tool.label_column_survey) setLabelColumnSurvey(tool.label_column_survey);
-    if (tool.label_column_choices) setLabelColumnChoices(tool.label_column_choices);
+    setFormRefreshed(false);
+    setLabelColumnSurvey(tool.label_column_survey ?? DEFAULT_LABEL_COLUMN);
+    setLabelColumnChoices(tool.label_column_choices ?? DEFAULT_LABEL_COLUMN);
     // Reconstruct KoboToolData from stored tool with label column
     const reconstructed = reconstructKoboToolData(tool.survey, tool.choices, tool.label_column_survey);
     setKoboToolData({ ...reconstructed, has_audit: tool.has_audit ?? null });
@@ -413,14 +421,17 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
 
   // Bumped by each successful refresh; the form check runs when it changes.
   const [formCheckRunKey, setFormCheckRunKey] = useState(0);
+  // A form read from Kobo and not saved yet.
+  const [formRefreshed, setFormRefreshed] = useState(false);
   // Until it is saved, the refreshed form is what the check reads.
   const refreshedFormPayload = useMemo(
-    () => (formCheckRunKey > 0 && sections.isEditing('koboTool') ? koboToolPayload(koboToolData) : null),
-    [formCheckRunKey, sections.isEditing('koboTool'), koboToolData]
+    () => (formRefreshed ? koboToolPayload(koboToolData) : null),
+    [formRefreshed, koboToolData]
   );
+  const savedLabelColumn = config?.config_data?.kobo_tool?.label_column_survey ?? DEFAULT_LABEL_COLUMN;
+  const isKoboToolDirty = formRefreshed || labelColumnSurvey !== savedLabelColumn;
 
-  const handleRefreshFormFromProject = async () => {
-    const assetId = config?.kobo_asset_id;
+  const handleRefreshFormFromProject = async (assetId = config?.kobo_asset_id) => {
     if (!assetId) {
       setError('This survey has no Kobo project linked, so the form cannot be read.');
       return;
@@ -433,6 +444,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
       const language = form.languages[0] || 'default';
       setKoboToolData(projectFormToKoboTool(form, language));
       setKoboToolFileName(form.asset_name || assetId);
+      setFormRefreshed(true);
       // A freshly read form gets checked without the user asking.
       setFormCheckRunKey((key) => key + 1);
 
@@ -467,7 +479,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
       switch (section) {
         case 'basicInfo':
           update.survey_name = surveyName;
-          update.kobo_asset_id = koboAssetId || null;
+          update.kobo_asset_id = pickedAssetId;
           cd.global_parameters = {
             ...cd.global_parameters,
             data_collection_start_date: gp.data_collection_start_date,
@@ -525,6 +537,10 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
    */
   const saveSection = async (section: SettingsSection) => {
     if (!selectedSurvey) return;
+    if (section === 'basicInfo' && !pickedAssetId) {
+      throw new Error('Choose the Kobo project this survey reads, or paste its link.');
+    }
+    const projectChanged = section === 'basicInfo' && pickedAssetId !== (config?.kobo_asset_id || '');
     const surveyId = selectedSurvey.survey_id;
     const build = sectionUpdate(section);
     const run = async () => {
@@ -537,6 +553,10 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
     if (currentSurveyId.current !== surveyId) return;
     setConfig((prev) => (prev ? { ...prev, ...saved } : saved));
     setSavedAt((prev) => ({ ...prev, [section]: new Date() }));
+    if (section === 'koboTool') setFormRefreshed(false);
+    if (section === 'samplingFrame') targets.markSaved();
+    // Another project has another form: read it, to save with the Kobo form.
+    if (projectChanged) handleRefreshFormFromProject(pickedAssetId);
   };
 
   /** Put a section's fields back as last saved: the counterpart of sectionUpdate. */
@@ -672,9 +692,15 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
           <h2 className="text-base font-semibold tracking-tight mb-4 text-gray-900 dark:text-white">Survey profile</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Survey name *</label>
+              <label
+                htmlFor="survey-name"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+              >
+                Survey name *
+              </label>
               {canEditSurvey ? (
                 <input
+                  id="survey-name"
                   type="text"
                   value={surveyName}
                   onChange={(e) => setSurveyName(e.target.value)}
@@ -687,29 +713,38 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
                 </div>
               )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Kobo asset ID</label>
-              {canEditSurvey ? (
-                <input
-                  type="text"
+            {canEditSurvey ? (
+              <div>
+                <KoboProjectPicker
                   value={koboAssetId}
-                  onChange={(e) => setKoboAssetId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g., a3wCWjYRXo46cSygF8gQAc"
+                  onChange={(value) => setKoboAssetId(value)}
+                  currentAssetId={config?.kobo_asset_id}
                 />
-              ) : (
-                <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300">
-                  {koboAssetId || '—'}
+                {config?.kobo_asset_id && pickedAssetId && pickedAssetId !== config.kobo_asset_id && (
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                    Submissions already pulled from the current project stay. Once saved, pulls read the new one.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Kobo project</span>
+                <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-700 dark:text-gray-300 font-mono text-sm">
+                  {config?.kobo_asset_id || '—'}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label
+                  htmlFor="collection-start"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                >
                   Collection start date
                 </label>
                 {canEditSurvey ? (
                   <input
+                    id="collection-start"
                     type="date"
                     value={globalParameters.data_collection_start_date}
                     onChange={(e) =>
@@ -724,11 +759,15 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label
+                  htmlFor="collection-end"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                >
                   Collection end date
                 </label>
                 {canEditSurvey ? (
                   <input
+                    id="collection-end"
                     type="date"
                     value={globalParameters.data_collection_end_date}
                     onChange={(e) =>
@@ -745,7 +784,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
             </div>
             {!isBasicInfoDirty && <SavedNote at={savedAt.basicInfo} className="pt-2" />}
             {canEditSurvey && isBasicInfoDirty && (
-              <SectionActions controls={sections.controls('basicInfo')} className="pt-2" />
+              <SectionActions controls={sections.controls('basicInfo', isBasicInfoDirty)} className="pt-2" />
             )}
           </div>
         </section>
@@ -761,11 +800,11 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
             setLabelColumnSurvey(column);
             setLabelColumnChoices(column);
           }}
-          onRefresh={handleRefreshFormFromProject}
+          onRefresh={() => handleRefreshFormFromProject()}
           isRefreshing={isLoadingTool}
           canRefresh={Boolean(config?.kobo_asset_id)}
           canEdit={canEditSurvey}
-          controls={sections.controls('koboTool')}
+          controls={sections.controls('koboTool', isKoboToolDirty)}
           savedAt={savedAt.koboTool}
         />
 
@@ -788,19 +827,18 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
             <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">
               Data collection targets
             </h2>
-            {!sections.isEditing('samplingFrame') && <SavedNote at={savedAt.samplingFrame} className="ml-auto mr-2" />}
-            {canEditSurvey && !sections.isEditing('samplingFrame') && (
-              <SectionEditButton onClick={() => sections.edit('samplingFrame')} />
-            )}
+            {!targets.dirty && <SavedNote at={savedAt.samplingFrame} className="ml-auto" />}
           </div>
-          {sections.isEditing('samplingFrame') ? (
+          {canEditSurvey ? (
             <div className="space-y-4">
               <CollectionTargetsEditor
                 targets={targets}
                 koboToolData={koboToolData}
                 labelColumnChoices={labelColumnChoices}
               />
-              <SectionActions controls={sections.controls('samplingFrame')} className="mt-4" />
+              {targets.dirty && (
+                <SectionActions controls={sections.controls('samplingFrame', targets.dirty)} className="mt-4" />
+              )}
             </div>
           ) : (
             <div className="space-y-2">
@@ -890,7 +928,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
           </div>
           {!isCoreIdentifiersDirty && <SavedNote at={savedAt.coreIdentifiers} className="pt-4" />}
           {canEditSurvey && isCoreIdentifiersDirty && (
-            <SectionActions controls={sections.controls('coreIdentifiers')} className="pt-4" />
+            <SectionActions controls={sections.controls('coreIdentifiers', isCoreIdentifiersDirty)} className="pt-4" />
           )}
         </section>
 
@@ -913,8 +951,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
             onDurationChange={(key, minutes) => setGlobalParameters((prev) => ({ ...prev, [key]: minutes }))}
             hasCollectionDates={hasCollectionDates}
             canEdit={canEditSurvey}
-            dirty={isGeneralFlagsDirty}
-            controls={sections.controls('generalFlags')}
+            controls={sections.controls('generalFlags', isGeneralFlagsDirty)}
             savedAt={savedAt.generalFlags}
           />
 
@@ -924,7 +961,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
             numericVariables={numericVariables}
             questionLabel={questionLabel}
             canEdit={canEditSurvey}
-            controls={sections.controls('outlier')}
+            controls={sections.controls('outlier', isOutlierDirty)}
             savedAt={savedAt.outlier}
           />
 
@@ -937,7 +974,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
             setChecks={setQualityChecks}
             reviewableVariables={reviewableVariables}
             canEdit={canEditSurvey}
-            controls={sections.controls('llm')}
+            controls={sections.controls('llm', isLlmDirty)}
             savedAt={savedAt.llm}
             onError={setError}
             onSuccess={setSuccess}

@@ -19,7 +19,7 @@ const surveyContext = vi.hoisted(() => ({
   selectedSurvey: {
     survey_id: 's1',
     survey_name: 'Household 2026',
-    kobo_asset_id: null,
+    kobo_asset_id: 'aHousehold2026',
     permission: 'owner',
     is_owner: true,
   } as Record<string, unknown>,
@@ -38,6 +38,7 @@ vi.mock('../components/ai/SurveyKeyPicker', () => ({
   default: ({ use }: { use: string }) => <span>key picker: {use}</span>,
 }));
 vi.mock('../components/linter/FormLintPanel', () => ({ default: () => null }));
+vi.mock('../components/ui/KoboProjectPicker', () => ({ default: () => null }));
 
 const api = vi.mocked(progressApi);
 
@@ -45,7 +46,7 @@ const config = (survey_name: string): SurveyConfig =>
   ({
     survey_id: 's1',
     survey_name,
-    kobo_asset_id: null,
+    kobo_asset_id: 'aHousehold2026',
     config_data: { global_parameters: {}, quality_checks: {}, core_identifiers: { uuid: '_uuid' } },
   }) as unknown as SurveyConfig;
 

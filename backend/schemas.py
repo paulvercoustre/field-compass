@@ -144,6 +144,10 @@ class JsonPatch(BaseModel):
     op: str = Field(..., description="Operation: add, remove, or replace")
     path: str = Field(..., description="JSON path to the field")
     value: Any | None = Field(default=None, description="New value (for add/replace)")
+    old: Any | None = Field(
+        default=None,
+        description="Value before (replace/remove); none on edits stored before it was kept",
+    )
     from_: str | None = Field(
         default=None, alias="from", description="Source path (for move operations)"
     )

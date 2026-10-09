@@ -51,7 +51,7 @@ const CollectionTargetsEditor: React.FC<CollectionTargetsEditorProps> = ({
           )}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+              <label htmlFor="targets-file" className="block text-sm font-medium text-gray-700 dark:text-gray-400">
                 Upload a file of targets (CSV or XLSX)
               </label>
               <button
@@ -100,6 +100,7 @@ const CollectionTargetsEditor: React.FC<CollectionTargetsEditorProps> = ({
               </div>
             )}
             <input
+              id="targets-file"
               type="file"
               accept=".csv,.xlsx"
               onChange={targets.upload}

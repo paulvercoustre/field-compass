@@ -1,5 +1,6 @@
 import { Submission, FilterState, KoboChoice, KoboQuestion, QueueSort, ReviewTab, SubmissionFacets } from '../types';
 import { buildFilterParams } from '../utils/filterUtils';
+import type { EditRecord } from '../utils/editHistory';
 
 import { orMessage, request } from './apiBase';
 
@@ -23,10 +24,11 @@ const queueParams = (filters: FilterState, surveyId: string, options?: { withSor
 
 export const api = {
   /** A page of a survey's submissions in one review tab, filtered and sorted. */
-  getSubmissions: (filters: FilterState, surveyId: string, page = 1, pageSize = 50) => {
+  /** Part of a tab's list: `limit` submissions from `offset`, with the total and the tab and order used. */
+  getSubmissions: (filters: FilterState, surveyId: string, { offset = 0, limit = 50 } = {}) => {
     const params = queueParams(filters, surveyId);
-    params.append('page', String(page));
-    params.append('page_size', String(pageSize));
+    params.append('offset', String(offset));
+    params.append('page_size', String(limit));
     return request<SubmissionListResponse>(`/api/submissions?${params}`);
   },
 
@@ -49,6 +51,9 @@ export const api = {
   },
 
   /** Sets Kobo's validation status: 'Approved', 'Not Approved', 'On Hold', or null. */
+  /** A submission's edits in Kobo, newest first (utils/editHistory.ts reads them). */
+  getSubmissionHistory: (koboId: number) => request<EditRecord[]>(`/api/submissions/${koboId}/history`),
+
   /** One submission of a survey, for a link to one that isn't in the list. */
   getSubmission: (koboId: number, surveyId: string) =>
     request<Submission>(`/api/submissions/${koboId}?${new URLSearchParams({ survey_id: surveyId })}`),

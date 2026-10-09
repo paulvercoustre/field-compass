@@ -6,6 +6,7 @@ import NotificationSettings from '../components/activity/NotificationSettings';
 import ReviewSettings from '../components/review/ReviewSettings';
 import SettingsLayout, { SettingsNavItem } from '../components/ui/SettingsLayout';
 import UsageTab from '../components/admin/UsageTab';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RequestedTab } from '../contexts/NavigationContext';
 
 type AccountTab = 'profile' | 'kobo' | 'ai' | 'reviewing' | 'notifications' | 'usage';
@@ -162,8 +163,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
 
               <form onSubmit={handleUpdateProfile} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
+                  <label
+                    htmlFor="account-email"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
+                    Email
+                  </label>
                   <input
+                    id="account-email"
                     type="email"
                     value={user.email}
                     disabled
@@ -172,8 +179,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Username</label>
+                  <label
+                    htmlFor="account-username"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
+                    Username
+                  </label>
                   <input
+                    id="account-username"
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -182,8 +195,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full name</label>
+                  <label
+                    htmlFor="account-full-name"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
+                    Full name
+                  </label>
                   <input
+                    id="account-full-name"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
@@ -234,10 +253,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
 
               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label
+                    htmlFor="current-password"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
                     Current password
                   </label>
                   <input
+                    id="current-password"
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
@@ -247,10 +270,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label
+                    htmlFor="new-password"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
                     New password
                   </label>
                   <input
+                    id="new-password"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -262,10 +289,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label
+                    htmlFor="confirm-password"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
                     Confirm New password
                   </label>
                   <input
+                    id="confirm-password"
                     type="password"
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
@@ -377,43 +408,21 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
         {activeTab === 'usage' && user.can_view_usage && <UsageTab />}
       </div>
 
-      {/* Delete Account Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-gray-950/40 backdrop-blur-[2px] flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 shadow-popover animate-fade-in">
-            <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
-              Delete Account
-            </h2>
-            <p className="text-gray-700 dark:text-gray-300 mb-6">
-              Are you sure you want to delete your account?
-              <br />
-              <br />
-              This action cannot be undone. This will permanently delete your account and all associated data.
-            </p>
-            {deleteError && (
-              <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg mb-4">
-                <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>
-              </div>
-            )}
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={handleDeleteAccountCancel}
-                disabled={isDeletingAccount}
-                className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteAccountConfirm}
-                disabled={isDeletingAccount}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-              >
-                {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete your account?"
+        confirmLabel="Delete account"
+        busy={isDeletingAccount}
+        onConfirm={handleDeleteAccountConfirm}
+        onCancel={handleDeleteAccountCancel}
+      >
+        <p>This can't be undone. Your account and everything in it are deleted for good.</p>
+        {deleteError && (
+          <p role="alert" className="text-red-700 dark:text-red-400">
+            {deleteError}
+          </p>
+        )}
+      </ConfirmDialog>
     </SettingsLayout>
   );
 };

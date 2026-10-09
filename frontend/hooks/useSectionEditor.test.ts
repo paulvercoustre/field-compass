@@ -12,64 +12,40 @@ const setup = (save: (section: Section) => Promise<void> = async () => {}) => {
 };
 
 describe('useSectionEditor', () => {
-  it('opens one section at a time and closes it once saved', async () => {
+  it('saves one section, saying it is saving meanwhile', async () => {
     let finish = () => {};
     const save = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
     const { hook, onError } = setup(save);
 
-    act(() => hook.result.current.edit('a'));
-    expect(hook.result.current.isEditing('a')).toBe(true);
-    expect(hook.result.current.isEditing('b')).toBe(false);
-
-    let saving!: Promise<void>;
+    expect(hook.result.current.controls('a', true).dirty).toBe(true);
     act(() => {
-      saving = hook.result.current.save('a');
+      hook.result.current.controls('a', true).save();
     });
-    expect(hook.result.current.isSaving('a')).toBe(true);
-    await act(async () => {
-      finish();
-      await saving;
-    });
+    expect(hook.result.current.controls('a', true).saving).toBe(true);
+    expect(hook.result.current.controls('b', false).saving).toBe(false);
+    await act(async () => finish());
 
     expect(save).toHaveBeenCalledWith('a');
     expect(onError).toHaveBeenCalledWith(null);
-    expect(hook.result.current.isSaving('a')).toBe(false);
-    expect(hook.result.current.isEditing('a')).toBe(false);
+    expect(hook.result.current.controls('a', false).saving).toBe(false);
   });
 
-  it('keeps a section open and shows the error when its save fails', async () => {
+  it('shows the error when a save fails', async () => {
     const { hook, onError } = setup(async () => {
       throw new Error('Kobo said no');
     });
 
-    act(() => hook.result.current.edit('a'));
-    await act(() => hook.result.current.save('a'));
+    await act(async () => hook.result.current.controls('a', true).save());
 
     expect(onError).toHaveBeenLastCalledWith('Kobo said no');
-    expect(hook.result.current.isEditing('a')).toBe(true);
-    expect(hook.result.current.isSaving('a')).toBe(false);
+    expect(hook.result.current.controls('a', true).saving).toBe(false);
   });
 
-  it('cancelling closes the section and puts its fields back', () => {
+  it('cancelling puts the section’s fields back', () => {
     const { hook, restore } = setup();
 
-    act(() => hook.result.current.edit('b'));
-    act(() => hook.result.current.cancel('b'));
+    act(() => hook.result.current.controls('b', true).cancel());
 
-    expect(hook.result.current.isEditing('b')).toBe(false);
     expect(restore).toHaveBeenCalledWith('b');
-  });
-
-  it('closes every section at once', () => {
-    const { hook } = setup();
-
-    act(() => {
-      hook.result.current.edit('a');
-      hook.result.current.edit('b');
-    });
-    act(() => hook.result.current.closeAll());
-
-    expect(hook.result.current.isEditing('a')).toBe(false);
-    expect(hook.result.current.isEditing('b')).toBe(false);
   });
 });

@@ -256,10 +256,11 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
 
       {mode === 'total' && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+          <label htmlFor="targets-total" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             Total interviews planned
           </label>
           <input
+            id="targets-total"
             type="number"
             min={1}
             value={totalTarget ?? ''}
@@ -273,9 +274,15 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
       {mode === 'by_variable' && (
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Group by</label>
+            <label
+              htmlFor="targets-variable"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+            >
+              Group by
+            </label>
             {strataVariables.length > 0 ? (
               <select
+                id="targets-variable"
                 value={variable || ''}
                 onChange={(e) => {
                   onVariableChange(e.target.value || null);
@@ -306,10 +313,14 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
               <div className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md space-y-3">
                 <div className="flex flex-wrap items-end gap-2">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-400 mb-1">
+                    <label
+                      htmlFor="targets-planned-total"
+                      className="block text-xs font-medium text-gray-700 dark:text-gray-400 mb-1"
+                    >
                       Total interviews planned
                     </label>
                     <input
+                      id="targets-planned-total"
                       type="number"
                       min={1}
                       value={plannedTotal}
@@ -332,10 +343,14 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-400 mb-1">
+                    <label
+                      htmlFor="targets-per-group"
+                      className="block text-xs font-medium text-gray-700 dark:text-gray-400 mb-1"
+                    >
                       Number of interviews per group
                     </label>
                     <input
+                      id="targets-per-group"
                       type="number"
                       min={1}
                       value={perGroup}
