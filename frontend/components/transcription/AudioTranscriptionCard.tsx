@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useActivity } from '../../contexts/ActivityContext';
 import {
   AudioQuestion,
@@ -87,6 +87,14 @@ const toInput = (overview: TranscriptionOverview): TranscriptionSettingsInput =>
   send_to_kobo: overview.settings.send_to_kobo,
 });
 
+/** The same settings, whatever order the questions were ticked in. */
+const sameInput = (a: TranscriptionSettingsInput, b: TranscriptionSettingsInput) =>
+  a.enabled === b.enabled &&
+  a.language === b.language &&
+  a.multiple_speakers === b.multiple_speakers &&
+  a.send_to_kobo === b.send_to_kobo &&
+  [...a.questions].sort().join('\n') === [...b.questions].sort().join('\n');
+
 /**
  * Survey Settings › Audio transcription. Shown only when the form has audio
  * questions, and lists only those. The language list puts the form's own
@@ -102,7 +110,6 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
   const [overview, setOverview] = useState<TranscriptionOverview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<TranscriptionSettingsInput | null>(null);
-  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -138,15 +145,15 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
   }, [surveyId]);
 
   useEffect(() => {
-    setEditing(false);
     setOverview(null);
     load();
   }, [load, formKey]);
 
-  // Keep the counts current while transcriptions run (not while editing:
-  // a reload would replace the draft).
+  // Keep the counts current while transcriptions run (not with unsaved
+  // changes: a reload would replace them).
+  const changed = useRef(false);
   useEffect(() => {
-    if (!editing && overview) load();
+    if (!changed.current && overview) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 
@@ -181,7 +188,6 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
       const saved = await saveTranscriptionSettings(surveyId, { ...draft, acknowledge });
       setOverview(saved);
       setDraft(toInput(saved));
-      setEditing(false);
       setConfirmConsent(false);
       onSettingsChange?.(saved.settings.questions, saved.settings.enabled);
       // Translation of the transcripts lives in the Translation settings.
@@ -270,7 +276,14 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
     navigate({ view: 'dashboard', survey_id: surveyId, filters: { review: 'all', transcript } });
 
   const pause = settings.send_to_kobo ? settings.kobo_pause : null;
-  const editable = editing && canEdit;
+  // Editors change the settings as they stand: Save and Cancel show once they differ from what is saved.
+  const editable = canEdit;
+  const savedTranslate = !!translation && translatesTranscripts(translation.settings, settings.questions);
+  const dirty =
+    !sameInput(draft, toInput(overview)) ||
+    translateDraft.on !== savedTranslate ||
+    (translateDraft.on && translateDraft.language !== (translation?.settings.language ?? 'eng'));
+  changed.current = dirty;
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-card dark:border-gray-800 dark:bg-gray-900">
@@ -279,17 +292,6 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
           <MicIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
           Audio transcription
         </h2>
-        {canEdit && !editing && (
-          <button
-            onClick={() => {
-              setEditing(true);
-              setNotice(null);
-            }}
-            className="rounded-md px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20"
-          >
-            Edit
-          </button>
-        )}
       </div>
       <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
         Recorded answers are transcribed with ElevenLabs Scribe, so you can read them here and AI review can check them.
@@ -369,7 +371,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
           </div>
         </div>
 
-        {editing && (
+        {editable && draft.enabled && (
           <div className="ml-7 space-y-5">
             <fieldset>
               <div className="mb-2 flex items-center justify-between gap-3">
@@ -568,7 +570,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
           </div>
         )}
 
-        {editing && (
+        {editable && draft.enabled && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Recordings of the chosen questions are sent to ElevenLabs to be transcribed
             {translateDraft.on && draft.enabled ? ', and their transcripts to the AI to be translated' : ''}. Nothing
@@ -576,7 +578,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
           </p>
         )}
 
-        {editable && (
+        {editable && dirty && (
           <div className="flex gap-3 pt-1">
             <Button variant="primary" onClick={handleSave} loading={saving}>
               Save changes
@@ -589,7 +591,6 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
                   on: !!translation && translatesTranscripts(translation.settings, settings.questions),
                   language: translation?.settings.language ?? 'eng',
                 });
-                setEditing(false);
                 setError(null);
               }}
               disabled={saving}
@@ -599,7 +600,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
           </div>
         )}
 
-        {!editing && settings.enabled && (
+        {!editable && settings.enabled && (
           <dl className="ml-7 grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-gray-500 dark:text-gray-400">Questions</dt>
             <dd className="text-gray-900 dark:text-white">
@@ -644,7 +645,7 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
           </dl>
         )}
 
-        {!editing && settings.enabled && (
+        {settings.enabled && (
           <div className="ml-7 space-y-3 border-t border-gray-100 pt-4 dark:border-gray-800">
             <p className="text-sm text-gray-700 dark:text-gray-300">
               {(() => {
@@ -730,13 +731,16 @@ const AudioTranscriptionCard: React.FC<AudioTranscriptionCardProps> = ({
           </div>
         )}
 
-        {!editing && !settings.enabled && settings.questions.length === 0 && overview.audio_questions.length > 0 && (
-          <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
-            This form has {overview.audio_questions.length} audio{' '}
-            {overview.audio_questions.length === 1 ? 'question' : 'questions'}:{' '}
-            {overview.audio_questions.map((q) => q.label).join(', ')}.
-          </p>
-        )}
+        {!draft.enabled &&
+          !settings.enabled &&
+          settings.questions.length === 0 &&
+          overview.audio_questions.length > 0 && (
+            <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
+              This form has {overview.audio_questions.length} audio{' '}
+              {overview.audio_questions.length === 1 ? 'question' : 'questions'}:{' '}
+              {overview.audio_questions.map((q) => q.label).join(', ')}.
+            </p>
+          )}
       </div>
 
       <ConfirmDialog

@@ -1,6 +1,6 @@
 import React from 'react';
 import { QualityChecksForm } from '../../utils/qualityCheckSettings';
-import { SavedNote, SectionActions, SectionControls, SectionEditButton } from './SectionControls';
+import { SavedNote, SectionActions, SectionControls } from './SectionControls';
 
 interface OutlierChecksSectionProps {
   checks: QualityChecksForm;
@@ -26,8 +26,7 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
   <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Outlier checks</h2>
-      {!controls.editing && <SavedNote at={savedAt} className="ml-auto mr-2" />}
-      {canEdit && !controls.editing && <SectionEditButton onClick={controls.edit} />}
+      {!controls.dirty && <SavedNote at={savedAt} className="ml-auto" />}
     </div>
     <div className="space-y-6">
       {/* Outlier Checks Flag */}
@@ -35,15 +34,18 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
         <div className="flex items-start">
           <div className="flex h-5 items-center">
             <input
+              id="outlier-enabled"
               type="checkbox"
-              disabled={!controls.editing}
+              disabled={!canEdit}
               checked={checks.flag_outliers}
               onChange={(e) => setChecks({ ...checks, flag_outliers: e.target.checked })}
               className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
             />
           </div>
           <div className="ml-3">
-            <label className="text-sm font-medium text-gray-900 dark:text-white">Flag outlier values</label>
+            <label htmlFor="outlier-enabled" className="text-sm font-medium text-gray-900 dark:text-white">
+              Flag outlier values
+            </label>
           </div>
         </div>
 
@@ -51,11 +53,15 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
           <div className="ml-7 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 space-y-4">
             {/* Variable Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <p id="outlier-variables" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Variables to check
-              </label>
-              {controls.editing ? (
-                <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2">
+              </p>
+              {canEdit ? (
+                <div
+                  role="group"
+                  aria-labelledby="outlier-variables"
+                  className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded p-2"
+                >
                   {numericVariables.length > 0 ? (
                     numericVariables.map((variable) => (
                       <label
@@ -117,14 +123,14 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
             {/* Log transform per variable */}
             {checks.outlier_variables.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <p id="outlier-log" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Log transform (signed)
-                </label>
+                </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                   Use signed log transform for skewed or mixed-sign variables: sign(x) × log(1 + |x|)
                 </p>
-                {controls.editing ? (
-                  <div className="space-y-2">
+                {canEdit ? (
+                  <div role="group" aria-labelledby="outlier-log" className="space-y-2">
                     {checks.outlier_variables.map((variable) => (
                       <label
                         key={variable}
@@ -179,11 +185,15 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
 
             {/* Method Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label
+                htmlFor="outlier-method"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
                 Detection method
               </label>
-              {controls.editing ? (
+              {canEdit ? (
                 <select
+                  id="outlier-method"
                   value={checks.outlier_method}
                   onChange={(e) => {
                     const newMethod = e.target.value as 'iqr' | 'mad' | 'zscore';
@@ -225,9 +235,15 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
 
             {/* Threshold */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Threshold</label>
-              {controls.editing ? (
+              <label
+                htmlFor="outlier-threshold"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+              >
+                Threshold
+              </label>
+              {canEdit ? (
                 <input
+                  id="outlier-threshold"
                   type="number"
                   step="0.1"
                   min="0.1"
@@ -254,7 +270,7 @@ const OutlierChecksSection: React.FC<OutlierChecksSectionProps> = ({
           </div>
         )}
       </div>
-      {controls.editing && <SectionActions controls={controls} className="pt-4" />}
+      {canEdit && controls.dirty && <SectionActions controls={controls} className="pt-4" />}
     </div>
   </section>
 );

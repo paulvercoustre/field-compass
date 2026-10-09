@@ -280,10 +280,14 @@ const CreateSurveyPage: React.FC = () => {
             <div className="space-y-4">
               <KoboProjectPicker value={koboLink} onChange={handleProjectChange} />
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label
+                  htmlFor="survey-name"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                >
                   Survey name *
                 </label>
                 <input
+                  id="survey-name"
                   type="text"
                   value={surveyName}
                   onChange={(e) => setSurveyName(e.target.value)}
@@ -293,10 +297,14 @@ const CreateSurveyPage: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label
+                    htmlFor="collection-start"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
                     Collection start date
                   </label>
                   <input
+                    id="collection-start"
                     type="date"
                     value={globalParameters.data_collection_start_date}
                     onChange={(e) =>
@@ -306,10 +314,14 @@ const CreateSurveyPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label
+                    htmlFor="collection-end"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
                     Collection end date
                   </label>
                   <input
+                    id="collection-end"
                     type="date"
                     value={globalParameters.data_collection_end_date}
                     onChange={(e) =>
@@ -353,10 +365,14 @@ const CreateSurveyPage: React.FC = () => {
               )}
               {formLanguages.length > 1 && (
                 <div className="pt-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label
+                    htmlFor="label-language"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
                     Show question labels in
                   </label>
                   <select
+                    id="label-language"
                     value={selectedLanguage}
                     onChange={(e) => setSelectedLanguage(e.target.value)}
                     className="w-full sm:w-64 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"

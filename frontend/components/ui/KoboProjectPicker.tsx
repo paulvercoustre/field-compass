@@ -12,6 +12,8 @@ interface KoboProjectPickerProps {
   value: string;
   /** `project` is set when the value was picked from the list. */
   onChange: (value: string, project?: KoboProject) => void;
+  /** Settings: the project the survey reads now, which is no other survey's. */
+  currentAssetId?: string | null;
 }
 
 const STATUS_GROUPS: Array<{ status: KoboProject['status']; label: string }> = [
@@ -25,12 +27,13 @@ const inputClass =
 const linkButtonClass =
   'text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 font-medium';
 
-const optionText = (project: KoboProject): string => {
+const optionText = (project: KoboProject, current?: string | null): string => {
   const parts = [project.name];
   if (project.status === 'deployed' && project.submission_count !== null) {
     parts.push(`${project.submission_count} ${project.submission_count === 1 ? 'submission' : 'submissions'}`);
   }
-  if (project.existing_survey_name) parts.push('already in Field Compass');
+  if (project.uid === current) parts.push('this survey');
+  else if (project.existing_survey_name) parts.push('already in Field Compass');
   return parts.join(' · ');
 };
 
@@ -42,7 +45,7 @@ const optionText = (project: KoboProject): string => {
  * address across. Pasting a link stays available: for a project the list does
  * not show, and for when the list cannot be loaded at all.
  */
-const KoboProjectPicker: React.FC<KoboProjectPickerProps> = ({ value, onChange }) => {
+const KoboProjectPicker: React.FC<KoboProjectPickerProps> = ({ value, onChange, currentAssetId }) => {
   const { user } = useAuth();
   const { navigate } = useActivity();
   const hasKey = Boolean(user?.has_kobo_api_key);
@@ -69,6 +72,13 @@ const KoboProjectPicker: React.FC<KoboProjectPickerProps> = ({ value, onChange }
     if (hasKey) loadProjects();
   }, [hasKey, loadProjects]);
 
+  // A project the list doesn't have (shared with someone else's account, say)
+  // shows as its ID rather than as nothing chosen.
+  useEffect(() => {
+    if (projects && value && !projects.some((project) => project.uid === value)) setMode('link');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
+
   const switchMode = (next: 'list' | 'link') => {
     // A value entered in the other mode is not visible in this one, so it
     // must not stay selected behind the user's back.
@@ -91,8 +101,11 @@ const KoboProjectPicker: React.FC<KoboProjectPickerProps> = ({ value, onChange }
   if (mode === 'link') {
     return (
       <div>
-        <FieldLabel hint={KOBO_LINK_HINT}>Kobo project link *</FieldLabel>
+        <FieldLabel htmlFor="kobo-project" hint={KOBO_LINK_HINT}>
+          Kobo project link *
+        </FieldLabel>
         <input
+          id="kobo-project"
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -126,7 +139,9 @@ const KoboProjectPicker: React.FC<KoboProjectPickerProps> = ({ value, onChange }
 
   return (
     <div>
-      <FieldLabel hint="The projects your Kobo account owns or has been shared.">Kobo project *</FieldLabel>
+      <FieldLabel htmlFor="kobo-project" hint="The projects your Kobo account owns or has been shared.">
+        Kobo project *
+      </FieldLabel>
 
       {isLoading ? (
         <div className={`${inputClass} flex items-center gap-2 text-gray-500 dark:text-gray-400`}>
@@ -155,6 +170,7 @@ const KoboProjectPicker: React.FC<KoboProjectPickerProps> = ({ value, onChange }
         </p>
       ) : (
         <select
+          id="kobo-project"
           value={selected ? selected.uid : ''}
           onChange={(e) => {
             const project = projects?.find((p) => p.uid === e.target.value);
@@ -171,7 +187,7 @@ const KoboProjectPicker: React.FC<KoboProjectPickerProps> = ({ value, onChange }
               <optgroup key={status} label={label}>
                 {inGroup.map((project) => (
                   <option key={project.uid} value={project.uid}>
-                    {optionText(project)}
+                    {optionText(project, currentAssetId)}
                   </option>
                 ))}
               </optgroup>
@@ -190,7 +206,7 @@ const KoboProjectPicker: React.FC<KoboProjectPickerProps> = ({ value, onChange }
           This project is archived in Kobo, so it no longer receives submissions.
         </p>
       )}
-      {selected?.existing_survey_name && (
+      {selected?.existing_survey_name && selected.uid !== currentAssetId && (
         <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
           “{selected.existing_survey_name}” already reads this project.
         </p>

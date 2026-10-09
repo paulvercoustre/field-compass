@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useActivity } from '../../contexts/ActivityContext';
 import {
   getTranslationOverview,
@@ -93,12 +93,18 @@ const QuestionList: React.FC<QuestionListProps> = ({
     </div>
   );
 
+/** The same settings, whatever order the questions were ticked in. */
+const sameSettings = (a: TranslationSettingsInput, b: TranslationSettingsInput) =>
+  a.enabled === b.enabled &&
+  a.language === b.language &&
+  a.send_to_kobo === b.send_to_kobo &&
+  [...a.questions].sort().join('\n') === [...b.questions].sort().join('\n');
+
 const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) => {
   const { trackRun, setPanelOpen, navigate, version } = useActivity();
   const [overview, setOverview] = useState<TranslationOverview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<TranslationSettingsInput | null>(null);
-  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -117,14 +123,15 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
   }, [surveyId]);
 
   useEffect(() => {
-    setEditing(false);
     setOverview(null);
     load();
   }, [load, formKey]);
 
-  // Keep the counts current while translations run (not while editing).
+  // Keep the counts current while translations run (not with unsaved
+  // changes: a reload would replace them).
+  const changed = useRef(false);
   useEffect(() => {
-    if (!editing && overview) load();
+    if (!changed.current && overview) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 
@@ -137,7 +144,10 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
 
   const { settings, counts, allowance, key } = overview;
   const canEdit = overview.can_edit;
-  const editable = editing && canEdit;
+  // Editors change the settings as they stand: Save and Cancel show once they differ from what is saved.
+  const editable = canEdit;
+  const dirty = !sameSettings(draft, settings);
+  changed.current = dirty;
 
   const languageName = (code: string | null) =>
     code ? (overview.languages.find((lang) => lang.code === code)?.name ?? code) : 'Not chosen';
@@ -163,7 +173,6 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
       const saved = await saveTranslationSettings(surveyId, draft);
       setOverview(saved);
       setDraft({ ...saved.settings });
-      setEditing(false);
       setNotice(
         saved.settings.enabled && !settings.enabled
           ? 'Translation is on. New answers are translated on each pull; use “Translate now” for the ones already pulled.'
@@ -223,17 +232,6 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
           <TranslateIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
           Translation
         </h2>
-        {canEdit && !editing && (
-          <button
-            onClick={() => {
-              setEditing(true);
-              setNotice(null);
-            }}
-            className="rounded-md px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20"
-          >
-            Edit
-          </button>
-        )}
       </div>
       <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
         Answers to the questions you choose are translated into one language by AI, so everyone can read them: typed
@@ -316,7 +314,7 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
           </div>
         </div>
 
-        {editing && (
+        {editable && draft.enabled && (
           <div className="ml-7 space-y-5">
             <div className="max-w-sm">
               <FieldLabel htmlFor="translation-language" hint="Answers already in this language are left as they are.">
@@ -406,7 +404,7 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
           </div>
         )}
 
-        {editable && (
+        {editable && dirty && (
           <div className="flex gap-3 pt-1">
             <Button variant="primary" onClick={save} loading={saving}>
               Save changes
@@ -415,7 +413,6 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
               variant="secondary"
               onClick={() => {
                 setDraft({ ...settings });
-                setEditing(false);
                 setError(null);
               }}
               disabled={saving}
@@ -425,7 +422,7 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
           </div>
         )}
 
-        {!editing && settings.enabled && (
+        {!editable && settings.enabled && (
           <dl className="ml-7 grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-gray-500 dark:text-gray-400">Into</dt>
             <dd className="text-gray-900 dark:text-white">{languageName(settings.language)}</dd>
@@ -452,7 +449,7 @@ const TranslationCard: React.FC<TranslationCardProps> = ({ surveyId, formKey }) 
           </dl>
         )}
 
-        {!editing && settings.enabled && (
+        {settings.enabled && (
           <div className="ml-7 space-y-3 border-t border-gray-100 pt-4 dark:border-gray-800">
             <p className="text-sm text-gray-700 dark:text-gray-300">
               {plural(counts.success, 'answer')} translated

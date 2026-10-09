@@ -1,7 +1,7 @@
 import React from 'react';
 import { KoboToolData } from '../../types';
 import { Spinner } from '../Spinner';
-import { SavedNote, SectionActions, SectionControls, SectionEditButton } from './SectionControls';
+import { SavedNote, SectionActions, SectionControls } from './SectionControls';
 
 interface KoboFormSectionProps {
   koboToolData: KoboToolData | null;
@@ -56,36 +56,45 @@ const KoboFormSection: React.FC<KoboFormSectionProps> = ({
     <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Kobo form</h2>
-        {!controls.editing && <SavedNote at={savedAt} className="ml-auto mr-2" />}
-        {canEdit && !controls.editing && <SectionEditButton onClick={controls.edit} />}
+        {!controls.dirty && <SavedNote at={savedAt} className="ml-auto" />}
       </div>
-      {controls.editing ? (
-        <div className="space-y-2">
-          {koboToolData && (
-            <div className="mb-3">
-              <FormSummary fileName={fileName} variableCount={variableCount} />
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={isRefreshing || !canRefresh}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
-          >
-            {isRefreshing ? (
-              <>
-                <Spinner size="sm" className="text-current" />
-                <span>Reading form...</span>
-              </>
-            ) : (
-              <span>Refresh form</span>
-            )}
-          </button>
+      <div className="space-y-2 text-gray-700 dark:text-gray-300">
+        {koboToolData ? (
+          <FormSummary fileName={fileName} variableCount={variableCount} />
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">No form loaded yet.</p>
+        )}
+        {canEdit && (
+          <>
+            <p className="pt-1 text-xs text-gray-500 dark:text-gray-400">
+              Each pull reads the form from Kobo again. Refresh to see a change made in Kobo now.
+            </p>
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing || !canRefresh}
+              className="px-4 py-2 bg-white text-gray-900 border border-gray-300 shadow-xs rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 dark:hover:bg-gray-800 text-sm font-medium flex items-center gap-2"
+            >
+              {isRefreshing ? (
+                <>
+                  <Spinner size="sm" className="text-current" />
+                  <span>Reading form...</span>
+                </>
+              ) : (
+                <span>Refresh form</span>
+              )}
+            </button>
+          </>
+        )}
 
-          {languages.length > 1 && (
-            <div className="mt-4 space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <label className="block text-sm font-semibold text-gray-900 dark:text-white">Label language</label>
+        {languages.length > 1 && (
+          <div className="mt-4 space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <label htmlFor="label-language" className="block text-sm font-semibold text-gray-900 dark:text-white">
+              Label language
+            </label>
+            {canEdit ? (
               <select
+                id="label-language"
                 value={labelColumn}
                 onChange={(e) => onLabelColumnChange(e.target.value)}
                 className="w-full sm:w-72 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -96,19 +105,15 @@ const KoboFormSection: React.FC<KoboFormSectionProps> = ({
                   </option>
                 ))}
               </select>
-            </div>
-          )}
-          <SectionActions controls={controls} className="mt-4" />
-        </div>
-      ) : (
-        <div className="text-gray-700 dark:text-gray-300">
-          {koboToolData ? (
-            <FormSummary fileName={fileName} variableCount={variableCount} />
-          ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">No form loaded yet.</p>
-          )}
-        </div>
-      )}
+            ) : (
+              <p id="label-language" className="text-sm text-gray-900 dark:text-white">
+                {labelColumn.replace('label::', '')}
+              </p>
+            )}
+          </div>
+        )}
+        {canEdit && controls.dirty && <SectionActions controls={controls} className="mt-4" />}
+      </div>
     </section>
   );
 };
