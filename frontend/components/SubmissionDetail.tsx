@@ -6,6 +6,7 @@ import Button from './ui/Button';
 import { ExternalLinkIcon, SidebarIcon } from './ui/icons';
 import ReviewCard, { Decision } from './review/ReviewCard';
 import AllChecks, { buildCheckList, passedCount } from './review/AllChecks';
+import EditHistory from './review/EditHistory';
 import { useSurvey } from '../contexts/SurveyContext';
 import { SurveyConfig, getValidationRules, ValidationRule } from '../services/progressApi';
 import { formatValueForDisplay } from '../utils/koboLabelUtils';
@@ -63,7 +64,11 @@ const day = (value: unknown): string | null => {
 };
 
 /** Who, where and when, in one line under the submission's number. */
-function describeInterview(submission: Submission, config: SurveyConfig | null): React.ReactNode[] {
+function describeInterview(
+  submission: Submission,
+  config: SurveyConfig | null,
+  edits: { open: boolean; toggle: () => void }
+): React.ReactNode[] {
   const data = submission.submission_data ?? {};
   const ids = config?.config_data?.core_identifiers ?? {};
   const parts: React.ReactNode[] = [];
@@ -111,7 +116,16 @@ function describeInterview(submission: Submission, config: SurveyConfig | null):
   }
 
   if (submission.has_edit_history)
-    parts.push(<span className="text-amber-700 dark:text-amber-400">Edited in Kobo</span>);
+    parts.push(
+      <button
+        type="button"
+        onClick={edits.toggle}
+        aria-expanded={edits.open}
+        className="rounded font-medium text-amber-700 hover:underline dark:text-amber-400"
+      >
+        Edited in Kobo <span aria-hidden="true">{edits.open ? '▴' : '▾'}</span>
+      </button>
+    );
   return parts;
 }
 
@@ -137,6 +151,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   const { selectedSurvey } = useSurvey();
   const [rules, setRules] = useState<ValidationRule[]>([]);
   const [allChecksOpen, setAllChecksOpen] = useState(false);
+  // What the edits made in Kobo changed, under the header.
+  const [editsOpen, setEditsOpen] = useState(false);
   const [openingKobo, setOpeningKobo] = useState(false);
   const [koboError, setKoboError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -160,6 +176,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   // paints, so it never shows at the last one's scroll position.
   useLayoutEffect(() => {
     setAllChecksOpen(false);
+    setEditsOpen(false);
     setKoboError(null);
     const container = scrollRef.current;
     if (!container) return;
@@ -268,7 +285,10 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
     }
   };
 
-  const meta = describeInterview(submission, surveyConfig);
+  const meta = describeInterview(submission, surveyConfig, {
+    open: editsOpen,
+    toggle: () => setEditsOpen((open) => !open),
+  });
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-gray-50/60 dark:bg-gray-950">
@@ -346,6 +366,9 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
             </React.Fragment>
           ))}
         </p>
+        {editsOpen && submission.has_edit_history && (
+          <EditHistory submissionId={submission._id} config={surveyConfig} data={submission.submission_data ?? {}} />
+        )}
         {koboError && (
           <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-400">
             {koboError}
