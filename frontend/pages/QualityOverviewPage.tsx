@@ -2,6 +2,7 @@ import React from 'react';
 import { FilterState } from '../types';
 import { useSurvey } from '../contexts/SurveyContext';
 import QualityOverviewDashboard from '../components/quality-dashboard/QualityOverviewDashboard';
+import type { ReviewCount } from '../components/quality-dashboard/StatusSummaryCards';
 
 interface QualityOverviewPageProps {
   onNavigateToSubmissions?: (filters?: FilterState) => void;
@@ -23,13 +24,17 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({ onNavigateToS
     );
   }
 
-  // A status card opens its tab; Approved and Not approved share Reviewed, so
-  // they also filter to their status.
-  const handleStatusClick = (status: string) => {
+  // A card opens the Submissions tab of the same name; Approved and Not
+  // approved share Reviewed, so they also filter to their decision.
+  const handleStatusClick = (state: ReviewCount) => {
     if (!onNavigateToSubmissions) return;
-    if (status === 'On Hold') onNavigateToSubmissions({ review: 'on_hold' });
-    else if (status === 'Not Reviewed') onNavigateToSubmissions({ review: 'all', validationStatuses: [status] });
-    else onNavigateToSubmissions({ review: 'reviewed', validationStatuses: [status] });
+    if (state === 'needs_review') onNavigateToSubmissions({ review: 'needs_review' });
+    else if (state === 'on_hold') onNavigateToSubmissions({ review: 'on_hold' });
+    else
+      onNavigateToSubmissions({
+        review: 'reviewed',
+        validationStatuses: [state === 'approved' ? 'Approved' : 'Not Approved'],
+      });
   };
 
   // An issue bar opens every submission with that issue, so the count matches the bar.

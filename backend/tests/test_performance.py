@@ -18,7 +18,7 @@ def test_submissions_with_no_enumerator_are_counted_apart():
         CONFIG,
     )
 
-    assert [row.id for row in performance.collection] == ["enum_01"]
-    assert [row.id for row in performance.quality] == ["enum_01"]
-    assert performance.collection[0].total == 2
+    assert [row.id for row in performance.enumerators] == ["enum_01"]
+    assert performance.enumerators[0].submissions == 2
+    assert performance.team is not None and performance.team.submissions == 2
     assert performance.no_enumerator == 2

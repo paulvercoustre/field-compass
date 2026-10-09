@@ -611,7 +611,8 @@ def run_summary(db: Session, run: Run, survey: SurveyConfig | None = None) -> di
             "processed": stats.get("processed"),
             "new": stats.get("created", 0),
             "edited": stats.get("edited", 0),
-            "flagged": stats.get("hfc_flagged", 0),
+            # Runs stored before this count was kept: the flagged ones, nearly the same.
+            "needs_review": stats.get("needs_review", stats.get("hfc_flagged", 0)),
             "errors": stats.get("errors", 0),
             "duration_seconds": stats.get("duration_seconds"),
         }
@@ -645,7 +646,11 @@ def _finished_text(summary: dict[str, Any]) -> tuple[str, str]:
     parts: list[str] = []
     pull = summary.get("pull")
     if pull:
-        parts.append(f"{_plural(pull['new'], 'new submission')}, {pull['flagged']} flagged.")
+        need = pull["needs_review"]
+        parts.append(
+            f"{_plural(pull['new'], 'new submission')}, "
+            f"{need} {'needs' if need == 1 else 'need'} review."
+        )
     work: list[str] = []
     ai = summary.get("ai_checks")
     if ai and ai["queued"]:

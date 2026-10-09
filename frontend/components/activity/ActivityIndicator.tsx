@@ -5,6 +5,7 @@ import { useSurvey } from '../../contexts/SurveyContext';
 import { getSurveyRuns, isOpen, RunSummary } from '../../services/activityApi';
 import { Spinner } from '../Spinner';
 import RunProgress, { runStatusLabel, runTitle } from './RunProgress';
+import { needReview } from '../../utils/glossary';
 
 /** One line for the header: what is running, briefly. */
 const headline = (runs: RunSummary[]): string | null => {
@@ -39,7 +40,7 @@ const outcome = (run: RunSummary): { tone: 'ok' | 'warn' | 'error' | 'muted'; te
   if (run.status === 'stopped') return { tone: 'muted', text: `${name}: stopped` };
   if (run.problems.length) return { tone: 'warn', text: `${name}: finished with problems` };
   if (run.kind === 'pull' && run.pull)
-    return { tone: 'ok', text: `${name}: ${run.pull.new} new, ${run.pull.flagged} flagged` };
+    return { tone: 'ok', text: `${name}: ${run.pull.new} new, ${needReview(run.pull.needs_review)}` };
   return { tone: 'ok', text: `${name}: finished` };
 };
 
@@ -211,7 +212,7 @@ const RecentRuns: React.FC<{ surveyId: string; exclude: Set<string> }> = ({ surv
               <span className="min-w-0 truncate text-xs text-gray-700 dark:text-gray-300">
                 {new Date(run.created_at || '').toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ·{' '}
                 {runTitle(run)}
-                {run.pull && ` · ${run.pull.new} new, ${run.pull.flagged} flagged`}
+                {run.pull && ` · ${run.pull.new} new, ${needReview(run.pull.needs_review)}`}
               </span>
               <span className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">{status.label}</span>
             </button>

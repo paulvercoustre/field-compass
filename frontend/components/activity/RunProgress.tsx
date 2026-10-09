@@ -287,9 +287,13 @@ const RunProgress: React.FC<RunProgressProps> = ({ run, compact = false }) => {
                 {run.status === 'running' && pull ? (
                   `${number(pull.processed ?? 0)} of ${number(pull.fetched)}`
                 ) : pull ? (
-                  <CountLink count={pull.flagged} text="flagged" onClick={toSubmissions({ review: 'needs_review' })} />
+                  <CountLink
+                    count={pull.needs_review}
+                    text={pull.needs_review === 1 ? 'needs review' : 'need review'}
+                    onClick={toSubmissions({ review: 'needs_review' })}
+                  />
                 ) : null}
-                {run.status !== 'running' && pull && pull.flagged === 0 && 'nothing flagged'}
+                {run.status !== 'running' && pull && pull.needs_review === 0 && 'nothing needs review'}
               </Step>
             )}
           </>

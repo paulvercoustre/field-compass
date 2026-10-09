@@ -20,6 +20,7 @@ from etl.hfc_engine import HFCEngine
 from etl.kobo_fetcher import KoboFetcher
 from services.ai_review_queue import AIReviewQueuer
 from services.kobo_form import refresh_stored_form
+from services.review_queue import NEEDS_REVIEW, review_state
 from services.transcription_queue import TranscriptionQueuer
 from services.translation_queue import TranslationQueuer
 
@@ -145,6 +146,8 @@ class ETLPipeline:
             "updated": 0,
             "edited": 0,
             "hfc_flagged": 0,
+            # Checked in this pull and now in the Submissions tab of that name.
+            "needs_review": 0,
             "validated": 0,  # NEW: Count of submissions validated
             "skipped": 0,  # NEW: Count of submissions skipped
             "validation_reasons": {},  # NEW: Reasons for validation
@@ -351,6 +354,8 @@ class ETLPipeline:
 
                         if submission.qa_status == "FLAGGED":
                             stats["hfc_flagged"] += 1
+                        if review_state(submission) == NEEDS_REVIEW:
+                            stats["needs_review"] += 1
                     else:
                         logger.debug(
                             f"Skipping validation for submission {submission_uuid}: {reason}"

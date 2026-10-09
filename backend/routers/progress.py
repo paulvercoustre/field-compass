@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query
 from database.models import SubmissionCurrent
 from schemas import PerformanceData, ProgressData
 from services.database import DbSession
+from services.metrics import is_approved, is_not_approved
 from services.permissions import ViewableSurvey
 from services.progress import compute_performance, compute_progress, performance_unavailable
 from services.survey_config import get_enumerator_field
@@ -22,7 +23,7 @@ async def get_progress_data(
     survey_config: ViewableSurvey,
     db: DbSession,
     approved_only: Annotated[
-        bool, Query(description="When true, only count submissions whose qa_status is APPROVED.")
+        bool, Query(description="When true, count only submissions marked Approved in Kobo.")
     ] = False,
 ):
     """
@@ -35,26 +36,25 @@ async def get_progress_data(
     from the sampling frame. Disaggregations are dynamically generated based on
     the sampling_cols in the survey configuration.
 
-    Submissions included:
-    - approved_only=False (default): all submissions except REJECTED (Not accepted).
-    - approved_only=True: only submissions with qa_status APPROVED.
+    Submissions counted, by the reviewer's decision in Kobo (services/metrics.py):
+    - approved_only=False (default): every submission except Not approved.
+    - approved_only=True: only Approved ones.
+    Either way the response says how many are Not approved, so the page can say
+    what it leaves out.
     """
-    # Build query filtered by survey
-    query = db.query(SubmissionCurrent).filter(
-        SubmissionCurrent.survey_id == survey_config.survey_id
+    submissions = (
+        db.query(SubmissionCurrent)
+        .filter(SubmissionCurrent.survey_id == survey_config.survey_id)
+        .all()
     )
-
-    # Filter submissions by qa_status
     if approved_only:
-        query = query.filter(SubmissionCurrent.qa_status == "APPROVED")
+        counted = [sub for sub in submissions if is_approved(sub)]
     else:
-        # Default: exclude REJECTED (Not accepted)
-        query = query.filter(SubmissionCurrent.qa_status != "REJECTED")
+        counted = [sub for sub in submissions if not is_not_approved(sub)]
 
-    # Get all submissions (completed surveys)
-    submissions = query.all()
-
-    return compute_progress(submissions, survey_config.config_data)
+    progress = compute_progress(counted, survey_config.config_data)
+    progress.not_approved = sum(1 for sub in submissions if is_not_approved(sub))
+    return progress
 
 
 @router.get("/performance", response_model=PerformanceData)
@@ -66,18 +66,9 @@ async def get_performance_data(
     Get enumerator performance metrics for a specific survey.
     Requires viewer access to the survey.
 
-    Returns collection stats and quality metrics per enumerator.
-
-    Quality metrics include:
-    - avgActiveTime: Average active interview time (minutes) from audit logs
-    - avgTotalTime: Average total duration (minutes) from audit logs
-    - avgDkRate: Average percentage of "Don't Know" values per submission
-    - avgIssuesPerSurvey: Average number of quality issues per submission
-
-    Note: Active time and total time metrics require audit logs to be processed
-    during ETL. If audit logs are not available, these values will be 0.
-
-    The figures are computed in services/progress.py.
+    Returns the named counts and measurements (services/metrics.py) for the
+    team and for each enumerator: the same definitions as Data quality, over
+    the submissions with an enumerator recorded. `no_enumerator` counts the rest.
     """
     config = survey_config.config_data
     if not get_enumerator_field(config):

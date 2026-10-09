@@ -127,7 +127,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ o
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
               <div className="lg:col-span-1 xl:col-span-2 flex">
-                <SubmissionsBarChart data={performanceData.collection} onEnumeratorClick={handleEnumeratorClick} />
+                <SubmissionsBarChart data={performanceData.enumerators} onEnumeratorClick={handleEnumeratorClick} />
               </div>
               <div className="lg:col-span-1 flex">
                 <EnumeratorLeaderboard data={performanceData} onEnumeratorClick={handleEnumeratorClick} />

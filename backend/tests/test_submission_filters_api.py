@@ -52,6 +52,9 @@ def _add(survey_id, data, *, day=1, validation=None, issues=(), qa="PENDING_APPR
                     {"check": check, "field": "f", "value": None, "message": "m"}
                     for check in issues
                 ],
+                # `dk` don't-know answers out of 100 that allow one.
+                dk_count=dk,
+                dk_eligible_count=None if dk is None else 100,
                 dk_percentage=dk,
             )
         )
@@ -90,18 +93,22 @@ class TestQualityOverview:
     def test_aggregates_every_submission(self, client, three):  # noqa: F811
         body = self._get(client, three)
 
-        status = body["status_summary"]
-        assert status["total_submissions"] == 3
-        assert (status["approved_count"], status["on_hold_count"]) == (1, 1)
-        assert status["not_reviewed_count"] == 1
-        assert status["approved_percentage"] == 33.3
-
-        metrics = body["quality_metrics"]
-        assert metrics["total_issues"] == 4
-        assert metrics["submissions_with_issues"] == 2
-        assert metrics["avg_issues_per_submission"] == 1.33
-        assert metrics["avg_dk_percentage"] == 20.0
-        assert metrics["avg_active_duration_minutes"] == 25.0
+        summary = body["summary"]
+        assert summary["submissions"] == 3
+        # e2's submission has no issue and no decision: Clean, whatever its qa_status.
+        assert (
+            summary["needs_review"],
+            summary["on_hold"],
+            summary["clean"],
+            summary["approved"],
+            summary["not_approved"],
+        ) == (0, 1, 1, 1, 0)
+        assert summary["reviewed"] == 1
+        assert (summary["flagged"], summary["issues"]) == (2, 4)
+        assert summary["issues_per_submission"] == 1.33
+        assert summary["dk_rate"] == 20.0
+        assert summary["duration_minutes"] == 25.0
+        assert (summary["duration_measured"], summary["duration_from_start_end"]) == (2, 0)
 
         frequency = {f["check"]: f for f in body["issue_frequency"]}
         assert frequency["dk_high"]["count"] == 3
@@ -110,31 +117,28 @@ class TestQualityOverview:
         assert [f["check"] for f in body["issue_frequency"]] == ["dk_high", "too_fast"]
 
         assert [d["date"] for d in body["temporal_data"]] == ["2026-03-01", "2026-03-02"]
-        assert body["temporal_data"][0]["total_issues"] == 4
+        day_one, day_two = body["temporal_data"]
+        assert (day_one["submissions"], day_one["issues"], day_one["flagged"]) == (2, 4, 2)
+        assert (day_one["approved"], day_one["on_hold"]) == (1, 1)
+        assert (day_two["submissions"], day_two["clean"]) == (1, 1)
         assert body["issue_time_series"][0]["issue_counts"] == {"dk_high": 3, "too_fast": 1}
         assert body["date_range"] == {"start": "2026-03-01", "end": "2026-03-02"}
 
     def test_filters_by_enumerator(self, client, three):  # noqa: F811
         body = self._get(client, three, enumerator="e2")
-        assert body["status_summary"]["total_submissions"] == 1
+        assert body["summary"]["submissions"] == 1
 
     def test_filters_by_a_sampling_variable_under_its_group_path(self, client, three):  # noqa: F811
         body = self._get(client, three, sampling_filters="district=north")
-        assert body["status_summary"]["total_submissions"] == 2
+        assert body["summary"]["submissions"] == 2
 
     def test_a_variable_that_is_not_a_sampling_column_is_ignored(self, client, three):  # noqa: F811
         body = self._get(client, three, sampling_filters="enumerator_id=nobody")
-        assert body["status_summary"]["total_submissions"] == 3
+        assert body["summary"]["submissions"] == 3
 
     def test_filters_by_date(self, client, three):  # noqa: F811
-        assert (
-            self._get(client, three, start_date="2026-03-02")["status_summary"]["total_submissions"]
-            == 1
-        )
-        assert (
-            self._get(client, three, end_date="2026-03-01")["status_summary"]["total_submissions"]
-            == 2
-        )
+        assert self._get(client, three, start_date="2026-03-02")["summary"]["submissions"] == 1
+        assert self._get(client, three, end_date="2026-03-01")["summary"]["submissions"] == 2
 
     def test_a_malformed_date_is_a_400(self, client, three):  # noqa: F811
         response = client.get(
@@ -144,8 +148,10 @@ class TestQualityOverview:
 
     def test_nothing_left_is_all_zeros(self, client, three):  # noqa: F811
         body = self._get(client, three, enumerator="nobody")
-        assert body["status_summary"]["total_submissions"] == 0
-        assert body["quality_metrics"]["avg_dk_percentage"] is None
+        assert body["summary"]["submissions"] == 0
+        assert body["summary"]["dk_rate"] is None
+        assert body["summary"]["duration_minutes"] is None
+        assert body["summary"]["issues_per_submission"] is None
         assert body["issue_frequency"] == [] and body["temporal_data"] == []
 
 
@@ -202,7 +208,7 @@ class TestNoAnswerUnderAFilter:
             "/api/quality/overview",
             params={"survey_id": unanswered, "sampling_filters": f"district={values}"},
         ).json()
-        assert body["status_summary"]["total_submissions"] == (0 if values == "None" else 1)
+        assert body["summary"]["submissions"] == (0 if values == "None" else 1)
 
     @pytest.mark.parametrize("values", ["north", "north,None", "None"])
     def test_submissions(self, client, unanswered, values):  # noqa: F811

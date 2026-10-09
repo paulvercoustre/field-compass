@@ -1,60 +1,82 @@
 import React, { useState, useMemo } from 'react';
-import { PerformanceData } from '../../types';
-import Dialog from '../ui/Dialog';
-import Button from '../ui/Button';
+import { EnumeratorSummary, PerformanceData, SubmissionSummary } from '../../types';
+import { GLOSSARY, Term, formatPercent, percentOf } from '../../utils/glossary';
 import { SubTabButton } from '../ui/SubTabButton';
+import TermInfo from '../ui/TermInfo';
 
-type PerformanceSubTab = 'collected' | 'quality';
+type PerformanceSubTab = 'review' | 'quality';
 type SortDirection = 'asc' | 'desc';
-type CollectionSortKey = 'id' | 'needsReview' | 'validated' | 'total' | 'percentValidated' | 'percentNeedsReview';
-type QualitySortKey = 'id' | 'avgActiveTime' | 'avgTotalTime' | 'avgDkRate' | 'avgIssuesPerSurvey';
 
-const DEFINITIONS: Record<string, { title: string; text: string }> = {
-  needsReview: {
-    title: 'Flagged, not yet approved',
-    text: 'Submissions where the checks found at least one issue, and that no reviewer has approved or rejected in Kobo yet.',
-  },
-  validated: {
-    title: 'Approved by reviewer',
-    text: 'Submissions a reviewer marked Approved in Kobo. This says how far review has got, not how good the interviews were: an enumerator whose work has not been reviewed yet has few.',
-  },
-  totalSurveys: { title: 'Total', text: "All of this enumerator's submissions pulled from Kobo, except deleted ones." },
-  percentValidated: {
-    title: '% Approved by reviewer',
-    text: "The share of this enumerator's submissions that a reviewer approved in Kobo. Low while review is behind; not a measure of quality.",
-  },
-  percentNeedsReview: {
-    title: '% Flagged, not yet approved',
-    text: "The share of this enumerator's submissions with issues that no reviewer has decided on yet.",
-  },
-  avgActiveTime: {
-    title: 'Avg. Active Survey Time (min)',
-    text: 'The average time the enumerator spent actively answering questions (e.g., excluding pauses). Requires audit logs.',
-  },
-  avgTotalTime: {
-    title: 'Avg. Total Survey Time (min)',
-    text: 'The average total time from the first event to the last event in the audit log.',
-  },
-  avgDkRate: {
-    title: "Avg. don't-know rate (%)",
-    text: "The average share of this enumerator's answers that were \"don't know\" or one of your survey's don't-know codes.",
-  },
-  avgIssuesPerSurvey: {
-    title: 'Issues per submission',
-    text: 'The average number of issues the checks found per submission from this enumerator, whether or not a reviewer has seen them. A higher number may mean they need follow-up.',
-  },
+// Enumerators with fewer submissions are not highlighted: a share of 1 in 3
+// says little.
+const MIN_SUBMISSIONS = 5;
+
+interface Column {
+  key: string;
+  label: string;
+  term: Term;
+  value: (row: SubmissionSummary) => number | null;
+  format: (row: SubmissionSummary) => string;
+  /** A share of the submissions, highlighted at twice the team's. */
+  share?: (row: SubmissionSummary) => number | null;
+}
+
+const count = (key: keyof SubmissionSummary, term: Term): Column => ({
+  key,
+  label: term.name,
+  term,
+  value: (row) => row[key] as number,
+  format: (row) => String(row[key]),
+});
+
+const shareOf = (key: 'flagged' | 'not_approved', term: Term): Column => {
+  const share = (row: SubmissionSummary) => percentOf(row[key], row.submissions);
+  return {
+    key: `${key}_share`,
+    label: term.name,
+    term,
+    value: share,
+    format: (row) => `${formatPercent(share(row))} (${row[key]})`,
+    share,
+  };
 };
 
-const InfoIcon: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-label={`What “${label}” means`}
-    className="ml-1 rounded font-bold text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-  >
-    <span aria-hidden="true">&#9432;</span>
-  </button>
-);
+const COLUMNS: Record<PerformanceSubTab, Column[]> = {
+  // How far review has got. Never coloured.
+  review: [
+    count('submissions', GLOSSARY.submissions),
+    count('flagged', GLOSSARY.flagged),
+    count('needs_review', GLOSSARY.needsReview),
+    count('on_hold', GLOSSARY.onHold),
+    count('approved', GLOSSARY.approved),
+    count('not_approved', GLOSSARY.notApproved),
+  ],
+  quality: [
+    shareOf('flagged', GLOSSARY.flagged),
+    shareOf('not_approved', GLOSSARY.notApproved),
+    {
+      key: 'issues_per_submission',
+      label: GLOSSARY.issuesPerSubmission.name,
+      term: GLOSSARY.issuesPerSubmission,
+      value: (row) => row.issues_per_submission,
+      format: (row) => (row.issues_per_submission === null ? '—' : row.issues_per_submission.toFixed(2)),
+    },
+    {
+      key: 'duration_minutes',
+      label: `${GLOSSARY.duration.name} (min)`,
+      term: GLOSSARY.duration,
+      value: (row) => row.duration_minutes,
+      format: (row) => (row.duration_minutes === null ? 'not measured' : String(Math.round(row.duration_minutes))),
+    },
+    {
+      key: 'dk_rate',
+      label: GLOSSARY.dkRate.name,
+      term: GLOSSARY.dkRate,
+      value: (row) => row.dk_rate,
+      format: (row) => (row.dk_rate === null ? 'not measured' : `${row.dk_rate}%`),
+    },
+  ],
+};
 
 const SortIcon: React.FC<{ direction: SortDirection | null }> = ({ direction }) => {
   if (!direction) {
@@ -66,19 +88,18 @@ const SortIcon: React.FC<{ direction: SortDirection | null }> = ({ direction }) 
 /** A column title that sorts the table, with what the column means behind the info button. */
 const SortableHeader: React.FC<{
   label: string;
-  sortKey: CollectionSortKey | QualitySortKey;
+  sortKey: string;
   currentSort: { key: string; dir: SortDirection };
-  onSort: (key: any) => void;
-  infoKey?: string;
-  onInfo: (key: string) => void;
-}> = ({ label, sortKey, currentSort, onSort, infoKey, onInfo }) => {
+  onSort: (key: string) => void;
+  term?: Term;
+}> = ({ label, sortKey, currentSort, onSort, term }) => {
   const direction = currentSort.key === sortKey ? currentSort.dir : null;
   return (
     <th
       aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
       className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400"
     >
-      <div className="flex items-center">
+      <div className="flex items-center gap-1">
         {/* A button, so the column sorts from the keyboard too. */}
         <button
           type="button"
@@ -88,7 +109,7 @@ const SortableHeader: React.FC<{
           {label}
           <SortIcon direction={direction} />
         </button>
-        {infoKey && <InfoIcon label={label} onClick={() => onInfo(infoKey)} />}
+        {term && <TermInfo term={term} />}
       </div>
     </th>
   );
@@ -100,394 +121,55 @@ interface PerformanceDataViewProps {
 }
 
 const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnumeratorClick }) => {
-  const [activeSubTab, setActiveSubTab] = useState<PerformanceSubTab>('collected');
+  const [activeSubTab, setActiveSubTab] = useState<PerformanceSubTab>('quality');
   const [filter, setFilter] = useState('');
-  const [modalContent, setModalContent] = useState<{ title: string; text: string } | null>(null);
+  const [sort, setSort] = useState<{ key: string; dir: SortDirection }>({ key: 'flagged_share', dir: 'desc' });
 
-  // Sorting state
-  const [collectionSort, setCollectionSort] = useState<{ key: CollectionSortKey; dir: SortDirection }>({
-    key: 'total',
-    dir: 'desc',
-  });
-  const [qualitySort, setQualitySort] = useState<{ key: QualitySortKey; dir: SortDirection }>({
-    key: 'avgIssuesPerSurvey',
-    dir: 'desc',
-  });
+  const columns = COLUMNS[activeSubTab];
+  const team = data.team;
 
-  const handleShowModal = (key: string) => {
-    if (DEFINITIONS[key]) {
-      setModalContent(DEFINITIONS[key]);
-    }
-  };
-
-  // Calculate team averages
-  const teamAverages = useMemo(() => {
-    const totalSubmissions = data.collection.reduce((sum, e) => sum + e.total, 0);
-    const totalValidated = data.collection.reduce((sum, e) => sum + e.validated, 0);
-    const totalNeedsReview = data.collection.reduce((sum, e) => sum + e.needsReview, 0);
-
-    const avgTotal = data.collection.length > 0 ? totalSubmissions / data.collection.length : 0;
-    const avgValidatedPercent = totalSubmissions > 0 ? (totalValidated / totalSubmissions) * 100 : 0;
-    const avgNeedsReviewPercent = totalSubmissions > 0 ? (totalNeedsReview / totalSubmissions) * 100 : 0;
-
-    const avgActiveTime =
-      data.quality.length > 0 ? data.quality.reduce((sum, q) => sum + q.avgActiveTime, 0) / data.quality.length : 0;
-    const avgTotalTime =
-      data.quality.length > 0 ? data.quality.reduce((sum, q) => sum + q.avgTotalTime, 0) / data.quality.length : 0;
-    const avgIssues =
-      data.quality.length > 0
-        ? data.quality.reduce((sum, q) => sum + q.avgIssuesPerSurvey, 0) / data.quality.length
-        : 0;
-    const avgDkRate =
-      data.quality.length > 0
-        ? data.quality.reduce((sum, q) => sum + parseFloat(q.avgDkRate), 0) / data.quality.length
-        : 0;
-
-    return {
-      total: avgTotal,
-      validatedPercent: avgValidatedPercent,
-      needsReviewPercent: avgNeedsReviewPercent,
-      activeTime: avgActiveTime,
-      totalTime: avgTotalTime,
-      issues: avgIssues,
-      dkRate: avgDkRate,
-    };
-  }, [data]);
-
-  const filteredCollectionData = useMemo(() => {
-    let filtered = data.collection;
-    if (filter) {
-      filtered = filtered.filter((row) => row.id.toLowerCase().includes(filter.toLowerCase()));
-    }
-
-    // Sort
+  const rows = useMemo(() => {
+    const needle = filter.toLowerCase();
+    const filtered = needle
+      ? data.enumerators.filter((row) => row.id.toLowerCase().includes(needle))
+      : data.enumerators;
+    const column = columns.find((c) => c.key === sort.key);
+    const sign = sort.dir === 'asc' ? 1 : -1;
     return [...filtered].sort((a, b) => {
-      let aVal: number | string;
-      let bVal: number | string;
-
-      switch (collectionSort.key) {
-        case 'id':
-          aVal = a.id.toLowerCase();
-          bVal = b.id.toLowerCase();
-          break;
-        case 'percentValidated':
-          aVal = parseFloat(a.percentValidated);
-          bVal = parseFloat(b.percentValidated);
-          break;
-        case 'percentNeedsReview':
-          aVal = parseFloat(a.percentNeedsReview);
-          bVal = parseFloat(b.percentNeedsReview);
-          break;
-        default:
-          aVal = a[collectionSort.key];
-          bVal = b[collectionSort.key];
-      }
-
-      if (aVal < bVal) return collectionSort.dir === 'asc' ? -1 : 1;
-      if (aVal > bVal) return collectionSort.dir === 'asc' ? 1 : -1;
-      return 0;
+      if (!column) return sign * a.id.localeCompare(b.id);
+      const av = column.value(a);
+      const bv = column.value(b);
+      // Nothing measured goes last, whichever way the column sorts.
+      if (av === null || bv === null) return av === bv ? 0 : av === null ? 1 : -1;
+      return sign * (av - bv);
     });
-  }, [data.collection, filter, collectionSort]);
+  }, [data.enumerators, filter, sort, columns]);
 
-  const filteredQualityData = useMemo(() => {
-    let filtered = data.quality;
-    if (filter) {
-      filtered = filtered.filter((row) => row.id.toLowerCase().includes(filter.toLowerCase()));
-    }
-
-    // Sort
-    return [...filtered].sort((a, b) => {
-      let aVal: number | string;
-      let bVal: number | string;
-
-      switch (qualitySort.key) {
-        case 'id':
-          aVal = a.id.toLowerCase();
-          bVal = b.id.toLowerCase();
-          break;
-        case 'avgDkRate':
-          aVal = parseFloat(a.avgDkRate);
-          bVal = parseFloat(b.avgDkRate);
-          break;
-        default:
-          aVal = a[qualitySort.key];
-          bVal = b[qualitySort.key];
-      }
-
-      if (aVal < bVal) return qualitySort.dir === 'asc' ? -1 : 1;
-      if (aVal > bVal) return qualitySort.dir === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [data.quality, filter, qualitySort]);
-
-  const handleCollectionSort = (key: CollectionSortKey) => {
-    setCollectionSort((prev) => ({
-      key,
-      dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc',
-    }));
+  const handleSort = (key: string) => {
+    setSort((prev) => ({ key, dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc' }));
   };
 
-  const handleQualitySort = (key: QualitySortKey) => {
-    setQualitySort((prev) => ({
-      key,
-      dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc',
-    }));
+  // The agreed rule: a share at least twice the team's, with enough submissions to mean something.
+  const highlighted = (column: Column, row: EnumeratorSummary): boolean => {
+    if (!column.share || !team || row.submissions < MIN_SUBMISSIONS) return false;
+    const mine = column.share(row);
+    const theirs = column.share(team);
+    return mine !== null && theirs !== null && theirs > 0 && mine >= 2 * theirs;
   };
 
-  // Color coding helpers. Approval share is not coloured: it measures review
-  // progress, and a low one says nothing against the enumerator.
-  const getNeedsReviewColor = (percentStr: string) => {
-    const percent = parseFloat(percentStr);
-    if (percent <= 10) return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
-    if (percent <= 30) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
-    return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
-  };
-
-  const getIssuesColor = (issues: number) => {
-    if (issues < 1) return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
-    if (issues < 2) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
-    return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
-  };
-
-  // `higherIsBetter: null`: above or below the team, with no verdict (time
-  // spent, where both very short and very long interviews are worth a look).
-  const getComparisonBadge = (value: number, avg: number, higherIsBetter: boolean | null = true) => {
-    const diff = ((value - avg) / avg) * 100;
-    if (!isFinite(diff) || Math.abs(diff) < 5) return null; // Within 5% of average
-
-    const arrow = diff > 0 ? '↑' : '↓';
-    const colorClass =
-      higherIsBetter === null
-        ? 'text-gray-500 dark:text-gray-400'
-        : (higherIsBetter ? diff > 0 : diff < 0)
-          ? 'text-emerald-600 dark:text-emerald-400'
-          : 'text-red-600 dark:text-red-400';
-
-    return (
-      <span className={`ml-1 text-xs ${colorClass}`} title={`${diff > 0 ? '+' : ''}${diff.toFixed(0)}% vs avg`}>
-        {arrow}
-      </span>
+  const switchTab = (tab: PerformanceSubTab) => {
+    setActiveSubTab(tab);
+    setSort((prev) =>
+      COLUMNS[tab].some((c) => c.key === prev.key) || prev.key === 'id'
+        ? prev
+        : { key: COLUMNS[tab][0].key, dir: 'desc' }
     );
-  };
-
-  const renderContent = () => {
-    if (activeSubTab === 'collected') {
-      return (
-        <table className="min-w-full">
-          <thead className="bg-gray-50 dark:bg-gray-900">
-            <tr>
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="Enumerator ID"
-                sortKey="id"
-                currentSort={collectionSort}
-                onSort={handleCollectionSort}
-              />
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="Flagged, not yet approved"
-                sortKey="needsReview"
-                currentSort={collectionSort}
-                onSort={handleCollectionSort}
-                infoKey="needsReview"
-              />
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="Approved by reviewer"
-                sortKey="validated"
-                currentSort={collectionSort}
-                onSort={handleCollectionSort}
-                infoKey="validated"
-              />
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="Total"
-                sortKey="total"
-                currentSort={collectionSort}
-                onSort={handleCollectionSort}
-                infoKey="totalSurveys"
-              />
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="% Approved"
-                sortKey="percentValidated"
-                currentSort={collectionSort}
-                onSort={handleCollectionSort}
-                infoKey="percentValidated"
-              />
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="% Flagged, not yet approved"
-                sortKey="percentNeedsReview"
-                currentSort={collectionSort}
-                onSort={handleCollectionSort}
-                infoKey="percentNeedsReview"
-              />
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-950 divide-y divide-gray-100 dark:divide-gray-800">
-            {filteredCollectionData.map((row) => (
-              <tr
-                key={row.id}
-                className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onEnumeratorClick ? 'cursor-pointer' : ''}`}
-                onClick={() => onEnumeratorClick?.(row.id)}
-              >
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
-                  {onEnumeratorClick ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onEnumeratorClick(row.id);
-                      }}
-                      className="rounded font-medium text-indigo-700 hover:underline dark:text-indigo-300"
-                    >
-                      {row.id}
-                    </button>
-                  ) : (
-                    row.id
-                  )}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
-                  {row.needsReview}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
-                  {row.validated}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
-                  {row.total}
-                  {getComparisonBadge(row.total, teamAverages.total, null)}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
-                  {row.percentValidated}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
-                  <span
-                    className={`px-2 py-1 rounded-md text-xs font-medium ${getNeedsReviewColor(row.percentNeedsReview)}`}
-                  >
-                    {row.percentNeedsReview}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      );
-    }
-
-    if (activeSubTab === 'quality') {
-      return (
-        <table className="min-w-full">
-          <thead className="bg-gray-50 dark:bg-gray-900">
-            <tr>
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="Enumerator ID"
-                sortKey="id"
-                currentSort={qualitySort}
-                onSort={handleQualitySort}
-              />
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="Avg Active Time (min)"
-                sortKey="avgActiveTime"
-                currentSort={qualitySort}
-                onSort={handleQualitySort}
-                infoKey="avgActiveTime"
-              />
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="Avg Total Time (min)"
-                sortKey="avgTotalTime"
-                currentSort={qualitySort}
-                onSort={handleQualitySort}
-                infoKey="avgTotalTime"
-              />
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="Avg. don't-know rate (%)"
-                sortKey="avgDkRate"
-                currentSort={qualitySort}
-                onSort={handleQualitySort}
-                infoKey="avgDkRate"
-              />
-              <SortableHeader
-                onInfo={handleShowModal}
-                label="Issues per submission"
-                sortKey="avgIssuesPerSurvey"
-                currentSort={qualitySort}
-                onSort={handleQualitySort}
-                infoKey="avgIssuesPerSurvey"
-              />
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-950 divide-y divide-gray-100 dark:divide-gray-800">
-            {filteredQualityData.map((row) => (
-              <tr
-                key={row.id}
-                className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onEnumeratorClick ? 'cursor-pointer' : ''}`}
-                onClick={() => onEnumeratorClick?.(row.id)}
-              >
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
-                  {onEnumeratorClick ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onEnumeratorClick(row.id);
-                      }}
-                      className="rounded font-medium text-indigo-700 hover:underline dark:text-indigo-300"
-                    >
-                      {row.id}
-                    </button>
-                  ) : (
-                    row.id
-                  )}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
-                  {row.avgActiveTime}
-                  {getComparisonBadge(row.avgActiveTime, teamAverages.activeTime, null)}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
-                  {row.avgTotalTime}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300">
-                  {row.avgDkRate}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular">
-                  <span
-                    className={`px-2 py-1 rounded-md text-xs font-medium ${getIssuesColor(row.avgIssuesPerSurvey)}`}
-                  >
-                    {row.avgIssuesPerSurvey.toFixed(2)}
-                  </span>
-                  {getComparisonBadge(row.avgIssuesPerSurvey, teamAverages.issues, false)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      );
-    }
-    return null;
   };
 
   return (
     <div>
-      <Dialog
-        open={!!modalContent}
-        title={modalContent?.title ?? ''}
-        onClose={() => setModalContent(null)}
-        actions={
-          <Button variant="secondary" onClick={() => setModalContent(null)}>
-            Close
-          </Button>
-        }
-      >
-        <p>{modalContent?.text}</p>
-      </Dialog>
-
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-        <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Detailed Data</h2>
+        <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">By enumerator</h2>
         <input
           type="text"
           value={filter}
@@ -499,52 +181,93 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
       </div>
 
       <div className="mb-4 inline-flex flex-wrap gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
-        <SubTabButton<PerformanceSubTab> tabId="collected" activeTab={activeSubTab} onClick={setActiveSubTab}>
-          Survey Collected
+        <SubTabButton<PerformanceSubTab> tabId="quality" activeTab={activeSubTab} onClick={switchTab}>
+          Quality
         </SubTabButton>
-        <SubTabButton<PerformanceSubTab> tabId="quality" activeTab={activeSubTab} onClick={setActiveSubTab}>
-          Survey Quality
+        <SubTabButton<PerformanceSubTab> tabId="review" activeTab={activeSubTab} onClick={switchTab}>
+          Review
         </SubTabButton>
-      </div>
-
-      {/* Team Averages Bar */}
-      <div className="mb-4 p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">
-        <div className="text-xs font-medium text-indigo-700 dark:text-indigo-300 mb-1">Team Averages</div>
-        <div className="flex flex-wrap gap-4 text-xs text-indigo-600 dark:text-indigo-400">
-          {activeSubTab === 'collected' ? (
-            <>
-              <span>
-                Submissions: <strong>{teamAverages.total.toFixed(1)}</strong>/enum
-              </span>
-              <span>
-                Approved by reviewer: <strong>{teamAverages.validatedPercent.toFixed(1)}%</strong>
-              </span>
-              <span>
-                Flagged, not yet approved: <strong>{teamAverages.needsReviewPercent.toFixed(1)}%</strong>
-              </span>
-            </>
-          ) : (
-            <>
-              <span>
-                Active Time: <strong>{teamAverages.activeTime.toFixed(0)}</strong> min
-              </span>
-              <span>
-                Total Time: <strong>{teamAverages.totalTime.toFixed(0)}</strong> min
-              </span>
-              <span>
-                Issues: <strong>{teamAverages.issues.toFixed(2)}</strong>/sub
-              </span>
-            </>
-          )}
-        </div>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-card dark:border-gray-800 dark:bg-gray-950">
-        {renderContent()}
+        <table className="min-w-full">
+          <thead className="bg-gray-50 dark:bg-gray-900">
+            <tr>
+              <SortableHeader label="Enumerator ID" sortKey="id" currentSort={sort} onSort={handleSort} />
+              {columns.map((column) => (
+                <SortableHeader
+                  key={column.key}
+                  label={column.label}
+                  sortKey={column.key}
+                  currentSort={sort}
+                  onSort={handleSort}
+                  term={column.term}
+                />
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white dark:bg-gray-950 divide-y divide-gray-100 dark:divide-gray-800">
+            {team && (
+              <tr className="bg-gray-50 dark:bg-gray-900">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm font-medium text-gray-600 dark:text-gray-300">
+                  Whole team
+                </td>
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-600 dark:text-gray-300"
+                  >
+                    {column.format(team)}
+                  </td>
+                ))}
+              </tr>
+            )}
+            {rows.map((row) => (
+              <tr
+                key={row.id}
+                className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onEnumeratorClick ? 'cursor-pointer' : ''}`}
+                onClick={() => onEnumeratorClick?.(row.id)}
+              >
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm tabular font-medium text-gray-900 dark:text-white">
+                  {onEnumeratorClick ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEnumeratorClick(row.id);
+                      }}
+                      className="rounded font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+                    >
+                      {row.id}
+                    </button>
+                  ) : (
+                    row.id
+                  )}
+                </td>
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-700 dark:text-gray-300"
+                  >
+                    {highlighted(column, row) ? (
+                      <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                        {column.format(row)}
+                      </span>
+                    ) : (
+                      column.format(row)
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-        ↑↓ more than 5% above or below the team average. Green or red only where more or less is clearly better.
+        {activeSubTab === 'quality'
+          ? `Highlighted: at least twice the team’s share, for enumerators with ${MIN_SUBMISSIONS} or more submissions.`
+          : 'How far review has got for each enumerator’s submissions. Not a measure of quality.'}
       </p>
     </div>
   );

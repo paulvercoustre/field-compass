@@ -5,12 +5,15 @@
 export const CHART_ACCENT = '#6366f1'; // indigo-500
 
 // Status hues match the badges: emerald / rose / amber / zinc.
+// The review counts (utils/glossary.ts). Needs review and On hold share a hue
+// and differ in lightness, so they stay apart without colour vision.
 export const STATUS_COLORS = {
-  total: CHART_ACCENT,
+  submissions: CHART_ACCENT,
+  needsReview: '#d97706',
+  onHold: '#fbbf24',
+  clean: '#a1a1aa',
   approved: '#10b981',
   notApproved: '#f43f5e',
-  onHold: '#f59e0b',
-  notReviewed: '#a1a1aa',
 } as const;
 
 // For series with no inherent meaning (issue types). Ordered so neighbours

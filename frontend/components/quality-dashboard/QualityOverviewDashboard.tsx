@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { QualityOverviewResponse, QualityOverviewFilters } from '../../types';
 import { fetchQualityOverview } from '../../services/qualityApi';
-import StatusSummaryCards from './StatusSummaryCards';
+import StatusSummaryCards, { ReviewCount } from './StatusSummaryCards';
 import QualityMetricsCards from './QualityMetricsCards';
 import IssueFrequencyChart from './IssueFrequencyChart';
 import SubmissionStatusChart from './SubmissionStatusChart';
@@ -13,7 +13,7 @@ import { PullButton, PullStartError, usePull } from '../activity/PullButton';
 
 interface QualityOverviewDashboardProps {
   surveyId: string;
-  onStatusClick?: (status: string) => void;
+  onStatusClick?: (state: ReviewCount) => void;
   onIssueClick?: (check: string) => void;
 }
 
@@ -140,8 +140,8 @@ const QualityOverviewDashboard: React.FC<QualityOverviewDashboardProps> = ({
 
       {/* Summary Cards */}
       <div className="space-y-6">
-        <StatusSummaryCards data={data.status_summary} onStatusClick={onStatusClick} />
-        <QualityMetricsCards data={data.quality_metrics} />
+        <StatusSummaryCards summary={data.summary} onStatusClick={onStatusClick} />
+        <QualityMetricsCards summary={data.summary} />
       </div>
 
       {/* Issue Frequency Chart */}

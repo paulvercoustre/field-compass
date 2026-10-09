@@ -1,95 +1,74 @@
 import React from 'react';
 import { PerformanceData } from '../../types';
+import { GLOSSARY, Term, formatPercent, percentOf } from '../../utils/glossary';
+import TermInfo from '../ui/TermInfo';
 
 interface EnumeratorSummaryCardsProps {
   data: PerformanceData;
 }
 
+const SummaryCard: React.FC<{ label: string; term?: Term; value: string; sub: string; muted?: boolean }> = ({
+  label,
+  term,
+  value,
+  sub,
+  muted,
+}) => (
+  <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
+    <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+      {label}
+      {term && <TermInfo term={term} />}
+    </div>
+    <div
+      className={`tabular text-2xl font-semibold tracking-tight mt-2 ${
+        muted ? 'text-gray-600 dark:text-gray-300' : 'text-gray-900 dark:text-white'
+      }`}
+    >
+      {value}
+    </div>
+    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{sub}</div>
+  </div>
+);
+
+/** The whole team's figures: the same definitions as Data quality, over the team's submissions. */
 const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data }) => {
-  const { collection, quality } = data;
-
-  // Calculate summary metrics
-  const totalEnumerators = collection.length;
-  const totalSubmissions = collection.reduce((sum, e) => sum + e.total, 0);
-  const avgSubmissionsPerEnumerator = totalEnumerators > 0 ? (totalSubmissions / totalEnumerators).toFixed(1) : '0';
-
-  // Count enumerators needing attention (>30% needs review or high issue rate)
-  const enumeratorsNeedingAttention = collection.filter((e) => {
-    const needsReviewPercent = parseFloat(e.percentNeedsReview);
-    const qualityStats = quality.find((q) => q.id === e.id);
-    const highIssueRate = qualityStats && qualityStats.avgIssuesPerSurvey > 2;
-    return needsReviewPercent > 30 || highIssueRate;
-  }).length;
-
-  // Share of submissions a reviewer has approved in Kobo: how far review
-  // has got, not how good the interviews were.
-  const teamApproved =
-    totalSubmissions > 0
-      ? ((collection.reduce((sum, e) => sum + e.validated, 0) / totalSubmissions) * 100).toFixed(1)
-      : '0';
-
-  const totalIssues = quality.reduce(
-    (sum, q) => sum + q.avgIssuesPerSurvey * (collection.find((c) => c.id === q.id)?.total ?? 0),
-    0
-  );
-  const teamAvgIssuesPerSubmission = totalSubmissions > 0 ? (totalIssues / totalSubmissions).toFixed(2) : '0';
+  const team = data.team;
+  if (!team) return null;
+  const enumerators = data.enumerators.length;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-      {/* Total Enumerators */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-sm text-gray-500 dark:text-gray-400">Enumerators</div>
-        <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
-          {totalEnumerators}
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">active</div>
-      </div>
-
-      {/* Total Submissions */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-sm text-gray-500 dark:text-gray-400">Submissions</div>
-        <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
-          {totalSubmissions}
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-          {avgSubmissionsPerEnumerator} per enumerator
-        </div>
-      </div>
-
-      {/* Review progress */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-sm text-gray-500 dark:text-gray-400">Approved by reviewer</div>
-        <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
-          {teamApproved}%
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">of submissions</div>
-      </div>
-
-      {/* Avg Issues per Submission */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-sm text-gray-500 dark:text-gray-400">Issues</div>
-        <div className="tabular text-2xl font-semibold tracking-tight text-gray-900 dark:text-white mt-2">
-          {teamAvgIssuesPerSubmission}
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">per submission</div>
-      </div>
-
-      {/* Needs Attention */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl p-4 shadow-card border border-gray-200 dark:border-gray-800">
-        <div className="text-sm text-gray-500 dark:text-gray-400">Often flagged</div>
-        <div
-          className={`tabular text-2xl font-semibold tracking-tight mt-1 ${
-            enumeratorsNeedingAttention > 0
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-emerald-600 dark:text-emerald-400'
-          }`}
-        >
-          {enumeratorsNeedingAttention}
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-          enumerators: over 30% flagged, or 2+ issues each
-        </div>
-      </div>
+      <SummaryCard
+        label="Enumerators"
+        value={String(enumerators)}
+        sub={`${team.submissions} ${GLOSSARY.submissions.name.toLowerCase()}`}
+      />
+      <SummaryCard
+        label={GLOSSARY.flagged.name}
+        term={GLOSSARY.flagged}
+        value={formatPercent(percentOf(team.flagged, team.submissions))}
+        sub={`${team.flagged} of ${team.submissions} submissions`}
+      />
+      <SummaryCard
+        label={GLOSSARY.issuesPerSubmission.name}
+        term={GLOSSARY.issuesPerSubmission}
+        value={team.issues_per_submission === null ? '—' : team.issues_per_submission.toFixed(2)}
+        sub={`${team.issues} issues`}
+      />
+      <SummaryCard
+        label={GLOSSARY.notApproved.name}
+        term={GLOSSARY.notApproved}
+        value={formatPercent(percentOf(team.not_approved, team.submissions))}
+        sub={`${team.not_approved} of ${team.submissions} submissions`}
+      />
+      {/* How far review has got, not quality: never coloured. */}
+      <SummaryCard
+        label={GLOSSARY.reviewed.name}
+        term={GLOSSARY.reviewed}
+        value={formatPercent(percentOf(team.reviewed, team.submissions))}
+        sub={`${team.reviewed} of ${team.submissions} · review progress`}
+        muted
+      />
     </div>
   );
 };

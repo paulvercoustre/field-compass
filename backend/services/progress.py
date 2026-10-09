@@ -10,18 +10,17 @@ from collections import defaultdict
 from typing import Any
 
 from database.models import SubmissionCurrent
-from etl.dk_utils import dk_numeric_codes, dk_string_tokens, is_dk_value
 from forms.answers import answer_value
 from schemas import (
     DetailedProgress,
-    EnumeratorCollectionStats,
-    EnumeratorQualityStats,
+    EnumeratorSummary,
     OverallProgress,
     PerformanceData,
     ProgressByColumn,
     ProgressData,
     UnavailableCapability,
 )
+from services.metrics import summarise
 from services.submission_filters import answer_text
 from services.survey_config import (
     CAPABILITY_ENUMERATOR_PERFORMANCE,
@@ -338,50 +337,6 @@ def compute_progress(
     )
 
 
-def _count_dk_values(
-    submission_data: dict[str, Any], dk_codes: list[int | float], dk_tokens: set[str]
-) -> tuple[int, int]:
-    """
-    Count DK values in submission data.
-
-    Returns:
-        Tuple of (dk_count, total_field_count)
-    """
-    dk_count = 0
-    total_count = 0
-
-    def _check_value(value: Any) -> bool:
-        return is_dk_value(value, dk_codes, dk_tokens)
-
-    def _traverse_dict(data: dict[str, Any], path: str = ""):
-        """Recursively traverse dictionary to count fields."""
-        nonlocal dk_count, total_count
-
-        for key, value in data.items():
-            current_path = f"{path}.{key}" if path else key
-
-            if isinstance(value, dict):
-                # Recursively process nested dictionaries
-                _traverse_dict(value, current_path)
-            elif isinstance(value, list):
-                # Process list items
-                for i, item in enumerate(value):
-                    if isinstance(item, dict):
-                        _traverse_dict(item, f"{current_path}[{i}]")
-                    else:
-                        total_count += 1
-                        if _check_value(item):
-                            dk_count += 1
-            else:
-                # Leaf value
-                total_count += 1
-                if _check_value(value):
-                    dk_count += 1
-
-    _traverse_dict(submission_data)
-    return dk_count, total_count
-
-
 def performance_unavailable(config: dict[str, Any] | None) -> PerformanceData:
     """
     No enumerator configured: an empty result carrying the reason, rather than
@@ -389,8 +344,6 @@ def performance_unavailable(config: dict[str, Any] | None) -> PerformanceData:
     as real data.
     """
     return PerformanceData(
-        collection=[],
-        quality=[],
         unavailable=[
             UnavailableCapability(**item)
             for item in unavailable_capabilities(config)
@@ -402,29 +355,13 @@ def performance_unavailable(config: dict[str, Any] | None) -> PerformanceData:
 def compute_performance(
     submissions: list[SubmissionCurrent], config: dict[str, Any]
 ) -> PerformanceData:
-    """Collection and quality figures per enumerator; see the /performance docs."""
+    """
+    The named counts and measurements per enumerator and for the team
+    (services/metrics.py), so they match Data quality's to the submission.
+    """
     enumerator_field = get_enumerator_field(config)
-    # Get DK values from survey config for DK rate calculation
-    special_values = config.get("special_values", {})
-    dk_codes = dk_numeric_codes(special_values)
-    # Shared with the ETL rather than compared here, so both read the same
-    # strings the same way. This screen used to do its own raw `==`, which
-    # missed case differences and `select_multiple` answers the ETL counted.
-    dk_tokens = dk_string_tokens(special_values)
 
-    # Aggregate by enumerator
-    enum_collection_stats = defaultdict(
-        lambda: {
-            "needsReview": 0,
-            "validated": 0,
-            "total": 0,
-            "total_issues": 0,
-            "active_times": [],  # List of active_interview_time values (minutes)
-            "total_times": [],  # List of total_duration values (minutes)
-            "dk_rates": [],  # List of DK rates per submission (percentage)
-        }
-    )
-
+    by_enumerator: dict[str, list[SubmissionCurrent]] = defaultdict(list)
     no_enumerator = 0
     for sub in submissions:
         enum_id = answer_text(sub.submission_data, enumerator_field) if enumerator_field else None
@@ -433,97 +370,14 @@ def compute_performance(
             # count and the rankings as if it were someone.
             no_enumerator += 1
             continue
+        by_enumerator[enum_id].append(sub)
 
-        enum_collection_stats[enum_id]["total"] += 1
-
-        if sub.qa_status == "FLAGGED":
-            enum_collection_stats[enum_id]["needsReview"] += 1
-        elif sub.qa_status == "APPROVED":
-            enum_collection_stats[enum_id]["validated"] += 1
-
-        # Count issues
-        if sub.data_quality_issues:
-            enum_collection_stats[enum_id]["total_issues"] += len(sub.data_quality_issues)
-
-        # Extract audit log metrics from submission_data
-        active_time = sub.submission_data.get("active_interview_time")
-        if active_time is not None:
-            try:
-                active_time_float = float(active_time)
-                enum_collection_stats[enum_id]["active_times"].append(active_time_float)
-            except (ValueError, TypeError):
-                pass  # Skip invalid values
-
-        total_time = sub.submission_data.get("total_duration")
-        if total_time is not None:
-            try:
-                total_time_float = float(total_time)
-                enum_collection_stats[enum_id]["total_times"].append(total_time_float)
-            except (ValueError, TypeError):
-                pass  # Skip invalid values
-
-        # Calculate DK rate for this submission
-        if dk_codes or dk_tokens:
-            dk_count, total_fields = _count_dk_values(sub.submission_data, dk_codes, dk_tokens)
-            if total_fields > 0:
-                dk_rate = (dk_count / total_fields) * 100
-                enum_collection_stats[enum_id]["dk_rates"].append(dk_rate)
-
-    # Build collection stats
-    collection = []
-    for enum_id, stats in sorted(enum_collection_stats.items()):
-        total = stats["total"]
-        validated = stats["validated"]
-        needs_review = stats["needsReview"]
-
-        collection.append(
-            EnumeratorCollectionStats(
-                id=enum_id,
-                needsReview=needs_review,
-                validated=validated,
-                total=total,
-                percentValidated=f"{round((validated / total * 100) if total > 0 else 0, 1)}%",
-                percentNeedsReview=f"{round((needs_review / total * 100) if total > 0 else 0, 1)}%",
-            )
-        )
-
-    # Build quality stats with calculated metrics from audit logs
-    quality = []
-    for enum_id in sorted(enum_collection_stats.keys()):
-        stats = enum_collection_stats[enum_id]
-        total = stats["total"]
-        avg_issues = round(stats["total_issues"] / total if total > 0 else 0, 2)
-
-        # Calculate average active time (in minutes, rounded to nearest integer)
-        active_times = stats["active_times"]
-        avg_active_time = 0
-        if active_times:
-            avg_active_time = round(sum(active_times) / len(active_times))
-
-        # Calculate average total time (in minutes, rounded to nearest integer)
-        total_times = stats["total_times"]
-        avg_total_time = 0
-        if total_times:
-            avg_total_time = round(sum(total_times) / len(total_times))
-
-        # Calculate average DK rate (percentage)
-        dk_rates = stats["dk_rates"]
-        avg_dk_rate = 0.0
-        if dk_rates:
-            avg_dk_rate = round(sum(dk_rates) / len(dk_rates), 1)
-
-        quality.append(
-            EnumeratorQualityStats(
-                id=enum_id,
-                avgActiveTime=avg_active_time,
-                avgTotalTime=avg_total_time,
-                avgDkRate=f"{avg_dk_rate}%",
-                avgIssuesPerSurvey=avg_issues,
-            )
-        )
-
+    team = [sub for subs in by_enumerator.values() for sub in subs]
     return PerformanceData(
-        collection=collection,
-        quality=quality,
+        team=summarise(team, config),
+        enumerators=[
+            EnumeratorSummary(id=enum_id, **summarise(subs, config).model_dump())
+            for enum_id, subs in sorted(by_enumerator.items())
+        ],
         no_enumerator=no_enumerator,
     )

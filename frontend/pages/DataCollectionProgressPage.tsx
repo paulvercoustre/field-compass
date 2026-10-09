@@ -97,6 +97,7 @@ const DataCollectionProgressPage: React.FC = () => {
                 setActiveSubTab={setActiveSubTab}
                 filter={filter}
                 setFilter={setFilter}
+                approvedOnly={approvedOnly}
               />
             )}
           </div>
