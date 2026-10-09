@@ -162,8 +162,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
 
               <form onSubmit={handleUpdateProfile} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
+                  <label
+                    htmlFor="account-email"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
+                    Email
+                  </label>
                   <input
+                    id="account-email"
                     type="email"
                     value={user.email}
                     disabled
@@ -172,8 +178,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Username</label>
+                  <label
+                    htmlFor="account-username"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
+                    Username
+                  </label>
                   <input
+                    id="account-username"
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -182,8 +194,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full name</label>
+                  <label
+                    htmlFor="account-full-name"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
+                    Full name
+                  </label>
                   <input
+                    id="account-full-name"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
@@ -234,10 +252,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
 
               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label
+                    htmlFor="current-password"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
                     Current password
                   </label>
                   <input
+                    id="current-password"
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
@@ -247,10 +269,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label
+                    htmlFor="new-password"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
                     New password
                   </label>
                   <input
+                    id="new-password"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -262,10 +288,14 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label
+                    htmlFor="confirm-password"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                  >
                     Confirm New password
                   </label>
                   <input
+                    id="confirm-password"
                     type="password"
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}

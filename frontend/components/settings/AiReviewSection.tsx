@@ -3,7 +3,7 @@ import { rerunAiChecks } from '../../services/progressApi';
 import { QualityChecksForm } from '../../utils/qualityCheckSettings';
 import SurveyKeyPicker from '../ai/SurveyKeyPicker';
 import { SparkleIcon } from '../ui/icons';
-import { SavedNote, SectionActions, SectionControls, SectionEditButton } from './SectionControls';
+import { SavedNote, SectionActions, SectionControls } from './SectionControls';
 
 interface AiReviewSectionProps {
   surveyId: string;
@@ -54,8 +54,7 @@ const AiReviewSection: React.FC<AiReviewSectionProps> = ({
           <SparkleIcon className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
           AI review
         </h2>
-        {!controls.editing && <SavedNote at={savedAt} className="ml-auto mr-2" />}
-        {canEdit && !controls.editing && <SectionEditButton onClick={controls.edit} />}
+        {!controls.dirty && <SavedNote at={savedAt} className="ml-auto" />}
       </div>
       {isOwner && (
         <div className="mb-4">
@@ -66,8 +65,9 @@ const AiReviewSection: React.FC<AiReviewSectionProps> = ({
         <div className="flex items-start">
           <div className="flex h-5 items-center">
             <input
+              id="ai-review-enabled"
               type="checkbox"
-              disabled={!controls.editing}
+              disabled={!canEdit}
               checked={checks.flag_llm_qualitative}
               onChange={(e) =>
                 setChecks({
@@ -79,7 +79,9 @@ const AiReviewSection: React.FC<AiReviewSectionProps> = ({
             />
           </div>
           <div className="ml-3">
-            <label className="text-sm font-medium text-gray-900 dark:text-white">Flag weak open-text answers</label>
+            <label htmlFor="ai-review-enabled" className="text-sm font-medium text-gray-900 dark:text-white">
+              Flag weak open-text answers
+            </label>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Unreadable, off-topic or too vague answers to the questions you pick. Counts toward the included usage,
               unless it runs on your own API key.
@@ -98,7 +100,7 @@ const AiReviewSection: React.FC<AiReviewSectionProps> = ({
                   <label key={variable.name} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      disabled={!controls.editing}
+                      disabled={!canEdit}
                       checked={checks.llm_qualitative_fields.includes(variable.name)}
                       onChange={(e) => {
                         const selected = checks.llm_qualitative_fields;
@@ -124,7 +126,8 @@ const AiReviewSection: React.FC<AiReviewSectionProps> = ({
             )}
           </div>
         )}
-        {canEdit && !controls.editing && checks.flag_llm_qualitative && (
+        {/* Only for what is saved: the next pull reviews with the saved questions. */}
+        {canEdit && !controls.dirty && checks.flag_llm_qualitative && (
           <div className="ml-7 flex flex-wrap items-center gap-3">
             <button
               onClick={rerun}
@@ -139,7 +142,7 @@ const AiReviewSection: React.FC<AiReviewSectionProps> = ({
             </p>
           </div>
         )}
-        {controls.editing && <SectionActions controls={controls} className="pt-4" />}
+        {canEdit && controls.dirty && <SectionActions controls={controls} className="pt-4" />}
       </div>
     </section>
   );

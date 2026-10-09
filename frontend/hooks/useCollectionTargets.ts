@@ -39,6 +39,11 @@ export function useCollectionTargets(koboToolData: KoboToolData | null) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // What is saved, to tell whether anything has changed since.
+  const [saved, setSaved] = useState<{ settings: TargetsSettings; frameData: Record<string, any>[] | null }>({
+    settings: NO_TARGETS,
+    frameData: null,
+  });
 
   const clearFile = () => {
     setFrameData(null);
@@ -50,7 +55,7 @@ export function useCollectionTargets(koboToolData: KoboToolData | null) {
   /** Show what is stored (on load, and on Cancel). */
   const load = (frame: StoredTargets | undefined) => {
     clearFile();
-    setSettings({
+    const stored: TargetsSettings = {
       // A config stored before `mode` existed carries none. Infer it the
       // way get_sampling_mode() does rather than defaulting to a constant,
       // so an existing survey shows the mode it actually behaves as.
@@ -61,8 +66,10 @@ export function useCollectionTargets(koboToolData: KoboToolData | null) {
       total_target: frame?.total_target ?? null,
       variable: frame?.variable ?? null,
       targets_by_value: frame?.targets_by_value || {},
-    });
-    if (frame?.frame_data) setFrameData(frame.frame_data);
+    };
+    setSettings(stored);
+    setFrameData(frame?.frame_data ?? null);
+    setSaved({ settings: stored, frameData: frame?.frame_data ?? null });
   };
 
   /**
@@ -159,6 +166,10 @@ export function useCollectionTargets(koboToolData: KoboToolData | null) {
       setSettings((prev) => ({ ...prev, targets_by_value })),
     /** What the config stores. */
     toConfig: () => ({ ...settings, frame_data: frameData }),
+    /** Changed since loaded or last saved. */
+    dirty: JSON.stringify(settings) !== JSON.stringify(saved.settings) || frameData !== saved.frameData,
+    /** What is on screen is now what is saved. */
+    markSaved: () => setSaved({ settings, frameData }),
   };
 }
 

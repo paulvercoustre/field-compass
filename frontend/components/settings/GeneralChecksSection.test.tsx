@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_QUALITY_CHECKS, QualityChecksForm } from '../../utils/qualityCheckSettings';
 import GeneralChecksSection from './GeneralChecksSection';
 
-const controls = { editing: false, saving: false, edit: vi.fn(), save: vi.fn(), cancel: vi.fn() };
+const controls = { dirty: false, saving: false, save: vi.fn(), cancel: vi.fn() };
 
 const renderSection = (initial: Partial<QualityChecksForm> = {}, hasCollectionDates = true) => {
   let latest: QualityChecksForm = { ...DEFAULT_QUALITY_CHECKS, ...initial };
@@ -19,7 +19,6 @@ const renderSection = (initial: Partial<QualityChecksForm> = {}, hasCollectionDa
         onDurationChange={vi.fn()}
         hasCollectionDates={hasCollectionDates}
         canEdit
-        dirty={false}
         controls={controls}
       />
     );

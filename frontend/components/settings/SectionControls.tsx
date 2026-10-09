@@ -1,10 +1,10 @@
 import React from 'react';
 
-/** One settings section's edit state and actions, as useSectionEditor gives them. */
+/** One settings section's state and actions, as useSectionEditor gives them. */
 export interface SectionControls {
-  editing: boolean;
+  /** Changed since it was last saved: Save and Cancel show. */
+  dirty: boolean;
   saving: boolean;
-  edit: () => void;
   save: () => void;
   cancel: () => void;
 }
@@ -31,15 +31,6 @@ export const SavedNote: React.FC<{ at?: Date; className?: string }> = ({ at, cla
       Saved {at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
     </span>
   ) : null;
-
-export const SectionEditButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <button
-    onClick={onClick}
-    className="px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md"
-  >
-    Edit
-  </button>
-);
 
 /** A section's Save changes and Cancel buttons. */
 export const SectionActions: React.FC<{ controls: SectionControls; className?: string }> = ({
