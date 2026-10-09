@@ -46,6 +46,8 @@ const SURVEY_SETTINGS_TABS: string[] = ['settings', 'access', 'quality', 'transc
 interface SurveySettingsPageProps {
   /** A tab asked for by a link elsewhere in the app (a notification, the activity panel). */
   requestedTab?: RequestedTab;
+  /** The tab shown, for the page's address. */
+  onTabChange?: (tab: string) => void;
 }
 
 /**
@@ -56,7 +58,7 @@ interface SurveySettingsPageProps {
 type SettingsSection =
   'basicInfo' | 'coreIdentifiers' | 'koboTool' | 'samplingFrame' | 'generalFlags' | 'outlier' | 'llm';
 
-const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab }) => {
+const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, onTabChange }) => {
   const { selectedSurvey, refreshSurveys, setSelectedSurvey } = useSurvey();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,6 +87,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab })
       setActiveTab(requestedTab.tab as SurveySettingsTab);
     }
   }, [requestedTab]);
+  useEffect(() => onTabChange?.(activeTab), [activeTab, onTabChange]);
   // Audio questions being transcribed: their transcripts can be AI-reviewed.
   const [transcribed, setTranscribed] = useState<{ paths: string[]; enabled: boolean }>({ paths: [], enabled: false });
 

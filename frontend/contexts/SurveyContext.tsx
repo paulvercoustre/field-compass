@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { getSurveys, Survey } from '../services/progressApi';
 import { readRememberedSurveyId, rememberSurveyId } from '../utils/selectedSurveyStorage';
+import { surveyIdInUrl } from '../utils/appUrl';
 
 interface SurveyContextType {
   selectedSurvey: Survey | null;
@@ -56,7 +57,9 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
           return currentSelected;
         }
 
-        // Restore a choice made earlier in this browser tab, so a refresh does
+        // A link names its survey: following it is choosing that survey.
+        //
+        // Otherwise, restore a choice made earlier in this browser tab, so a refresh does
         // not lose your place. sessionStorage, not localStorage, is what draws
         // the line the user asked for: it survives a reload but dies with the
         // tab, and login clears it explicitly (see AuthContext). So a fresh
@@ -69,7 +72,7 @@ export const SurveyProvider: React.FC<SurveyProviderProps> = ({ children }) => {
         // first use loses the race on the second pass. Storage is idempotent:
         // it is only ever written by an actual selection, and only cleared by
         // login, logout, or starting a new survey.
-        const rememberedId = readRememberedSurveyId();
+        const rememberedId = surveyIdInUrl() ?? readRememberedSurveyId();
         if (rememberedId) {
           const remembered = data.find((s) => s.survey_id === rememberedId);
           if (remembered) {

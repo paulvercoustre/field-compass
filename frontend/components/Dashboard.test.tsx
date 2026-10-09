@@ -27,7 +27,9 @@ vi.mock('../contexts/SurveyContext', () => {
 });
 vi.mock('../contexts/ActivityContext', () => ({ useActivity: () => ({ runs: [] }) }));
 vi.mock('../contexts/AuthContext', () => ({ useReviewPreferences: vi.fn() }));
-vi.mock('../contexts/NavigationContext', () => ({ useNavigation: () => ({ navigate: vi.fn() }) }));
+vi.mock('../contexts/NavigationContext', () => ({
+  useNavigation: () => ({ navigate: vi.fn(), reportPlace: vi.fn() }),
+}));
 vi.mock('./activity/PullButton', () => ({
   usePull: () => ({ run: undefined, pulling: false }),
   PullButton: () => null,

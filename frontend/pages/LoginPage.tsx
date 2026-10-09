@@ -3,11 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { LogoTile } from '../components/ui/Logo';
 import { Spinner } from '../components/Spinner';
 
-interface LoginPageProps {
-  onLoginSuccess: () => void;
-}
-
-const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
+const LoginPage: React.FC = () => {
   const { login, register, isLoading: authLoading } = useAuth();
 
   // The marketing site links straight here with #register on its "Create an
@@ -41,7 +37,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         }
         await register(email, username, password, fullName || undefined);
       }
-      onLoginSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {

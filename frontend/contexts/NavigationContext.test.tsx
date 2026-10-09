@@ -32,11 +32,8 @@ const renderNavigation = async () => {
 };
 
 describe('NavigationProvider', () => {
-  beforeEach(() => localStorage.clear());
-  afterEach(() => {
-    cleanup();
-    localStorage.clear();
-  });
+  beforeEach(() => window.history.replaceState(null, '', '/'));
+  afterEach(cleanup);
 
   it('selects the survey, opens the tab and switches view in one call', async () => {
     const seen = await renderNavigation();
@@ -62,11 +59,38 @@ describe('NavigationProvider', () => {
     expect(seen.current.dashboardFilters).toEqual({});
   });
 
-  it('remembers the view, and ignores a remembered value that is not a view', async () => {
-    localStorage.setItem('currentView', 'qualityOverview');
-    expect((await renderNavigation()).current.view).toBe('qualityOverview');
-    cleanup();
-    localStorage.setItem('currentView', 'nonsense');
-    expect((await renderNavigation()).current.view).toBe('dashboard');
+  it('opens where the address says', async () => {
+    window.history.replaceState(null, '', '/surveys/s2/settings/quality');
+    const seen = await renderNavigation();
+    expect(seen.current.view).toBe('settings');
+    expect(seen.current.selected).toBe('s2');
+    expect(seen.current.requestedTab?.tab).toBe('quality');
+    await waitFor(() => expect(document.title).toBe('Settings · s2 · Field Compass'));
+  });
+
+  it('writes the address as the user moves, and follows Back', async () => {
+    window.history.replaceState(null, '', '/surveys/s1/submissions');
+    const seen = await renderNavigation();
+    const length = window.history.length;
+
+    act(() => seen.current.navigate({ view: 'qualityOverview' }));
+    expect(window.location.pathname).toBe('/surveys/s1/quality');
+    // Another page is a step Back can undo.
+    expect(window.history.length).toBe(length + 1);
+
+    act(() => seen.current.navigate({ view: 'dashboard', filters: { issues: ['dk_percentage_high'] } }));
+    act(() => seen.current.reportPlace({ filters: { issues: ['dk_percentage_high'] }, submissionId: 7 }));
+    expect(window.location.pathname + window.location.search).toBe(
+      '/surveys/s1/submissions/7?issue=dk_percentage_high'
+    );
+
+    // Back, to the list: the queue keeps its filters and closes the submission.
+    act(() => {
+      window.history.replaceState(null, '', '/surveys/s1/submissions?issue=dk_percentage_high');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(seen.current.view).toBe('dashboard');
+    expect(seen.current.requestedSubmission?.id).toBeNull();
+    expect(seen.current.dashboardFilters).toEqual({ issues: ['dk_percentage_high'] });
   });
 });

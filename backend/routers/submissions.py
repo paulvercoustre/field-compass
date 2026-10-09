@@ -421,6 +421,10 @@ async def get_submission(
     kobo_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    survey_id: Annotated[
+        str | None,
+        Query(description="Only in this survey: what a link to a survey's submission names"),
+    ] = None,
 ):
     """
     Get a single submission by its KoboToolbox ID (_id).
@@ -428,7 +432,10 @@ async def get_submission(
 
     Returns the complete submission with all data and quality issues.
     """
-    orm_submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
+    query = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id)
+    if survey_id is not None:
+        query = query.filter(SubmissionCurrent.survey_id == parse_uuid(survey_id))
+    orm_submission = query.first()
 
     if not orm_submission:
         raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")

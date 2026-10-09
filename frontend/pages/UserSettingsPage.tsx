@@ -24,9 +24,11 @@ const USAGE_NAV_ITEMS: SettingsNavItem<AccountTab>[] = [...NAV_ITEMS, { id: 'usa
 interface UserSettingsPageProps {
   /** A tab asked for by a link elsewhere in the app. */
   requestedTab?: RequestedTab;
+  /** The tab shown, for the page's address. */
+  onTabChange?: (tab: string) => void;
 }
 
-const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => {
+const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTabChange }) => {
   const [activeTab, setActiveTab] = useState<AccountTab>(() =>
     NAV_ITEMS.some((item) => item.id === requestedTab?.tab) ? (requestedTab!.tab as AccountTab) : 'profile'
   );
@@ -36,6 +38,7 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab }) => 
       setActiveTab(requestedTab.tab as AccountTab);
     }
   }, [requestedTab]);
+  useEffect(() => onTabChange?.(activeTab), [activeTab, onTabChange]);
   const { user, updateUser, changePassword, deleteAccount } = useAuth();
 
   // Profile form state

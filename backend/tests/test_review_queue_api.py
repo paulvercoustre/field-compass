@@ -393,3 +393,16 @@ class TestPreferences:
             "auto_advance": False,
             "review_shortcuts": True,
         }
+
+
+class TestOneSubmission:
+    def test_a_link_opens_a_submission_of_the_survey_it_names(self, client, survey):  # noqa: F811
+        submission_id = _add(survey, {"enumerator_id": "e1"})
+        other = client.post(
+            "/api/surveys", json={"survey_name": "Other", "config_data": {"core_identifiers": {}}}
+        ).json()["survey_id"]
+
+        found = client.get(f"/api/submissions/{submission_id}", params={"survey_id": survey})
+        assert found.status_code == 200 and found.json()["_id"] == submission_id
+        elsewhere = client.get(f"/api/submissions/{submission_id}", params={"survey_id": other})
+        assert elsewhere.status_code == 404

@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import { useSurvey } from '../contexts/SurveyContext';
 import { useActivity } from '../contexts/ActivityContext';
 import { useReviewPreferences } from '../contexts/AuthContext';
+import { useNavigation } from '../contexts/NavigationContext';
 import { getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import { menuFilterCount, stillMatches } from '../utils/filterUtils';
 import { PullButton, PullStartError, usePull } from './activity/PullButton';
@@ -72,6 +73,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   const surveyId = selectedSurvey?.survey_id;
   const canEdit = selectedSurvey?.permission !== 'viewer';
   const { autoAdvance, shortcuts } = useReviewPreferences();
+  const { requestedSubmission, reportPlace } = useNavigation();
 
   const [filters, setFilters] = useState<FilterState>(initialFilters ?? {});
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -182,6 +184,31 @@ const Dashboard: React.FC<DashboardProps> = ({ initialFilters }) => {
   useEffect(() => {
     load(false);
   }, [load]);
+
+  // A submission the address asked for (a link, Back or Forward): opened once
+  // the list is in, from the list or, when it isn't there, on its own; null
+  // closes the one open.
+  const [appliedAt, setAppliedAt] = useState<number>();
+  const opening = !!requestedSubmission && appliedAt !== requestedSubmission.at;
+  useEffect(() => {
+    if (!requestedSubmission || !opening || loading || !surveyId) return;
+    setAppliedAt(requestedSubmission.at);
+    const { id } = requestedSubmission;
+    const inList = submissions.find((s) => s._id === id);
+    if (id === null || inList) select(inList ?? null);
+    else
+      api
+        .getSubmission(id, surveyId)
+        .then(select)
+        .catch(() => undefined);
+  }, [requestedSubmission, opening, loading, submissions, surveyId, select]);
+
+  // The address shows the tab, filters and open submission; not while one it
+  // asked for is still opening, which would take it out of the address.
+  const openId = selected?._id ?? null;
+  useEffect(() => {
+    if (!opening) reportPlace({ filters, submissionId: openId });
+  }, [filters, openId, opening, reportPlace]);
 
   const refreshCounts = useCallback(() => {
     if (!surveyId || !filters.review) return;
