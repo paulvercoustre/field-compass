@@ -299,7 +299,22 @@ async def get_submissions(
         ),
     ] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
+    page_size: Annotated[
+        int,
+        Query(
+            ge=1, le=500, description="Items per page; up to 500, to re-read a long list at once"
+        ),
+    ] = 50,
+    offset: Annotated[
+        int | None,
+        Query(
+            ge=0,
+            description=(
+                "Start here instead of at the page: the queue loads more from where its list "
+                "ends, which decisions shorten"
+            ),
+        ),
+    ] = None,
 ):
     """
     A survey's submissions in one review tab, filtered, sorted and paginated.
@@ -312,8 +327,8 @@ async def get_submissions(
     orm_submissions, used_sort = queue.submissions(sort)
 
     total = len(orm_submissions)
-    offset = (page - 1) * page_size
-    paginated_submissions = orm_submissions[offset : offset + page_size]
+    start = offset if offset is not None else (page - 1) * page_size
+    paginated_submissions = orm_submissions[start : start + page_size]
 
     summaries = _transcript_summaries(
         db, survey_config.survey_id, [sub._id for sub in paginated_submissions]

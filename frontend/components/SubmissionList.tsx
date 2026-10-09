@@ -21,7 +21,43 @@ interface SubmissionListProps {
   empty: React.ReactNode;
   /** A decided row about to leave the list: it folds away, in its decision's colour. */
   leavingId?: number | null;
+  /** The tab holds more than is loaded: how many more, and how to load them. */
+  more?: { left: number; loading: boolean; load: () => void };
 }
+
+/**
+ * The end of what is loaded: more comes in as it scrolls into view, or on the
+ * button, which keyboard users reach.
+ */
+const LoadMore: React.FC<NonNullable<SubmissionListProps['more']>> = ({ left, loading, load }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) loadRef.current();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className="flex items-center justify-center px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+      {loading ? (
+        <span aria-live="polite">Loading more…</span>
+      ) : (
+        <button
+          type="button"
+          onClick={load}
+          className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+        >
+          Load more · {left.toLocaleString()} left
+        </button>
+      )}
+    </div>
+  );
+};
 
 const SubmissionList: React.FC<SubmissionListProps> = ({
   submissions,
@@ -32,6 +68,7 @@ const SubmissionList: React.FC<SubmissionListProps> = ({
   summary,
   empty,
   leavingId = null,
+  more,
 }) => {
   const listRef = useRef<HTMLUListElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
@@ -125,6 +162,7 @@ const SubmissionList: React.FC<SubmissionListProps> = ({
                 </li>
               ))}
             </ul>
+            {more && <LoadMore {...more} />}
           </div>
         ) : (
           empty
