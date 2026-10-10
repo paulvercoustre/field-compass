@@ -47,6 +47,14 @@ describe('the app’s address', () => {
     });
   });
 
+  it('opens an enumerator’s call sheet at its own address', () => {
+    const place = { view: 'enumeratorPerformance' as const, surveyId: 's1', tab: 'enum 07' };
+    expect(urlFor(place)).toBe('/surveys/s1/team/enum%2007');
+    expect(at('/surveys/s1/team/enum%2007')).toEqual(place);
+    expect(urlFor({ view: 'enumeratorPerformance', surveyId: 's1' })).toBe('/surveys/s1/team');
+    expect(titleFor(place, 'Household 2026')).toBe('enum 07 · Field team · Household 2026 · Field Compass');
+  });
+
   it('titles the browser tab with the page, the submission and the survey', () => {
     expect(titleFor({ view: 'dashboard', submissionId: 300163 }, 'Household 2026')).toBe(
       '#300163 · Submissions · Household 2026 · Field Compass'

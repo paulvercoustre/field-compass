@@ -11,6 +11,7 @@ from database.models import SubmissionCurrent
 from etl.duration import AUDIT, START_END, interview_minutes
 from services.metrics import counts, is_approved, is_not_approved, summarise
 from services.progress import compute_performance
+from services.survey_config import built_in_checks
 
 CONFIG = {
     "core_identifiers": {
@@ -144,3 +145,68 @@ def test_a_submission_time_is_not_a_duration():
     sub._submission_time = datetime(2026, 3, 1, 12)
     sub.end = datetime(2026, 3, 1, 13)
     assert summarise([sub], CONFIG).duration_minutes is None
+
+
+class TestTheCallSheetsFigures:
+    def test_checks_count_submissions_not_issues(self):
+        # Two outliers on one submission flag it once for that check.
+        subs = [_sub(), _sub(), _sub()]
+        subs[0].data_quality_issues = [{"check": "outlier_x"}, {"check": "outlier_x"}]
+        subs[1].data_quality_issues = [{"check": "outlier_x"}, {"check": "duration_too_short"}]
+        assert summarise(subs, CONFIG).checks == {"outlier_x": 2, "duration_too_short": 1}
+
+    def test_the_middle_half_of_durations(self):
+        subs = [_sub(data={"active_interview_time": m}) for m in (10, 20, 30, 40, 50)]
+        summary = summarise(subs, CONFIG)
+        assert (summary.duration_p25, summary.duration_minutes, summary.duration_p75) == (
+            20.0,
+            30.0,
+            40.0,
+        )
+        one = summarise([_sub(data={"active_interview_time": 12})], CONFIG)
+        assert (one.duration_p25, one.duration_p75) == (12.0, 12.0)
+
+    def test_by_week_and_first_and_last(self):
+        days = [datetime(2026, 9, 14, 9), datetime(2026, 9, 20, 18), datetime(2026, 9, 21, 8)]
+        subs = [_sub(issues=n) for n in (2, 0, 1)]
+        for sub, day in zip(subs, days, strict=True):
+            sub._submission_time = day
+        summary = summarise(subs, CONFIG)
+        # Monday 14 to Sunday 20 September is one week; the 21st starts the next.
+        assert [(w.week, w.submissions, w.flagged, w.issues) for w in summary.weekly] == [
+            ("2026-09-14", 2, 1, 2),
+            ("2026-09-21", 1, 1, 1),
+        ]
+        assert (summary.first_submission, summary.last_submission) == (
+            "2026-09-14T09:00:00",
+            "2026-09-21T08:00:00",
+        )
+
+    def test_an_enumerator_s_durations_are_listed(self):
+        subs = [_sub("e1", data={"active_interview_time": 6.04}), _sub("e1")]
+        assert compute_performance(subs, CONFIG).enumerators[0].durations == [6.0]
+
+
+class TestChecksOn:
+    def test_a_new_survey_has_them_all_off(self):
+        checks = built_in_checks({})
+        assert len(checks) == 10
+        assert not any(on for _, on in checks)
+
+    def test_each_reads_its_own_setting(self):
+        config = {
+            "global_parameters": {"min_survey_duration_minutes": 15},
+            "quality_checks": {
+                "flag_weekend": True,
+                # Outliers with no question to look at, and AI review with no
+                # answer to read, cannot run: they are off.
+                "flag_outliers": True,
+                "outlier_variables": [],
+                "flag_llm_qualitative": True,
+                "llm_qualitative_fields": [],
+            },
+        }
+        on = {key for key, is_on in built_in_checks(config) if is_on}
+        assert on == {"interview_on_weekend", "duration_too_short"}
+        performance = compute_performance([], {**CONFIG, **config})
+        assert set(performance.checks_on) == on and len(performance.checks_off) == 8

@@ -145,7 +145,13 @@ const Shell: React.FC = () => {
   const views: Record<View, React.ReactElement> = {
     dashboard: <Dashboard initialFilters={dashboardFilters} />,
     dataCollectionProgress: <DataCollectionProgressPage />,
-    enumeratorPerformance: <EnumeratorPerformancePage onNavigateToSubmissions={toSubmissions} />,
+    enumeratorPerformance: (
+      <EnumeratorPerformancePage
+        onNavigateToSubmissions={toSubmissions}
+        requestedTab={requestedTab}
+        onTabChange={onTabChange}
+      />
+    ),
     qualityOverview: <QualityOverviewPage onNavigateToSubmissions={toSubmissions} />,
     createSurvey: <CreateSurveyPage />,
     settings: <SurveySettingsPage requestedTab={requestedTab} onTabChange={onTabChange} />,

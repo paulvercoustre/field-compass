@@ -20,13 +20,14 @@ from schemas import (
     ProgressData,
     UnavailableCapability,
 )
-from services.metrics import summarise
+from services.metrics import durations, summarise
 from services.submission_filters import answer_text
 from services.survey_config import (
     CAPABILITY_ENUMERATOR_PERFORMANCE,
     SAMPLING_MODE_BY_VARIABLE,
     SAMPLING_MODE_TOTAL,
     SAMPLING_MODE_UPLOADED,
+    built_in_checks,
     get_enumerator_field,
     get_frame_data,
     get_sampling_cols,
@@ -373,11 +374,18 @@ def compute_performance(
             continue
         by_enumerator[enum_id].append(sub)
 
+    checks = built_in_checks(config)
     return PerformanceData(
         team=summarise(submissions, config),
         enumerators=[
-            EnumeratorSummary(id=enum_id, **summarise(subs, config).model_dump())
+            EnumeratorSummary(
+                id=enum_id,
+                durations=[round(m, 1) for m in durations(subs, config)[0]],
+                **summarise(subs, config).model_dump(),
+            )
             for enum_id, subs in sorted(by_enumerator.items())
         ],
         no_enumerator=summarise(no_enumerator, config) if no_enumerator else None,
+        checks_on=[key for key, on in checks if on],
+        checks_off=[key for key, on in checks if not on],
     )

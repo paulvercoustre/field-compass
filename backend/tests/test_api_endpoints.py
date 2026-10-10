@@ -542,6 +542,44 @@ class TestPerformanceEndpoint:
         assert payload["team"]["submissions"] == 0
 
 
+class TestPerformancePeriodAndChecks:
+    """A period narrows Field team's figures; the survey's own rules are counted."""
+
+    def test_period_and_custom_checks(self, client, test_survey):
+        survey_uuid = UUID(test_survey["survey_id"])
+        with TestingSessionLocal() as db:
+            for i, day in enumerate((1, 5, 9)):
+                db.add(
+                    SubmissionCurrent(
+                        _id=70000 + i,
+                        survey_id=survey_uuid,
+                        _uuid=str(uuid4()),
+                        _submission_time=datetime(2026, 3, day, 10),
+                        end=datetime(2026, 3, day, 11),
+                        submission_data={"enumerator_id": "enum-a"},
+                    )
+                )
+            db.add_all(
+                [
+                    ValidationRule(survey_id=survey_uuid, rule_name="On", rule_data={}),
+                    ValidationRule(
+                        survey_id=survey_uuid, rule_name="Off", rule_data={}, is_active=False
+                    ),
+                ]
+            )
+            db.commit()
+
+        base = f"/api/performance?survey_id={test_survey['survey_id']}"
+        whole = client.get(base).json()
+        assert whole["team"]["submissions"] == 3
+        assert whole["custom_checks"] == 1
+        assert len(whole["checks_on"]) + len(whole["checks_off"]) == 10
+
+        week = client.get(f"{base}&start_date=2026-03-04&end_date=2026-03-09").json()
+        assert week["team"]["submissions"] == 2
+        assert client.get(f"{base}&start_date=04/03/2026").status_code == 400
+
+
 class TestProgressEndpoint:
     """Tests for /api/progress endpoint."""
 

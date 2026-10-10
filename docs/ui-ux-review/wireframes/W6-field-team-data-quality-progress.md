@@ -75,20 +75,28 @@ Total issues across…
 ┌ Field team ─────────────────────────────────── Period [Whole survey ▾]   Last pulled 2 h ago  [Pull] ┐
 │ ┌ Flagged 45% ┐ ┌ Duration 27 min ┐ ┌ Don't-know 2.6% ┐ ┌ Checks on 8 of 10 ┐ ┌ Reviewed 32% (grey) ┐ │
 │ 4 submissions have no enumerator recorded. They count in the team's figures, not as an enumerator.   │
-│ Who to follow up with                                    [Find an enumerator ID]  Sort by [Flagged ▾]  │
-│ Enumerator │ Subs │ Flagged      │ Not approved │ Most frequent issue      │ Duration │ DK  │ Reviewed │ │
-│ Whole team │ 147  │ 46%          │ 7%           │ Interview too short ×38  │ 27 min   │2.6% │ 46 of 147│ │
-│ enum_07    │ 32   │ ▇▇▇▇ [100%]  │ [25%]        │ [Interview too short ×32]│ 6 min    │5.9% │ 9 of 32  │→│
-│ enum_03    │ 22   │ ▇▇ 41%       │ 5%           │ Outside office hours ×6  │ 29 min   │0.4% │ 6 of 22  │→│
+│ Who to follow up with                                                   [Find an enumerator ID]       │
+│ Enumerator │ Subs │ Flagged      │ Not approved │ Main issue               │ Duration │ DK  │ Reviewed │NR │
+│ Whole team │ 147  │ 46%          │ 7%           │ Interview too short ×38  │ 27 min   │2.6% │ 46 of 147│42→│
+│ enum_07    │ 32   │ ▇▇▇▇ [100%]  │ [25%]        │ [Interview too short ×32]│ 6 min    │5.9% │ 9 of 32  │20→│
+│ enum_03    │ 22   │ ▇▇ 41%       │ 5%           │ Outside office hours ×6  │ 29 min   │0.4% │ 6 of 22  │ 6→│
 │ … Too few submissions to compare (under 5): enum_08                                                  │
 │ No enumerator recorded │ 4 │ 50% │ 0% │ …   (last, never sorted among the enumerators or highlighted)   │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────┘
-[ ] = highlighted: at least twice the team's share. A row opens the call sheet; "Needs review 20 →" opens the queue.
+[ ] = highlighted: at least twice the team's share. Columns sort from their heading. A row opens the call sheet;
+the Needs review count (NR) opens that enumerator's Needs review.
 ```
 
-The call sheet (C1) opens beside the list: duration against the team's middle half, don't-know rate and flagged share
-against the team, the checks that flagged them, their submissions in review (Needs review, On hold, Approved, Not
-approved), issues per submission by week, and a plain summary to copy into a message or read on the call.
+**Main issue** is the check that flagged most of their submissions, with one at twice the team's share first, so the
+column names what to talk about, not what everyone gets. "Checks on" names the checks that are off; with none on, a
+line says nothing has been flagged and that this doesn't mean the data is clean. A period with no submissions says so.
+
+The call sheet (C1) has its own address, `/surveys/<id>/team/<enumerator>`, opens beside a compact list of the team,
+and Back returns to the table. In order: Not approved and Flagged against the team; duration, their interviews as
+dots over the team's middle half and median; the don't-know rate against the team; the checks that flagged them, each
+with its share against the team's and a link to those submissions; their submissions in review (Needs review, On
+hold, Clean, Approved, Not approved); issues per submission by week, theirs and the team's; and a plain summary to
+copy into a message or read on the call. Buttons open their Needs review and all their submissions.
 
 Removed: the five summary cards, the ranking card, the submissions bar chart and the scatter.
 
@@ -136,7 +144,9 @@ listed apart and not highlighted.
 
 1. **One calculation, one set of names.** `services/metrics.py` and `etl/duration.py`; Field team, Data quality,
    Progress and the pull summary read from them and use the named counts. Fixes F-10 A.
-2. Field team table and call sheet.
+2. **Field team table and call sheet.** `/api/performance` adds per-check counts, the middle half of durations,
+   first and last submission, a weekly trend (all in the shared summary, for Data quality to use next), each
+   enumerator's durations, which checks are on, and a period.
 3. Data quality Overview and By check.
 4. Progress bar.
 5. Data quality By question.
