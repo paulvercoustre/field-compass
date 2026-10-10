@@ -1,21 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { progressApi, getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import { useSurvey } from '../contexts/SurveyContext';
-import { ProgressData } from '../types';
+import { useNavigation } from '../contexts/NavigationContext';
+import { FilterState, ProgressData } from '../types';
 import { Spinner } from '../components/Spinner';
 import PageHeader from '../components/ui/PageHeader';
+import { Card, CardHeader } from '../components/ui/Card';
 import { PullButton, PullStartError, usePull } from '../components/activity/PullButton';
-import ProgressDataView, { ProgressSubTab } from '../components/progress-tracker/ProgressDataView';
+import ProgressSummary from '../components/progress-tracker/ProgressSummary';
+import CollectionChart from '../components/progress-tracker/CollectionChart';
+import ProgressTable from '../components/progress-tracker/ProgressTable';
 
-const DataCollectionProgressPage: React.FC = () => {
+interface DataCollectionProgressPageProps {
+  onNavigateToSubmissions?: (filters?: FilterState) => void;
+}
+
+/**
+ * Progress: will we reach the sample, and where are we behind? Collection
+ * apart from quality: every submission but Not approved counts, with the
+ * Approved part shown (docs/ui-ux-review/wireframes/W6-field-team-data-quality-progress.md).
+ */
+const DataCollectionProgressPage: React.FC<DataCollectionProgressPageProps> = ({ onNavigateToSubmissions }) => {
   const { selectedSurvey } = useSurvey();
+  const { navigate } = useNavigation();
   const [progressData, setProgressData] = useState<ProgressData | null>(null);
   const [surveyConfig, setSurveyConfig] = useState<SurveyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [approvedOnly, setApprovedOnly] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<ProgressSubTab>('overall');
-  const [filter, setFilter] = useState('');
 
   // `quiet`: re-read after a pull without swapping the page for a spinner.
   const fetchData = useCallback(
@@ -26,7 +37,7 @@ const DataCollectionProgressPage: React.FC = () => {
       setError(null);
       try {
         const [progress, config] = await Promise.all([
-          progressApi.getProgressData(selectedSurvey.survey_id, { approvedOnly }),
+          progressApi.getProgressData(selectedSurvey.survey_id),
           getSurveyConfig(selectedSurvey.survey_id),
         ]);
         setProgressData(progress);
@@ -38,7 +49,7 @@ const DataCollectionProgressPage: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [selectedSurvey, approvedOnly]
+    [selectedSurvey]
   );
 
   useEffect(() => {
@@ -49,37 +60,10 @@ const DataCollectionProgressPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader
-        title="Progress"
-        actions={
-          <>
-            <label className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-gray-300">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={approvedOnly}
-                onClick={() => setApprovedOnly((prev) => !prev)}
-                className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
-                  approvedOnly ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${
-                    approvedOnly ? 'translate-x-[18px]' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
-              Approved submissions only
-            </label>
-            <span className="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-800" aria-hidden="true" />
-            <PullButton pull={pull} />
-          </>
-        }
-      >
+      <PageHeader title="Progress" actions={<PullButton pull={pull} />}>
         <PullStartError pull={pull} />
       </PageHeader>
 
-      {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 text-gray-700 dark:text-gray-300">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
@@ -87,21 +71,35 @@ const DataCollectionProgressPage: React.FC = () => {
           </div>
         ) : error ? (
           <div className="p-4 text-center text-sm text-red-600 dark:text-red-400">{error}</div>
-        ) : (
-          <div className="mx-auto max-w-screen-2xl">
-            {progressData && (
-              <ProgressDataView
-                data={progressData}
-                surveyConfig={surveyConfig}
-                activeSubTab={activeSubTab}
-                setActiveSubTab={setActiveSubTab}
-                filter={filter}
-                setFilter={setFilter}
-                approvedOnly={approvedOnly}
-              />
-            )}
+        ) : progressData ? (
+          <div className="mx-auto max-w-screen-2xl space-y-5">
+            <ProgressSummary data={progressData} onOpenSettings={() => navigate({ view: 'settings' })} />
+            <Card className="p-5">
+              <CardHeader className="mb-3" title="Collection over time" />
+              <CollectionChart data={progressData} />
+            </Card>
+            <ProgressTable
+              data={progressData}
+              surveyConfig={surveyConfig}
+              onOpen={
+                onNavigateToSubmissions
+                  ? (samplingFilters) => onNavigateToSubmissions({ review: 'all', samplingFilters })
+                  : undefined
+              }
+            />
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              How far review has got, and what is flagged, is on{' '}
+              <button
+                type="button"
+                onClick={() => navigate({ view: 'qualityOverview' })}
+                className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+              >
+                Data quality
+              </button>
+              .
+            </p>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

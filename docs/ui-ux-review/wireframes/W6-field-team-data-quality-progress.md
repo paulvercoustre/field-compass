@@ -141,15 +141,35 @@ behind each bar ("3 of 8 flagged").
 
 ```
 ┌ Progress ─────────────────────────────────────────────────────────── Last pulled 2 h ago  [Pull] ┐
-│ 137 of 160 done, 36 of them approved                                                              │
-│ [██████ Approved 36 ██████|░░░░░░░░░ not decided yet 101 ░░░░░░░░░|      to go 23      ]  Not approved 10, not counted │
-│ 23 to go · 10 a day over the last 7 days · about 2 days at this pace                              │
+│ 137 of 160 done                                                                              86%  │
+│ 36 of them approved · 10 Not approved, not counted ⓘ                                              │
+│ [██████ Approved 36 ██████|▓▓▓▓▓▓▓▓▓ Not decided yet 101 ▓▓▓▓▓▓▓▓▓|░░░░░ to go 23 ░░░░░]           │
+│ 23 to go │ 10 a day, over the last 7 days │ About 2 days, at this pace │ 28 days, since 1 Sep     │
+│ Collection over time                                                                              │
+│   Done so far   ____....·····  (total so far; dotted: where the recent pace goes; dashed: target)  │
+│   Each day      ▂▅▃▇▂▅▆▄▃▅  (one bar a day, on the same days)                                     │
+│   — Done so far: 137   ··· At the recent pace: the target by 18 Oct   - - Target: 160   ┊ Planned end │
 │ [By district] [By district and settlement]                                                        │
 │ District │ Target │ Done │ Approved │ Progress            │ Last 7 days │ To go │ Not approved     │
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The "Approved submissions only" switch goes: both numbers are always on the bar.
+The "Approved submissions only" switch goes: both numbers are always on the bar, Approved in the review bar's green
+and the rest of what is done in indigo.
+
+- **The pace** is the last 7 days, today included, so a stall shows as "None in the last 7 days". "At this pace" is
+  the days to the target at that pace; past 2 months it says so rather than give a date. There is no daily objective.
+- **Collection over time is two charts on the same days, not one chart with two scales**, and not a switch between
+  them: what is done so far climbing toward the target, and how many came in each day. Hovering either shows the day
+  in both: how many that day, and the total. The dotted line runs from today at the recent pace to the target; the
+  planned end (the survey's collection end date, when it sets one) is an upright dashed line. The lines are named
+  in a legend under the chart rather than on it, where they collide near the target. The days run to today while
+  something arrived in the last 14 days, else they stop at the last submission.
+- **The table** puts the group most behind first, groups without a target last. A group's name opens its
+  submissions. When the groups' To go doesn't add up to what is left overall, a line says why: submissions in a
+  group with no target, or a group over its target, count toward the total but not toward a group's target.
+- With no targets, the page shows what was collected: done, the Approved part, the pace and the average a day, with a
+  link to add targets.
 
 ## States (D1)
 
@@ -169,7 +189,9 @@ listed apart and not highlighted.
    last 14 days, the enumerator it flags most, on or off), when the oldest submission in Needs review was sent, and
    which checks are on; the issue frequency and issue time series it replaces are gone. The tiles, review bar, period
    menu and daily chart are shared with Field team.
-4. Progress bar.
+4. **Progress bar and chart.** `/api/progress` counts every submission but Not approved, always (the `approved_only`
+   switch is gone), and adds the Approved part, the last 7 days and the Not approved left out, overall and for each
+   group; the days of collection; the planned end; and the day it counts the last 7 days to.
 5. Data quality By question.
 
 Not covered, and not needed for now: exports and a cleaning log (Kobo exports; the edit history could feed a cleaning

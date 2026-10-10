@@ -47,6 +47,11 @@ export const GLOSSARY = {
     name: 'Not approved',
     definition: 'A reviewer marked it Not approved in Kobo. Never counted toward the target.',
   },
+  done: {
+    name: 'Done',
+    definition:
+      'Every submission except Not approved: what counts toward the target, whether or not a reviewer has approved it yet.',
+  },
   duration: {
     name: 'Duration',
     definition:

@@ -121,16 +121,10 @@ export interface SurveyCreate {
 /** Surveys the user can open. */
 export const getSurveys = () => request<Survey[]>('/api/surveys');
 
-interface ProgressQueryOptions {
-  approvedOnly?: boolean;
-}
-
 export const progressApi = {
-  getProgressData: (surveyId: string, options: ProgressQueryOptions = {}) => {
-    const params = new URLSearchParams({ survey_id: surveyId });
-    if (options.approvedOnly) params.append('approved_only', 'true');
-    return request<ProgressData>(`/api/progress?${params}`);
-  },
+  /** Every submission but Not approved, against the targets, with the Approved part. */
+  getProgressData: (surveyId: string) =>
+    request<ProgressData>(`/api/progress?${new URLSearchParams({ survey_id: surveyId })}`),
 
   /** Field team's figures; a period narrows them to submissions sent within it (YYYY-MM-DD). */
   getPerformanceData: (surveyId: string, period: { startDate?: string; endDate?: string } = {}) => {

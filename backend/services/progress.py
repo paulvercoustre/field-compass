@@ -6,7 +6,9 @@ submissions count is the caller's choice (routers/progress.py). Targets come
 from services/survey_config.py in whichever of its modes the survey uses.
 """
 
-from collections import defaultdict
+from collections import Counter, defaultdict
+from collections.abc import Callable, Hashable
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from database.models import SubmissionCurrent
@@ -18,9 +20,10 @@ from schemas import (
     PerformanceData,
     ProgressByColumn,
     ProgressData,
+    ProgressDay,
     UnavailableCapability,
 )
-from services.metrics import durations, summarise
+from services.metrics import durations, is_approved, is_not_approved, summarise
 from services.submission_filters import answer_text
 from services.survey_config import (
     CAPABILITY_ENUMERATOR_PERFORMANCE,
@@ -30,6 +33,7 @@ from services.survey_config import (
     built_in_checks,
     get_enumerator_field,
     get_frame_data,
+    get_global_parameters,
     get_sampling_cols,
     get_sampling_mode,
     get_sampling_variable,
@@ -94,6 +98,47 @@ def _collection_rate(submissions: list[SubmissionCurrent]) -> tuple[int, float |
 
     span_days = (max(times).date() - min(times).date()).days + 1
     return span_days, round(len(submissions) / span_days, 1)
+
+
+# The pace: submissions counted over the last week, today included.
+PACE_DAYS = 7
+
+
+def _value(sub: SubmissionCurrent, column: str) -> str:
+    """A submission's answer to a sampling column, as the breakdown groups it."""
+    return str(answer_value(sub.submission_data, column) or "Unknown")
+
+
+def _sent_since(sub: SubmissionCurrent, first_day: date) -> bool:
+    return sub._submission_time is not None and sub._submission_time.date() >= first_day
+
+
+def _counts_by(
+    counted: list[SubmissionCurrent],
+    left_out: list[SubmissionCurrent],
+    key: Callable[[SubmissionCurrent], Hashable],
+    week_start: date,
+) -> dict[Any, dict[str, int]]:
+    """Per group: the Approved part, the last 7 days, and the Not approved left out."""
+    rows: dict[Any, dict[str, int]] = defaultdict(
+        lambda: dict.fromkeys(("approved", "last_7_days", "not_approved"), 0)
+    )
+    for sub in counted:
+        row = rows[key(sub)]
+        row["approved"] += 1 if is_approved(sub) else 0
+        row["last_7_days"] += 1 if _sent_since(sub, week_start) else 0
+    for sub in left_out:
+        rows[key(sub)]["not_approved"] += 1
+    return rows
+
+
+def _planned_end(config: dict[str, Any] | None) -> str | None:
+    """The survey's planned last day of collection, when it sets a readable one."""
+    try:
+        end = get_global_parameters(config).data_collection_end_date
+        return date.fromisoformat(end).isoformat() if end else None
+    except ValueError:
+        return None
 
 
 def _calculate_targets_from_frame(
@@ -174,9 +219,22 @@ def _calculate_targets_from_frame(
 
 
 def compute_progress(
-    submissions: list[SubmissionCurrent], config: dict[str, Any] | None
+    all_submissions: list[SubmissionCurrent],
+    config: dict[str, Any] | None,
+    today: date | None = None,
 ) -> ProgressData:
-    """Overall progress, progress per sampling column value, and per combination."""
+    """
+    Overall progress, progress per sampling column value, and per combination.
+
+    Every submission except Not approved counts toward the target (decided
+    2026-10-09); beside each count, the Approved part of it, how many came in
+    the last 7 days, and how many Not approved were left out.
+    """
+    today = today or datetime.now(UTC).date()
+    week_start = today - timedelta(days=PACE_DAYS - 1)
+    left_out = [sub for sub in all_submissions if is_not_approved(sub)]
+    submissions = [sub for sub in all_submissions if not is_not_approved(sub)]
+
     mode = get_sampling_mode(config)
     sampling_cols = get_sampling_cols(config)
     sampling_variable = get_sampling_variable(config)
@@ -217,19 +275,18 @@ def compute_progress(
         progress=_percentage(total_conducted, total_target),
         days_active=days_active,
         submissions_per_day=submissions_per_day,
+        approved=sum(1 for sub in submissions if is_approved(sub)),
+        last_7_days=sum(1 for sub in submissions if _sent_since(sub, week_start)),
     )
 
     # Group by each sampling column dynamically
     by_column: dict[str, list[ProgressByColumn]] = {}
 
     for col in sampling_cols:
-        col_counts = defaultdict(int)
-
-        # Count conducted surveys for each value in this column
-        for sub in submissions:
-            col_value = answer_value(sub.submission_data, col) or "Unknown"
-            col_value = str(col_value) if col_value is not None else "Unknown"
-            col_counts[col_value] += 1
+        col_counts: Counter[str] = Counter(_value(sub, col) for sub in submissions)
+        col_extras = _counts_by(
+            submissions, left_out, lambda sub, col=col: _value(sub, col), week_start
+        )
 
         # Where this column's targets come from. A single total cannot be split
         # across values without inventing an allocation, so `total` mode
@@ -243,7 +300,7 @@ def compute_progress(
             col_targets = {}
 
         # Build progress list for this column ensuring targets with zero conducted are included
-        all_values = set(col_counts.keys()) | set(col_targets.keys())
+        all_values = set(col_counts) | set(col_targets) | set(col_extras)
         column_progress = []
         for col_value in sorted(all_values):
             conducted = col_counts.get(col_value, 0)
@@ -255,6 +312,7 @@ def compute_progress(
                     target=target,
                     progress=_percentage(conducted, target),
                     share=_percentage(conducted, total_conducted),
+                    **col_extras.get(col_value, {}),
                 )
             )
 
@@ -263,25 +321,21 @@ def compute_progress(
     # Detailed breakdown (all sampling columns combined)
     detailed = []
     if sampling_cols and len(sampling_cols) > 0:
-        combo_counts = defaultdict(int)
-        combo_values_map = {}
+        combo_counts: Counter[tuple[str, ...]] = Counter()
+        combo_values_map: dict[tuple[str, ...], dict[str, str]] = {}
 
-        # Group submissions by all sampling column values
+        def combo_of(sub: SubmissionCurrent) -> tuple[str, ...]:
+            return tuple(_value(sub, col) for col in sampling_cols)
+
+        # Group submissions by all sampling column values; the Not approved
+        # name their combination too, so a row can say what it leaves out.
+        for sub in [*submissions, *left_out]:
+            combo_values_map.setdefault(
+                combo_of(sub), dict(zip(sampling_cols, combo_of(sub), strict=True))
+            )
         for sub in submissions:
-            combo_values = {}
-            combo_key_parts = []
-
-            for col in sampling_cols:
-                col_value = answer_value(sub.submission_data, col) or "Unknown"
-                col_value = str(col_value) if col_value is not None else "Unknown"
-                combo_values[col] = col_value
-                combo_key_parts.append(col_value)
-
-            combo_key = tuple(combo_key_parts)
-            combo_counts[combo_key] += 1
-            # Store values dict for this combination (only need to store once per unique combo)
-            if combo_key not in combo_values_map:
-                combo_values_map[combo_key] = combo_values
+            combo_counts[combo_of(sub)] += 1
+        combo_extras = _counts_by(submissions, left_out, combo_of, week_start)
 
         # Include combinations from frame even if no submissions. Without a
         # frame there is nothing to add: the observed combinations are the
@@ -295,7 +349,7 @@ def compute_progress(
             frame_combos = {(value,): target for value, target in targets_by_value.items()}
         else:
             frame_combos = {}
-        all_combo_keys = set(combo_counts.keys()) | set(frame_combos.keys())
+        all_combo_keys = set(combo_counts) | set(frame_combos) | set(combo_extras)
 
         # Build detailed progress entries
         for combo_key in sorted(all_combo_keys):
@@ -326,15 +380,23 @@ def compute_progress(
                     conducted=conducted,
                     target=target,
                     progress=_percentage(conducted, target),
+                    **combo_extras.get(combo_key, {}),
                 )
             )
 
+    per_day = Counter(
+        sub._submission_time.date() for sub in submissions if sub._submission_time is not None
+    )
     return ProgressData(
         mode=mode,
         overall=overall,
         byColumn=by_column,
         detailed=detailed,
         samplingColumns=sampling_cols,
+        not_approved=len(left_out),
+        daily=[ProgressDay(day=day.isoformat(), counted=per_day[day]) for day in sorted(per_day)],
+        planned_end=_planned_end(config),
+        today=today.isoformat(),
     )
 
 

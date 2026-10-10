@@ -144,7 +144,7 @@ const Shell: React.FC = () => {
 
   const views: Record<View, React.ReactElement> = {
     dashboard: <Dashboard initialFilters={dashboardFilters} />,
-    dataCollectionProgress: <DataCollectionProgressPage />,
+    dataCollectionProgress: <DataCollectionProgressPage onNavigateToSubmissions={toSubmissions} />,
     enumeratorPerformance: (
       <EnumeratorPerformancePage
         onNavigateToSubmissions={toSubmissions}

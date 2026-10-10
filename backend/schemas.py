@@ -202,9 +202,25 @@ class OverallProgress(BaseModel):
         default=None,
         description="Mean submissions per active day. Null before any submission arrives.",
     )
+    approved: int = Field(default=0, description="Of those counted, how many are Approved.")
+    last_7_days: int = Field(
+        default=0, description="Of those counted, how many were sent in the 7 days to today."
+    )
 
 
-class ProgressByColumn(BaseModel):
+class ProgressCounts(BaseModel):
+    """What a row of the breakdown adds to its progress: the Approved part, the pace, what is left out."""
+
+    approved: int = Field(default=0, description="Of those counted, how many are Approved.")
+    last_7_days: int = Field(
+        default=0, description="Of those counted, how many were sent in the 7 days to today."
+    )
+    not_approved: int = Field(
+        default=0, description="Not approved, so not counted: left out of `conducted`."
+    )
+
+
+class ProgressByColumn(ProgressCounts):
     """Progress for a single value within a sampling column."""
 
     value: str
@@ -220,13 +236,20 @@ class ProgressByColumn(BaseModel):
     )
 
 
-class DetailedProgress(BaseModel):
+class DetailedProgress(ProgressCounts):
     """Progress for a combination of all sampling column values."""
 
     values: dict[str, str] = Field(..., description="Map of column name to value")
     target: int | None = None
     conducted: int
     progress: float | None = None
+
+
+class ProgressDay(BaseModel):
+    """Submissions counted toward the target that were sent on one day."""
+
+    day: str = Field(..., description="ISO date (YYYY-MM-DD)")
+    counted: int = 0
 
 
 class ProgressData(BaseModel):
@@ -253,6 +276,13 @@ class ProgressData(BaseModel):
         default=0,
         description="Submissions a reviewer marked Not approved: never counted toward the target.",
     )
+    daily: list[ProgressDay] = Field(
+        default_factory=list, description="Submissions counted, by the day they were sent"
+    )
+    planned_end: str | None = Field(
+        default=None, description="The last day of collection the survey plans (YYYY-MM-DD)"
+    )
+    today: str = Field(default="", description="The day the last 7 days end on (YYYY-MM-DD)")
 
 
 # ============================================================================

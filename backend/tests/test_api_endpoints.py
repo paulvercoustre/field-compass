@@ -615,12 +615,10 @@ class TestProgressEndpoint:
             for row in detailed
         )
 
-    def test_progress_filters_approved_only(self, client, test_survey):
-        """Progress counts by the reviewer's decision in Kobo.
-        Default (no param): every submission except Not approved.
-        approved_only=true: only Approved ones.
-        Either way the response says how many are Not approved.
-        """
+    def test_progress_counts_all_but_not_approved_with_the_approved_part(self, client, test_survey):
+        """Progress counts by the reviewer's decision in Kobo: every submission
+        except Not approved, with the Approved part of them, and says how many
+        Not approved it leaves out."""
         survey_uuid = UUID(test_survey["survey_id"])
 
         def submission(_id, enumerator, qa_status, decision):
@@ -648,17 +646,16 @@ class TestProgressEndpoint:
             )
             db.commit()
 
-        response_all = client.get(f"/api/progress?survey_id={test_survey['survey_id']}")
-        assert response_all.status_code == 200
-        assert response_all.json()["overall"]["conducted"] == 3
-        assert response_all.json()["not_approved"] == 1
-
-        response_approved = client.get(
-            f"/api/progress?survey_id={test_survey['survey_id']}&approved_only=true"
-        )
-        assert response_approved.status_code == 200
-        assert response_approved.json()["overall"]["conducted"] == 1
-        assert response_approved.json()["not_approved"] == 1
+        response = client.get(f"/api/progress?survey_id={test_survey['survey_id']}")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["overall"]["conducted"] == 3
+        assert body["overall"]["approved"] == 1
+        assert body["not_approved"] == 1
+        # All sent today: the last 7 days, and one day of collection.
+        assert body["overall"]["last_7_days"] == 3
+        assert [d["counted"] for d in body["daily"]] == [3]
+        assert body["today"] == body["daily"][0]["day"]
 
 
 # The Kobo decision a pull stores alongside each qa_status.
@@ -777,16 +774,15 @@ class TestProgressWithoutTargets:
         assert payload["overall"]["target"] is None
         assert payload["overall"]["progress"] is None
 
-    def test_approved_only_still_applies_without_targets(self, client):
+    def test_the_approved_part_without_targets(self, client):
         survey = self._create_survey(client, {})
         self._add_submissions(survey["survey_id"], 2, qa_status="APPROVED")
         self._add_submissions(
             survey["survey_id"], 1, start_day=datetime(2026, 4, 1), qa_status="PENDING_APPROVAL"
         )
 
-        base = f"/api/progress?survey_id={survey['survey_id']}"
-        assert client.get(base).json()["overall"]["conducted"] == 3
-        assert client.get(f"{base}&approved_only=true").json()["overall"]["conducted"] == 2
+        overall = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()["overall"]
+        assert (overall["conducted"], overall["approved"]) == (3, 2)
 
     def test_observed_distribution_is_reported_without_targets(self, client):
         """Columns can still be described even when nothing sets a target for them."""
@@ -918,14 +914,15 @@ class TestProgressByVariable:
         assert payload["overall"]["target"] is None
         assert payload["overall"]["progress"] is None
 
-    def test_approved_only_applies(self, client):
+    def test_each_value_has_its_approved_part(self, client):
         survey = self._create_survey(client, self.FRAME)
         self._add(survey["survey_id"], "north", 3, qa_status="APPROVED")
         self._add(survey["survey_id"], "north", 2, qa_status="PENDING_APPROVAL")
 
-        base = f"/api/progress?survey_id={survey['survey_id']}"
-        assert client.get(base).json()["overall"]["conducted"] == 5
-        assert client.get(f"{base}&approved_only=true").json()["overall"]["conducted"] == 3
+        payload = client.get(f"/api/progress?survey_id={survey['survey_id']}").json()
+        assert (payload["overall"]["conducted"], payload["overall"]["approved"]) == (5, 3)
+        north = next(r for r in payload["byColumn"]["district"] if r["value"] == "north")
+        assert (north["conducted"], north["approved"], north["not_approved"]) == (5, 3, 0)
 
 
 class TestSurveyAccessDependency:

@@ -129,9 +129,23 @@ export interface OverallProgress {
   progress: number | null;
   days_active: number;
   submissions_per_day: number | null;
+  /** Of those counted, how many are Approved. */
+  approved: number;
+  /** Of those counted, how many were sent in the 7 days to today. */
+  last_7_days: number;
 }
 
-export interface ProgressByColumn {
+/** What a breakdown row carries besides its progress. */
+interface ProgressCounts {
+  /** Of those counted, how many are Approved. */
+  approved: number;
+  /** Of those counted, how many were sent in the 7 days to today. */
+  last_7_days: number;
+  /** Not approved, so left out of `conducted`. */
+  not_approved: number;
+}
+
+export interface ProgressByColumn extends ProgressCounts {
   value: string;
   conducted: number;
   target: number | null;
@@ -139,7 +153,7 @@ export interface ProgressByColumn {
   share: number | null; // Percent of all submissions, when there is no target to compare against
 }
 
-export interface DetailedProgress {
+export interface DetailedProgress extends ProgressCounts {
   values: Record<string, string>; // Map of column name to value
   target: number | null;
   conducted: number;
@@ -154,6 +168,12 @@ export interface ProgressData {
   samplingColumns: string[];
   /** Submissions marked Not approved: never counted toward the target. */
   not_approved: number;
+  /** Submissions counted, by the day they were sent; days with none are left out. */
+  daily: { day: string; counted: number }[];
+  /** The survey's planned last day of collection (YYYY-MM-DD), if it sets one. */
+  planned_end: string | null;
+  /** The day the last 7 days end on (YYYY-MM-DD), as the server counts them. */
+  today: string;
 }
 
 /**

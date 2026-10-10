@@ -3,7 +3,7 @@ The counts and measurements every data page shares (services/metrics.py,
 etl/duration.py): one definition each, so the screens agree.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 
@@ -11,7 +11,7 @@ from database.models import SubmissionCurrent
 from etl.duration import AUDIT, START_END, interview_minutes
 from schemas import TopEnumerator
 from services.metrics import counts, is_approved, is_not_approved, summarise
-from services.progress import compute_performance
+from services.progress import compute_performance, compute_progress
 from services.quality import by_check
 from services.survey_config import built_in_checks
 
@@ -277,3 +277,81 @@ class TestByCheck:
     def test_nothing_at_all(self):
         rows = by_check([], {})
         assert len(rows) == 10 and not any(r.on for r in rows)
+
+
+class TestProgressCounts:
+    """Progress (services/progress.compute_progress): what counts, and what each count carries."""
+
+    CONFIG_TARGETS = {
+        **CONFIG,
+        "sampling_frame": {
+            "mode": "by_variable",
+            "variable": "district",
+            "sampling_cols": ["district"],
+            "targets_by_value": {"north": 10, "south": 10},
+        },
+        "global_parameters": {"data_collection_end_date": "2026-10-31"},
+    }
+
+    def _subs(self):
+        def sub(district, day, decision=None):
+            s = _sub(data={"district": district}, decision=decision)
+            s._submission_time = datetime(2026, 10, day, 9)
+            return s
+
+        return [
+            sub("north", 1, "Approved"),
+            sub("north", 8),
+            sub("north", 9, "Not Approved"),
+            sub("south", 9, "On Hold"),
+            # Only Not approved here: a row that counts nothing, and says why.
+            sub("east", 2, "Not Approved"),
+        ]
+
+    def test_everything_but_not_approved_with_the_approved_part(self):
+        progress = compute_progress(self._subs(), self.CONFIG_TARGETS, today=date(2026, 10, 10))
+        assert (progress.overall.conducted, progress.overall.approved) == (3, 1)
+        assert progress.not_approved == 2
+        rows = {r.value: r for r in progress.byColumn["district"]}
+        assert (rows["north"].conducted, rows["north"].approved, rows["north"].not_approved) == (
+            2,
+            1,
+            1,
+        )
+        assert (rows["east"].conducted, rows["east"].not_approved, rows["east"].target) == (
+            0,
+            1,
+            None,
+        )
+
+    def test_the_last_7_days_end_today(self):
+        progress = compute_progress(self._subs(), self.CONFIG_TARGETS, today=date(2026, 10, 10))
+        # 4 to 10 October: the 8th and the 9th, not the 1st or the Not approved.
+        assert progress.overall.last_7_days == 2
+        rows = {r.value: r for r in progress.byColumn["district"]}
+        assert (rows["north"].last_7_days, rows["south"].last_7_days) == (1, 1)
+        assert progress.today == "2026-10-10"
+
+    def test_the_days_of_collection_and_the_planned_end(self):
+        progress = compute_progress(self._subs(), self.CONFIG_TARGETS, today=date(2026, 10, 10))
+        assert [(d.day, d.counted) for d in progress.daily] == [
+            ("2026-10-01", 1),
+            ("2026-10-08", 1),
+            ("2026-10-09", 1),
+        ]
+        assert progress.planned_end == "2026-10-31"
+        unreadable = {
+            **self.CONFIG_TARGETS,
+            "global_parameters": {"data_collection_end_date": "soon"},
+        }
+        assert compute_progress([], unreadable).planned_end is None
+
+    def test_combinations_carry_the_same(self):
+        detailed = {
+            row.values["district"]: row
+            for row in compute_progress(
+                self._subs(), self.CONFIG_TARGETS, today=date(2026, 10, 10)
+            ).detailed
+        }
+        assert (detailed["north"].approved, detailed["north"].not_approved) == (1, 1)
+        assert detailed["east"].not_approved == 1
