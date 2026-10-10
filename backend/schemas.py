@@ -452,45 +452,50 @@ class ApproveCleanResult(BaseModel):
 # ============================================================================
 
 
-class IssueFrequency(BaseModel):
-    """Frequency of a specific issue type."""
+class TopEnumerator(BaseModel):
+    """The enumerator a check flagged most often."""
 
-    check: str = Field(..., description="Issue type/check name")
-    count: int = Field(..., description="Number of occurrences")
-    percentage: float = Field(..., description="Percentage of total submissions affected")
-    affected_submissions: int = Field(..., description="Number of unique submissions affected")
-
-
-class TemporalDataPoint(BaseModel):
-    """The named counts of the submissions collected on one day, as they stand now."""
-
-    date: str = Field(..., description="ISO date string (YYYY-MM-DD)")
-    submissions: int = 0
-    flagged: int = 0
-    issues: int = 0
-    needs_review: int = 0
-    on_hold: int = 0
-    clean: int = 0
-    approved: int = 0
-    not_approved: int = 0
+    id: str
+    flagged: int = Field(..., description="Their submissions the check flagged")
+    submissions: int = Field(..., description="All their submissions")
 
 
-class IssueTimeSeriesPoint(BaseModel):
-    """Issue counts by type for a specific date."""
+class CheckRow(BaseModel):
+    """One check on Data quality's By check view."""
 
-    date: str = Field(..., description="ISO date string (YYYY-MM-DD)")
-    issue_counts: dict[str, int] = Field(..., description="Map of check type to count")
+    check: str = Field(
+        ..., description="The issue it writes, or the built-in check's key when nothing is flagged"
+    )
+    on: bool | None = Field(
+        default=None, description="A built-in check's setting; None for the survey's own rules"
+    )
+    flagged: int = Field(default=0, description="Submissions it flagged")
+    issues: int = Field(default=0, description="Issues it found")
+    needs_review: int = Field(default=0, description="Of those flagged, still in Needs review")
+    last_14_days: list[int] = Field(
+        default_factory=list,
+        description="Submissions it flagged each day, the 14 days up to the last submission; "
+        "the share is of QualityOverviewResponse.last_14_days, not this count",
+    )
+    top_enumerator: TopEnumerator | None = None
 
 
 class QualityOverviewResponse(BaseModel):
     """Complete quality overview response."""
 
     summary: SubmissionSummary = Field(..., description="The named counts and measurements")
-    issue_frequency: list[IssueFrequency] = Field(
-        ..., description="Issue frequency sorted by count descending"
+    oldest_needs_review: str | None = Field(
+        default=None, description="When the oldest submission still in Needs review was sent"
     )
-    temporal_data: list[TemporalDataPoint] = Field(..., description="Daily aggregated status data")
-    issue_time_series: list[IssueTimeSeriesPoint] = Field(
-        ..., description="Daily aggregated issues by type"
+    by_check: list[CheckRow] = Field(
+        default_factory=list,
+        description="Checks that flagged something, most first; then built-in checks on, then off",
+    )
+    last_14_days: list[int] = Field(
+        default_factory=list,
+        description="Submissions each day, the 14 days up to the last: what each check's days are out of",
     )
     date_range: dict[str, str] = Field(..., description="Actual date range of the data")
+    checks_on: list[str] = Field(default_factory=list, description="Built-in checks turned on")
+    checks_off: list[str] = Field(default_factory=list, description="Built-in checks turned off")
+    custom_checks: int = Field(default=0, description="The survey's own rules that are active")

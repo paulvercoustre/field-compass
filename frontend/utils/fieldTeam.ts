@@ -7,7 +7,7 @@
  * Duration and the don't-know rate are shown plain; their checks carry the
  * verdict. Too few submissions to compare are never highlighted.
  */
-import { DayPoint, EnumeratorSummary, SubmissionSummary } from '../types';
+import { EnumeratorSummary, SubmissionSummary, TopEnumerator } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { issueName } from './issueNames';
 import { questionText } from './koboLabelUtils';
@@ -35,6 +35,13 @@ export const highlightCheck = (row: SubmissionSummary, team: SubmissionSummary, 
   comparable(row) && twiceTheTeams(row.checks[check] ?? 0, row.submissions, team.checks[check] ?? 0, team.submissions);
 
 /**
+ * On Data quality's By check view: the enumerator a check flags most, when
+ * their share is at least twice the team's for that check.
+ */
+export const highlightTopEnumerator = (top: TopEnumerator, flagged: number, submissions: number): boolean =>
+  top.submissions >= MIN_SUBMISSIONS && twiceTheTeams(top.flagged, top.submissions, flagged, submissions);
+
+/**
  * The check to talk about: the one that flagged most of their submissions,
  * with any at twice the team's share first. Null when nothing flagged them.
  */
@@ -58,13 +65,6 @@ const BUILT_IN_NAMES: Record<string, string> = {
 /** A check as a coordinator reads it; an outlier is named by its question. */
 export const checkName = (check: string, config: SurveyConfig | null): string =>
   BUILT_IN_NAMES[check] ?? issueName(check, (name) => questionText(name, config));
-
-/** Issues per submission on each day they collected. */
-export const dailyIssuesPerSubmission = (daily: DayPoint[]): { day: string; value: number }[] =>
-  daily.map((d) => ({
-    day: d.day,
-    value: d.submissions ? Math.round((d.issues / d.submissions) * 100) / 100 : 0,
-  }));
 
 const shortDate = (iso: string): string =>
   new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });

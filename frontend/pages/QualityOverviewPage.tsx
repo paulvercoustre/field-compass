@@ -1,15 +1,104 @@
-import React from 'react';
-import { FilterState } from '../types';
+import React, { useCallback, useEffect, useState } from 'react';
+import { FilterState, QualityOverviewResponse } from '../types';
 import { useSurvey } from '../contexts/SurveyContext';
-import QualityOverviewDashboard from '../components/quality-dashboard/QualityOverviewDashboard';
-import type { ReviewCount } from '../components/quality-dashboard/StatusSummaryCards';
+import { RequestedTab, useNavigation } from '../contexts/NavigationContext';
+import { fetchQualityOverview } from '../services/qualityApi';
+import { getSurveyConfig, SurveyConfig } from '../services/progressApi';
+import { QUALITY_TABS, QualityTab } from '../utils/appUrl';
+import { GLOSSARY, Term, percentOf } from '../utils/glossary';
+import { Period, periodDates } from '../utils/period';
+import { Spinner } from '../components/Spinner';
+import PageHeader from '../components/ui/PageHeader';
+import PeriodSelect from '../components/ui/PeriodSelect';
+import Banner from '../components/ui/Banner';
+import { Card, CardHeader } from '../components/ui/Card';
+import { SubTabButton } from '../components/ui/SubTabButton';
+import TermInfo from '../components/ui/TermInfo';
+import { PullButton, PullStartError, usePull } from '../components/activity/PullButton';
+import SummaryTiles, { NoChecksNotice } from '../components/metrics/SummaryTiles';
+import { ReviewCount } from '../components/metrics/ReviewBar';
+import DailyChart from '../components/charts/DailyChart';
+import ReviewCard from '../components/quality-dashboard/ReviewCard';
+import ByCheckTable from '../components/quality-dashboard/ByCheckTable';
+
+/** "Flagged, by day ⓘ". */
+const ChartTitle: React.FC<{ term: Term }> = ({ term }) => (
+  <span className="flex items-center gap-1">
+    {term.name}, by day
+    <TermInfo term={term} />
+  </span>
+);
+
+const isQualityTab = (tab: string | undefined): tab is QualityTab => QUALITY_TABS.some((t) => t.id === tab);
 
 interface QualityOverviewPageProps {
   onNavigateToSubmissions?: (filters?: FilterState) => void;
+  /** The view the address names: Overview or By check. */
+  requestedTab?: RequestedTab;
+  /** The view shown, for the address. */
+  onTabChange?: (tab: string) => void;
 }
 
-const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({ onNavigateToSubmissions }) => {
+/**
+ * Data quality: what is going wrong in the data, and how far review has got.
+ * Overview, and By check at /surveys/<id>/quality/by-check
+ * (docs/ui-ux-review/wireframes/W6-field-team-data-quality-progress.md).
+ */
+const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
+  onNavigateToSubmissions,
+  requestedTab,
+  onTabChange,
+}) => {
   const { selectedSurvey } = useSurvey();
+  const { navigate } = useNavigation();
+  const [data, setData] = useState<QualityOverviewResponse | null>(null);
+  const [config, setConfig] = useState<SurveyConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>('all');
+  const [tab, setTab] = useState<QualityTab>(() => (isQualityTab(requestedTab?.tab) ? requestedTab.tab : 'overview'));
+
+  useEffect(() => {
+    if (isQualityTab(requestedTab?.tab)) setTab(requestedTab.tab);
+  }, [requestedTab]);
+  useEffect(() => onTabChange?.(tab), [tab, onTabChange]);
+
+  // `quiet`: re-read after a pull without swapping the page for a spinner.
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!selectedSurvey) return;
+      if (!quiet) setLoading(true);
+      setError(null);
+      try {
+        setData(await fetchQualityOverview(selectedSurvey.survey_id, periodDates(period)));
+      } catch (err: unknown) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : err && typeof err === 'object' && 'detail' in err
+              ? String((err as { detail: unknown }).detail)
+              : 'Failed to load quality data'
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedSurvey, period]
+  );
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // The form, for naming outliers by their question. The page works without it.
+  useEffect(() => {
+    if (!selectedSurvey) return;
+    getSurveyConfig(selectedSurvey.survey_id)
+      .then(setConfig)
+      .catch(() => setConfig(null));
+  }, [selectedSurvey]);
+
+  const pull = usePull(() => load(true));
 
   if (!selectedSurvey) {
     return (
@@ -24,31 +113,136 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({ onNavigateToS
     );
   }
 
-  // A card opens the Submissions tab of the same name; Approved and Not
-  // approved share Reviewed, so they also filter to their decision.
-  const handleStatusClick = (state: ReviewCount) => {
-    if (!onNavigateToSubmissions) return;
-    if (state === 'needs_review') onNavigateToSubmissions({ review: 'needs_review' });
-    else if (state === 'on_hold') onNavigateToSubmissions({ review: 'on_hold' });
-    else
-      onNavigateToSubmissions({
-        review: 'reviewed',
-        validationStatuses: [state === 'approved' ? 'Approved' : 'Not Approved'],
-      });
-  };
+  // A review state opens the Submissions tab of the same name; Approved and
+  // Not approved share Reviewed, so they also filter to their decision.
+  const openState = onNavigateToSubmissions
+    ? (state: ReviewCount) => {
+        if (state === 'needs_review') onNavigateToSubmissions({ review: 'needs_review' });
+        else if (state === 'on_hold') onNavigateToSubmissions({ review: 'on_hold' });
+        else
+          onNavigateToSubmissions({
+            review: 'reviewed',
+            validationStatuses: [state === 'approved' ? 'Approved' : 'Not Approved'],
+          });
+      }
+    : undefined;
+  const openSettings = () => navigate({ view: 'settings', tab: 'quality' });
 
-  // An issue bar opens every submission with that issue, so the count matches the bar.
-  const handleIssueClick = (check: string) => {
-    onNavigateToSubmissions?.({ review: 'all', issues: [check] });
+  const body = () => {
+    if (loading)
+      return (
+        <div className="flex h-64 items-center justify-center">
+          <Spinner />
+        </div>
+      );
+    if (error)
+      return (
+        <Banner tone="error">
+          <p>{error}</p>
+          <button
+            onClick={() => load()}
+            className="mt-1 text-sm font-medium underline underline-offset-2 hover:no-underline"
+          >
+            Try again
+          </button>
+        </Banner>
+      );
+    if (!data) return null;
+    const summary = data.summary;
+    if (summary.submissions === 0)
+      return (
+        <div className="mx-auto max-w-xl py-16 text-center">
+          <h2 className="mb-1 text-sm font-medium text-gray-900 dark:text-white">
+            {period === 'all' ? 'No submissions yet' : 'No submissions in this period'}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {period === 'all' ? 'Refresh from Kobo to pull them.' : 'Choose a longer period, or all time.'}
+          </p>
+        </div>
+      );
+
+    return tab === 'overview' ? (
+      <>
+        <NoChecksNotice checks={data} onOpenSettings={openSettings} />
+        <ReviewCard summary={summary} oldestNeedsReview={data.oldest_needs_review} onOpen={openState} />
+        <SummaryTiles summary={summary} checks={data} onOpenSettings={openSettings} />
+        {/* Shares of each day's submissions, never counts: how many came in is progress. */}
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Card className="p-4">
+            <CardHeader className="mb-3" title={<ChartTitle term={GLOSSARY.flagged} />} />
+            <DailyChart
+              daily={summary.daily}
+              measure="flagged"
+              average={percentOf(summary.flagged, summary.submissions)}
+              barLabel="Share of the day’s submissions"
+              averageLabel="Whole period"
+            />
+          </Card>
+          <Card className="p-4">
+            <CardHeader className="mb-3" title={<ChartTitle term={GLOSSARY.issuesPerSubmission} />} />
+            <DailyChart
+              daily={summary.daily}
+              measure="issues"
+              average={summary.issues_per_submission}
+              barLabel="Each day"
+              averageLabel="Whole period"
+            />
+          </Card>
+        </div>
+      </>
+    ) : (
+      <>
+        <NoChecksNotice checks={data} onOpenSettings={openSettings} />
+        <ByCheckTable
+          rows={data.by_check}
+          submissions={summary.submissions}
+          lastDay={data.date_range.end}
+          daySubmissions={data.last_14_days}
+          config={config}
+          onOpenCheck={
+            onNavigateToSubmissions ? (check) => onNavigateToSubmissions({ review: 'all', issues: [check] }) : undefined
+          }
+          onNeedsReview={
+            onNavigateToSubmissions
+              ? (check) => onNavigateToSubmissions({ review: 'needs_review', issues: [check] })
+              : undefined
+          }
+          onOpenEnumerator={(id) => navigate({ view: 'enumeratorPerformance', tab: id })}
+          onOpenSettings={openSettings}
+        />
+      </>
+    );
   };
 
   return (
-    <div className="h-full overflow-auto p-6">
-      <QualityOverviewDashboard
-        surveyId={selectedSurvey.survey_id}
-        onStatusClick={handleStatusClick}
-        onIssueClick={handleIssueClick}
-      />
+    <div className="flex h-full flex-col">
+      <PageHeader
+        title="Data quality"
+        actions={
+          <>
+            <PeriodSelect value={period} onChange={setPeriod} />
+            <PullButton pull={pull} />
+          </>
+        }
+      >
+        <PullStartError pull={pull} />
+      </PageHeader>
+      <div className="flex-1 overflow-y-auto p-4 text-gray-700 md:p-6 dark:text-gray-300">
+        <div className="mx-auto max-w-screen-2xl space-y-5">
+          <div
+            role="group"
+            aria-label="View"
+            className="inline-flex gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900"
+          >
+            {QUALITY_TABS.map((t) => (
+              <SubTabButton<QualityTab> key={t.id} tabId={t.id} activeTab={tab} onClick={setTab}>
+                {t.label}
+              </SubTabButton>
+            ))}
+          </div>
+          {body()}
+        </div>
+      </div>
     </div>
   );
 };

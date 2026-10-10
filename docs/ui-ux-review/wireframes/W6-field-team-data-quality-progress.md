@@ -105,11 +105,21 @@ Removed: the five summary cards, the ranking card, the submissions bar chart and
 
 ## Data quality (A2, E1)
 
-- **Overview:** the review bar (Needs review, On hold, Clean, Approved, Not approved, each opening its tab), the oldest
-  submission still waiting; Flagged, Duration, Don't-know rate, Checks on; issues per submission by day; submissions
-  by the day collected, coloured by where they stand now.
-- **By check:** each check that is on, with submissions flagged, share, the last 14 days, the enumerator with the most,
-  and its Needs review count; checks that are off are listed as off, with a link to turn them on.
+The views sit in the address, `/surveys/<id>/quality` and `/surveys/<id>/quality/by-check`, behind a switch at the
+top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
+
+- **Overview:** the review card: submissions and how many are Reviewed, how long the oldest submission still in Needs
+  review has waited, a button to open Needs review, and one bar of Needs review, On hold, Clean, Approved and Not
+  approved, each below it as a box that opens its tab (Clean has none). Then Field team's tiles without Reviewed:
+  Flagged, Duration, Don't-know rate, Checks on. Then two charts by day, Flagged and Issues per submission, each a
+  share of that day's submissions as bars, with the whole period's figure as a dashed line named in the legend. With
+  no checks on, a line says so first.
+- **By check:** each check that flagged something, most first: submissions flagged, share of submissions, the share of
+  each day's submissions it flagged on the 14 days up to the last submission in the period, the enumerator it flags most (with how many of theirs, highlighted at twice
+  the team's share, opening their call sheet), and its Needs review count. A check's name opens every submission it
+  flagged; the count opens those still waiting. Built-in checks that are on and flagged nothing follow with 0, then
+  those that are off, under "Off: these checks did not run", each with a link to Settings. Outliers are named by
+  their question.
 - **By question (E1):** every question, the ones to look at first on top.
 
 | Column | Rule | Looked at when |
@@ -121,6 +131,11 @@ Removed: the five summary cards, the ranking card, the submissions bar chart and
 | Corrected | Submissions where the answer was edited in Kobo (edit history, since #94). | 3 or more. |
 
 Time per question needs the audit processor to keep per-question times (`etl/audit_processor.py` keeps totals); later.
+
+**Quality by day is always a share of the day's submissions, never a count** (2026-10-10). How many came in on a day is
+progress: a busy day must not look worse than a quiet one. So Data quality draws no submissions-per-day chart; Progress
+will have its own time series (step 4). Shares on days with few submissions are noisy; the tooltip gives the numbers
+behind each bar ("3 of 8 flagged").
 
 ## Progress (A3 with B2's bar)
 
@@ -150,7 +165,10 @@ listed apart and not highlighted.
 2. **Field team table and call sheet.** `/api/performance` adds per-check counts, the middle half of durations,
    first and last submission, a daily trend (all in the shared summary, for Data quality to use next), each
    enumerator's durations, which checks are on, and a period.
-3. Data quality Overview and By check.
+3. **Data quality Overview and By check.** `/api/quality/overview` adds a row per check (flagged, Needs review, the
+   last 14 days, the enumerator it flags most, on or off), when the oldest submission in Needs review was sent, and
+   which checks are on; the issue frequency and issue time series it replaces are gone. The tiles, review bar, period
+   menu and daily chart are shared with Field team.
 4. Progress bar.
 5. Data quality By question.
 

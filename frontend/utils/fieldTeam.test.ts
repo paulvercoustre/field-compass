@@ -6,8 +6,8 @@ import {
   highlightCheck,
   highlightFlagged,
   highlightNotApproved,
+  highlightTopEnumerator,
   mainIssue,
-  dailyIssuesPerSubmission,
 } from './fieldTeam';
 
 const summary = (over: Partial<SubmissionSummary> = {}): SubmissionSummary => ({
@@ -64,6 +64,13 @@ describe('highlighting, by the flags against the team', () => {
     expect(highlightCheck(row, team, 'duration_too_short')).toBe(false);
     expect(highlightCheck(row, team, 'outlier_income')).toBe(true);
   });
+
+  it('works for the enumerator a check flags most', () => {
+    // The check flags 10 of 100 across the team: 10%.
+    expect(highlightTopEnumerator({ id: 'e1', flagged: 2, submissions: 10 }, 10, 100)).toBe(true);
+    expect(highlightTopEnumerator({ id: 'e1', flagged: 1, submissions: 10 }, 10, 100)).toBe(false);
+    expect(highlightTopEnumerator({ id: 'e1', flagged: 4, submissions: 4 }, 10, 100)).toBe(false);
+  });
 });
 
 describe('the main issue', () => {
@@ -107,17 +114,5 @@ describe('words', () => {
     expect(text).toContain('32 flagged (100%; team 20%), most often “Interview too short” (32).');
     expect(text).toContain('Median duration 27 min (team 27 min).');
     expect(text).toContain('20 waiting for review.');
-  });
-
-  it('gives issues per submission for each day collected', () => {
-    expect(
-      dailyIssuesPerSubmission([
-        { day: '2026-09-14', submissions: 3, flagged: 1, issues: 2 },
-        { day: '2026-09-15', submissions: 2, flagged: 0, issues: 0 },
-      ])
-    ).toEqual([
-      { day: '2026-09-14', value: 0.67 },
-      { day: '2026-09-15', value: 0 },
-    ]);
   });
 });

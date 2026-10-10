@@ -14,9 +14,12 @@ submission as `missing_enumerator` and produced a phantom enumerator named
 """
 
 import logging
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from pydantic import BaseModel, ConfigDict, ValidationError
+
+if TYPE_CHECKING:
+    from database.models import SurveyConfig
 
 logger = logging.getLogger(__name__)
 
@@ -324,3 +327,28 @@ def built_in_checks(config_data: dict[str, Any] | None) -> list[tuple[str, bool]
         ("sampling", bool(checks.flag_sampling_frame)),
         ("ai_review", bool(checks.flag_llm_qualitative and checks.llm_qualitative_fields)),
     ]
+
+
+def custom_checks(survey: "SurveyConfig") -> int:
+    """How many of the survey's own rules are active: checks on, besides the built-in ones."""
+    return sum(1 for rule in survey.validation_rules if rule.is_active)
+
+
+_SAMPLING_ISSUES = frozenset({"sampling_frame_mismatch", "strata_value_not_in_form"})
+_BUILT_IN_KEYS = frozenset(key for key, _ in built_in_checks(None))
+
+
+def built_in_check_of(issue_check: str) -> str | None:
+    """
+    The built-in check, keyed as built_in_checks keys it, that writes an issue;
+    None for the survey's own rules and the checks that always run.
+    """
+    if issue_check.startswith("outlier_"):
+        return "outliers"
+    if issue_check.startswith("qual_"):
+        return "ai_review"
+    if issue_check in _SAMPLING_ISSUES:
+        return "sampling"
+    if issue_check in _BUILT_IN_KEYS:
+        return issue_check
+    return None

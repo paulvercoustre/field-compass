@@ -152,7 +152,13 @@ const Shell: React.FC = () => {
         onTabChange={onTabChange}
       />
     ),
-    qualityOverview: <QualityOverviewPage onNavigateToSubmissions={toSubmissions} />,
+    qualityOverview: (
+      <QualityOverviewPage
+        onNavigateToSubmissions={toSubmissions}
+        requestedTab={requestedTab}
+        onTabChange={onTabChange}
+      />
+    ),
     createSurvey: <CreateSurveyPage />,
     settings: <SurveySettingsPage requestedTab={requestedTab} onTabChange={onTabChange} />,
     userSettings: <UserSettingsPage requestedTab={requestedTab} onTabChange={onTabChange} />,
