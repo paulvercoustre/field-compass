@@ -218,7 +218,7 @@ class TestThePullTask:
         assert run.status == "finished" and run.stats["created"] == 2
         note = db.query(Notification).one()
         assert note.title == "Household survey: pull finished"
-        assert note.body.startswith("2 new submissions, 0 flagged.")
+        assert note.body.startswith("2 new submissions, 0 need review.")
 
     def test_kobo_refusing_says_why(self, db, queued):
         from etl.kobo_fetcher import KoboFetchError

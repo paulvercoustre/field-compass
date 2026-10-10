@@ -48,7 +48,8 @@ export interface RunSummary {
     processed: number | null;
     new: number;
     edited: number;
-    flagged: number;
+    /** Checked in this pull and now in Needs review. */
+    needs_review: number;
     errors: number;
     duration_seconds: number | null;
   } | null;

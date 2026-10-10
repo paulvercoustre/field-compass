@@ -26,6 +26,7 @@ from etl.dk_utils import (
 from etl.dk_utils import (
     compute_dk_metrics as compute_submission_dk_metrics,
 )
+from etl.duration import AUDIT, interview_minutes, interview_time_fields
 from etl.relevance import is_shown
 from forms.answers import find_answer
 from forms.schema import Question, load_form_schema
@@ -205,8 +206,7 @@ class HFCEngine:
         # substitute a default -- see services/survey_config.py.
         self.enumerator_field = get_core_identifier(self.config_data, "enumerator")
         self.date_interview_field = get_core_identifier(self.config_data, "date_interview")
-        self.start_time_field = core_identifiers.get("start_time", "start")
-        self.end_time_field = core_identifiers.get("end_time", "end")
+        self.start_time_field, self.end_time_field = interview_time_fields(self.config_data)
 
         # Special values
         self.special_values = special_values
@@ -864,124 +864,49 @@ class HFCEngine:
             )
         ]
 
-    def _check_duration(
-        self,
-        submission_data: dict[str, Any],
-        start_time: datetime | None = None,
-        end_time: datetime | None = None,
-    ) -> list[QualityIssue]:
+    def _check_duration(self, submission_data: dict[str, Any]) -> list[QualityIssue]:
         """
-        Check survey duration against min/max limits.
+        Check the interview's length against the min/max limits.
 
-        Uses two-tier approach:
-        1. Priority 1: active_interview_time from audit logs (if available)
-        2. Priority 2: start/end fields from submission_data (form timestamps)
-
-        Note: Does NOT use metadata timestamps (_submission_time, end) as these
-        represent server upload time, not actual form duration.
+        The length is measured as every screen measures it (etl/duration.py):
+        active time from the audit log, else the start and end questions.
+        Kobo's submission and upload times are never used.
         """
-        issues = []
-
-        logger.debug(
-            f"Duration check: min={self.min_survey_duration_minutes}, max={self.max_survey_duration_minutes}"
+        minutes, source = interview_minutes(
+            submission_data, self.start_time_field, self.end_time_field
         )
+        if minutes is None:
+            logger.debug("No audit time and no start/end answers: cannot measure duration")
+            return []
 
-        # Priority 1: Try to get active_interview_time from audit logs (if available)
-        active_time = submission_data.get("active_interview_time")
-        logger.debug(f"Duration check: active_interview_time from data={active_time}")
-
-        if active_time is not None:
-            try:
-                duration_minutes = float(active_time)
-                logger.debug(f"Using active_interview_time: {duration_minutes} minutes")
-
-                if (
-                    self.min_survey_duration_minutes is not None
-                    and duration_minutes < self.min_survey_duration_minutes
-                ):
-                    issues.append(
-                        QualityIssue(
-                            check="duration_too_short",
-                            field="active_interview_time",
-                            value=duration_minutes,
-                            message=f"Active survey duration too short ({duration_minutes:.2f} min < {self.min_survey_duration_minutes} min)",
-                        )
-                    )
-
-                if (
-                    self.max_survey_duration_minutes is not None
-                    and duration_minutes > self.max_survey_duration_minutes
-                ):
-                    issues.append(
-                        QualityIssue(
-                            check="duration_too_long",
-                            field="active_interview_time",
-                            value=duration_minutes,
-                            message=f"Active survey duration too long ({duration_minutes:.2f} min > {self.max_survey_duration_minutes} min)",
-                        )
-                    )
-            except (ValueError, TypeError):
-                pass
-        else:
-            # Priority 2: Use start/end fields from submission data (form timestamps)
-            logger.debug(
-                f"Using submission data fields: {self.start_time_field}, {self.end_time_field}"
-            )
-            logger.debug(f"Submission data keys (sample): {list(submission_data.keys())[:20]}")
-            start_time_data, start_field_path = find_answer(submission_data, self.start_time_field)
-            end_time_data, end_field_path = find_answer(submission_data, self.end_time_field)
-            logger.debug(
-                f"Found in submission data: start={start_time_data} (path={start_field_path}), end={end_time_data} (path={end_field_path})"
-            )
-
-            if start_time_data and end_time_data:
-                try:
-                    if isinstance(start_time_data, str):
-                        start_dt = datetime.fromisoformat(start_time_data.replace("Z", "+00:00"))
-                    else:
-                        start_dt = start_time_data
-
-                    if isinstance(end_time_data, str):
-                        end_dt = datetime.fromisoformat(end_time_data.replace("Z", "+00:00"))
-                    else:
-                        end_dt = end_time_data
-
-                    duration_minutes = (end_dt - start_dt).total_seconds() / 60
-                    logger.debug(f"Using submission data timestamps: {duration_minutes} minutes")
-
-                    if (
-                        self.min_survey_duration_minutes is not None
-                        and duration_minutes < self.min_survey_duration_minutes
-                    ):
-                        issues.append(
-                            QualityIssue(
-                                check="duration_too_short",
-                                field="duration_minutes",
-                                value=duration_minutes,
-                                message=f"Survey duration too short ({duration_minutes:.2f} min < {self.min_survey_duration_minutes} min)",
-                            )
-                        )
-
-                    if (
-                        self.max_survey_duration_minutes is not None
-                        and duration_minutes > self.max_survey_duration_minutes
-                    ):
-                        issues.append(
-                            QualityIssue(
-                                check="duration_too_long",
-                                field="duration_minutes",
-                                value=duration_minutes,
-                                message=f"Survey duration too long ({duration_minutes:.2f} min > {self.max_survey_duration_minutes} min)",
-                            )
-                        )
-                except (ValueError, TypeError, AttributeError) as e:
-                    logger.debug(f"Could not calculate duration from submission data fields: {e}")
-            else:
-                logger.debug(
-                    "No start/end time data found in submission data fields - cannot calculate duration"
+        from_audit = source == AUDIT
+        field = "active_interview_time" if from_audit else "duration_minutes"
+        what = "Active survey duration" if from_audit else "Survey duration"
+        issues = []
+        if (
+            self.min_survey_duration_minutes is not None
+            and minutes < self.min_survey_duration_minutes
+        ):
+            issues.append(
+                QualityIssue(
+                    check="duration_too_short",
+                    field=field,
+                    value=minutes,
+                    message=f"{what} too short ({minutes:.2f} min < {self.min_survey_duration_minutes} min)",
                 )
-
-        logger.debug(f"Duration check complete: {len(issues)} issues found")
+            )
+        if (
+            self.max_survey_duration_minutes is not None
+            and minutes > self.max_survey_duration_minutes
+        ):
+            issues.append(
+                QualityIssue(
+                    check="duration_too_long",
+                    field=field,
+                    value=minutes,
+                    message=f"{what} too long ({minutes:.2f} min > {self.max_survey_duration_minutes} min)",
+                )
+            )
         return issues
 
     def _check_sampling_frame(self, submission_data: dict[str, Any]) -> list[QualityIssue]:

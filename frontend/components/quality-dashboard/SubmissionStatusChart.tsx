@@ -2,13 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { TemporalDataPoint } from '../../types';
 import { axisProps, gridProps, tooltipProps, STATUS_COLORS } from '../charts/chartTheme';
+import { GLOSSARY } from '../../utils/glossary';
 
 const STATUS_OPTIONS = [
-  { key: 'total_submissions', label: 'Total', color: STATUS_COLORS.total },
-  { key: 'approved_count', label: 'Approved', color: STATUS_COLORS.approved },
-  { key: 'not_approved_count', label: 'Not Approved', color: STATUS_COLORS.notApproved },
-  { key: 'on_hold_count', label: 'On Hold', color: STATUS_COLORS.onHold },
-  { key: 'not_reviewed_count', label: 'Not Reviewed', color: STATUS_COLORS.notReviewed },
+  { key: 'submissions', label: GLOSSARY.submissions.name, color: STATUS_COLORS.submissions },
+  { key: 'needs_review', label: GLOSSARY.needsReview.name, color: STATUS_COLORS.needsReview },
+  { key: 'on_hold', label: GLOSSARY.onHold.name, color: STATUS_COLORS.onHold },
+  { key: 'clean', label: GLOSSARY.clean.name, color: STATUS_COLORS.clean },
+  { key: 'approved', label: GLOSSARY.approved.name, color: STATUS_COLORS.approved },
+  { key: 'not_approved', label: GLOSSARY.notApproved.name, color: STATUS_COLORS.notApproved },
 ] as const;
 
 interface SubmissionStatusChartProps {
@@ -46,7 +48,9 @@ const SubmissionStatusChart: React.FC<SubmissionStatusChartProps> = ({ data }) =
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Submission status over time</h3>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+          Submissions by the day collected, as they stand now
+        </h3>
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"

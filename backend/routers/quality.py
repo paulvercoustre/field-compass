@@ -43,8 +43,8 @@ async def get_quality_overview(
     ] = None,
 ):
     """
-    Get quality overview data for the dashboard: submission status breakdown,
-    quality metrics, issue frequency and daily trends (services/quality.py),
+    Get quality overview data for the dashboard: the named counts and
+    measurements, issue frequency and daily trends (services/quality.py),
     over the submissions the filters leave (services/submission_filters.py).
 
     Requires viewer access to the specified survey.
@@ -69,4 +69,4 @@ async def get_quality_overview(
         sampling_filters=parse_sampling_filters(sampling_filters),
         sampling_cols=get_sampling_cols(config),
     )
-    return quality_overview(submissions)
+    return quality_overview(submissions, config)

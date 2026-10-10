@@ -4,6 +4,7 @@ import { SurveyConfig } from '../../services/progressApi';
 import { getQuestionInfo, getChoiceLabel } from '../../utils/koboLabelUtils';
 import ProgressBar from './ProgressBar';
 import { SubTabButton } from '../ui/SubTabButton';
+import { GLOSSARY } from '../../utils/glossary';
 
 export type ProgressSubTab = 'overall' | string; // string will be column name for "by-{columnName}"
 
@@ -14,6 +15,8 @@ interface ProgressDataViewProps {
   setActiveSubTab: (tab: ProgressSubTab) => void;
   filter: string;
   setFilter: (filter: string) => void;
+  /** Counting only Approved submissions, rather than everything but Not approved. */
+  approvedOnly: boolean;
 }
 
 const ProgressDataView: React.FC<ProgressDataViewProps> = ({
@@ -23,6 +26,7 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
   setActiveSubTab,
   filter,
   setFilter,
+  approvedOnly,
 }) => {
   // `mode` says whether this survey sets targets at all. Branching on it
   // rather than on `target === null` keeps the two questions separate: a
@@ -86,14 +90,10 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
         <table className="min-w-full">
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                Interviews Conducted
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Counted</th>
               {hasTargets ? (
                 <>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Target Interviews
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Target</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
                     Progress (%)
                   </th>
@@ -148,11 +148,9 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{columnName}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Counted</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                Interviews Conducted
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                {hasTargets ? 'Target Interviews' : 'Share of Total'}
+                {hasTargets ? 'Target' : 'Share of Total'}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Progress (%)</th>
             </tr>
@@ -207,12 +205,8 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
                       {colName}
                     </th>
                   ))}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Target Interviews
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Interviews Conducted
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Target</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Counted</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
                     Progress (%)
                   </th>
@@ -270,6 +264,16 @@ const ProgressDataView: React.FC<ProgressDataViewProps> = ({
           track completion.
         </p>
       )}
+      {/* What "Counted" counts, every time: the Not approved are never a silent gap. */}
+      <p className="mb-4 max-w-3xl text-sm text-gray-600 dark:text-gray-400">
+        {approvedOnly
+          ? `Counting only submissions marked ${GLOSSARY.approved.name} in Kobo.`
+          : data.not_approved > 0
+            ? `Counting every submission except ${GLOSSARY.notApproved.name}: ${data.not_approved} ${
+                data.not_approved === 1 ? 'is' : 'are'
+              } left out.`
+            : `Counting every submission except ${GLOSSARY.notApproved.name}.`}
+      </p>
       <div className="mb-4 inline-flex flex-wrap gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
         <SubTabButton<ProgressSubTab> tabId="overall" activeTab={activeSubTab} onClick={setActiveSubTab}>
           Overall

@@ -165,6 +165,18 @@ class TestDurationChecks:
         assert len(duration_issues) == 1
         assert "too long" in duration_issues[0].message.lower()
 
+    def test_unreadable_audit_time_falls_back_to_start_and_end(self, test_db, test_survey_config):
+        """Measured as every screen measures it (etl/duration.py)."""
+        engine = HFCEngine(test_db, test_survey_config)
+        issues = engine._check_duration(
+            {
+                "active_interview_time": "?",
+                "start": "2026-03-01T10:00:00",
+                "end": "2026-03-01T10:05:00",
+            }
+        )
+        assert [(i.check, i.field) for i in issues] == [("duration_too_short", "duration_minutes")]
+
     def test_duration_within_range(self, test_db, test_survey_config):
         """Test that duration within range doesn't create issues."""
         engine = HFCEngine(test_db, test_survey_config)

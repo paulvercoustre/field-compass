@@ -11,6 +11,7 @@ import {
   ZAxis,
 } from 'recharts';
 import { PerformanceData } from '../../types';
+import { GLOSSARY } from '../../utils/glossary';
 
 interface QualityScatterPlotProps {
   data: PerformanceData;
@@ -25,16 +26,16 @@ const EnumeratorTooltip = ({ active, payload }: any) => {
         <p className="font-semibold text-gray-900 dark:text-white">{d.id}</p>
         <div className="text-sm mt-2 space-y-1">
           <p className="text-gray-600 dark:text-gray-300">
-            Submissions: <span className="font-medium">{d.submissions}</span>
+            {GLOSSARY.submissions.name}: <span className="font-medium">{d.submissions}</span>
           </p>
           <p className="text-gray-600 dark:text-gray-300">
-            Issues per submission: <span className="font-medium">{d.avgIssues.toFixed(2)}</span>
+            {GLOSSARY.issuesPerSubmission.name}: <span className="font-medium">{d.avgIssues.toFixed(2)}</span>
           </p>
           <p className="text-gray-600 dark:text-gray-300">
-            Flagged, not yet approved: <span className="font-medium">{d.needsReview}</span>
+            {GLOSSARY.flagged.name}: <span className="font-medium">{d.flagged}</span>
           </p>
           <p className="text-gray-600 dark:text-gray-300">
-            Approved by reviewer: <span className="font-medium">{d.validated}</span> ({d.validatedPercent}%)
+            {GLOSSARY.needsReview.name}: <span className="font-medium">{d.needsReview}</span>
           </p>
         </div>
       </div>
@@ -68,39 +69,31 @@ const EnumeratorDot = ({ cx, cy, payload, onEnumeratorClick }: any) => {
 };
 
 const QualityScatterPlot: React.FC<QualityScatterPlotProps> = ({ data, onEnumeratorClick }) => {
-  const { collection, quality } = data;
-
-  const chartData = useMemo(() => {
-    return collection.map((c) => {
-      const q = quality.find((qs) => qs.id === c.id);
-      return {
-        id: c.id,
-        submissions: c.total,
-        validatedPercent: parseFloat(c.percentValidated),
-        needsReviewPercent: parseFloat(c.percentNeedsReview),
-        avgIssues: q?.avgIssuesPerSurvey || 0,
-        validated: c.validated,
-        needsReview: c.needsReview,
-      };
-    });
-  }, [collection, quality]);
+  const chartData = useMemo(
+    () =>
+      data.enumerators.map((row) => ({
+        id: row.id,
+        submissions: row.submissions,
+        avgIssues: row.issues_per_submission ?? 0,
+        flagged: row.flagged,
+        needsReview: row.needs_review,
+      })),
+    [data.enumerators]
+  );
 
   const avgSubmissions = useMemo(() => {
     if (chartData.length === 0) return 0;
     return chartData.reduce((sum, d) => sum + d.submissions, 0) / chartData.length;
   }, [chartData]);
 
-  const avgIssues = useMemo(() => {
-    const total = chartData.reduce((sum, d) => sum + d.submissions, 0);
-    if (total === 0) return 0;
-    return chartData.reduce((sum, d) => sum + d.avgIssues * d.submissions, 0) / total;
-  }, [chartData]);
+  // The team's own figure: every submission counting once, as everywhere else.
+  const avgIssues = data.team?.issues_per_submission ?? 0;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-5 shadow-card border border-gray-200 dark:border-gray-800">
       <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Issues against submissions</h3>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-        Each circle is an enumerator, sized by submissions. Dashed lines are the team average. Click one to see their
+        Each circle is an enumerator, sized by submissions. Dashed lines are the team’s. Click one to see their
         submissions.
       </p>
       <div className="h-64">

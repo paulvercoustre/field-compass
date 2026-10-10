@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { EnumeratorCollectionStats } from '../../types';
+import { EnumeratorSummary } from '../../types';
+import { GLOSSARY } from '../../utils/glossary';
 
 interface SubmissionsBarChartProps {
-  data: EnumeratorCollectionStats[];
+  data: EnumeratorSummary[];
   onEnumeratorClick?: (enumeratorId: string) => void;
 }
 
@@ -15,13 +16,13 @@ const EnumeratorTooltip = ({ active, payload }: any) => {
         <p className="font-semibold text-gray-900 dark:text-white">{d.id}</p>
         <div className="text-sm mt-1 space-y-1">
           <p className="text-gray-600 dark:text-gray-300">
-            Total: <span className="font-medium">{d.total}</span>
+            {GLOSSARY.submissions.name}: <span className="font-medium">{d.total}</span>
           </p>
           <p className="text-gray-600 dark:text-gray-300">
-            Flagged, not yet approved: <span className="font-medium">{d.needsReview}</span>
+            {GLOSSARY.flagged.name}: <span className="font-medium">{d.flagged}</span>
           </p>
           <p className="text-gray-600 dark:text-gray-300">
-            Approved by reviewer: <span className="font-medium">{d.validated}</span> ({d.percentValidated}%)
+            {GLOSSARY.needsReview.name}: <span className="font-medium">{d.needsReview}</span>
           </p>
         </div>
       </div>
@@ -33,19 +34,18 @@ const EnumeratorTooltip = ({ active, payload }: any) => {
 const SubmissionsBarChart: React.FC<SubmissionsBarChartProps> = ({ data, onEnumeratorClick }) => {
   const chartData = useMemo(() => {
     return [...data]
-      .sort((a, b) => b.total - a.total)
+      .sort((a, b) => b.submissions - a.submissions)
       .map((e) => ({
         id: e.id,
-        total: e.total,
-        validated: e.validated,
-        needsReview: e.needsReview,
-        percentValidated: parseFloat(e.percentValidated),
+        total: e.submissions,
+        flagged: e.flagged,
+        needsReview: e.needs_review,
       }));
   }, [data]);
 
   const avgSubmissions = useMemo(() => {
     if (data.length === 0) return 0;
-    return data.reduce((sum, e) => sum + e.total, 0) / data.length;
+    return data.reduce((sum, e) => sum + e.submissions, 0) / data.length;
   }, [data]);
 
   return (

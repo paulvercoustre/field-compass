@@ -513,8 +513,9 @@ class TestPerformanceEndpoint:
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["collection"] == []
-        assert payload["quality"] == []
+        assert payload["enumerators"] == []
+        assert payload["team"] is None
+        assert payload["no_enumerator"] is None
         assert len(payload["unavailable"]) == 1
 
         entry = payload["unavailable"][0]
@@ -527,7 +528,7 @@ class TestPerformanceEndpoint:
 
         payload = client.get(f"/api/performance?survey_id={survey['survey_id']}").json()
 
-        assert payload["collection"] == []
+        assert payload["enumerators"] == []
         assert payload["unavailable"][0]["capability"] == "enumerator_performance"
 
     def test_configured_enumerator_reports_nothing_unavailable(self, client, test_survey):
@@ -537,8 +538,8 @@ class TestPerformanceEndpoint:
         assert response.status_code == 200
         payload = response.json()
         assert payload["unavailable"] == []
-        assert "collection" in payload
-        assert "quality" in payload
+        assert "enumerators" in payload
+        assert payload["team"]["submissions"] == 0
 
 
 class TestProgressEndpoint:
@@ -577,56 +578,53 @@ class TestProgressEndpoint:
         )
 
     def test_progress_filters_approved_only(self, client, test_survey):
-        """Progress endpoint should respect the approved_only flag.
-        Default (no param): exclude REJECTED, count APPROVED + PENDING_APPROVAL + etc.
-        approved_only=true: count only APPROVED.
+        """Progress counts by the reviewer's decision in Kobo.
+        Default (no param): every submission except Not approved.
+        approved_only=true: only Approved ones.
+        Either way the response says how many are Not approved.
         """
         survey_uuid = UUID(test_survey["survey_id"])
 
+        def submission(_id, enumerator, qa_status, decision):
+            return SubmissionCurrent(
+                _id=_id,
+                survey_id=survey_uuid,
+                _uuid=str(uuid4()),
+                _submission_time=datetime.utcnow(),
+                end=datetime.utcnow(),
+                submission_data={"enumerator_id": enumerator},
+                qa_status=qa_status,
+                kobo_validation_status=decision,
+            )
+
         with TestingSessionLocal() as db:
-            submission_approved = SubmissionCurrent(
-                _id=1,
-                survey_id=survey_uuid,
-                _uuid=str(uuid4()),
-                _submission_time=datetime.utcnow(),
-                end=datetime.utcnow(),
-                submission_data={"enumerator_id": "enum-a"},
-                qa_status="APPROVED",
+            db.add_all(
+                [
+                    submission(1, "enum-a", "APPROVED", "Approved"),
+                    submission(2, "enum-b", "PENDING_APPROVAL", None),
+                    submission(3, "enum-c", "REJECTED", "Not Approved"),
+                    # On hold after an approval keeps qa_status APPROVED; it is
+                    # on hold, so it is not approved and still counts by default.
+                    submission(4, "enum-d", "APPROVED", "On Hold"),
+                ]
             )
-            submission_pending = SubmissionCurrent(
-                _id=2,
-                survey_id=survey_uuid,
-                _uuid=str(uuid4()),
-                _submission_time=datetime.utcnow(),
-                end=datetime.utcnow(),
-                submission_data={"enumerator_id": "enum-b"},
-                qa_status="PENDING_APPROVAL",
-            )
-            submission_rejected = SubmissionCurrent(
-                _id=3,
-                survey_id=survey_uuid,
-                _uuid=str(uuid4()),
-                _submission_time=datetime.utcnow(),
-                end=datetime.utcnow(),
-                submission_data={"enumerator_id": "enum-c"},
-                qa_status="REJECTED",
-            )
-            db.add_all([submission_approved, submission_pending, submission_rejected])
             db.commit()
 
-        # Default: exclude REJECTED, so conducted = 2 (APPROVED + PENDING_APPROVAL)
         response_all = client.get(f"/api/progress?survey_id={test_survey['survey_id']}")
         assert response_all.status_code == 200
-        overall_all = response_all.json()["overall"]
-        assert overall_all["conducted"] == 2
+        assert response_all.json()["overall"]["conducted"] == 3
+        assert response_all.json()["not_approved"] == 1
 
-        # approved_only=true: only APPROVED
         response_approved = client.get(
             f"/api/progress?survey_id={test_survey['survey_id']}&approved_only=true"
         )
         assert response_approved.status_code == 200
-        overall_approved = response_approved.json()["overall"]
-        assert overall_approved["conducted"] == 1
+        assert response_approved.json()["overall"]["conducted"] == 1
+        assert response_approved.json()["not_approved"] == 1
+
+
+# The Kobo decision a pull stores alongside each qa_status.
+_DECISION = {"APPROVED": "Approved", "REJECTED": "Not Approved"}
 
 
 class TestProgressWithoutTargets:
@@ -671,6 +669,7 @@ class TestProgressWithoutTargets:
                         end=base + timedelta(days=index),
                         submission_data={"enumerator_id": f"enum-{index}", "district": "North"},
                         qa_status=qa_status,
+                        kobo_validation_status=_DECISION.get(qa_status),
                     )
                 )
             db.commit()
@@ -804,6 +803,7 @@ class TestProgressByVariable:
                         end=datetime(2026, 5, 1) + timedelta(days=index),
                         submission_data={"enumerator_id": "enum-1", "district": district},
                         qa_status=qa_status,
+                        kobo_validation_status=_DECISION.get(qa_status),
                     )
                 )
             db.commit()

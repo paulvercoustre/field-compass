@@ -249,6 +249,10 @@ class ProgressData(BaseModel):
     samplingColumns: list[str] = Field(
         default_factory=list, description="Names of sampling columns used for disaggregation"
     )
+    not_approved: int = Field(
+        default=0,
+        description="Submissions a reviewer marked Not approved: never counted toward the target.",
+    )
 
 
 # ============================================================================
@@ -256,21 +260,47 @@ class ProgressData(BaseModel):
 # ============================================================================
 
 
-class EnumeratorCollectionStats(BaseModel):
-    id: str
-    needsReview: int
-    validated: int
-    total: int
-    percentValidated: str
-    percentNeedsReview: str
+class SubmissionSummary(BaseModel):
+    """
+    The named counts and measurements of a set of submissions (services/metrics.py).
+
+    Submissions = needs_review + on_hold + clean + approved + not_approved.
+    """
+
+    submissions: int = Field(..., description="Every submission pulled, except deleted ones.")
+    flagged: int = Field(..., description="At least one issue, whatever a reviewer decided.")
+    issues: int = Field(..., description="Everything the checks found.")
+    needs_review: int = Field(..., description="Flagged, and no decision in Kobo yet.")
+    on_hold: int = Field(..., description="Marked On hold in Kobo.")
+    clean: int = Field(..., description="Not flagged, and no decision in Kobo yet.")
+    reviewed: int = Field(..., description="Marked Approved or Not approved in Kobo.")
+    approved: int = Field(..., description="Marked Approved in Kobo.")
+    not_approved: int = Field(..., description="Marked Not approved in Kobo.")
+    issues_per_submission: float | None = Field(
+        default=None, description="Issues ÷ submissions. Null with no submissions."
+    )
+    duration_minutes: float | None = Field(
+        default=None,
+        description=(
+            "Median interview length: audit active time, else start to end (etl/duration.py). "
+            "Null when no submission has either."
+        ),
+    )
+    duration_measured: int = Field(default=0, description="Submissions with a duration.")
+    duration_from_start_end: int = Field(
+        default=0, description="Of those, measured from start to end: no audit time."
+    )
+    dk_rate: float | None = Field(
+        default=None,
+        description=(
+            "Percent of the answers to questions that allow don't-know that are don't-know. "
+            "Null when nothing could be measured."
+        ),
+    )
 
 
-class EnumeratorQualityStats(BaseModel):
+class EnumeratorSummary(SubmissionSummary):
     id: str
-    avgActiveTime: int
-    avgTotalTime: int
-    avgDkRate: str
-    avgIssuesPerSurvey: float
 
 
 class SurveyFormResponse(BaseModel):
@@ -313,11 +343,13 @@ class UnavailableCapability(BaseModel):
 
 
 class PerformanceData(BaseModel):
-    collection: list[EnumeratorCollectionStats]
-    quality: list[EnumeratorQualityStats]
-    # Submissions with no enumerator recorded: counted apart, never as an
-    # enumerator of their own.
-    no_enumerator: int = 0
+    # The whole team: every submission, so the figures match Data quality's.
+    team: SubmissionSummary | None = None
+    enumerators: list[EnumeratorSummary] = []
+    # Submissions with no enumerator recorded: in the team's figures, but never
+    # an enumerator of their own (not counted, ranked or compared as one).
+    # Null when every submission has one.
+    no_enumerator: SubmissionSummary | None = None
     # Populated when a required setting is missing, so the client can
     # explain an empty result instead of rendering a blank chart.
     unavailable: list[UnavailableCapability] = []
@@ -389,40 +421,6 @@ class ApproveCleanResult(BaseModel):
 # ============================================================================
 
 
-class SubmissionStatusSummary(BaseModel):
-    """Summary of submission counts by Kobo validation status."""
-
-    total_submissions: int = Field(..., description="Total number of submissions")
-    approved_count: int = Field(..., description="Number of approved submissions")
-    approved_percentage: float = Field(..., description="Percentage of approved submissions")
-    not_approved_count: int = Field(..., description="Number of not approved submissions")
-    not_approved_percentage: float = Field(
-        ..., description="Percentage of not approved submissions"
-    )
-    on_hold_count: int = Field(..., description="Number of on hold submissions")
-    on_hold_percentage: float = Field(..., description="Percentage of on hold submissions")
-    not_reviewed_count: int = Field(..., description="Number of not reviewed submissions")
-    not_reviewed_percentage: float = Field(
-        ..., description="Percentage of not reviewed submissions"
-    )
-
-
-class QualityMetricsSummary(BaseModel):
-    """Summary of quality issue metrics."""
-
-    total_issues: int = Field(..., description="Total count of all quality issues")
-    submissions_with_issues: int = Field(
-        ..., description="Number of submissions with at least one issue"
-    )
-    avg_issues_per_submission: float = Field(..., description="Average issues per submission")
-    avg_dk_percentage: float | None = Field(
-        default=None, description="Average DK percentage across submissions"
-    )
-    avg_active_duration_minutes: float | None = Field(
-        default=None, description="Average active interview duration in minutes (from audit logs)"
-    )
-
-
 class IssueFrequency(BaseModel):
     """Frequency of a specific issue type."""
 
@@ -433,15 +431,17 @@ class IssueFrequency(BaseModel):
 
 
 class TemporalDataPoint(BaseModel):
-    """Quality data aggregated by date."""
+    """The named counts of the submissions collected on one day, as they stand now."""
 
     date: str = Field(..., description="ISO date string (YYYY-MM-DD)")
-    total_submissions: int = Field(..., description="Submissions on this date")
-    approved_count: int = Field(default=0, description="Approved submissions on this date")
-    not_approved_count: int = Field(default=0, description="Not approved submissions on this date")
-    on_hold_count: int = Field(default=0, description="On hold submissions on this date")
-    not_reviewed_count: int = Field(default=0, description="Not reviewed submissions on this date")
-    total_issues: int = Field(default=0, description="Total issues found on this date")
+    submissions: int = 0
+    flagged: int = 0
+    issues: int = 0
+    needs_review: int = 0
+    on_hold: int = 0
+    clean: int = 0
+    approved: int = 0
+    not_approved: int = 0
 
 
 class IssueTimeSeriesPoint(BaseModel):
@@ -454,8 +454,7 @@ class IssueTimeSeriesPoint(BaseModel):
 class QualityOverviewResponse(BaseModel):
     """Complete quality overview response."""
 
-    status_summary: SubmissionStatusSummary = Field(..., description="Submission status breakdown")
-    quality_metrics: QualityMetricsSummary = Field(..., description="Quality issue metrics")
+    summary: SubmissionSummary = Field(..., description="The named counts and measurements")
     issue_frequency: list[IssueFrequency] = Field(
         ..., description="Issue frequency sorted by count descending"
     )

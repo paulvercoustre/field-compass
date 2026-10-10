@@ -152,23 +152,38 @@ export interface ProgressData {
   byColumn: Record<string, ProgressByColumn[]>; // Key is column name, value is list of progress by column value
   detailed: DetailedProgress[];
   samplingColumns: string[];
+  /** Submissions marked Not approved: never counted toward the target. */
+  not_approved: number;
 }
 
-export interface EnumeratorCollectionStats {
-  id: string;
-  needsReview: number;
-  validated: number;
-  total: number;
-  percentValidated: string;
-  percentNeedsReview: string;
+/**
+ * The named counts and measurements of a set of submissions
+ * (backend/services/metrics.py; the words for them are in utils/glossary.ts).
+ * submissions = needs_review + on_hold + clean + approved + not_approved.
+ */
+export interface SubmissionSummary {
+  submissions: number;
+  flagged: number;
+  issues: number;
+  needs_review: number;
+  on_hold: number;
+  clean: number;
+  reviewed: number;
+  approved: number;
+  not_approved: number;
+  /** Null with no submissions. */
+  issues_per_submission: number | null;
+  /** Median minutes: audit active time, else start to end. Null when none could be measured. */
+  duration_minutes: number | null;
+  duration_measured: number;
+  /** Of the measured durations, how many came from start and end: no audit log. */
+  duration_from_start_end: number;
+  /** Percent. Null when nothing could be measured. */
+  dk_rate: number | null;
 }
 
-export interface EnumeratorQualityStats {
+export interface EnumeratorSummary extends SubmissionSummary {
   id: string;
-  avgActiveTime: number;
-  avgTotalTime: number;
-  avgDkRate: string;
-  avgIssuesPerSurvey: number;
 }
 
 export interface UnavailableCapability {
@@ -178,13 +193,17 @@ export interface UnavailableCapability {
 }
 
 export interface PerformanceData {
-  collection: EnumeratorCollectionStats[];
-  quality: EnumeratorQualityStats[];
+  /** The whole team: every submission, so the figures match Data quality's. Null when unavailable. */
+  team: SubmissionSummary | null;
+  enumerators: EnumeratorSummary[];
   // Present when a required survey setting is missing, so the view can
   // explain itself instead of rendering an empty chart.
   unavailable?: UnavailableCapability[];
-  /** Submissions with no enumerator recorded, counted apart from the team. */
-  no_enumerator?: number;
+  /**
+   * Submissions with no enumerator recorded: in the team's figures, never an
+   * enumerator of their own. Null when every submission has one.
+   */
+  no_enumerator: SubmissionSummary | null;
 }
 
 // --- Filtering Types ---
@@ -238,26 +257,6 @@ export interface SubmissionFacets {
 
 // --- Quality Overview Types ---
 
-export interface SubmissionStatusSummary {
-  total_submissions: number;
-  approved_count: number;
-  approved_percentage: number;
-  not_approved_count: number;
-  not_approved_percentage: number;
-  on_hold_count: number;
-  on_hold_percentage: number;
-  not_reviewed_count: number;
-  not_reviewed_percentage: number;
-}
-
-export interface QualityMetricsSummary {
-  total_issues: number;
-  submissions_with_issues: number;
-  avg_issues_per_submission: number;
-  avg_dk_percentage?: number | null;
-  avg_active_duration_minutes?: number | null;
-}
-
 export interface IssueFrequency {
   check: string;
   count: number;
@@ -265,14 +264,17 @@ export interface IssueFrequency {
   affected_submissions: number;
 }
 
+/** The named counts of the submissions collected on one day, as they stand now. */
 export interface TemporalDataPoint {
   date: string;
-  total_submissions: number;
-  approved_count: number;
-  not_approved_count: number;
-  on_hold_count: number;
-  not_reviewed_count: number;
-  total_issues: number;
+  submissions: number;
+  flagged: number;
+  issues: number;
+  needs_review: number;
+  on_hold: number;
+  clean: number;
+  approved: number;
+  not_approved: number;
 }
 
 export interface IssueTimeSeriesPoint {
@@ -281,8 +283,7 @@ export interface IssueTimeSeriesPoint {
 }
 
 export interface QualityOverviewResponse {
-  status_summary: SubmissionStatusSummary;
-  quality_metrics: QualityMetricsSummary;
+  summary: SubmissionSummary;
   issue_frequency: IssueFrequency[];
   temporal_data: TemporalDataPoint[];
   issue_time_series: IssueTimeSeriesPoint[];

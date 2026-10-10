@@ -58,7 +58,10 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ o
   };
 
   const unavailable = performanceData?.unavailable ?? [];
-  const noEnumerator = performanceData?.no_enumerator ?? 0;
+  const noEnumerator = performanceData?.no_enumerator?.submissions ?? 0;
+  const openNoEnumerator = onNavigateToSubmissions
+    ? () => onNavigateToSubmissions({ review: 'all', enumerators: [NO_ENUMERATOR] })
+    : undefined;
 
   if (!selectedSurvey) {
     return (
@@ -107,15 +110,15 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ o
           <div className="max-w-screen-2xl mx-auto space-y-6">
             {/* Summary Cards */}
             <EnumeratorSummaryCards data={performanceData} />
-            {/* Not an enumerator of their own: they would count as one of the team. */}
+            {/* In the team's figures, so they match Data quality's; never an enumerator of their own. */}
             {noEnumerator > 0 && (
               <p className="-mt-2 text-sm text-gray-600 dark:text-gray-400">
-                {noEnumerator} submission{noEnumerator === 1 ? ' has' : 's have'} no enumerator recorded, so{' '}
-                {noEnumerator === 1 ? 'it isn’t' : 'they aren’t'} counted here.{' '}
-                {onNavigateToSubmissions && (
+                {noEnumerator} submission{noEnumerator === 1 ? ' has' : 's have'} no enumerator recorded.{' '}
+                {noEnumerator === 1 ? 'It counts' : 'They count'} in the team’s figures, not as an enumerator.{' '}
+                {openNoEnumerator && (
                   <button
                     type="button"
-                    onClick={() => onNavigateToSubmissions({ review: 'all', enumerators: [NO_ENUMERATOR] })}
+                    onClick={openNoEnumerator}
                     className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
                   >
                     See {noEnumerator === 1 ? 'it' : 'them'}
@@ -127,7 +130,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ o
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
               <div className="lg:col-span-1 xl:col-span-2 flex">
-                <SubmissionsBarChart data={performanceData.collection} onEnumeratorClick={handleEnumeratorClick} />
+                <SubmissionsBarChart data={performanceData.enumerators} onEnumeratorClick={handleEnumeratorClick} />
               </div>
               <div className="lg:col-span-1 flex">
                 <EnumeratorLeaderboard data={performanceData} onEnumeratorClick={handleEnumeratorClick} />
@@ -139,7 +142,11 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({ o
 
             {/* Detailed Tables */}
             <div className="bg-gray-100 dark:bg-gray-850 rounded-xl shadow-lg p-4 md:p-6">
-              <PerformanceDataView data={performanceData} onEnumeratorClick={handleEnumeratorClick} />
+              <PerformanceDataView
+                data={performanceData}
+                onEnumeratorClick={handleEnumeratorClick}
+                onNoEnumeratorClick={openNoEnumerator}
+              />
             </div>
           </div>
         ) : null}

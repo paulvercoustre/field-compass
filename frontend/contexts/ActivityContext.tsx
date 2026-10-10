@@ -10,6 +10,7 @@ import {
 import { ApiError } from '../services/apiBase';
 import { useAuth } from './AuthContext';
 import { NavigationTarget, useNavigation } from './NavigationContext';
+import { needReview } from '../utils/glossary';
 
 /** Polling: often while something runs, rarely otherwise, and on focus. */
 const ACTIVE_POLL_MS = 4000;
@@ -55,7 +56,7 @@ const finishedTitle = (run: RunSummary): string => {
 const finishedBody = (run: RunSummary): string => {
   if (run.status === 'failed') return run.error || 'The pull failed.';
   const parts: string[] = [];
-  if (run.pull) parts.push(`${run.pull.new} new, ${run.pull.flagged} flagged.`);
+  if (run.pull) parts.push(`${run.pull.new} new, ${needReview(run.pull.needs_review)}.`);
   if (run.ai_checks?.queued) parts.push(`${run.ai_checks.done} answers reviewed.`);
   if (run.transcripts?.queued) parts.push(`${run.transcripts.done} recordings transcribed.`);
   if (run.problems.length) parts.push(run.problems[0].text);

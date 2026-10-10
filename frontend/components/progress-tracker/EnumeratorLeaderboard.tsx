@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { PerformanceData } from '../../types';
+import { EnumeratorSummary, PerformanceData } from '../../types';
+import { GLOSSARY, formatPercent, percentOf } from '../../utils/glossary';
 
-type RankingMetric = 'avgIssues' | 'submissions' | 'avgTime' | 'approved';
+type RankingMetric = 'flagged' | 'notApproved' | 'issues' | 'submissions' | 'duration';
 
 interface EnumeratorLeaderboardProps {
   data: PerformanceData;
@@ -9,62 +10,77 @@ interface EnumeratorLeaderboardProps {
 }
 
 // Each metric is a fact about the enumerator, ranked without a verdict: no
-// medals, no "top performers". Issues come first because they are the only
-// one here that says something about the interviews; approval only says how
-// far review has got, and active time is worth a look at both ends.
+// medals, no "top performers". The flags come first because they say
+// something about the interviews; duration is worth a look at both ends.
+// Review progress is not here: it says how far reviewers have got, not how an
+// enumerator works, and is never ranked.
 const METRICS: Array<{ key: RankingMetric; label: string; highest: string; lowest: string }> = [
-  { key: 'avgIssues', label: 'Issues', highest: 'Most issues per submission', lowest: 'Fewest issues per submission' },
-  { key: 'submissions', label: 'Submissions', highest: 'Most submissions', lowest: 'Fewest submissions' },
-  { key: 'avgTime', label: 'Active time', highest: 'Longest active time', lowest: 'Shortest active time' },
-  { key: 'approved', label: 'Approved', highest: 'Most approved by reviewer', lowest: 'Least approved by reviewer' },
+  { key: 'flagged', label: GLOSSARY.flagged.name, highest: 'Most often flagged', lowest: 'Least often flagged' },
+  {
+    key: 'notApproved',
+    label: GLOSSARY.notApproved.name,
+    highest: 'Most often not approved',
+    lowest: 'Least often not approved',
+  },
+  { key: 'issues', label: 'Issues', highest: 'Most issues per submission', lowest: 'Fewest issues per submission' },
+  { key: 'submissions', label: GLOSSARY.submissions.name, highest: 'Most submissions', lowest: 'Fewest submissions' },
+  { key: 'duration', label: GLOSSARY.duration.name, highest: 'Longest interviews', lowest: 'Shortest interviews' },
 ];
 
 const MIN_SUBMISSIONS = 3;
 
+const value = (row: EnumeratorSummary, metric: RankingMetric): number | null => {
+  switch (metric) {
+    case 'flagged':
+      return percentOf(row.flagged, row.submissions);
+    case 'notApproved':
+      return percentOf(row.not_approved, row.submissions);
+    case 'issues':
+      return row.issues_per_submission;
+    case 'submissions':
+      return row.submissions;
+    case 'duration':
+      return row.duration_minutes;
+  }
+};
+
+const display = (row: EnumeratorSummary, metric: RankingMetric): { value: string; sublabel: string } => {
+  switch (metric) {
+    case 'flagged':
+      return {
+        value: formatPercent(percentOf(row.flagged, row.submissions)),
+        sublabel: `${row.flagged} of ${row.submissions} flagged`,
+      };
+    case 'notApproved':
+      return {
+        value: formatPercent(percentOf(row.not_approved, row.submissions)),
+        sublabel: `${row.not_approved} of ${row.submissions} not approved`,
+      };
+    case 'issues':
+      return {
+        value: (row.issues_per_submission ?? 0).toFixed(2),
+        sublabel: `per submission, of ${row.submissions}`,
+      };
+    case 'submissions':
+      return { value: row.submissions.toString(), sublabel: 'submissions' };
+    case 'duration':
+      return { value: `${Math.round(row.duration_minutes ?? 0)} min`, sublabel: 'median duration' };
+  }
+};
+
 const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onEnumeratorClick }) => {
-  const { collection, quality } = data;
-  const [metric, setMetric] = useState<RankingMetric>('avgIssues');
+  const [metric, setMetric] = useState<RankingMetric>('flagged');
   const [lowest, setLowest] = useState(false);
 
-  const value = (item: { avgIssues: number; total: number; avgActiveTime: number; approvedPercent: number }) =>
-    ({
-      avgIssues: item.avgIssues,
-      submissions: item.total,
-      avgTime: item.avgActiveTime,
-      approved: item.approvedPercent,
-    })[metric];
-
   const rankings = useMemo(() => {
-    const combined = collection
-      .filter((c) => c.total >= MIN_SUBMISSIONS)
-      .map((c) => {
-        const q = quality.find((qs) => qs.id === c.id);
-        return {
-          id: c.id,
-          total: c.total,
-          approved: c.validated,
-          approvedPercent: parseFloat(c.percentValidated),
-          avgIssues: q?.avgIssuesPerSurvey || 0,
-          avgActiveTime: q?.avgActiveTime || 0,
-        };
-      });
-    const sorted = [...combined].sort((a, b) => (lowest ? value(a) - value(b) : value(b) - value(a)));
+    // Too few submissions, or nothing measured, is no place in a ranking.
+    const ranked = data.enumerators.filter((row) => row.submissions >= MIN_SUBMISSIONS && value(row, metric) !== null);
+    const sorted = [...ranked].sort((a, b) => {
+      const diff = (value(a, metric) ?? 0) - (value(b, metric) ?? 0);
+      return lowest ? diff : -diff;
+    });
     return sorted.slice(0, 5);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collection, quality, metric, lowest]);
-
-  const display = (item: (typeof rankings)[0]): { value: string; sublabel: string } => {
-    switch (metric) {
-      case 'avgIssues':
-        return { value: item.avgIssues.toFixed(2), sublabel: `per submission, of ${item.total}` };
-      case 'submissions':
-        return { value: item.total.toString(), sublabel: 'submissions' };
-      case 'avgTime':
-        return { value: `${item.avgActiveTime} min`, sublabel: 'average active time' };
-      case 'approved':
-        return { value: `${item.approvedPercent}%`, sublabel: `${item.approved} of ${item.total} approved` };
-    }
-  };
+  }, [data.enumerators, metric, lowest]);
 
   const current = METRICS.find((m) => m.key === metric)!;
 
@@ -108,7 +124,7 @@ const EnumeratorLeaderboard: React.FC<EnumeratorLeaderboardProps> = ({ data, onE
           </li>
         ) : (
           rankings.map((item, index) => {
-            const shown = display(item);
+            const shown = display(item, metric);
             const content = (
               <>
                 <span className="tabular w-6 flex-shrink-0 text-center text-sm text-gray-500 dark:text-gray-400">

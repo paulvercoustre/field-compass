@@ -12,7 +12,7 @@ Screenshot references such as `j4-03` mean `screenshots/j4-03-*.png` (journey 4,
 
 Checked against `main` at `6930af5` (after #95), by reading the code and the PRs merged since the review. #87 to #95 were checked in a browser against the mock Kobo. Contrast figures are still the review's.
 
-**Summary: 31 done, 4 partly done, 0 open, 1 decided against (F-23).** What is left is mostly design work on Field Team, Data quality and Progress ([Next five](#next-five)).
+**Summary: 32 done, 3 partly done, 0 open, 1 decided against (F-23).** The design pass on Field team, Data quality and Progress is decided ([W6](wireframes/W6-field-team-data-quality-progress.md)) and its first step is built: one calculation and one set of named counts. What is left is building the three pages ([Next five](#next-five)).
 
 - Roadmap step 0 (data-loss bug) and step 1 (honesty quick wins) are **done**: #64, #67, #69, #73, #79.
 - Part of step 3 is in: tokens and shared components (#71), and persisted pull runs with an activity panel (#73).
@@ -40,6 +40,15 @@ Checked against `main` at `6930af5` (after #95), by reading the code and the PRs
 - **Q6.** New surveys keep their checks off: F-23 is decided against.
 - **Q10.** The largest survey is probably under 2,000 submissions; the queue was made faster anyway (#95).
 
+Later the same day, on the [design canvas](https://claude.ai/artifact/XNYePxNz8F75JZmAj3iXJB), written up as [W6](wireframes/W6-field-team-data-quality-progress.md):
+
+- **Three pages, one job each.** Progress: will we reach the sample. Data quality: what is going wrong in the data, where in the form, and how far review has got. Field team: which enumerator needs a call, with a call sheet per enumerator for targeted feedback. No fifth tab: problem questions and form problems become Data quality's "By question" view.
+- **Progress tracks collection apart from quality:** every submission except Not approved, against the target, with the Approved part shown. In the intended workflow every submission is reviewed. No daily objective per enumerator.
+- **One set of named counts** on every screen: Submissions, Flagged, Issues, Needs review, On hold, Clean, Reviewed, Approved, Not approved.
+- **Don't-know rate** is out of the questions that allow don't-know, never every field. **Duration** falls back to start and end without an audit log. **Issues per submission** is issues ÷ submissions, most useful as a trend.
+- **Highlighting comes from flags, against the team:** a share at least twice the team's. **Not approved** is a major signal. The **default period** is the whole survey.
+- **Q4** is answered: "validated" is not used on screen; Kobo's Approved is, and review progress has its places (W6).
+
 ### What changed since the review
 
 | PR | What it did for the review |
@@ -61,6 +70,7 @@ Checked against `main` at `6930af5` (after #95), by reading the code and the PRs
 | #93 | `ui/Dialog`: announced by its title, focus moved in, kept inside and given back, Escape to close; `ConfirmDialog` built on it, and the Field Team explanations, "Set up quality checks" and "Delete your account?" moved onto it (F-30). Field Team's tables sort and open enumerators from the keyboard; Data quality's issue chart has a Table view (F-26). "Avg. don't-know rate", and plain role descriptions (F-12). |
 | #94 | "Edited in Kobo" opens each edit's changed answers as old → new; edits now keep the old values (F-06 B). |
 | #95 | The queue loads 50 at a time, more on scroll, Load more, or ahead of J and auto-advance; reads on from where the list ends (`offset`) (F-36). |
+| W6 step 1 | One calculation for the numbers the data pages share (`services/metrics.py`, `etl/duration.py`), and one set of names for them (`frontend/utils/glossary.ts`), with the definition behind an ⓘ (F-10 A). Field team and Data quality agree to the submission: the don't-know rate counts only questions that allow don't-know (Field team counted every field), duration falls back to start and end on every screen as the duration check does (Field team showed 0 min), and the team's issues per submission is one figure. Data quality's five Kobo-status cards become Needs review, On hold, Clean, Approved and Not approved, which add up to Submissions. Field team's team figures count every submission, so they equal Data quality's; submissions with no enumerator are a row of their own at the end of the table, never ranked or highlighted. Its table shows Flagged and Not approved shares, highlighted at twice the team's; review progress is a separate, uncoloured tab; the ranking card no longer ranks by approval. Data quality's cards open their list from anywhere on the card. Progress counts by Kobo's decision and says how many Not approved it leaves out. The pull summary says how many "need review", the tab it links to. |
 | #90 | An address for every page and submission (`/surveys/<id>/submissions/<kobo id>?review=…`): links, reloads, Back and Forward land in the same place (F-32). A browser-tab title per page and open submission (F-31). |
 
 #66 (the first step-1 PR) was closed unmerged and redone as #79. Three things in #66 were not carried over: per-view `document.title`, the 8 s Undo on rule delete, and the amber "pulled 800 of 1 000" partial pull. Today a Kobo error part-way through fails the whole pull (`kobo_fetcher.py`, `KoboFetchError`), which is honest, but the pages already read are not kept.
@@ -82,7 +92,7 @@ What changed in #87 after the first version, from using the queue on the mock Ko
 |---|---|---|---|
 | F-13 | Failed pulls shown as success | ✅ | #64, #67, #73, #79. Partial pulls now fail outright instead of keeping the pages read (see above). |
 | F-18 | Kobo server can't be saved | ✅ | #69. Server picker, key checked before saving. |
-| F-08 | Field Team ranks review progress as quality | 🟡 | A done (#79). Ranking by issues per submission is in. Left: the W2 table of coordinator signals; Q4 and Q5 are answered, and it is part of the design pass on Field Team, Data quality and Progress. |
+| F-08 | Field Team ranks review progress as quality | 🟡 | A done (#79). B designed in [W6](wireframes/W6-field-team-data-quality-progress.md), which replaces W2. W6 step 1: the numbers are Data quality's, Flagged and Not approved shares lead and are highlighted at twice the team's, and approval is no longer ranked. Left: W6 step 2, the follow-up table and the call sheet. |
 | F-01 | Can't isolate flagged submissions | ✅ | #87: review tabs (On hold has its own), issue filter, sort. Counts come from `/api/submissions/facets`. |
 | F-02 | Flag reason below the fold | ✅ | #87: findings card with the decision; findings also sit under their answers. |
 | F-03 | No auto-advance; filtered list goes stale | ✅ | #87. Auto-advance and shortcuts are settings in Account settings › Reviewing. |
@@ -95,7 +105,7 @@ What changed in #87 after the first version, from using the queue on the mock Ko
 | F-35 | Expired session not detected | ✅ | #79. |
 | F-29 | Contrast failures | 🟡 | Palette and issue chip fixed in #71 (amber-800). #87's chosen decision buttons are white on emerald-, rose- and amber-700 (about 5:1 or better). Not re-measured. |
 | F-05 | No detail pane below 768 px / 200 % zoom | ✅ | #87: below 768 px the list gives way to the submission, with "← List". |
-| F-10 | Counts disagree across screens | 🟡 | B done (#67): AI-only findings set `qa_status`. Progress no longer filters by validation status. Left: A, one glossary of named counts used on every screen, best settled in the design pass. |
+| F-10 | Counts disagree across screens | ✅ | B done (#67): AI-only findings set `qa_status`. A done in W6 step 1: one calculation and one glossary of named counts on Data quality, Field team, Progress and the pull summary. Progress still leaves out Not approved by default, as decided, and now says how many (this table said on 2026-10-09 that it no longer filtered; it did). |
 | F-14 | No data-freshness indicator | ✅ | Runs are stored and the activity panel lists recent ones (#73). #89: "Last pulled 3 h ago" beside the pull button on every data page. |
 | F-20 | Date / start / end identifiers invisible | ✅ | #87: the submission's "All checks" list says when a check couldn't run and links to Settings. #88: pickers on Create and Settings, conventional names suggested. Surveys created on 2026-10-02 between #68 and #70 (#70) may have them empty; Settings can now fix them. |
 | F-23 | New surveys start with checks off | — | Decided against (Q6, 2026-10-09): new surveys keep their checks off. |
@@ -103,7 +113,7 @@ What changed in #87 after the first version, from using the queue on the mock Ko
 | F-32 | No URLs | ✅ | #90: an address for every page, settings tab and submission, with the queue's tab and filters; links, reloads, Back and Forward land in the same place. |
 | F-36 | Queue downloads everything twice | ✅ | #87: once, not twice. #95: 50 at a time, more as needed; about 0.35 s to show at 2,000 submissions, from 2 s (Needs review) or 6 s (All). The server still reads the survey's submissions for each request (0.22 s at 2,000); reading only what the queue filters on would cut that if surveys grow. |
 | F-04 | Rows lack who / where / what | ✅ | #71, #87: enumerator name and place on the row, the issue count with the names in its tooltip (a row can have several). |
-| F-11 | Enumerator codes; phantom "Unknown" | ✅ | #87: names (choice labels) on Submissions rows, detail and filter. Field Team keeps enumerator IDs (decided 2026-10-09). #89: blank values are counted apart, with a link to them, rather than as an "Unknown" enumerator. |
+| F-11 | Enumerator codes; phantom "Unknown" | ✅ | #87: names (choice labels) on Submissions rows, detail and filter. Field Team keeps enumerator IDs (decided 2026-10-09). #89: blank values are counted apart, with a link to them, rather than as an "Unknown" enumerator. W6 step 1: they count in Field team's team figures, so those match Data quality's, and are a row of their own, never an enumerator. |
 | F-12 | Jargon and check IDs | ✅ | #72, #79; #93 the last two: "Avg. don't-know rate (%)", and roles that say what editors can do. |
 | F-16 | Failed pull replaces the list | ✅ | #73, #79. |
 | F-22 | Four save models on one page | ✅ | One section editor and tabbed layout (#72, #83, #85). #92: no Edit step; Save and Cancel appear once a section changes, in every section and the transcription and translation cards. |
@@ -119,11 +129,11 @@ What changed in #87 after the first version, from using the queue on the mock Ko
 
 ### Next five
 
-Everything listed on 2026-10-09 is done (#88 to #95). What is left, in order:
+The design pass is decided ([W6](wireframes/W6-field-team-data-quality-progress.md)) and its step 1 is built. What is left, in order:
 
 | # | Change | Findings | Effort | Why now |
 |---|---|---|---|---|
-| 1 | **Design pass on Field Team, Data quality and Progress**: what each page is for, the coordinator signals from Q5 (duration, don't-know rate, share flagged, specific checks), where review progress lives, and one set of named counts across the three | F-08 B, F-10 A | L | The three pages grew separately; Q4 and Q5 give the starting point. Wireframes first, no code. |
+| 1 | **Build W6 steps 2 to 5**: Field team's follow-up table and call sheet; Data quality's Overview and By check; Progress's two-part bar; Data quality's By question | F-08 B | L | The numbers are now shared; the pages can be built on them one at a time. |
 | 2 | **Name outlier findings by their question** on Data quality ("Outlier · livestock_count" today) | F-12 follow-up | XS | The queue already names them by question; the chart doesn't. |
 | 3 | **Re-measure contrast** and fix what still fails | F-29 | S | The palette changed twice (#71, #87) since the review measured it. |
 | 4 | **Move the four other overlays onto `ui/Dialog`** | F-30 follow-up | S | One focus behaviour everywhere. |
