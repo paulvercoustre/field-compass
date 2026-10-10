@@ -5,7 +5,7 @@ import { RequestedTab, useNavigation } from '../contexts/NavigationContext';
 import { fetchQualityOverview } from '../services/qualityApi';
 import { getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import { QUALITY_TABS, QualityTab } from '../utils/appUrl';
-import { GLOSSARY } from '../utils/glossary';
+import { GLOSSARY, Term, percentOf } from '../utils/glossary';
 import { Period, periodDates } from '../utils/period';
 import { Spinner } from '../components/Spinner';
 import PageHeader from '../components/ui/PageHeader';
@@ -17,10 +17,17 @@ import TermInfo from '../components/ui/TermInfo';
 import { PullButton, PullStartError, usePull } from '../components/activity/PullButton';
 import SummaryTiles, { NoChecksNotice } from '../components/metrics/SummaryTiles';
 import { ReviewCount } from '../components/metrics/ReviewBar';
-import IssuesPerDayChart from '../components/charts/IssuesPerDayChart';
+import DailyChart from '../components/charts/DailyChart';
 import ReviewCard from '../components/quality-dashboard/ReviewCard';
-import SubmissionStatusChart from '../components/quality-dashboard/SubmissionStatusChart';
 import ByCheckTable from '../components/quality-dashboard/ByCheckTable';
+
+/** "Flagged, by day ⓘ". */
+const ChartTitle: React.FC<{ term: Term }> = ({ term }) => (
+  <span className="flex items-center gap-1">
+    {term.name}, by day
+    <TermInfo term={term} />
+  </span>
+);
 
 const isQualityTab = (tab: string | undefined): tab is QualityTab => QUALITY_TABS.some((t) => t.id === tab);
 
@@ -159,30 +166,27 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
         <NoChecksNotice checks={data} onOpenSettings={openSettings} />
         <ReviewCard summary={summary} oldestNeedsReview={data.oldest_needs_review} onOpen={openState} />
         <SummaryTiles summary={summary} checks={data} onOpenSettings={openSettings} />
+        {/* Shares of each day's submissions, never counts: how many came in is progress. */}
         <div className="grid gap-5 lg:grid-cols-2">
           <Card className="p-4">
-            <CardHeader
-              className="mb-3"
-              title={
-                <span className="flex items-center gap-1">
-                  {GLOSSARY.issuesPerSubmission.name}, by day
-                  <TermInfo term={GLOSSARY.issuesPerSubmission} />
-                </span>
-              }
-              description="Each day of collection. Is it getting better?"
+            <CardHeader className="mb-3" title={<ChartTitle term={GLOSSARY.flagged} />} />
+            <DailyChart
+              daily={summary.daily}
+              measure="flagged"
+              average={percentOf(summary.flagged, summary.submissions)}
+              barLabel="Share of the day’s submissions"
+              averageLabel="Whole period"
             />
-            <IssuesPerDayChart daily={summary.daily} average={summary.issues_per_submission} name="Everyone" />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Dashed: {summary.issues_per_submission ?? 0} for the whole period.
-            </p>
           </Card>
           <Card className="p-4">
-            <CardHeader
-              className="mb-3"
-              title="Submissions by the day they were collected"
-              description="Coloured by where each one stands now."
+            <CardHeader className="mb-3" title={<ChartTitle term={GLOSSARY.issuesPerSubmission} />} />
+            <DailyChart
+              daily={summary.daily}
+              measure="issues"
+              average={summary.issues_per_submission}
+              barLabel="Each day"
+              averageLabel="Whole period"
             />
-            <SubmissionStatusChart data={data.temporal_data} />
           </Card>
         </div>
       </>
@@ -193,6 +197,7 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
           rows={data.by_check}
           submissions={summary.submissions}
           lastDay={data.date_range.end}
+          daySubmissions={data.last_14_days}
           config={config}
           onOpenCheck={
             onNavigateToSubmissions ? (check) => onNavigateToSubmissions({ review: 'all', issues: [check] }) : undefined

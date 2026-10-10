@@ -58,7 +58,7 @@ def is_not_approved(sub: SubmissionCurrent) -> bool:
 
 
 def counts(submissions: Iterable[SubmissionCurrent]) -> dict[str, int]:
-    """The named counts, keyed as SubmissionSummary and TemporalDataPoint name them."""
+    """The named counts, keyed as SubmissionSummary names them."""
     tally: dict[str, int] = dict.fromkeys(COUNT_KEYS, 0)
     for sub in submissions:
         issues = len(sub.data_quality_issues or [])

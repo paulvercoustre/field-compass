@@ -474,23 +474,10 @@ class CheckRow(BaseModel):
     needs_review: int = Field(default=0, description="Of those flagged, still in Needs review")
     last_14_days: list[int] = Field(
         default_factory=list,
-        description="Submissions it flagged each day, the 14 days up to the last submission",
+        description="Submissions it flagged each day, the 14 days up to the last submission; "
+        "the share is of QualityOverviewResponse.last_14_days, not this count",
     )
     top_enumerator: TopEnumerator | None = None
-
-
-class TemporalDataPoint(BaseModel):
-    """The named counts of the submissions collected on one day, as they stand now."""
-
-    date: str = Field(..., description="ISO date string (YYYY-MM-DD)")
-    submissions: int = 0
-    flagged: int = 0
-    issues: int = 0
-    needs_review: int = 0
-    on_hold: int = 0
-    clean: int = 0
-    approved: int = 0
-    not_approved: int = 0
 
 
 class QualityOverviewResponse(BaseModel):
@@ -504,7 +491,10 @@ class QualityOverviewResponse(BaseModel):
         default_factory=list,
         description="Checks that flagged something, most first; then built-in checks on, then off",
     )
-    temporal_data: list[TemporalDataPoint] = Field(..., description="Daily aggregated status data")
+    last_14_days: list[int] = Field(
+        default_factory=list,
+        description="Submissions each day, the 14 days up to the last: what each check's days are out of",
+    )
     date_range: dict[str, str] = Field(..., description="Actual date range of the data")
     checks_on: list[str] = Field(default_factory=list, description="Built-in checks turned on")
     checks_off: list[str] = Field(default_factory=list, description="Built-in checks turned off")

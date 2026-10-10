@@ -111,11 +111,11 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
 - **Overview:** the review card: submissions and how many are Reviewed, how long the oldest submission still in Needs
   review has waited, a button to open Needs review, and one bar of Needs review, On hold, Clean, Approved and Not
   approved, each below it as a box that opens its tab (Clean has none). Then Field team's tiles without Reviewed:
-  Flagged, Duration, Don't-know rate, Checks on. Then issues per submission by day as bars, with the whole period's
-  figure dashed, and submissions by the day collected, stacked by where each stands now. With no checks on, a line
-  says so first.
-- **By check:** each check that flagged something, most first: submissions flagged, share of submissions, the 14 days
-  up to the last submission in the period, the enumerator it flags most (with how many of theirs, highlighted at twice
+  Flagged, Duration, Don't-know rate, Checks on. Then two charts by day, Flagged and Issues per submission, each a
+  share of that day's submissions as bars, with the whole period's figure as a dashed line named in the legend. With
+  no checks on, a line says so first.
+- **By check:** each check that flagged something, most first: submissions flagged, share of submissions, the share of
+  each day's submissions it flagged on the 14 days up to the last submission in the period, the enumerator it flags most (with how many of theirs, highlighted at twice
   the team's share, opening their call sheet), and its Needs review count. A check's name opens every submission it
   flagged; the count opens those still waiting. Built-in checks that are on and flagged nothing follow with 0, then
   those that are off, under "Off: these checks did not run", each with a link to Settings. Outliers are named by
@@ -131,6 +131,11 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
 | Corrected | Submissions where the answer was edited in Kobo (edit history, since #94). | 3 or more. |
 
 Time per question needs the audit processor to keep per-question times (`etl/audit_processor.py` keeps totals); later.
+
+**Quality by day is always a share of the day's submissions, never a count** (2026-10-10). How many came in on a day is
+progress: a busy day must not look worse than a quiet one. So Data quality draws no submissions-per-day chart; Progress
+will have its own time series (step 4). Shares on days with few submissions are noisy; the tooltip gives the numbers
+behind each bar ("3 of 8 flagged").
 
 ## Progress (A3 with B2's bar)
 

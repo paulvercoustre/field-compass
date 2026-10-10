@@ -3,7 +3,8 @@ import { CheckRow } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { GLOSSARY, Term, formatPercent, percentOf } from '../../utils/glossary';
 import { MIN_SUBMISSIONS, checkName, highlightTopEnumerator } from '../../utils/fieldTeam';
-import Sparkline from '../charts/Sparkline';
+import Sparkline, { SparkBar } from '../charts/Sparkline';
+import { shortDay } from '../../utils/daily';
 import TermInfo from '../ui/TermInfo';
 
 const MOST_FROM: Term = {
@@ -15,7 +16,7 @@ const MOST_FROM: Term = {
 const LAST_14_DAYS: Term = {
   name: 'Last 14 days',
   definition:
-    'Submissions the check flagged on each of the 14 days up to the latest submission in the period. A grey stub is a day with none.',
+    'The share of each day’s submissions the check flagged, on the 14 days up to the latest submission in the period, so a busy day doesn’t look worse than a quiet one. A grey stub is a day with none flagged; a gap is a day with no submissions. Hover a day for its numbers.',
 };
 
 const Header: React.FC<{ label: string; term?: Term }> = ({ label, term }) => (
@@ -35,6 +36,8 @@ interface ByCheckTableProps {
   submissions: number;
   /** The latest day in the period, where the 14 days end. */
   lastDay: string;
+  /** Submissions each of the last 14 days: what each check's days are a share of. */
+  daySubmissions: number[];
   config: SurveyConfig | null;
   /** Opens every submission a check flagged. */
   onOpenCheck?: (check: string) => void;
@@ -54,15 +57,29 @@ const ByCheckTable: React.FC<ByCheckTableProps> = ({
   rows,
   submissions,
   lastDay,
+  daySubmissions,
   config,
   onOpenCheck,
   onNeedsReview,
   onOpenEnumerator,
   onOpenSettings,
 }) => {
-  const end = lastDay
-    ? new Date(`${lastDay}T00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-    : '';
+  const end = lastDay ? shortDay(lastDay) : '';
+  // The 14 days, oldest first, to name each bar.
+  const dayNames = daySubmissions.map((_, i) => {
+    const day = new Date(`${lastDay}T00:00`);
+    day.setDate(day.getDate() - (daySubmissions.length - 1 - i));
+    return day.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  });
+  const sparkBars = (flagged: number[]): SparkBar[] =>
+    flagged.map((count, i) => {
+      const total = daySubmissions[i] ?? 0;
+      const share = percentOf(count, total);
+      return {
+        share,
+        title: total ? `${dayNames[i]}: ${count} of ${total} (${share}%)` : `${dayNames[i]}: no submissions`,
+      };
+    });
   const off = rows.filter((r) => r.on === false && r.flagged === 0);
   const shown = rows.filter((r) => !(r.on === false && r.flagged === 0));
 
@@ -106,8 +123,13 @@ const ByCheckTable: React.FC<ByCheckTableProps> = ({
         <td className="px-2.5 py-2.5">
           {r.last_14_days.length > 0 && (
             <Sparkline
-              values={r.last_14_days}
-              label={`${r.last_14_days.reduce((a, b) => a + b, 0)} flagged in the 14 days to ${end}`}
+              bars={sparkBars(r.last_14_days)}
+              label={`${formatPercent(
+                percentOf(
+                  r.last_14_days.reduce((a, b) => a + b, 0),
+                  daySubmissions.reduce((a, b) => a + b, 0)
+                )
+              )} flagged in the 14 days to ${end}`}
             />
           )}
         </td>
@@ -163,9 +185,6 @@ const ByCheckTable: React.FC<ByCheckTableProps> = ({
     >
       <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
         <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Issues by check</h2>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          A check’s name opens every submission it flagged; its Needs review count opens those still waiting.
-        </p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full">

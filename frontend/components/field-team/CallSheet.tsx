@@ -12,7 +12,7 @@ import {
   highlightNotApproved,
   MIN_SUBMISSIONS,
 } from '../../utils/fieldTeam';
-import IssuesPerDayChart from '../charts/IssuesPerDayChart';
+import DailyChart from '../charts/DailyChart';
 import ReviewBar, { reviewParts } from '../metrics/ReviewBar';
 import Button from '../ui/Button';
 import TermInfo from '../ui/TermInfo';
@@ -312,12 +312,13 @@ const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, on
           </Card>
 
           <Card title={`${GLOSSARY.issuesPerSubmission.name}, by day`} term={GLOSSARY.issuesPerSubmission}>
-            <IssuesPerDayChart daily={row.daily} average={team.issues_per_submission} name={row.id} />
-            {row.daily.length > 0 && (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Each day they collected. Dashed: the team’s {team.issues_per_submission ?? 0} for the whole period.
-              </p>
-            )}
+            <DailyChart
+              daily={row.daily}
+              measure="issues"
+              average={team.issues_per_submission}
+              barLabel={`${row.id}, each day`}
+              averageLabel="Team, whole period"
+            />
           </Card>
         </div>
       </div>

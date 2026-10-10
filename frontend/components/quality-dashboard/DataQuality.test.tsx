@@ -72,12 +72,16 @@ describe('ByCheckTable', () => {
     row('interview_on_weekend', { on: false }),
   ];
 
+  // Submissions each of the 14 days: none on the first.
+  const daySubmissions = [0, 2, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 8];
+
   const renderTable = (handlers = {}) =>
     render(
       <ByCheckTable
         rows={rows}
         submissions={100}
         lastDay="2026-09-28"
+        daySubmissions={daySubmissions}
         config={null}
         onOpenSettings={vi.fn()}
         {...handlers}
@@ -103,7 +107,19 @@ describe('ByCheckTable', () => {
     const view = renderTable();
     const highlighted = Array.from(view.container.querySelectorAll('.bg-amber-100')).map((el) => el.textContent);
     expect(highlighted).toEqual(['enum_0725 of 25', 'Highlighted']);
-    expect(view.getByRole('img', { name: /^10 flagged in the 14 days to / })).toBeTruthy();
+  });
+
+  it('draws each day as a share of its submissions, not a count', () => {
+    const view = renderTable();
+    // 10 flagged of the 65 sent in the 14 days.
+    const spark = view.getByRole('img', { name: /^15% flagged in the 14 days to / });
+    const titles = Array.from(spark.querySelectorAll('title')).map((t) => t.textContent);
+    expect(titles[0]).toMatch(/: no submissions$/);
+    expect(titles[12]).toMatch(/: 3 of 6 \(50%\)$/);
+    expect(titles[13]).toMatch(/: 4 of 8 \(50%\)$/);
+    // Equal shares, equal bars, though the days differ in size.
+    const bars = Array.from(spark.querySelectorAll('rect.fill-amber-600')).map((r) => r.getAttribute('height'));
+    expect(bars.slice(-2)).toEqual(['20', '20']);
   });
 
   it('opens a check’s submissions, its Needs review, and the enumerator', () => {

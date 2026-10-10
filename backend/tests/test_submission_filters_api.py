@@ -123,11 +123,8 @@ class TestQualityOverview:
         assert body["custom_checks"] == 0
         assert body["oldest_needs_review"] is None
 
-        assert [d["date"] for d in body["temporal_data"]] == ["2026-03-01", "2026-03-02"]
-        day_one, day_two = body["temporal_data"]
-        assert (day_one["submissions"], day_one["issues"], day_one["flagged"]) == (2, 4, 2)
-        assert (day_one["approved"], day_one["on_hold"]) == (1, 1)
-        assert (day_two["submissions"], day_two["clean"]) == (1, 1)
+        # What each check's days are out of: 2 on the 1st, 1 on the 2nd.
+        assert body["last_14_days"][-2:] == [2, 1] and len(body["last_14_days"]) == 14
         assert body["date_range"] == {"start": "2026-03-01", "end": "2026-03-02"}
 
     def test_filters_by_enumerator(self, client, three):  # noqa: F811
@@ -158,7 +155,7 @@ class TestQualityOverview:
         assert body["summary"]["dk_rate"] is None
         assert body["summary"]["duration_minutes"] is None
         assert body["summary"]["issues_per_submission"] is None
-        assert body["temporal_data"] == []
+        assert body["last_14_days"] == []
         assert len(body["by_check"]) == 10
 
 

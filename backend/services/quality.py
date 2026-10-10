@@ -11,8 +11,8 @@ from datetime import date, timedelta
 from typing import Any
 
 from database.models import SubmissionCurrent
-from schemas import CheckRow, QualityOverviewResponse, TemporalDataPoint, TopEnumerator
-from services.metrics import counts, summarise
+from schemas import CheckRow, QualityOverviewResponse, TopEnumerator
+from services.metrics import summarise
 from services.review_queue import NEEDS_REVIEW, review_state
 from services.submission_filters import answer_text
 from services.survey_config import built_in_check_of, built_in_checks, get_enumerator_field
@@ -30,6 +30,15 @@ def _top_enumerator(flagged_by: Counter[str], submissions_by: Counter[str]) -> T
     )
 
 
+def trend_days(submissions: list[SubmissionCurrent]) -> list[date]:
+    """The 14 days up to the last submission: recent, even when collection ended a while ago."""
+    times = [sub._submission_time for sub in submissions if sub._submission_time is not None]
+    if not times:
+        return []
+    last = max(times).date()
+    return [last - timedelta(days=n) for n in reversed(range(TREND_DAYS))]
+
+
 def by_check(
     submissions: list[SubmissionCurrent], config_data: dict[str, Any] | None
 ) -> list[CheckRow]:
@@ -40,12 +49,7 @@ def by_check(
     that are off, so a quiet check is never mistaken for a clean one.
     """
     enumerator_field = get_enumerator_field(config_data)
-    times = [sub._submission_time for sub in submissions if sub._submission_time is not None]
-    last_day = max(times).date() if times else None
-    trend_days: list[date] = (
-        [last_day - timedelta(days=n) for n in reversed(range(TREND_DAYS))] if last_day else []
-    )
-
+    trend = trend_days(submissions)
     issues_of: Counter[str] = Counter()
     flagged_of: Counter[str] = Counter()
     waiting_of: Counter[str] = Counter()
@@ -78,7 +82,7 @@ def by_check(
                 flagged=flagged,
                 issues=issues_of[check],
                 needs_review=waiting_of[check],
-                last_14_days=[days_of[check][day] for day in trend_days],
+                last_14_days=[days_of[check][day] for day in trend],
                 top_enumerator=_top_enumerator(flagged_by[check], submissions_by),
             )
         )
@@ -86,7 +90,7 @@ def by_check(
 
     flagging = {built_in_check_of(row.check) for row in flagged_rows}
     quiet = [
-        CheckRow(check=key, on=on, last_14_days=[0] * len(trend_days) if on else [])
+        CheckRow(check=key, on=on, last_14_days=[0] * len(trend) if on else [])
         for key, on in settings.items()
         if key not in flagging
     ]
@@ -97,28 +101,27 @@ def by_check(
 def quality_overview(
     submissions: list[SubmissionCurrent], config_data: dict[str, Any] | None
 ) -> QualityOverviewResponse:
-    """The named counts and measurements, each check, and the days of collection."""
+    """The named counts and measurements, and each check with its last 14 days."""
     waiting = [
         sub._submission_time
         for sub in submissions
         if sub._submission_time is not None and review_state(sub) == NEEDS_REVIEW
     ]
 
-    # By the day each submission was collected, as it stands now.
-    by_date: dict[str, list[SubmissionCurrent]] = defaultdict(list)
-    for sub in submissions:
-        by_date[sub._submission_time.strftime("%Y-%m-%d")].append(sub)
-    sorted_dates = sorted(by_date)
+    per_day = Counter(
+        sub._submission_time.date() for sub in submissions if sub._submission_time is not None
+    )
+    days = sorted(per_day)
 
     checks = built_in_checks(config_data)
     return QualityOverviewResponse(
         summary=summarise(submissions, config_data),
         oldest_needs_review=min(waiting).isoformat() if waiting else None,
         by_check=by_check(submissions, config_data),
-        temporal_data=[TemporalDataPoint(date=day, **counts(by_date[day])) for day in sorted_dates],
+        last_14_days=[per_day[day] for day in trend_days(submissions)],
         date_range={
-            "start": sorted_dates[0] if sorted_dates else "",
-            "end": sorted_dates[-1] if sorted_dates else "",
+            "start": days[0].isoformat() if days else "",
+            "end": days[-1].isoformat() if days else "",
         },
         checks_on=[key for key, on in checks if on],
         checks_off=[key for key, on in checks if not on],

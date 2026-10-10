@@ -296,22 +296,9 @@ export interface CheckRow {
   issues: number;
   /** Of those flagged, still in Needs review. */
   needs_review: number;
-  /** Submissions it flagged each day, the 14 days up to the last submission; empty when off. */
+  /** Submissions it flagged each day, the 14 days up to the last submission; empty when off. Out of QualityOverviewResponse.last_14_days. */
   last_14_days: number[];
   top_enumerator: TopEnumerator | null;
-}
-
-/** The named counts of the submissions collected on one day, as they stand now. */
-export interface TemporalDataPoint {
-  date: string;
-  submissions: number;
-  flagged: number;
-  issues: number;
-  needs_review: number;
-  on_hold: number;
-  clean: number;
-  approved: number;
-  not_approved: number;
 }
 
 /** Which checks are on: the built-in ones by key (backend survey_config.built_in_checks), and the survey's own. */
@@ -328,7 +315,8 @@ export interface QualityOverviewResponse extends ChecksInUse {
   oldest_needs_review: string | null;
   /** Checks that flagged something, most first; then built-in checks on, then off. */
   by_check: CheckRow[];
-  temporal_data: TemporalDataPoint[];
+  /** Submissions each day, the 14 days up to the last: what each check's days are a share of. */
+  last_14_days: number[];
   date_range: { start: string; end: string };
 }
 
