@@ -101,10 +101,12 @@ const NavButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
   </button>
 );
 
+// In the order a survey is followed: the review queue, then whether
+// collection is on track, then whether the data is good, then who to call.
 const SURVEY_NAV: View[] = [
   'dashboard',
-  'qualityOverview',
   'dataCollectionProgress',
+  'qualityOverview',
   'enumeratorPerformance',
   'settings',
 ];
@@ -144,7 +146,7 @@ const Shell: React.FC = () => {
 
   const views: Record<View, React.ReactElement> = {
     dashboard: <Dashboard initialFilters={dashboardFilters} />,
-    dataCollectionProgress: <DataCollectionProgressPage />,
+    dataCollectionProgress: <DataCollectionProgressPage onNavigateToSubmissions={toSubmissions} />,
     enumeratorPerformance: (
       <EnumeratorPerformancePage
         onNavigateToSubmissions={toSubmissions}

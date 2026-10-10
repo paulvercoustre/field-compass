@@ -29,6 +29,16 @@ review, 67 flagged, 137 of a target of 160. Splits by enumerator, check and ques
 - **Default period: the whole survey.** The period menu calls it All time, beside Last 7 days and Last 30 days.
 - **"Flagged" and "Clean"** as named below, the same on every tab.
 
+## Decisions, 2026-10-10
+
+- **Progress counts toward the targets as the sampling plan does:** each group up to its own target. Extra interviews
+  in one district don't make up for another's shortfall, so "130 of 160 done" and "30 to go", not 138 and 22.
+- **What is done is split into the named review states** (Approved, Clean, On hold, Needs review), in the review
+  bar's colours, not "Not decided yet".
+- **Progress is the second tab**, after Submissions: the queue, then whether collection is on track, then whether
+  the data is good, then who to call.
+- **Quality by day is a share of the day's submissions**, never a count; the count is on Progress.
+
 ## What each page is for
 
 | Page | Question | For | Opens |
@@ -141,15 +151,42 @@ behind each bar ("3 of 8 flagged").
 
 ```
 ┌ Progress ─────────────────────────────────────────────────────────── Last pulled 2 h ago  [Pull] ┐
-│ 137 of 160 done, 36 of them approved                                                              │
-│ [██████ Approved 36 ██████|░░░░░░░░░ not decided yet 101 ░░░░░░░░░|      to go 23      ]  Not approved 10, not counted │
-│ 23 to go · 10 a day over the last 7 days · about 2 days at this pace                              │
+│ 130 of 160 done ⓘ                                                                            81%  │
+│ 35 of them approved · 9 Not approved, not counted ⓘ                                               │
+│ 8 more don't count toward a target: 5 in a district with no target, 3 beyond their district's target │
+│ [█ Approved 35 █|░ Clean 61 ░|▒ On hold 1 ▒|▓ Needs review 33 ▓|      to go 30      ]             │
+│ 30 to go │ 10 a day, toward the targets │ About 3 days, at this pace │ 28 days, since 1 Sep       │
+│ Submissions over time                                                                             │
+│   Done so far, toward the targets   ____....·····  (dotted: the recent pace; dashed: target)       │
+│   Submissions each day              ▂▅▃▇▂▅▆▄▃▅  (one bar a day, on the same days)                 │
+│   — Done so far: 130   ··· At the recent pace: the target by 13 Oct   - - Target: 160   ┊ Planned end │
 │ [By district] [By district and settlement]                                                        │
 │ District │ Target │ Done │ Approved │ Progress            │ Last 7 days │ To go │ Not approved     │
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The "Approved submissions only" switch goes: both numbers are always on the bar.
+The "Approved submissions only" switch goes: what is done is always on the bar, split into the review states in the
+review bar's own words and colours, the most settled first.
+
+- **Done toward the targets** counts each group of the sampling plan up to its target: a value of the sampling
+  variable, a combination in an uploaded file, or the whole survey for a single total. Which submissions fill a
+  group's target: for the bar, the most settled first (Approved, Clean, On hold, Needs review); for the chart, the
+  first sent, so a group's line stops once it is full. A line under the headline says how many don't count, and why:
+  in a group with no target, or beyond their group's target.
+
+- **The pace** is the last 7 days, today included, toward the targets: interviews in a group already full bring the
+  target no nearer. A stall shows as "None in the last 7 days". "At this pace" is the days to the target at that
+  pace; past 2 months it says so rather than give a date. There is no daily objective.
+- **Submissions over time is two charts on the same days, not one chart with two scales**, and not a switch between
+  them: what is done so far climbing toward the target, and how many submissions came in each day. Hovering either shows the day
+  in both: how many that day, and the total. The dotted line runs from today at the recent pace to the target; the
+  planned end (the survey's collection end date, when it sets one) is an upright dashed line. The lines are named
+  in a legend under the chart rather than on it, where they collide near the target. The days run to today while
+  something arrived in the last 14 days, else they stop at the last submission.
+- **The table** puts the group most behind first, groups without a target last. A group's name opens its
+  submissions. Its progress bar is split like the headline's, and its To go column adds up to the headline's.
+- With no targets, the page shows what was collected: done, the Approved part, the pace and the average a day, with a
+  link to add targets.
 
 ## States (D1)
 
@@ -169,7 +206,9 @@ listed apart and not highlighted.
    last 14 days, the enumerator it flags most, on or off), when the oldest submission in Needs review was sent, and
    which checks are on; the issue frequency and issue time series it replaces are gone. The tiles, review bar, period
    menu and daily chart are shared with Field team.
-4. Progress bar.
+4. **Progress bar and chart.** `/api/progress` counts every submission but Not approved, always (the `approved_only`
+   switch is gone), and adds the Approved part, the last 7 days and the Not approved left out, overall and for each
+   group; the days of collection; the planned end; and the day it counts the last 7 days to.
 5. Data quality By question.
 
 Not covered, and not needed for now: exports and a cleaning log (Kobo exports; the edit history could feed a cleaning
