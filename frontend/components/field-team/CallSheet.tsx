@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { EnumeratorSummary, SubmissionSummary } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { GLOSSARY, Term, formatPercent, percentOf } from '../../utils/glossary';
@@ -12,9 +11,9 @@ import {
   highlightFlagged,
   highlightNotApproved,
   MIN_SUBMISSIONS,
-  dailyIssuesPerSubmission,
 } from '../../utils/fieldTeam';
-import { axisProps, gridProps, tooltipProps, CHART_ACCENT } from '../charts/chartTheme';
+import IssuesPerDayChart from '../charts/IssuesPerDayChart';
+import ReviewBar, { reviewParts } from '../metrics/ReviewBar';
 import Button from '../ui/Button';
 import TermInfo from '../ui/TermInfo';
 import { ChevronDownIcon } from '../ui/icons';
@@ -130,14 +129,6 @@ interface CallSheetProps {
 const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, onClose, onOpenSubmissions }) => {
   const [copied, setCopied] = useState<'yes' | 'failed' | null>(null);
   const summary = useMemo(() => callSummary(row, team, config), [row, team, config]);
-  const days = useMemo(
-    () =>
-      dailyIssuesPerSubmission(row.daily).map((d) => ({
-        label: new Date(d.day).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
-        value: d.value,
-      })),
-    [row]
-  );
   const checks = Object.entries(row.checks).sort((a, b) => b[1] - a[1]);
   const span = dateSpan(row);
   const last = row.last_submission
@@ -158,13 +149,7 @@ const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, on
     }
   };
 
-  const reviewParts: { term: Term; count: number; colour: string }[] = [
-    { term: GLOSSARY.needsReview, count: row.needs_review, colour: 'bg-amber-600' },
-    { term: GLOSSARY.onHold, count: row.on_hold, colour: 'bg-amber-300' },
-    { term: GLOSSARY.clean, count: row.clean, colour: 'bg-gray-300 dark:bg-gray-600' },
-    { term: GLOSSARY.approved, count: row.approved, colour: 'bg-emerald-600' },
-    { term: GLOSSARY.notApproved, count: row.not_approved, colour: 'bg-rose-700' },
-  ];
+  const parts = reviewParts(row);
 
   return (
     <article aria-label={`Call sheet: ${row.id}`} className="flex min-w-0 flex-col gap-4">
@@ -314,20 +299,10 @@ const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, on
 
         <div className="flex flex-col gap-3">
           <Card title="Their submissions in review" term={GLOSSARY.reviewed}>
-            <div
-              className="flex h-3 gap-0.5 overflow-hidden rounded-full"
-              role="img"
-              aria-label={reviewParts.map((p) => `${p.term.name} ${p.count}`).join(', ')}
-            >
-              {reviewParts
-                .filter((p) => p.count > 0)
-                .map((p) => (
-                  <span key={p.term.name} className={p.colour} style={{ flex: `${p.count} 1 0` }} />
-                ))}
-            </div>
+            <ReviewBar parts={parts} />
             <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700 dark:text-gray-300">
-              {reviewParts.map((p) => (
-                <li key={p.term.name} className="flex items-center gap-1.5">
+              {parts.map((p) => (
+                <li key={p.key} className="flex items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-sm ${p.colour}`} aria-hidden="true" />
                   {p.term.name} {p.count}
                 </li>
@@ -337,33 +312,11 @@ const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, on
           </Card>
 
           <Card title={`${GLOSSARY.issuesPerSubmission.name}, by day`} term={GLOSSARY.issuesPerSubmission}>
-            {days.length === 0 ? (
-              <p className="text-sm text-gray-500">No submissions in this period.</p>
-            ) : (
-              <>
-                <div style={{ width: '100%', height: 180 }}>
-                  <ResponsiveContainer>
-                    <BarChart data={days} margin={{ top: 5, right: 8, left: -16, bottom: 0 }}>
-                      <CartesianGrid {...gridProps} vertical={false} />
-                      <XAxis dataKey="label" {...axisProps} />
-                      <YAxis {...axisProps} allowDecimals />
-                      <Tooltip {...tooltipProps} formatter={(value) => [value, row.id]} />
-                      <Bar dataKey="value" fill="#d97706" radius={[3, 3, 0, 0]} maxBarSize={28} />
-                      {team.issues_per_submission !== null && (
-                        <ReferenceLine
-                          y={team.issues_per_submission}
-                          stroke={CHART_ACCENT}
-                          strokeWidth={1.5}
-                          strokeDasharray="4 4"
-                        />
-                      )}
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Each day they collected. Dashed: the team’s {team.issues_per_submission ?? 0} for the whole period.
-                </p>
-              </>
+            <IssuesPerDayChart daily={row.daily} average={team.issues_per_submission} name={row.id} />
+            {row.daily.length > 0 && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Each day they collected. Dashed: the team’s {team.issues_per_submission ?? 0} for the whole period.
+              </p>
             )}
           </Card>
         </div>

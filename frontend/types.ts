@@ -211,7 +211,7 @@ export interface UnavailableCapability {
   missing_setting: string;
 }
 
-export interface PerformanceData {
+export interface PerformanceData extends ChecksInUse {
   /** The whole team: every submission, so the figures match Data quality's. Null when unavailable. */
   team: SubmissionSummary | null;
   enumerators: EnumeratorSummary[];
@@ -223,11 +223,6 @@ export interface PerformanceData {
    * enumerator of their own. Null when every submission has one.
    */
   no_enumerator: SubmissionSummary | null;
-  /** The built-in checks that are on and off (backend survey_config.built_in_checks). */
-  checks_on: string[];
-  checks_off: string[];
-  /** The survey's own active rules. */
-  custom_checks: number;
 }
 
 // --- Filtering Types ---
@@ -281,11 +276,29 @@ export interface SubmissionFacets {
 
 // --- Quality Overview Types ---
 
-export interface IssueFrequency {
+/** The enumerator a check flagged most often. */
+export interface TopEnumerator {
+  id: string;
+  /** Their submissions the check flagged. */
+  flagged: number;
+  /** All their submissions. */
+  submissions: number;
+}
+
+/** One check on Data quality's By check view. */
+export interface CheckRow {
+  /** The issue it writes, or the built-in check's key when it flagged nothing. */
   check: string;
-  count: number;
-  percentage: number;
-  affected_submissions: number;
+  /** A built-in check's setting; null for the survey's own rules. */
+  on: boolean | null;
+  /** Submissions it flagged. */
+  flagged: number;
+  issues: number;
+  /** Of those flagged, still in Needs review. */
+  needs_review: number;
+  /** Submissions it flagged each day, the 14 days up to the last submission; empty when off. */
+  last_14_days: number[];
+  top_enumerator: TopEnumerator | null;
 }
 
 /** The named counts of the submissions collected on one day, as they stand now. */
@@ -301,16 +314,21 @@ export interface TemporalDataPoint {
   not_approved: number;
 }
 
-export interface IssueTimeSeriesPoint {
-  date: string;
-  issue_counts: Record<string, number>;
+/** Which checks are on: the built-in ones by key (backend survey_config.built_in_checks), and the survey's own. */
+export interface ChecksInUse {
+  checks_on: string[];
+  checks_off: string[];
+  /** The survey's own rules that are active. */
+  custom_checks: number;
 }
 
-export interface QualityOverviewResponse {
+export interface QualityOverviewResponse extends ChecksInUse {
   summary: SubmissionSummary;
-  issue_frequency: IssueFrequency[];
+  /** When the oldest submission still in Needs review was sent. */
+  oldest_needs_review: string | null;
+  /** Checks that flagged something, most first; then built-in checks on, then off. */
+  by_check: CheckRow[];
   temporal_data: TemporalDataPoint[];
-  issue_time_series: IssueTimeSeriesPoint[];
   date_range: { start: string; end: string };
 }
 

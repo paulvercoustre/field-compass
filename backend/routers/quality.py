@@ -18,7 +18,7 @@ from services.submission_filters import (
     parse_sampling_filters,
     within_dates,
 )
-from services.survey_config import get_enumerator_field, get_sampling_cols
+from services.survey_config import custom_checks, get_enumerator_field, get_sampling_cols
 
 router = APIRouter()
 
@@ -39,8 +39,9 @@ async def get_quality_overview(
 ):
     """
     Get quality overview data for the dashboard: the named counts and
-    measurements, issue frequency and daily trends (services/quality.py),
-    over the submissions the filters leave (services/submission_filters.py).
+    measurements, each check, the days of collection and which checks are on
+    (services/quality.py), over the submissions the filters leave
+    (services/submission_filters.py).
 
     Requires viewer access to the specified survey.
     """
@@ -57,4 +58,6 @@ async def get_quality_overview(
         sampling_filters=parse_sampling_filters(sampling_filters),
         sampling_cols=get_sampling_cols(config),
     )
-    return quality_overview(submissions, config)
+    overview = quality_overview(submissions, config)
+    overview.custom_checks = custom_checks(survey_config)
+    return overview

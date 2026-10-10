@@ -110,18 +110,24 @@ class TestQualityOverview:
         assert summary["duration_minutes"] == 25.0
         assert (summary["duration_measured"], summary["duration_from_start_end"]) == (2, 0)
 
-        frequency = {f["check"]: f for f in body["issue_frequency"]}
-        assert frequency["dk_high"]["count"] == 3
-        assert frequency["dk_high"]["affected_submissions"] == 2
-        assert frequency["dk_high"]["percentage"] == 66.7
-        assert [f["check"] for f in body["issue_frequency"]] == ["dk_high", "too_fast"]
+        dk_high, too_fast = body["by_check"][:2]
+        assert (dk_high["check"], dk_high["flagged"], dk_high["issues"]) == ("dk_high", 2, 3)
+        # One Approved, one On hold: neither is waiting.
+        assert dk_high["needs_review"] == 0
+        assert dk_high["top_enumerator"] == {"id": "e1", "flagged": 2, "submissions": 2}
+        assert dk_high["last_14_days"][-2:] == [2, 0]
+        assert too_fast["flagged"] == 1
+        # A new survey's checks are off, and listed so.
+        assert [row["on"] for row in body["by_check"][2:]] == [False] * 10
+        assert body["checks_on"] == [] and len(body["checks_off"]) == 10
+        assert body["custom_checks"] == 0
+        assert body["oldest_needs_review"] is None
 
         assert [d["date"] for d in body["temporal_data"]] == ["2026-03-01", "2026-03-02"]
         day_one, day_two = body["temporal_data"]
         assert (day_one["submissions"], day_one["issues"], day_one["flagged"]) == (2, 4, 2)
         assert (day_one["approved"], day_one["on_hold"]) == (1, 1)
         assert (day_two["submissions"], day_two["clean"]) == (1, 1)
-        assert body["issue_time_series"][0]["issue_counts"] == {"dk_high": 3, "too_fast": 1}
         assert body["date_range"] == {"start": "2026-03-01", "end": "2026-03-02"}
 
     def test_filters_by_enumerator(self, client, three):  # noqa: F811
@@ -152,7 +158,8 @@ class TestQualityOverview:
         assert body["summary"]["dk_rate"] is None
         assert body["summary"]["duration_minutes"] is None
         assert body["summary"]["issues_per_submission"] is None
-        assert body["issue_frequency"] == [] and body["temporal_data"] == []
+        assert body["temporal_data"] == []
+        assert len(body["by_check"]) == 10
 
 
 class TestSubmissionsList:

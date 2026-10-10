@@ -9,8 +9,10 @@ import pytest
 
 from database.models import SubmissionCurrent
 from etl.duration import AUDIT, START_END, interview_minutes
+from schemas import TopEnumerator
 from services.metrics import counts, is_approved, is_not_approved, summarise
 from services.progress import compute_performance
+from services.quality import by_check
 from services.survey_config import built_in_checks
 
 CONFIG = {
@@ -209,3 +211,69 @@ class TestChecksOn:
         assert on == {"interview_on_weekend", "duration_too_short"}
         performance = compute_performance([], {**CONFIG, **config})
         assert set(performance.checks_on) == on and len(performance.checks_off) == 8
+
+
+class TestByCheck:
+    """Data quality's By check view (services/quality.by_check)."""
+
+    CONFIG_ON = {
+        **CONFIG,
+        "global_parameters": {"min_survey_duration_minutes": 15},
+        "quality_checks": {"flag_outliers": True, "outlier_variables": ["income"]},
+    }
+
+    def _subs(self):
+        def sub(enumerator, checks, day, decision=None):
+            s = _sub(enumerator, decision=decision)
+            s.data_quality_issues = [{"check": c} for c in checks]
+            s._submission_time = datetime(2026, 9, day, 10)
+            return s
+
+        return [
+            sub("e1", ["duration_too_short"], 1),
+            sub("e1", ["duration_too_short", "outlier_income", "outlier_income"], 14),
+            sub("e1", ["duration_too_short"], 14, decision="Approved"),
+            sub("e2", ["outlier_income"], 20),
+            sub("e2", [], 20),
+            sub(None, ["my_rule"], 20),
+        ]
+
+    def test_each_check_most_flagged_first(self):
+        rows = by_check(self._subs(), self.CONFIG_ON)
+        flagged = [(r.check, r.on, r.flagged, r.issues, r.needs_review) for r in rows[:3]]
+        assert flagged == [
+            # Approved is no longer waiting; two outliers on one submission flag it once.
+            ("duration_too_short", True, 3, 3, 2),
+            ("outlier_income", True, 2, 3, 2),
+            # The survey's own rule has no built-in setting.
+            ("my_rule", None, 1, 1, 1),
+        ]
+
+    def test_the_last_14_days_end_at_the_last_submission(self):
+        short = by_check(self._subs(), self.CONFIG_ON)[0]
+        # 7 to 20 September: the 1st is too early, two on the 14th.
+        assert len(short.last_14_days) == 14
+        assert short.last_14_days[7] == 2 and sum(short.last_14_days) == 2
+
+    def test_the_enumerator_it_flags_most(self):
+        rows = {r.check: r for r in by_check(self._subs(), self.CONFIG_ON)}
+        assert rows["duration_too_short"].top_enumerator == TopEnumerator(
+            id="e1", flagged=3, submissions=3
+        )
+        # A tie goes to the enumerator with fewer submissions: the larger share.
+        assert rows["outlier_income"].top_enumerator.id == "e2"
+        # No enumerator recorded is nobody's.
+        assert rows["my_rule"].top_enumerator is None
+
+    def test_quiet_checks_are_listed_on_then_off(self):
+        rows = by_check(self._subs()[4:5], self.CONFIG_ON)
+        assert [(r.check, r.on, r.flagged) for r in rows[:2]] == [
+            ("duration_too_short", True, 0),
+            ("outliers", True, 0),
+        ]
+        assert [r.on for r in rows[2:]] == [False] * 8
+        assert rows[0].last_14_days == [0] * 14 and rows[2].last_14_days == []
+
+    def test_nothing_at_all(self):
+        rows = by_check([], {})
+        assert len(rows) == 10 and not any(r.on for r in rows)

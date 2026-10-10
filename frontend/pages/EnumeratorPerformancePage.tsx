@@ -7,27 +7,13 @@ import { Spinner } from '../components/Spinner';
 import PageHeader from '../components/ui/PageHeader';
 import { PullButton, PullStartError, usePull } from '../components/activity/PullButton';
 import CapabilityNotice from '../components/ui/CapabilityNotice';
-import FieldTeamTiles from '../components/field-team/FieldTeamTiles';
+import SummaryTiles, { NoChecksNotice } from '../components/metrics/SummaryTiles';
+import PeriodSelect from '../components/ui/PeriodSelect';
 import FollowUpTable from '../components/field-team/FollowUpTable';
 import EnumeratorList from '../components/field-team/EnumeratorList';
 import CallSheet, { CallSheetLink } from '../components/field-team/CallSheet';
 import { NO_ENUMERATOR } from '../utils/filterUtils';
-
-type Period = 'all' | 'last7' | 'last30';
-
-const PERIODS: { value: Period; label: string; days?: number }[] = [
-  { value: 'all', label: 'All time' },
-  { value: 'last7', label: 'Last 7 days', days: 7 },
-  { value: 'last30', label: 'Last 30 days', days: 30 },
-];
-
-const periodDates = (period: Period): { startDate?: string; endDate?: string } => {
-  const days = PERIODS.find((p) => p.value === period)?.days;
-  if (!days) return {};
-  const today = new Date();
-  const day = (d: Date) => d.toISOString().split('T')[0];
-  return { startDate: day(new Date(today.getTime() - days * 24 * 60 * 60 * 1000)), endDate: day(today) };
-};
+import { Period, periodDates } from '../utils/period';
 
 interface EnumeratorPerformancePageProps {
   onNavigateToSubmissions?: (filters?: FilterState) => void;
@@ -137,18 +123,7 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
         title="Field team"
         actions={
           <>
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as Period)}
-              aria-label="Period"
-              className="h-8 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-xs pl-2.5 pr-8 py-0 text-gray-700 dark:text-gray-200"
-            >
-              {PERIODS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
+            <PeriodSelect value={period} onChange={setPeriod} />
             <PullButton pull={pull} />
           </>
         }
@@ -210,19 +185,8 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
                   {openId} has no submissions in this period.
                 </p>
               )}
-              <FieldTeamTiles data={performanceData} onOpenSettings={openSettings} />
-              {performanceData.checks_on.length === 0 && (
-                <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-gray-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-gray-200">
-                  No checks are on, so nothing has been flagged. That doesn’t mean the submissions are clean.{' '}
-                  <button
-                    type="button"
-                    onClick={openSettings}
-                    className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
-                  >
-                    Choose checks
-                  </button>
-                </p>
-              )}
+              <SummaryTiles summary={team} checks={performanceData} onOpenSettings={openSettings} showReviewed />
+              <NoChecksNotice checks={performanceData} onOpenSettings={openSettings} />
               {/* In the team's figures, so they match Data quality's; never an enumerator of their own. */}
               {noEnumerator > 0 && (
                 <p className="text-sm text-gray-600 dark:text-gray-400">

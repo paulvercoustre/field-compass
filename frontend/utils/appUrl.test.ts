@@ -55,6 +55,17 @@ describe('the app’s address', () => {
     expect(titleFor(place, 'Household 2026')).toBe('enum 07 · Field team · Household 2026 · Field Compass');
   });
 
+  it('keeps Data quality’s view in its address', () => {
+    const place = { view: 'qualityOverview' as const, surveyId: 's1', tab: 'by-check' };
+    expect(urlFor(place)).toBe('/surveys/s1/quality/by-check');
+    expect(at('/surveys/s1/quality/by-check')).toEqual(place);
+    expect(urlFor({ ...place, tab: 'overview' })).toBe('/surveys/s1/quality');
+    expect(titleFor(place, 'Household 2026')).toBe('By check · Data quality · Household 2026 · Field Compass');
+    expect(titleFor({ ...place, tab: 'overview' }, 'Household 2026')).toBe(
+      'Data quality · Household 2026 · Field Compass'
+    );
+  });
+
   it('titles the browser tab with the page, the submission and the survey', () => {
     expect(titleFor({ view: 'dashboard', submissionId: 300163 }, 'Household 2026')).toBe(
       '#300163 · Submissions · Household 2026 · Field Compass'

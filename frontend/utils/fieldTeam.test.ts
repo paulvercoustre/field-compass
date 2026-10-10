@@ -6,6 +6,7 @@ import {
   highlightCheck,
   highlightFlagged,
   highlightNotApproved,
+  highlightTopEnumerator,
   mainIssue,
   dailyIssuesPerSubmission,
 } from './fieldTeam';
@@ -63,6 +64,13 @@ describe('highlighting, by the flags against the team', () => {
     const row = enumerator({ checks: { duration_too_short: 1, outlier_income: 1 } });
     expect(highlightCheck(row, team, 'duration_too_short')).toBe(false);
     expect(highlightCheck(row, team, 'outlier_income')).toBe(true);
+  });
+
+  it('works for the enumerator a check flags most', () => {
+    // The check flags 10 of 100 across the team: 10%.
+    expect(highlightTopEnumerator({ id: 'e1', flagged: 2, submissions: 10 }, 10, 100)).toBe(true);
+    expect(highlightTopEnumerator({ id: 'e1', flagged: 1, submissions: 10 }, 10, 100)).toBe(false);
+    expect(highlightTopEnumerator({ id: 'e1', flagged: 4, submissions: 4 }, 10, 100)).toBe(false);
   });
 });
 

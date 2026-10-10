@@ -7,7 +7,7 @@
  * Duration and the don't-know rate are shown plain; their checks carry the
  * verdict. Too few submissions to compare are never highlighted.
  */
-import { DayPoint, EnumeratorSummary, SubmissionSummary } from '../types';
+import { DayPoint, EnumeratorSummary, SubmissionSummary, TopEnumerator } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { issueName } from './issueNames';
 import { questionText } from './koboLabelUtils';
@@ -33,6 +33,13 @@ export const highlightNotApproved = (row: SubmissionSummary, team: SubmissionSum
 
 export const highlightCheck = (row: SubmissionSummary, team: SubmissionSummary, check: string): boolean =>
   comparable(row) && twiceTheTeams(row.checks[check] ?? 0, row.submissions, team.checks[check] ?? 0, team.submissions);
+
+/**
+ * On Data quality's By check view: the enumerator a check flags most, when
+ * their share is at least twice the team's for that check.
+ */
+export const highlightTopEnumerator = (top: TopEnumerator, flagged: number, submissions: number): boolean =>
+  top.submissions >= MIN_SUBMISSIONS && twiceTheTeams(top.flagged, top.submissions, flagged, submissions);
 
 /**
  * The check to talk about: the one that flagged most of their submissions,

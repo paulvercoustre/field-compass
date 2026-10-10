@@ -7,14 +7,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from database.models import SubmissionCurrent, ValidationRule
+from database.models import SubmissionCurrent
 from schemas import PerformanceData, ProgressData
 from services.database import DbSession
 from services.metrics import is_approved, is_not_approved
 from services.permissions import ViewableSurvey
 from services.progress import compute_performance, compute_progress, performance_unavailable
 from services.submission_filters import within_dates
-from services.survey_config import get_enumerator_field
+from services.survey_config import custom_checks, get_enumerator_field
 
 router = APIRouter()
 
@@ -82,12 +82,5 @@ async def get_performance_data(
         SubmissionCurrent.survey_id == survey_config.survey_id
     )
     performance = compute_performance(within_dates(query, start_date, end_date).all(), config)
-    performance.custom_checks = (
-        db.query(ValidationRule)
-        .filter(
-            ValidationRule.survey_id == survey_config.survey_id,
-            ValidationRule.is_active == True,  # noqa: E712 - SQLAlchemy needs `== True`
-        )
-        .count()
-    )
+    performance.custom_checks = custom_checks(survey_config)
     return performance
