@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { EnumeratorSummary, SubmissionSummary } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { GLOSSARY, Term, formatPercent, percentOf } from '../../utils/glossary';
@@ -12,11 +12,12 @@ import {
   highlightFlagged,
   highlightNotApproved,
   MIN_SUBMISSIONS,
-  weeklyIssuesPerSubmission,
+  dailyIssuesPerSubmission,
 } from '../../utils/fieldTeam';
 import { axisProps, gridProps, tooltipProps, CHART_ACCENT } from '../charts/chartTheme';
 import Button from '../ui/Button';
 import TermInfo from '../ui/TermInfo';
+import { ChevronDownIcon } from '../ui/icons';
 
 /** What a link from the call sheet opens: their submissions, in a tab, maybe for one check. */
 export interface CallSheetLink {
@@ -129,14 +130,14 @@ interface CallSheetProps {
 const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, onClose, onOpenSubmissions }) => {
   const [copied, setCopied] = useState<'yes' | 'failed' | null>(null);
   const summary = useMemo(() => callSummary(row, team, config), [row, team, config]);
-  const weeks = useMemo(() => {
-    const teamWeeks = new Map(weeklyIssuesPerSubmission(team.weekly).map((w) => [w.week, w.value]));
-    return weeklyIssuesPerSubmission(row.weekly).map((w) => ({
-      label: new Date(w.week).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
-      [row.id]: w.value,
-      Team: teamWeeks.get(w.week) ?? null,
-    }));
-  }, [row, team]);
+  const days = useMemo(
+    () =>
+      dailyIssuesPerSubmission(row.daily).map((d) => ({
+        label: new Date(d.day).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+        value: d.value,
+      })),
+    [row]
+  );
   const checks = Object.entries(row.checks).sort((a, b) => b[1] - a[1]);
   const span = dateSpan(row);
   const last = row.last_submission
@@ -171,9 +172,10 @@ const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, on
         <button
           type="button"
           onClick={onClose}
-          className="rounded text-sm font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+          className="inline-flex items-center gap-1 rounded text-sm font-medium text-indigo-700 hover:underline dark:text-indigo-300"
         >
-          ← Field team
+          <ChevronDownIcon className="h-4 w-4 rotate-90" />
+          Field team
         </button>
         <h2 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">{row.id}</h2>
         <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -199,7 +201,7 @@ const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, on
         </p>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         <Card title={GLOSSARY.notApproved.name} term={GLOSSARY.notApproved}>
           <p className="tabular text-2xl font-semibold text-gray-900 dark:text-white">
             {row.not_approved} <span className="text-sm font-normal text-gray-500">of {row.submissions}</span>
@@ -256,34 +258,57 @@ const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, on
           {checks.length === 0 ? (
             <p className="text-sm text-gray-500">No check flagged any of their submissions.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-              {checks.map(([check, count]) => {
-                const hi = highlightCheck(row, team, check);
-                return (
-                  <li key={check} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
-                    <span className="tabular w-8 text-right font-semibold text-gray-900 dark:text-white">{count}</span>
-                    <span
-                      className={`min-w-0 flex-1 ${hi ? 'font-semibold text-amber-800 dark:text-amber-300' : 'text-gray-700 dark:text-gray-300'}`}
-                    >
-                      {checkName(check, config)}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatPercent(percentOf(count, row.submissions))} of theirs · team{' '}
-                      {formatPercent(percentOf(team.checks[check] ?? 0, team.submissions))}
-                    </span>
-                    {onOpenSubmissions && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenSubmissions({ review: 'all', issue: check })}
-                        className="rounded text-xs font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+            // Their share against the team's, under headings that say whose is whose.
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
+                  <th scope="col" className="pb-1.5 font-medium">
+                    Check
+                  </th>
+                  <th scope="col" className="pb-1.5 pl-3 text-right font-medium">
+                    {row.id}
+                  </th>
+                  <th scope="col" className="pb-1.5 pl-3 text-right font-medium">
+                    Team
+                  </th>
+                  <th scope="col" className="pb-1.5 pl-3">
+                    <span className="sr-only">Their submissions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {checks.map(([check, count]) => {
+                  const hi = highlightCheck(row, team, check);
+                  return (
+                    <tr key={check}>
+                      <td
+                        className={`py-2 ${hi ? 'font-semibold text-amber-800 dark:text-amber-300' : 'text-gray-700 dark:text-gray-300'}`}
                       >
-                        See them
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                        {checkName(check, config)}
+                      </td>
+                      <td className="tabular whitespace-nowrap py-2 pl-3 text-right text-gray-900 dark:text-white">
+                        {formatPercent(percentOf(count, row.submissions))}{' '}
+                        <span className="text-xs text-gray-500 dark:text-gray-400">({count})</span>
+                      </td>
+                      <td className="tabular whitespace-nowrap py-2 pl-3 text-right text-gray-600 dark:text-gray-400">
+                        {formatPercent(percentOf(team.checks[check] ?? 0, team.submissions))}
+                      </td>
+                      <td className="whitespace-nowrap py-2 pl-3 text-right">
+                        {onOpenSubmissions && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenSubmissions({ review: 'all', issue: check })}
+                            className="rounded text-xs font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+                          >
+                            See them
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </Card>
 
@@ -311,35 +336,34 @@ const CallSheet: React.FC<CallSheetProps> = ({ enumerator: row, team, config, on
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">How far review has got, not quality.</p>
           </Card>
 
-          <Card title={`${GLOSSARY.issuesPerSubmission.name}, by week`} term={GLOSSARY.issuesPerSubmission}>
-            {weeks.length < 2 ? (
-              <p className="text-sm text-gray-500">
-                {weeks.length === 1
-                  ? `One week so far: ${row.issues_per_submission ?? 0} for them, ${team.issues_per_submission ?? 0} for the team.`
-                  : 'No submissions in this period.'}
-              </p>
+          <Card title={`${GLOSSARY.issuesPerSubmission.name}, by day`} term={GLOSSARY.issuesPerSubmission}>
+            {days.length === 0 ? (
+              <p className="text-sm text-gray-500">No submissions in this period.</p>
             ) : (
-              <div style={{ width: '100%', height: 180 }}>
-                <ResponsiveContainer>
-                  <LineChart data={weeks} margin={{ top: 5, right: 8, left: -16, bottom: 0 }}>
-                    <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="label" {...axisProps} />
-                    <YAxis {...axisProps} allowDecimals />
-                    <Tooltip {...tooltipProps} />
-                    <Legend iconType="circle" iconSize={8} />
-                    <Line type="monotone" dataKey={row.id} stroke="#d97706" strokeWidth={2} dot connectNulls />
-                    <Line
-                      type="monotone"
-                      dataKey="Team"
-                      stroke={CHART_ACCENT}
-                      strokeDasharray="4 4"
-                      strokeWidth={2}
-                      dot={false}
-                      connectNulls
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              <>
+                <div style={{ width: '100%', height: 180 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={days} margin={{ top: 5, right: 8, left: -16, bottom: 0 }}>
+                      <CartesianGrid {...gridProps} vertical={false} />
+                      <XAxis dataKey="label" {...axisProps} />
+                      <YAxis {...axisProps} allowDecimals />
+                      <Tooltip {...tooltipProps} formatter={(value) => [value, row.id]} />
+                      <Bar dataKey="value" fill="#d97706" radius={[3, 3, 0, 0]} maxBarSize={28} />
+                      {team.issues_per_submission !== null && (
+                        <ReferenceLine
+                          y={team.issues_per_submission}
+                          stroke={CHART_ACCENT}
+                          strokeWidth={1.5}
+                          strokeDasharray="4 4"
+                        />
+                      )}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Each day they collected. Dashed: the team’s {team.issues_per_submission ?? 0} for the whole period.
+                </p>
+              </>
             )}
           </Card>
         </div>

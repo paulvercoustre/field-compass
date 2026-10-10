@@ -260,10 +260,10 @@ class ProgressData(BaseModel):
 # ============================================================================
 
 
-class WeekPoint(BaseModel):
-    """One week of collection, by the Monday it starts on."""
+class DayPoint(BaseModel):
+    """One day of collection."""
 
-    week: str = Field(..., description="ISO date of the week's Monday (YYYY-MM-DD)")
+    day: str = Field(..., description="ISO date (YYYY-MM-DD)")
     submissions: int = 0
     flagged: int = 0
     issues: int = 0
@@ -317,8 +317,8 @@ class SubmissionSummary(BaseModel):
     )
     first_submission: str | None = Field(default=None, description="ISO time of the first.")
     last_submission: str | None = Field(default=None, description="ISO time of the latest.")
-    weekly: list[WeekPoint] = Field(
-        default_factory=list, description="By the week collected, oldest first."
+    daily: list[DayPoint] = Field(
+        default_factory=list, description="By the day collected, oldest first."
     )
 
 

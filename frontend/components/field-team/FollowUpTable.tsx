@@ -11,6 +11,7 @@ import {
   mainIssue,
 } from '../../utils/fieldTeam';
 import TermInfo from '../ui/TermInfo';
+import { ChevronDownIcon, ChevronUpDownIcon } from '../ui/icons';
 
 type SortKey = 'id' | 'submissions' | 'flagged' | 'not_approved' | 'duration' | 'dk';
 type SortDirection = 'asc' | 'desc';
@@ -68,9 +69,13 @@ const SortHeader: React.FC<{
           className="-mx-1 flex items-center rounded px-1 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-800"
         >
           {label}
-          <span className={`ml-1 ${direction ? 'text-indigo-500' : 'text-gray-400'}`} aria-hidden="true">
-            {direction === 'asc' ? '↑' : direction === 'desc' ? '↓' : '↕'}
-          </span>
+          {direction ? (
+            <ChevronDownIcon
+              className={`ml-1 h-3.5 w-3.5 text-indigo-500 ${direction === 'asc' ? 'rotate-180' : ''}`}
+            />
+          ) : (
+            <ChevronUpDownIcon className="ml-1 h-3.5 w-3.5 text-gray-400" />
+          )}
         </button>
         {term && <TermInfo term={term} />}
       </span>
@@ -195,7 +200,7 @@ const FollowUpTable: React.FC<FollowUpTableProps> = ({ data, config, onOpen, onN
         aria-label={`Open ${count} in ${GLOSSARY.needsReview.name}${enumeratorId ? ` for ${enumeratorId}` : ''}`}
         className="tabular whitespace-nowrap rounded text-sm font-medium text-indigo-700 hover:underline dark:text-indigo-300"
       >
-        {count} →
+        {count}
       </button>
     ) : (
       <span className="text-gray-400">—</span>

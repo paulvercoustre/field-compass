@@ -7,7 +7,7 @@
  * Duration and the don't-know rate are shown plain; their checks carry the
  * verdict. Too few submissions to compare are never highlighted.
  */
-import { EnumeratorSummary, SubmissionSummary, WeekPoint } from '../types';
+import { DayPoint, EnumeratorSummary, SubmissionSummary } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { issueName } from './issueNames';
 import { questionText } from './koboLabelUtils';
@@ -59,11 +59,11 @@ const BUILT_IN_NAMES: Record<string, string> = {
 export const checkName = (check: string, config: SurveyConfig | null): string =>
   BUILT_IN_NAMES[check] ?? issueName(check, (name) => questionText(name, config));
 
-/** Issues per submission for each week, or null for a week with none. */
-export const weeklyIssuesPerSubmission = (weekly: WeekPoint[]): { week: string; value: number | null }[] =>
-  weekly.map((w) => ({
-    week: w.week,
-    value: w.submissions ? Math.round((w.issues / w.submissions) * 100) / 100 : null,
+/** Issues per submission on each day they collected. */
+export const dailyIssuesPerSubmission = (daily: DayPoint[]): { day: string; value: number }[] =>
+  daily.map((d) => ({
+    day: d.day,
+    value: d.submissions ? Math.round((d.issues / d.submissions) * 100) / 100 : 0,
   }));
 
 const shortDate = (iso: string): string =>

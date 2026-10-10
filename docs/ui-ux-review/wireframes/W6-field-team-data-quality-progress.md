@@ -20,13 +20,13 @@ review, 67 flagged, 137 of a target of 160. Splits by enumerator, check and ques
 - **Don't-know rate:** don't-know answers out of the questions that allow one, never out of every field.
 - **Duration:** the audit log's active time, else the time from the start question to the end question, on every
   screen, the way the duration check measures it.
-- **Issues per submission:** issues ÷ submissions, every submission counting once. Most useful as a trend: weekly on
-  Data quality, per enumerator on the call sheet. Flagged share is the headline.
+- **Issues per submission:** issues ÷ submissions, every submission counting once. Most useful as a trend, by day, as
+  bars: on Data quality, and per enumerator on the call sheet against the team's. Flagged share is the headline.
 - **Highlighting is driven by flags, against the team:** a cell is highlighted when an enumerator's share flagged by a
   check, or their Not approved share, is at least twice the team's. Duration and don't-know rate are shown plain;
   the checks carry the verdict. With checks off, nothing is highlighted.
 - **Not approved is a major signal:** its own column on Field team, first on the call sheet.
-- **Default period: the whole survey.**
+- **Default period: the whole survey.** The period menu calls it All time, beside Last 7 days and Last 30 days.
 - **"Flagged" and "Clean"** as named below, the same on every tab.
 
 ## What each page is for
@@ -72,14 +72,14 @@ Total issues across…
 ## Field team (A1, with C1)
 
 ```
-┌ Field team ─────────────────────────────────── Period [Whole survey ▾]   Last pulled 2 h ago  [Pull] ┐
-│ ┌ Flagged 45% ┐ ┌ Duration 27 min ┐ ┌ Don't-know 2.6% ┐ ┌ Checks on 8 of 10 ┐ ┌ Reviewed 32% (grey) ┐ │
+┌ Field team ─────────────────────────────────────── Period [All time ▾]   Last pulled 2 h ago  [Pull] ┐
+│ ┌ Flagged 45% ┐ ┌ Duration 27 min ┐ ┌ Don't-know 2.6% ┐ ┌ Checks on 8 ┐ ┌ Reviewed 32% (grey) ┐       │
 │ 4 submissions have no enumerator recorded. They count in the team's figures, not as an enumerator.   │
 │ Who to follow up with                                                   [Find an enumerator ID]       │
 │ Enumerator │ Subs │ Flagged      │ Not approved │ Main issue               │ Duration │ DK  │ Reviewed │NR │
-│ Whole team │ 147  │ 46%          │ 7%           │ Interview too short ×38  │ 27 min   │2.6% │ 46 of 147│42→│
-│ enum_07    │ 32   │ ▇▇▇▇ [100%]  │ [25%]        │ [Interview too short ×32]│ 6 min    │5.9% │ 9 of 32  │20→│
-│ enum_03    │ 22   │ ▇▇ 41%       │ 5%           │ Outside office hours ×6  │ 29 min   │0.4% │ 6 of 22  │ 6→│
+│ Whole team │ 147  │ 46%          │ 7%           │ Interview too short ×38  │ 27 min   │2.6% │ 46 of 147│ 42│
+│ enum_07    │ 32   │ ▇▇▇▇ [100%]  │ [25%]        │ [Interview too short ×32]│ 6 min    │5.9% │ 9 of 32  │ 20│
+│ enum_03    │ 22   │ ▇▇ 41%       │ 5%           │ Outside office hours ×6  │ 29 min   │0.4% │ 6 of 22  │  6│
 │ … Too few submissions to compare (under 5): enum_08                                                  │
 │ No enumerator recorded │ 4 │ 50% │ 0% │ …   (last, never sorted among the enumerators or highlighted)   │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -88,22 +88,25 @@ the Needs review count (NR) opens that enumerator's Needs review.
 ```
 
 **Main issue** is the check that flagged most of their submissions, with one at twice the team's share first, so the
-column names what to talk about, not what everyone gets. "Checks on" names the checks that are off; with none on, a
-line says nothing has been flagged and that this doesn't mean the data is clean. A period with no submissions says so.
+column names what to talk about, not what everyone gets. "Checks on" is one number, the survey's own checks included,
+with a link to Settings; with none on, a line says nothing has been flagged and that this doesn't mean the data is
+clean. A period with no submissions says so.
 
-The call sheet (C1) has its own address, `/surveys/<id>/team/<enumerator>`, opens beside a compact list of the team,
-and Back returns to the table. In order: Not approved and Flagged against the team; duration, their interviews as
-dots over the team's middle half and median; the don't-know rate against the team; the checks that flagged them, each
-with its share against the team's and a link to those submissions; their submissions in review (Needs review, On
-hold, Clean, Approved, Not approved); issues per submission by week, theirs and the team's; and a plain summary to
-copy into a message or read on the call. Buttons open their Needs review and all their submissions.
+The call sheet (C1) has its own address, `/surveys/<id>/team/<enumerator>`, and Back returns to the table. The team
+stays beside it as a scrolling list in the Submissions list's form: one row each (ID and submissions, then Flagged,
+Not approved and a highlighted main issue as tags), the open one marked. In order: Not approved and Flagged against
+the team; duration, their interviews as dots over the team's middle half and median; the don't-know rate against the
+team; the checks that flagged them, as a small table (check, their share with the count, the team's share, a link to
+those submissions); their submissions in review (Needs review, On hold, Clean, Approved, Not approved); issues per
+submission by day as bars, with the team's figure as a dashed line; and a plain summary to copy into a message or
+read on the call. Buttons open their Needs review and all their submissions.
 
 Removed: the five summary cards, the ranking card, the submissions bar chart and the scatter.
 
 ## Data quality (A2, E1)
 
 - **Overview:** the review bar (Needs review, On hold, Clean, Approved, Not approved, each opening its tab), the oldest
-  submission still waiting; Flagged, Duration, Don't-know rate, Checks on; issues per submission by week; submissions
+  submission still waiting; Flagged, Duration, Don't-know rate, Checks on; issues per submission by day; submissions
   by the day collected, coloured by where they stand now.
 - **By check:** each check that is on, with submissions flagged, share, the last 14 days, the enumerator with the most,
   and its Needs review count; checks that are off are listed as off, with a link to turn them on.
@@ -145,7 +148,7 @@ listed apart and not highlighted.
 1. **One calculation, one set of names.** `services/metrics.py` and `etl/duration.py`; Field team, Data quality,
    Progress and the pull summary read from them and use the named counts. Fixes F-10 A.
 2. **Field team table and call sheet.** `/api/performance` adds per-check counts, the middle half of durations,
-   first and last submission, a weekly trend (all in the shared summary, for Data quality to use next), each
+   first and last submission, a daily trend (all in the shared summary, for Data quality to use next), each
    enumerator's durations, which checks are on, and a period.
 3. Data quality Overview and By check.
 4. Progress bar.

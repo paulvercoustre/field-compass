@@ -1,8 +1,6 @@
 import React from 'react';
 import { PerformanceData } from '../../types';
-import { SurveyConfig } from '../../services/progressApi';
 import { GLOSSARY, Term, formatPercent, percentOf } from '../../utils/glossary';
-import { checkName } from '../../utils/fieldTeam';
 import TermInfo from '../ui/TermInfo';
 
 const Tile: React.FC<{
@@ -34,16 +32,14 @@ const Tile: React.FC<{
 
 interface FieldTeamTilesProps {
   data: PerformanceData;
-  config: SurveyConfig | null;
   onOpenSettings?: () => void;
 }
 
 /** The whole team, with Data quality's figures; review progress last and grey. */
-const FieldTeamTiles: React.FC<FieldTeamTilesProps> = ({ data, config, onOpenSettings }) => {
+const FieldTeamTiles: React.FC<FieldTeamTilesProps> = ({ data, onOpenSettings }) => {
   const team = data.team;
   if (!team) return null;
-  const available = data.checks_on.length + data.checks_off.length;
-  const off = data.checks_off.map((check) => checkName(check, config));
+  const checksOn = data.checks_on.length + data.custom_checks;
   const settings = onOpenSettings && (
     <button
       type="button"
@@ -78,15 +74,10 @@ const FieldTeamTiles: React.FC<FieldTeamTilesProps> = ({ data, config, onOpenSet
       />
       <Tile
         label="Checks on"
-        value={`${data.checks_on.length} of ${available}`}
+        value={String(checksOn)}
         sub={
           <>
-            {off.length === 0
-              ? 'All built-in checks are on'
-              : off.length <= 2
-                ? `${off.join(' and ')} ${off.length === 1 ? 'is' : 'are'} off`
-                : `${off.length} are off`}
-            {data.custom_checks > 0 && `, plus ${data.custom_checks} of your own`}
+            {data.custom_checks > 0 ? `${data.custom_checks} of them your own` : 'built-in checks'}
             {settings && <> · {settings}</>}
           </>
         }

@@ -11,13 +11,12 @@ import FieldTeamTiles from '../components/field-team/FieldTeamTiles';
 import FollowUpTable from '../components/field-team/FollowUpTable';
 import EnumeratorList from '../components/field-team/EnumeratorList';
 import CallSheet, { CallSheetLink } from '../components/field-team/CallSheet';
-import { formatPercent, percentOf } from '../utils/glossary';
 import { NO_ENUMERATOR } from '../utils/filterUtils';
 
 type Period = 'all' | 'last7' | 'last30';
 
 const PERIODS: { value: Period; label: string; days?: number }[] = [
-  { value: 'all', label: 'Whole survey' },
+  { value: 'all', label: 'All time' },
   { value: 'last7', label: 'Last 7 days', days: 7 },
   { value: 'last30', label: 'Last 30 days', days: 30 },
 ];
@@ -124,6 +123,10 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
   const team = performanceData?.team ?? null;
   const noEnumerator = performanceData?.no_enumerator?.submissions ?? 0;
   const openEnumerator = openId ? performanceData?.enumerators.find((e) => e.id === openId) : undefined;
+  const sheet =
+    !isLoading && !error && unavailable.length === 0 && performanceData && team && openEnumerator
+      ? { enumerators: performanceData.enumerators, team, enumerator: openEnumerator }
+      : null;
   const openNoEnumerator = onNavigateToSubmissions
     ? () => onNavigateToSubmissions({ review: 'all', enumerators: [NO_ENUMERATOR] })
     : undefined;
@@ -153,101 +156,104 @@ const EnumeratorPerformancePage: React.FC<EnumeratorPerformancePageProps> = ({
         <PullStartError pull={pull} />
       </PageHeader>
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 text-gray-700 dark:text-gray-300">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Spinner />
-          </div>
-        ) : error ? (
-          <div className="p-4 text-center text-sm text-red-600 dark:text-red-400">{error}</div>
-        ) : unavailable.length > 0 ? (
-          // The survey has no enumerator configured. Everything here groups
-          // by enumerator, so rendering it would show a single synthetic
-          // bucket holding the whole dataset -- which reads as real data.
-          <CapabilityNotice
-            title="Field team needs to know who did each interview"
-            message="Choose the question that records the enumerator. Data quality and Progress work without it."
-            onOpenSettings={() => navigate({ view: 'settings' })}
-          />
-        ) : performanceData && team && team.submissions === 0 ? (
-          <div className="mx-auto max-w-xl py-16 text-center">
-            <h2 className="mb-1 text-sm font-medium text-gray-900 dark:text-white">No submissions in this period</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Choose a longer period, or the whole survey.</p>
-          </div>
-        ) : performanceData && team && openEnumerator ? (
-          <div className="mx-auto grid max-w-screen-2xl gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
-            <aside className="hidden lg:flex lg:flex-col lg:gap-3">
-              <p className="px-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                Team: {formatPercent(percentOf(team.flagged, team.submissions))} flagged ·{' '}
-                {formatPercent(percentOf(team.not_approved, team.submissions))} not approved
-                {team.duration_minutes !== null && ` · ${Math.round(team.duration_minutes)} min`}
-              </p>
-              <EnumeratorList
-                enumerators={performanceData.enumerators}
-                team={team}
-                config={config}
-                openId={openEnumerator.id}
-                onOpen={open}
-              />
-            </aside>
+      {sheet ? (
+        // As in Submissions: the list in its own scrolling column, the open
+        // enumerator beside it; on a phone, the sheet alone.
+        <div className="flex min-h-0 flex-1 text-gray-700 dark:text-gray-300">
+          <aside className="hidden min-h-0 w-[22rem] flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-white md:block lg:w-[24rem] dark:border-gray-800 dark:bg-gray-950">
+            <EnumeratorList
+              enumerators={sheet.enumerators}
+              team={sheet.team}
+              config={config}
+              openId={sheet.enumerator.id}
+              onOpen={open}
+            />
+          </aside>
+          <div className="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
             <CallSheet
-              enumerator={openEnumerator}
-              team={team}
+              enumerator={sheet.enumerator}
+              team={sheet.team}
               config={config}
               onClose={() => open(null)}
-              onOpenSubmissions={onNavigateToSubmissions ? (link) => toSubmissions(openEnumerator.id, link) : undefined}
+              onOpenSubmissions={
+                onNavigateToSubmissions ? (link) => toSubmissions(sheet.enumerator.id, link) : undefined
+              }
             />
           </div>
-        ) : performanceData && team ? (
-          <div className="mx-auto max-w-screen-2xl space-y-5">
-            {openId && (
-              <p className="text-sm text-gray-600 dark:text-gray-400" role="status">
-                {openId} has no submissions in this period.
-              </p>
-            )}
-            <FieldTeamTiles data={performanceData} config={config} onOpenSettings={openSettings} />
-            {performanceData.checks_on.length === 0 && (
-              <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-gray-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-gray-200">
-                No checks are on, so nothing has been flagged. That doesn’t mean the submissions are clean.{' '}
-                <button
-                  type="button"
-                  onClick={openSettings}
-                  className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
-                >
-                  Choose checks
-                </button>
-              </p>
-            )}
-            {/* In the team's figures, so they match Data quality's; never an enumerator of their own. */}
-            {noEnumerator > 0 && (
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {noEnumerator} submission{noEnumerator === 1 ? ' has' : 's have'} no enumerator recorded.{' '}
-                {noEnumerator === 1 ? 'It counts' : 'They count'} in the team’s figures, not as an enumerator.{' '}
-                {openNoEnumerator && (
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 text-gray-700 dark:text-gray-300">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Spinner />
+            </div>
+          ) : error ? (
+            <div className="p-4 text-center text-sm text-red-600 dark:text-red-400">{error}</div>
+          ) : unavailable.length > 0 ? (
+            // The survey has no enumerator configured. Everything here groups
+            // by enumerator, so rendering it would show a single synthetic
+            // bucket holding the whole dataset -- which reads as real data.
+            <CapabilityNotice
+              title="Field team needs to know who did each interview"
+              message="Choose the question that records the enumerator. Data quality and Progress work without it."
+              onOpenSettings={() => navigate({ view: 'settings' })}
+            />
+          ) : performanceData && team && team.submissions === 0 ? (
+            <div className="mx-auto max-w-xl py-16 text-center">
+              <h2 className="mb-1 text-sm font-medium text-gray-900 dark:text-white">No submissions in this period</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Choose a longer period, or all time.</p>
+            </div>
+          ) : performanceData && team ? (
+            <div className="mx-auto max-w-screen-2xl space-y-5">
+              {openId && (
+                <p className="text-sm text-gray-600 dark:text-gray-400" role="status">
+                  {openId} has no submissions in this period.
+                </p>
+              )}
+              <FieldTeamTiles data={performanceData} onOpenSettings={openSettings} />
+              {performanceData.checks_on.length === 0 && (
+                <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-gray-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-gray-200">
+                  No checks are on, so nothing has been flagged. That doesn’t mean the submissions are clean.{' '}
                   <button
                     type="button"
-                    onClick={openNoEnumerator}
+                    onClick={openSettings}
                     className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
                   >
-                    See {noEnumerator === 1 ? 'it' : 'them'}
+                    Choose checks
                   </button>
-                )}
-              </p>
-            )}
-            <FollowUpTable
-              data={performanceData}
-              config={config}
-              onOpen={open}
-              onNeedsReview={
-                onNavigateToSubmissions
-                  ? (id) => onNavigateToSubmissions({ review: 'needs_review', ...(id ? { enumerators: [id] } : {}) })
-                  : undefined
-              }
-              onNoEnumerator={openNoEnumerator}
-            />
-          </div>
-        ) : null}
-      </div>
+                </p>
+              )}
+              {/* In the team's figures, so they match Data quality's; never an enumerator of their own. */}
+              {noEnumerator > 0 && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {noEnumerator} submission{noEnumerator === 1 ? ' has' : 's have'} no enumerator recorded.{' '}
+                  {noEnumerator === 1 ? 'It counts' : 'They count'} in the team’s figures, not as an enumerator.{' '}
+                  {openNoEnumerator && (
+                    <button
+                      type="button"
+                      onClick={openNoEnumerator}
+                      className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
+                    >
+                      See {noEnumerator === 1 ? 'it' : 'them'}
+                    </button>
+                  )}
+                </p>
+              )}
+              <FollowUpTable
+                data={performanceData}
+                config={config}
+                onOpen={open}
+                onNeedsReview={
+                  onNavigateToSubmissions
+                    ? (id) => onNavigateToSubmissions({ review: 'needs_review', ...(id ? { enumerators: [id] } : {}) })
+                    : undefined
+                }
+                onNoEnumerator={openNoEnumerator}
+              />
+            </div>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 };

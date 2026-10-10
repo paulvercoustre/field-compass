@@ -161,9 +161,9 @@ export interface ProgressData {
  * (backend/services/metrics.py; the words for them are in utils/glossary.ts).
  * submissions = needs_review + on_hold + clean + approved + not_approved.
  */
-/** One week of collection, by the Monday it starts on. */
-export interface WeekPoint {
-  week: string;
+/** One day of collection. */
+export interface DayPoint {
+  day: string;
   submissions: number;
   flagged: number;
   issues: number;
@@ -195,8 +195,8 @@ export interface SubmissionSummary {
   checks: Record<string, number>;
   first_submission: string | null;
   last_submission: string | null;
-  /** By the week collected, oldest first. */
-  weekly: WeekPoint[];
+  /** By the day collected, oldest first. */
+  daily: DayPoint[];
 }
 
 export interface EnumeratorSummary extends SubmissionSummary {

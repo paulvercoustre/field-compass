@@ -7,7 +7,7 @@ import {
   highlightFlagged,
   highlightNotApproved,
   mainIssue,
-  weeklyIssuesPerSubmission,
+  dailyIssuesPerSubmission,
 } from './fieldTeam';
 
 const summary = (over: Partial<SubmissionSummary> = {}): SubmissionSummary => ({
@@ -30,7 +30,7 @@ const summary = (over: Partial<SubmissionSummary> = {}): SubmissionSummary => ({
   checks: { duration_too_short: 10, outlier_income: 4 },
   first_submission: '2026-09-15T08:00:00',
   last_submission: '2026-09-28T15:38:00',
-  weekly: [],
+  daily: [],
   ...over,
 });
 
@@ -109,15 +109,15 @@ describe('words', () => {
     expect(text).toContain('20 waiting for review.');
   });
 
-  it('gives issues per submission by week, and nothing for an empty week', () => {
+  it('gives issues per submission for each day collected', () => {
     expect(
-      weeklyIssuesPerSubmission([
-        { week: '2026-09-14', submissions: 3, flagged: 1, issues: 2 },
-        { week: '2026-09-21', submissions: 0, flagged: 0, issues: 0 },
+      dailyIssuesPerSubmission([
+        { day: '2026-09-14', submissions: 3, flagged: 1, issues: 2 },
+        { day: '2026-09-15', submissions: 2, flagged: 0, issues: 0 },
       ])
     ).toEqual([
-      { week: '2026-09-14', value: 0.67 },
-      { week: '2026-09-21', value: null },
+      { day: '2026-09-14', value: 0.67 },
+      { day: '2026-09-15', value: 0 },
     ]);
   });
 });

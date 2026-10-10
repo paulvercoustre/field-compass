@@ -24,7 +24,7 @@ const summary = (over: Partial<SubmissionSummary> = {}): SubmissionSummary => ({
   checks: { duration_too_short: 1 },
   first_submission: '2026-09-15T08:00:00',
   last_submission: '2026-09-28T15:38:00',
-  weekly: [],
+  daily: [],
   ...over,
 });
 

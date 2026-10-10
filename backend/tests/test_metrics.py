@@ -166,19 +166,18 @@ class TestTheCallSheetsFigures:
         one = summarise([_sub(data={"active_interview_time": 12})], CONFIG)
         assert (one.duration_p25, one.duration_p75) == (12.0, 12.0)
 
-    def test_by_week_and_first_and_last(self):
-        days = [datetime(2026, 9, 14, 9), datetime(2026, 9, 20, 18), datetime(2026, 9, 21, 8)]
+    def test_by_day_and_first_and_last(self):
+        days = [datetime(2026, 9, 20, 9), datetime(2026, 9, 20, 18), datetime(2026, 9, 21, 8)]
         subs = [_sub(issues=n) for n in (2, 0, 1)]
         for sub, day in zip(subs, days, strict=True):
             sub._submission_time = day
         summary = summarise(subs, CONFIG)
-        # Monday 14 to Sunday 20 September is one week; the 21st starts the next.
-        assert [(w.week, w.submissions, w.flagged, w.issues) for w in summary.weekly] == [
-            ("2026-09-14", 2, 1, 2),
+        assert [(d.day, d.submissions, d.flagged, d.issues) for d in summary.daily] == [
+            ("2026-09-20", 2, 1, 2),
             ("2026-09-21", 1, 1, 1),
         ]
         assert (summary.first_submission, summary.last_submission) == (
-            "2026-09-14T09:00:00",
+            "2026-09-20T09:00:00",
             "2026-09-21T08:00:00",
         )
 
