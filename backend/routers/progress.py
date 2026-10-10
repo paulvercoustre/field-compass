@@ -7,12 +7,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from database.models import SubmissionCurrent
+from database.models import SubmissionCurrent, ValidationRule
 from schemas import PerformanceData, ProgressData
 from services.database import DbSession
 from services.metrics import is_approved, is_not_approved
 from services.permissions import ViewableSurvey
 from services.progress import compute_performance, compute_progress, performance_unavailable
+from services.submission_filters import within_dates
 from services.survey_config import get_enumerator_field
 
 router = APIRouter()
@@ -61,6 +62,8 @@ async def get_progress_data(
 async def get_performance_data(
     survey_config: ViewableSurvey,
     db: DbSession,
+    start_date: Annotated[str | None, Query(description="Sent on or after (YYYY-MM-DD)")] = None,
+    end_date: Annotated[str | None, Query(description="Sent on or before (YYYY-MM-DD)")] = None,
 ):
     """
     Get enumerator performance metrics for a specific survey.
@@ -75,9 +78,16 @@ async def get_performance_data(
     if not get_enumerator_field(config):
         return performance_unavailable(config)
 
-    submissions = (
-        db.query(SubmissionCurrent)
-        .filter(SubmissionCurrent.survey_id == survey_config.survey_id)
-        .all()
+    query = db.query(SubmissionCurrent).filter(
+        SubmissionCurrent.survey_id == survey_config.survey_id
     )
-    return compute_performance(submissions, config)
+    performance = compute_performance(within_dates(query, start_date, end_date).all(), config)
+    performance.custom_checks = (
+        db.query(ValidationRule)
+        .filter(
+            ValidationRule.survey_id == survey_config.survey_id,
+            ValidationRule.is_active == True,  # noqa: E712 - SQLAlchemy needs `== True`
+        )
+        .count()
+    )
+    return performance

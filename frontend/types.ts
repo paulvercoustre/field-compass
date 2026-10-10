@@ -161,6 +161,14 @@ export interface ProgressData {
  * (backend/services/metrics.py; the words for them are in utils/glossary.ts).
  * submissions = needs_review + on_hold + clean + approved + not_approved.
  */
+/** One day of collection. */
+export interface DayPoint {
+  day: string;
+  submissions: number;
+  flagged: number;
+  issues: number;
+}
+
 export interface SubmissionSummary {
   submissions: number;
   flagged: number;
@@ -180,10 +188,21 @@ export interface SubmissionSummary {
   duration_from_start_end: number;
   /** Percent. Null when nothing could be measured. */
   dk_rate: number | null;
+  /** The middle half of durations, in minutes. */
+  duration_p25: number | null;
+  duration_p75: number | null;
+  /** Submissions flagged by each check, by its issue key. */
+  checks: Record<string, number>;
+  first_submission: string | null;
+  last_submission: string | null;
+  /** By the day collected, oldest first. */
+  daily: DayPoint[];
 }
 
 export interface EnumeratorSummary extends SubmissionSummary {
   id: string;
+  /** Each measured interview's minutes. */
+  durations: number[];
 }
 
 export interface UnavailableCapability {
@@ -204,6 +223,11 @@ export interface PerformanceData {
    * enumerator of their own. Null when every submission has one.
    */
   no_enumerator: SubmissionSummary | null;
+  /** The built-in checks that are on and off (backend survey_config.built_in_checks). */
+  checks_on: string[];
+  checks_off: string[];
+  /** The survey's own active rules. */
+  custom_checks: number;
 }
 
 // --- Filtering Types ---

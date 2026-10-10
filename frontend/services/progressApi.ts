@@ -132,8 +132,13 @@ export const progressApi = {
     return request<ProgressData>(`/api/progress?${params}`);
   },
 
-  getPerformanceData: (surveyId: string) =>
-    request<PerformanceData>(`/api/performance?${new URLSearchParams({ survey_id: surveyId })}`),
+  /** Field team's figures; a period narrows them to submissions sent within it (YYYY-MM-DD). */
+  getPerformanceData: (surveyId: string, period: { startDate?: string; endDate?: string } = {}) => {
+    const params = new URLSearchParams({ survey_id: surveyId });
+    if (period.startDate) params.append('start_date', period.startDate);
+    if (period.endDate) params.append('end_date', period.endDate);
+    return request<PerformanceData>(`/api/performance?${params}`);
+  },
 };
 
 /** A survey's full configuration, with the caller's permission on it. */

@@ -57,8 +57,8 @@ const samePlace = (a: PagePlace, b: PagePlace) =>
  * and the submissions filters it carried, with the survey selected first so
  * the page that opens is about the right one.
  *
- * The address follows (utils/appUrl.ts). Another page, another survey or a
- * submission opened is a step Back undoes; moving between submissions,
+ * The address follows (utils/appUrl.ts). Another page, another survey, a
+ * submission or a call sheet opened is a step Back undoes; moving between submissions,
  * filtering or switching tabs only updates the address. A link, a reload, and
  * Back and Forward put the app where the address says.
  */
@@ -111,7 +111,9 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (survey) setSelectedSurvey(survey);
       }
       const tab = place.tab ?? DEFAULT_TABS[place.view];
-      setRequestedTab(tab ? { tab, at: Date.now() } : undefined);
+      // Field team's "tab" is the open call sheet; going back to none must close it.
+      const asked = tab || (place.view === 'enumeratorPerformance' ? '' : undefined);
+      setRequestedTab(asked !== undefined ? { tab: asked, at: Date.now() } : undefined);
       if (place.view === 'dashboard') {
         // The same filters keep the queue as it is; only the open submission changes.
         if (!sameFilters(place.filters, current.filters)) setDashboardFilters(place.filters ?? {});
@@ -145,7 +147,9 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       !!last &&
       (last.view !== place.view ||
         last.surveyId !== place.surveyId ||
-        (last.submissionId == null && place.submissionId != null));
+        (last.submissionId == null && place.submissionId != null) ||
+        // An enumerator's call sheet opened from the table: Back returns to it.
+        (place.view === 'enumeratorPerformance' && !last.tab && !!place.tab));
     window.history[step ? 'pushState' : 'replaceState'](null, '', url);
     // `place` is what `url` is made from.
     // eslint-disable-next-line react-hooks/exhaustive-deps

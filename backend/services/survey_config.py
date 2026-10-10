@@ -300,3 +300,27 @@ def get_global_parameters(config_data: dict[str, Any] | None) -> GlobalParameter
 
 def get_quality_checks(config_data: dict[str, Any] | None) -> QualityChecks:
     return QualityChecks.of(config_data, "quality_checks")
+
+
+def built_in_checks(config_data: dict[str, Any] | None) -> list[tuple[str, bool]]:
+    """
+    The checks Field Compass runs when a survey turns them on, each with
+    whether it is on. Keyed by the issue a check writes where it writes one;
+    outliers, the sampling frame and AI review write several, so they have a
+    key of their own. New surveys start with them off (decided 2026-10-09),
+    so screens say how many are on rather than reading "no issues" as clean.
+    """
+    checks = get_quality_checks(config_data)
+    params = get_global_parameters(config_data)
+    return [
+        ("date_out_of_range", bool(checks.flag_out_of_period)),
+        ("interview_on_weekend", bool(checks.flag_weekend)),
+        ("interview_out_of_office_hours", bool(checks.flag_office_hours)),
+        ("duration_too_short", params.min_survey_duration_minutes is not None),
+        ("duration_too_long", params.max_survey_duration_minutes is not None),
+        ("dk_percentage_high", bool(checks.flag_dk_percentage)),
+        ("empty_percentage_high", bool(checks.flag_empty_percentage)),
+        ("outliers", bool(checks.flag_outliers and checks.outlier_variables)),
+        ("sampling", bool(checks.flag_sampling_frame)),
+        ("ai_review", bool(checks.flag_llm_qualitative and checks.llm_qualitative_fields)),
+    ]

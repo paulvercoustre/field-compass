@@ -260,6 +260,15 @@ class ProgressData(BaseModel):
 # ============================================================================
 
 
+class DayPoint(BaseModel):
+    """One day of collection."""
+
+    day: str = Field(..., description="ISO date (YYYY-MM-DD)")
+    submissions: int = 0
+    flagged: int = 0
+    issues: int = 0
+
+
 class SubmissionSummary(BaseModel):
     """
     The named counts and measurements of a set of submissions (services/metrics.py).
@@ -297,10 +306,27 @@ class SubmissionSummary(BaseModel):
             "Null when nothing could be measured."
         ),
     )
+    duration_p25: float | None = Field(
+        default=None, description="The quarter of durations below this: the middle half's start."
+    )
+    duration_p75: float | None = Field(
+        default=None, description="The quarter of durations above this: the middle half's end."
+    )
+    checks: dict[str, int] = Field(
+        default_factory=dict, description="Submissions flagged by each check, by its issue key."
+    )
+    first_submission: str | None = Field(default=None, description="ISO time of the first.")
+    last_submission: str | None = Field(default=None, description="ISO time of the latest.")
+    daily: list[DayPoint] = Field(
+        default_factory=list, description="By the day collected, oldest first."
+    )
 
 
 class EnumeratorSummary(SubmissionSummary):
     id: str
+    durations: list[float] = Field(
+        default_factory=list, description="Each measured interview's minutes, for the call sheet."
+    )
 
 
 class SurveyFormResponse(BaseModel):
@@ -350,6 +376,11 @@ class PerformanceData(BaseModel):
     # an enumerator of their own (not counted, ranked or compared as one).
     # Null when every submission has one.
     no_enumerator: SubmissionSummary | None = None
+    # The survey's built-in checks that are on and off (services/survey_config
+    # built_in_checks), and how many of its own rules are active.
+    checks_on: list[str] = []
+    checks_off: list[str] = []
+    custom_checks: int = 0
     # Populated when a required setting is missing, so the client can
     # explain an empty result instead of rendering a blank chart.
     unavailable: list[UnavailableCapability] = []

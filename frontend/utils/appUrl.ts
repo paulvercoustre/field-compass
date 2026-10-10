@@ -7,6 +7,7 @@ import { buildFilterParams, filtersFromParams } from './filterUtils';
  *
  *   /surveys/<id>/submissions[/<kobo id>]?review=…&issue=…   the queue, and a submission
  *   /surveys/<id>/quality | progress | team
+ *   /surveys/<id>/team/<enumerator>                           an enumerator's call sheet
  *   /surveys/<id>/settings[/<tab>]
  *   /new                                                      a new survey
  *   /account[/<tab>]                                          account settings
@@ -51,7 +52,7 @@ export const DEFAULT_TABS: Partial<Record<View, string>> = { settings: 'settings
 export interface Place {
   view: View;
   surveyId?: string | null;
-  /** Survey or account settings. */
+  /** Survey or account settings: the tab. Field team: the enumerator whose call sheet is open. */
   tab?: string;
   /** Submissions: the one open. */
   submissionId?: number | null;
@@ -65,7 +66,7 @@ export function urlFor(place: Place): string {
   if (place.view === 'userSettings') return `/account${tab}`;
   if (!place.surveyId) return '/';
   const base = `/surveys/${encodeURIComponent(place.surveyId)}/${SEGMENTS[place.view]}`;
-  if (place.view === 'settings') return `${base}${tab}`;
+  if (place.view === 'settings' || place.view === 'enumeratorPerformance') return `${base}${tab}`;
   if (place.view !== 'dashboard') return base;
   const open = place.submissionId != null ? `/${place.submissionId}` : '';
   const query = place.filters ? buildFilterParams(place.filters).toString() : '';
@@ -79,7 +80,7 @@ export function placeFrom(location: { pathname: string; search: string }): Place
   if (parts[0] === 'surveys' && parts[1]) {
     const view = (Object.keys(SEGMENTS) as SurveyView[]).find((v) => SEGMENTS[v] === parts[2]) ?? 'dashboard';
     const place: Place = { view, surveyId: parts[1] };
-    if (view === 'settings') place.tab = parts[3];
+    if (view === 'settings' || view === 'enumeratorPerformance') place.tab = parts[3];
     if (view === 'dashboard') {
       const id = Number(parts[3]);
       place.submissionId = parts[3] && Number.isInteger(id) ? id : null;
@@ -97,6 +98,7 @@ export const surveyIdInUrl = (): string | null => placeFrom(window.location).sur
 export function titleFor(place: Place, surveyName?: string | null): string {
   const parts = [VIEW_LABELS[place.view]];
   if (place.view === 'dashboard' && place.submissionId != null) parts.unshift(`#${place.submissionId}`);
+  if (place.view === 'enumeratorPerformance' && place.tab) parts.unshift(place.tab);
   const surveyPage = place.view !== 'createSurvey' && place.view !== 'userSettings';
   if (surveyPage && !surveyName) return 'Field Compass';
   if (surveyPage) parts.push(surveyName!);

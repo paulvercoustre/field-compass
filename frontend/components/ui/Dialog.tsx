@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -62,7 +63,9 @@ const Dialog: React.FC<DialogProps> = ({ open, title, onClose, busy = false, chi
   }, [open]);
 
   if (!open) return null;
-  return (
+  // At the root of the page, so it takes on nothing from where it was opened:
+  // inside a table heading it inherited no-wrap, and its text ran out of the box.
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950/40 backdrop-blur-[2px]"
       onMouseDown={(event) => {
@@ -83,7 +86,8 @@ const Dialog: React.FC<DialogProps> = ({ open, title, onClose, busy = false, chi
         <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">{children}</div>
         {actions && <div className="mt-5 flex justify-end gap-3">{actions}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

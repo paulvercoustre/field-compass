@@ -3,29 +3,24 @@ Quality Overview API endpoints.
 Provides aggregated quality metrics for the quality dashboard.
 """
 
-from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
 from database.models import SubmissionCurrent
 from schemas import QualityOverviewResponse
 from services.database import DbSession
 from services.permissions import ViewableSurvey
 from services.quality import quality_overview
-from services.submission_filters import filter_by_answers, parse_list, parse_sampling_filters
+from services.submission_filters import (
+    filter_by_answers,
+    parse_list,
+    parse_sampling_filters,
+    within_dates,
+)
 from services.survey_config import get_enumerator_field, get_sampling_cols
 
 router = APIRouter()
-
-
-def _parse_date(value: str, name: str) -> datetime:
-    try:
-        return datetime.strptime(value, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid {name} format: {value}. Use YYYY-MM-DD."
-        ) from None
 
 
 @router.get("/quality/overview", response_model=QualityOverviewResponse)
@@ -52,14 +47,7 @@ async def get_quality_overview(
     query = db.query(SubmissionCurrent).filter(
         SubmissionCurrent.survey_id == survey_config.survey_id
     )
-    if start_date:
-        query = query.filter(
-            SubmissionCurrent._submission_time >= _parse_date(start_date, "start_date")
-        )
-    if end_date:
-        # The whole of the end date.
-        end_dt = _parse_date(end_date, "end_date").replace(hour=23, minute=59, second=59)
-        query = query.filter(SubmissionCurrent._submission_time <= end_dt)
+    query = within_dates(query, start_date, end_date)
 
     config = survey_config.config_data or {}
     submissions = filter_by_answers(

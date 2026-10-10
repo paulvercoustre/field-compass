@@ -13,7 +13,11 @@ enumerator question.
 """
 
 from collections.abc import Iterable, Sequence
+from datetime import datetime
 from typing import Any
+
+from fastapi import HTTPException
+from sqlalchemy.orm import Query
 
 from database.models import SubmissionCurrent
 from forms.answers import answer_value
@@ -71,3 +75,26 @@ def filter_by_answers(
         for sub in submissions
         if all(_answered_one_of(sub.submission_data, q, values) for q, values in conditions)
     ]
+
+
+def _parse_day(value: str, name: str) -> datetime:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {name} format: {value}. Use YYYY-MM-DD."
+        ) from None
+
+
+def within_dates(
+    query: Query[SubmissionCurrent], start_date: str | None, end_date: str | None
+) -> Query[SubmissionCurrent]:
+    """Submissions sent from the start date through the whole of the end date (YYYY-MM-DD)."""
+    if start_date:
+        query = query.filter(
+            SubmissionCurrent._submission_time >= _parse_day(start_date, "start_date")
+        )
+    if end_date:
+        end = _parse_day(end_date, "end_date").replace(hour=23, minute=59, second=59)
+        query = query.filter(SubmissionCurrent._submission_time <= end)
+    return query
