@@ -67,8 +67,9 @@ async def get_performance_data(
     Requires viewer access to the survey.
 
     Returns the named counts and measurements (services/metrics.py) for the
-    team and for each enumerator: the same definitions as Data quality, over
-    the submissions with an enumerator recorded. `no_enumerator` counts the rest.
+    team, each enumerator, and the submissions with no enumerator recorded.
+    The team is every submission, with Data quality's definitions, so the two
+    pages show the same figures.
     """
     config = survey_config.config_data
     if not get_enumerator_field(config):

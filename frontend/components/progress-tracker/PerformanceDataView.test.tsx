@@ -30,7 +30,7 @@ const data = (enumerators: EnumeratorSummary[]): PerformanceData => ({
   // 20% flagged, 5% not approved across the team.
   team: summary({ submissions: 40, flagged: 8, not_approved: 2 }),
   enumerators,
-  no_enumerator: 0,
+  no_enumerator: null,
 });
 
 const row = (view: ReturnType<typeof render>, id: string) =>
@@ -64,6 +64,29 @@ describe('PerformanceDataView', () => {
     );
     expect(within(row(view, 'Whole team')).getByText('20% (8)')).toBeTruthy();
     expect(within(row(view, 'enum_01')).getAllByText('not measured')).toHaveLength(2);
+  });
+
+  it('lists submissions with no enumerator apart, last and never highlighted', () => {
+    const opened: string[] = [];
+    const view = render(
+      <PerformanceDataView
+        data={{
+          ...data([enumerator('enum_01', { submissions: 10, flagged: 1 })]),
+          no_enumerator: summary({ submissions: 6, flagged: 6 }),
+        }}
+        onNoEnumeratorClick={() => opened.push('none')}
+      />
+    );
+    const rows = view.getAllByRole('row');
+    const last = rows[rows.length - 1];
+    expect(within(last).getByText('100% (6)')).toBeTruthy();
+    expect(last.querySelectorAll('span.bg-amber-100')).toHaveLength(0);
+    // Sorted the other way, it stays at the bottom.
+    fireEvent.click(view.getByRole('button', { name: /^Flagged/ }));
+    const again = view.getAllByRole('row');
+    expect(within(again[again.length - 1]).getByText('No enumerator recorded')).toBeTruthy();
+    fireEvent.click(within(again[again.length - 1]).getByRole('button', { name: 'No enumerator recorded' }));
+    expect(opened).toEqual(['none']);
   });
 
   it('never colours review progress', () => {

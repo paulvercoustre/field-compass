@@ -30,18 +30,19 @@ const SummaryCard: React.FC<{ label: string; term?: Term; value: string; sub: st
   </div>
 );
 
-/** The whole team's figures: the same definitions as Data quality, over the team's submissions. */
+/** The whole team's figures: every submission, as on Data quality. */
 const EnumeratorSummaryCards: React.FC<EnumeratorSummaryCardsProps> = ({ data }) => {
   const team = data.team;
   if (!team) return null;
   const enumerators = data.enumerators.length;
+  const unrecorded = data.no_enumerator?.submissions ?? 0;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
       <SummaryCard
         label="Enumerators"
         value={String(enumerators)}
-        sub={`${team.submissions} ${GLOSSARY.submissions.name.toLowerCase()}`}
+        sub={`${team.submissions} submissions${unrecorded ? `, ${unrecorded} with none recorded` : ''}`}
       />
       <SummaryCard
         label={GLOSSARY.flagged.name}

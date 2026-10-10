@@ -48,7 +48,7 @@ Used word for word on every screen; the ⓘ text is the definition. `services/me
 
 | Name | Definition | Notes |
 |---|---|---|
-| Submissions | Every submission pulled from Kobo, except deleted ones. | Field team leaves out submissions with no enumerator, and says how many. |
+| Submissions | Every submission pulled from Kobo, except deleted ones. | Field team's team figures include submissions with no enumerator, so they match Data quality's; those are a row of their own, never counted, ranked or highlighted as an enumerator. |
 | Flagged | At least one check found an issue, whatever a reviewer decided. | |
 | Issues | What the checks found. A flagged submission can have several. | |
 | Needs review | Flagged, and no decision in Kobo yet. | The Submissions tab. |
@@ -74,13 +74,14 @@ Total issues across…
 ```
 ┌ Field team ─────────────────────────────────── Period [Whole survey ▾]   Last pulled 2 h ago  [Pull] ┐
 │ ┌ Flagged 45% ┐ ┌ Duration 27 min ┐ ┌ Don't-know 2.6% ┐ ┌ Checks on 8 of 10 ┐ ┌ Reviewed 32% (grey) ┐ │
-│ 4 submissions have no enumerator recorded, so they aren't counted here. See them                     │
+│ 4 submissions have no enumerator recorded. They count in the team's figures, not as an enumerator.   │
 │ Who to follow up with                                    [Find an enumerator ID]  Sort by [Flagged ▾]  │
 │ Enumerator │ Subs │ Flagged      │ Not approved │ Most frequent issue      │ Duration │ DK  │ Reviewed │ │
-│ Whole team │ 143  │ 45%          │ 7%           │ Interview too short ×38  │ 27 min   │2.6% │ 46 of 143│ │
+│ Whole team │ 147  │ 46%          │ 7%           │ Interview too short ×38  │ 27 min   │2.6% │ 46 of 147│ │
 │ enum_07    │ 32   │ ▇▇▇▇ [100%]  │ [25%]        │ [Interview too short ×32]│ 6 min    │5.9% │ 9 of 32  │→│
 │ enum_03    │ 22   │ ▇▇ 41%       │ 5%           │ Outside office hours ×6  │ 29 min   │0.4% │ 6 of 22  │→│
 │ … Too few submissions to compare (under 5): enum_08                                                  │
+│ No enumerator recorded │ 4 │ 50% │ 0% │ …   (last, never sorted among the enumerators or highlighted)   │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────┘
 [ ] = highlighted: at least twice the team's share. A row opens the call sheet; "Needs review 20 →" opens the queue.
 ```

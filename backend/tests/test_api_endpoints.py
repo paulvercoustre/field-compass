@@ -515,6 +515,7 @@ class TestPerformanceEndpoint:
         payload = response.json()
         assert payload["enumerators"] == []
         assert payload["team"] is None
+        assert payload["no_enumerator"] is None
         assert len(payload["unavailable"]) == 1
 
         entry = payload["unavailable"][0]

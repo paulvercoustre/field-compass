@@ -193,14 +193,17 @@ export interface UnavailableCapability {
 }
 
 export interface PerformanceData {
-  /** The whole team: every submission with an enumerator recorded. Null when unavailable. */
+  /** The whole team: every submission, so the figures match Data quality's. Null when unavailable. */
   team: SubmissionSummary | null;
   enumerators: EnumeratorSummary[];
   // Present when a required survey setting is missing, so the view can
   // explain itself instead of rendering an empty chart.
   unavailable?: UnavailableCapability[];
-  /** Submissions with no enumerator recorded, counted apart from the team. */
-  no_enumerator?: number;
+  /**
+   * Submissions with no enumerator recorded: in the team's figures, never an
+   * enumerator of their own. Null when every submission has one.
+   */
+  no_enumerator: SubmissionSummary | null;
 }
 
 // --- Filtering Types ---

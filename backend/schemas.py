@@ -343,12 +343,13 @@ class UnavailableCapability(BaseModel):
 
 
 class PerformanceData(BaseModel):
-    # The whole team: every submission with an enumerator recorded.
+    # The whole team: every submission, so the figures match Data quality's.
     team: SubmissionSummary | None = None
     enumerators: list[EnumeratorSummary] = []
-    # Submissions with no enumerator recorded: counted apart, never as an
-    # enumerator of their own.
-    no_enumerator: int = 0
+    # Submissions with no enumerator recorded: in the team's figures, but never
+    # an enumerator of their own (not counted, ranked or compared as one).
+    # Null when every submission has one.
+    no_enumerator: SubmissionSummary | None = None
     # Populated when a required setting is missing, so the client can
     # explain an empty result instead of rendering a blank chart.
     unavailable: list[UnavailableCapability] = []

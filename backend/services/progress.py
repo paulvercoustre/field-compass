@@ -356,28 +356,28 @@ def compute_performance(
     submissions: list[SubmissionCurrent], config: dict[str, Any]
 ) -> PerformanceData:
     """
-    The named counts and measurements per enumerator and for the team
-    (services/metrics.py), so they match Data quality's to the submission.
+    The named counts and measurements per enumerator, for submissions with no
+    enumerator recorded, and for the whole team (services/metrics.py). The
+    team is every submission, so its figures are Data quality's exactly.
     """
     enumerator_field = get_enumerator_field(config)
 
     by_enumerator: dict[str, list[SubmissionCurrent]] = defaultdict(list)
-    no_enumerator = 0
+    no_enumerator: list[SubmissionCurrent] = []
     for sub in submissions:
         enum_id = answer_text(sub.submission_data, enumerator_field) if enumerator_field else None
         if enum_id is None:
-            # Not an enumerator called "Unknown": that would join the team
-            # count and the rankings as if it were someone.
-            no_enumerator += 1
+            # Not an enumerator called "Unknown": that would join the
+            # enumerator count and the rankings as if it were someone.
+            no_enumerator.append(sub)
             continue
         by_enumerator[enum_id].append(sub)
 
-    team = [sub for subs in by_enumerator.values() for sub in subs]
     return PerformanceData(
-        team=summarise(team, config),
+        team=summarise(submissions, config),
         enumerators=[
             EnumeratorSummary(id=enum_id, **summarise(subs, config).model_dump())
             for enum_id, subs in sorted(by_enumerator.items())
         ],
-        no_enumerator=no_enumerator,
+        no_enumerator=summarise(no_enumerator, config) if no_enumerator else None,
     )

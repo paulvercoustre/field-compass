@@ -12,7 +12,10 @@ def _submission(enumerator: str | None) -> SubmissionCurrent:
 
 
 def test_submissions_with_no_enumerator_are_counted_apart():
-    """Not a phantom "Unknown" enumerator, which would join the team count and the rankings."""
+    """
+    In the team's figures, so they match Data quality's; never a phantom
+    "Unknown" enumerator, which would join the enumerators and the rankings.
+    """
     performance = compute_performance(
         [_submission("enum_01"), _submission("enum_01"), _submission(None), _submission("  ")],
         CONFIG,
@@ -20,5 +23,11 @@ def test_submissions_with_no_enumerator_are_counted_apart():
 
     assert [row.id for row in performance.enumerators] == ["enum_01"]
     assert performance.enumerators[0].submissions == 2
-    assert performance.team is not None and performance.team.submissions == 2
-    assert performance.no_enumerator == 2
+    assert performance.team is not None and performance.team.submissions == 4
+    assert performance.no_enumerator is not None
+    assert performance.no_enumerator.submissions == 2
+
+
+def test_no_summary_when_every_submission_has_an_enumerator():
+    performance = compute_performance([_submission("enum_01")], CONFIG)
+    assert performance.no_enumerator is None

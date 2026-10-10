@@ -35,26 +35,32 @@ const StatusCard: React.FC<StatusCardProps> = ({ term, count, percentage, dotCla
     </span>
   );
   const cardClass =
-    'relative flex flex-col items-start rounded-xl border border-gray-200 bg-white p-4 text-left shadow-card dark:border-gray-800 dark:bg-gray-900';
-  return (
-    <div
-      className={`${cardClass} ${onClick ? 'transition-colors hover:border-gray-300 dark:hover:border-gray-700' : ''}`}
-    >
-      {/* The ⓘ sits apart from the card's own button: one control inside another is not allowed. */}
-      <span className="absolute right-3 top-3">
-        <TermInfo term={term} />
-      </span>
-      {onClick ? (
-        <button type="button" onClick={onClick} className="flex flex-col items-start rounded text-left">
-          {label}
-          {figures}
-        </button>
-      ) : (
-        <>
-          {label}
-          {figures}
-        </>
-      )}
+    'flex h-full w-full flex-col items-start rounded-xl border border-gray-200 bg-white p-4 pr-9 text-left shadow-card dark:border-gray-800 dark:bg-gray-900';
+  // The ⓘ sits beside the card's button, over its corner, not inside it: one
+  // control inside another is not allowed. The button is the whole card, so
+  // every part of it opens the list, and its focus ring goes round the card.
+  const info = (
+    <span className="absolute right-3 top-3">
+      <TermInfo term={term} />
+    </span>
+  );
+  return onClick ? (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${cardClass} transition-colors hover:border-gray-300 hover:bg-gray-50/60 dark:hover:border-gray-700 dark:hover:bg-gray-900/60`}
+      >
+        {label}
+        {figures}
+      </button>
+      {info}
+    </div>
+  ) : (
+    <div className={`relative ${cardClass}`}>
+      {label}
+      {figures}
+      {info}
     </div>
   );
 };

@@ -120,18 +120,22 @@ class TestInterviewMinutes:
 
 
 def test_field_team_and_data_quality_agree():
-    """The team's figures are Data quality's over the same submissions."""
+    """The team's figures are Data quality's: every submission, an enumerator or not."""
     subs = [
         _sub("e1", issues=2, dk=(1, 10), data={"active_interview_time": 6}),
         _sub("e1", decision="Approved", dk=(0, 10), data={"active_interview_time": 25}),
         _sub("e2", issues=1, decision="Not Approved", data={"active_interview_time": 31}),
         _sub("e2", decision="On Hold", dk=(3, 20)),
+        _sub(None, issues=3, data={"active_interview_time": 40}),
     ]
     performance = compute_performance(subs, CONFIG)
     assert performance.team == summarise(subs, CONFIG)
+    assert performance.team.issues_per_submission == 1.2
     e1, e2 = performance.enumerators
     assert (e1.id, e1.submissions, e1.flagged, e1.approved) == ("e1", 2, 1, 1)
     assert (e2.not_approved, e2.on_hold, e2.dk_rate) == (1, 1, 15.0)
+    assert performance.no_enumerator is not None
+    assert (performance.no_enumerator.submissions, performance.no_enumerator.issues) == (1, 3)
 
 
 def test_a_submission_time_is_not_a_duration():

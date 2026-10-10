@@ -118,15 +118,18 @@ const SortableHeader: React.FC<{
 interface PerformanceDataViewProps {
   data: PerformanceData;
   onEnumeratorClick?: (enumeratorId: string) => void;
+  /** Opens the submissions with no enumerator recorded. */
+  onNoEnumeratorClick?: () => void;
 }
 
-const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnumeratorClick }) => {
+const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnumeratorClick, onNoEnumeratorClick }) => {
   const [activeSubTab, setActiveSubTab] = useState<PerformanceSubTab>('quality');
   const [filter, setFilter] = useState('');
   const [sort, setSort] = useState<{ key: string; dir: SortDirection }>({ key: 'flagged_share', dir: 'desc' });
 
   const columns = COLUMNS[activeSubTab];
   const team = data.team;
+  const noEnumerator = data.no_enumerator;
 
   const rows = useMemo(() => {
     const needle = filter.toLowerCase();
@@ -260,6 +263,33 @@ const PerformanceDataView: React.FC<PerformanceDataViewProps> = ({ data, onEnume
                 ))}
               </tr>
             ))}
+            {noEnumerator && !filter && (
+              // Part of the team's figures, set apart: not an enumerator, so
+              // never sorted among them, compared or highlighted.
+              <tr className="border-t-2 border-gray-200 dark:border-gray-700">
+                <td className="px-4 py-2.5 whitespace-nowrap text-sm italic text-gray-600 dark:text-gray-300">
+                  {onNoEnumeratorClick ? (
+                    <button
+                      type="button"
+                      onClick={onNoEnumeratorClick}
+                      className="rounded italic text-indigo-700 hover:underline dark:text-indigo-300"
+                    >
+                      No enumerator recorded
+                    </button>
+                  ) : (
+                    'No enumerator recorded'
+                  )}
+                </td>
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    className="px-4 py-2.5 whitespace-nowrap text-sm tabular text-gray-600 dark:text-gray-300"
+                  >
+                    {column.format(noEnumerator)}
+                  </td>
+                ))}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
