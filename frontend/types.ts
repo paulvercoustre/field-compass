@@ -123,22 +123,34 @@ export type SamplingMode = 'none' | 'total' | 'by_variable' | 'uploaded';
 // `target` and `progress` are null when the survey sets no target -- null, not
 // 0. The two are not the same, and collapsing them is what made an untargeted
 // survey report 100% complete.
-export interface OverallProgress {
+/** Submissions counted, by where they stand in review: the Submissions tabs' own words. */
+export interface ReviewSplit {
+  approved: number;
+  clean: number;
+  on_hold: number;
+  needs_review: number;
+}
+
+/** The survey against its sampling plan. With targets, the review split is of `toward_target`; without, of `conducted`. */
+export interface OverallProgress extends ReviewSplit {
   conducted: number;
   target: number | null;
+  /** Done toward the targets as the sampling plan counts them: each group up to its target. Null without targets. */
+  toward_target: number | null;
+  /** Counted, but beyond their group's target. */
+  over_target: number;
+  /** Counted, but in a group with no target. */
+  no_target: number;
+  /** Percent of the target done toward it. */
   progress: number | null;
   days_active: number;
   submissions_per_day: number | null;
-  /** Of those counted, how many are Approved. */
-  approved: number;
-  /** Of those counted, how many were sent in the 7 days to today. */
+  /** Of the last 7 days' submissions, how many counted toward the targets (all, without targets). */
   last_7_days: number;
 }
 
 /** What a breakdown row carries besides its progress. */
-interface ProgressCounts {
-  /** Of those counted, how many are Approved. */
-  approved: number;
+interface ProgressCounts extends ReviewSplit {
   /** Of those counted, how many were sent in the 7 days to today. */
   last_7_days: number;
   /** Not approved, so left out of `conducted`. */
@@ -168,8 +180,8 @@ export interface ProgressData {
   samplingColumns: string[];
   /** Submissions marked Not approved: never counted toward the target. */
   not_approved: number;
-  /** Submissions counted, by the day they were sent; days with none are left out. */
-  daily: { day: string; counted: number }[];
+  /** Submissions counted by the day they were sent, and how many of them counted toward the targets. */
+  daily: { day: string; counted: number; toward: number }[];
   /** The survey's planned last day of collection (YYYY-MM-DD), if it sets one. */
   planned_end: string | null;
   /** The day the last 7 days end on (YYYY-MM-DD), as the server counts them. */

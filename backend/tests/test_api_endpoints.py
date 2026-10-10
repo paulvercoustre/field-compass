@@ -650,11 +650,13 @@ class TestProgressEndpoint:
         assert response.status_code == 200
         body = response.json()
         assert body["overall"]["conducted"] == 3
-        assert body["overall"]["approved"] == 1
         assert body["not_approved"] == 1
-        # All sent today: the last 7 days, and one day of collection.
-        assert body["overall"]["last_7_days"] == 3
-        assert [d["counted"] for d in body["daily"]] == [3]
+        # None names a district, so none counts toward the plan's targets.
+        assert (body["overall"]["toward_target"], body["overall"]["no_target"]) == (0, 3)
+        unknown = next(r for r in body["byColumn"]["district"] if r["value"] == "Unknown")
+        assert (unknown["value"], unknown["approved"], unknown["not_approved"]) == ("Unknown", 1, 1)
+        # All sent today: one day of collection, none of it toward a target.
+        assert [(d["counted"], d["toward"]) for d in body["daily"]] == [(3, 0)]
         assert body["today"] == body["daily"][0]["day"]
 
 

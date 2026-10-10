@@ -6,7 +6,7 @@ import { GLOSSARY, Term } from '../../utils/glossary';
 import { toGo } from '../../utils/progress';
 import { SubTabButton } from '../ui/SubTabButton';
 import TermInfo from '../ui/TermInfo';
-import { TwoPartBar } from './ProgressSummary';
+import { PlanBar, progressParts } from './ProgressSummary';
 
 interface Row {
   key: string;
@@ -16,6 +16,9 @@ interface Row {
   progress: number | null;
   share: number | null;
   approved: number;
+  clean: number;
+  on_hold: number;
+  needs_review: number;
   last_7_days: number;
   not_approved: number;
 }
@@ -89,31 +92,7 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ data, surveyConfig, onOpe
 
   if (!tab) return null;
 
-  const noun = tab.id === 'detailed' ? 'group' : tab.cols[0];
   const name = (r: Row) => tab.cols.map((c) => label(c, r.values[c])).join(' · ');
-
-  // When the groups' To go doesn't add up to what is left overall, say why.
-  const left = toGo(data.overall.target, data.overall.conducted);
-  const groupsLeft = rows.reduce((n, r) => n + (toGo(r.target, r.conducted) ?? 0), 0);
-  const untargeted = rows.filter((r) => r.target === null && r.conducted > 0);
-  const over = rows.filter((r) => r.target !== null && r.conducted > r.target);
-  const reasons = [
-    ...(untargeted.length
-      ? [
-          `${untargeted.reduce((n, r) => n + r.conducted, 0)} submissions are in ${
-            untargeted.length === 1 ? name(untargeted[0]) : `${untargeted.length} ${noun}s`
-          }, which ${untargeted.length === 1 ? 'has' : 'have'} no target`,
-        ]
-      : []),
-    ...(over.length
-      ? [
-          over.length === 1
-            ? `${name(over[0])} is ${over[0].conducted - over[0].target!} over its target`
-            : `${over.length} ${noun}s are over their target`,
-        ]
-      : []),
-  ];
-  const mismatch = hasTargets && !filter && left !== null && groupsLeft !== left && reasons.length > 0;
 
   return (
     <section aria-label="Progress by group">
@@ -196,12 +175,7 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ data, surveyConfig, onOpe
                         <span className="text-gray-400">—</span>
                       ) : (
                         <span className="flex items-center gap-2">
-                          <TwoPartBar
-                            approved={r.approved}
-                            done={r.conducted}
-                            target={r.target}
-                            className="h-1.5 w-24"
-                          />
+                          <PlanBar parts={progressParts(r)} target={r.target} className="h-1.5 w-24" />
                           <span className="tabular w-11 text-right text-xs font-medium">{Math.round(r.progress)}%</span>
                         </span>
                       )}
@@ -216,12 +190,6 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ data, surveyConfig, onOpe
           </tbody>
         </table>
       </div>
-      {mismatch && (
-        <p className="mt-2 max-w-3xl text-xs text-gray-500 dark:text-gray-400">
-          The {noun}s are {groupsLeft} short in all, not {left}: {reasons.join(', and ')}. Those count toward the total,
-          not toward a {noun}’s target.
-        </p>
-      )}
     </section>
   );
 };

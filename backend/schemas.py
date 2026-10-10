@@ -187,13 +187,36 @@ class SubmissionHistory(BaseModel):
 # it from a null.
 
 
-class OverallProgress(BaseModel):
+class ReviewSplit(BaseModel):
+    """Submissions counted, by where they stand in review: the Submissions tabs' own words."""
+
+    approved: int = Field(default=0, description="Approved in Kobo.")
+    clean: int = Field(default=0, description="Not flagged, no decision yet.")
+    on_hold: int = Field(default=0, description="On hold in Kobo.")
+    needs_review: int = Field(default=0, description="Flagged, no decision yet.")
+
+
+class OverallProgress(ReviewSplit):
+    """
+    The whole survey against its sampling plan. With targets, the review split
+    is of `toward_target`; without, of `conducted`.
+    """
+
     conducted: int
     target: int | None = Field(
         default=None, description="Planned interviews. Null when the survey sets no targets."
     )
+    toward_target: int | None = Field(
+        default=None,
+        description=(
+            "Done toward the targets, as the sampling plan counts them: each group's "
+            "submissions up to its target. Null when there is no target."
+        ),
+    )
+    over_target: int = Field(default=0, description="Counted, but beyond their group's target.")
+    no_target: int = Field(default=0, description="Counted, but in a group with no target.")
     progress: float | None = Field(
-        default=None, description="Percent of target conducted. Null when there is no target."
+        default=None, description="Percent of the target done toward it. Null without a target."
     )
     days_active: int = Field(
         default=0, description="Days from the first submission to the most recent, inclusive."
@@ -202,16 +225,18 @@ class OverallProgress(BaseModel):
         default=None,
         description="Mean submissions per active day. Null before any submission arrives.",
     )
-    approved: int = Field(default=0, description="Of those counted, how many are Approved.")
     last_7_days: int = Field(
-        default=0, description="Of those counted, how many were sent in the 7 days to today."
+        default=0,
+        description=(
+            "Of those sent in the 7 days to today, how many counted toward the targets "
+            "(every one counted, without targets)."
+        ),
     )
 
 
-class ProgressCounts(BaseModel):
-    """What a row of the breakdown adds to its progress: the Approved part, the pace, what is left out."""
+class ProgressCounts(ReviewSplit):
+    """What a row of the breakdown adds to its progress: its review split, the pace, what is left out."""
 
-    approved: int = Field(default=0, description="Of those counted, how many are Approved.")
     last_7_days: int = Field(
         default=0, description="Of those counted, how many were sent in the 7 days to today."
     )
@@ -250,6 +275,10 @@ class ProgressDay(BaseModel):
 
     day: str = Field(..., description="ISO date (YYYY-MM-DD)")
     counted: int = 0
+    toward: int = Field(
+        default=0,
+        description="Of those, toward the targets: each group's first, up to its target",
+    )
 
 
 class ProgressData(BaseModel):

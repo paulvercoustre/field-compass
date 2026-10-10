@@ -23,7 +23,8 @@ from schemas import (
     ProgressDay,
     UnavailableCapability,
 )
-from services.metrics import durations, is_approved, is_not_approved, summarise
+from services.metrics import durations, is_not_approved, summarise
+from services.review_queue import REVIEWED, review_state
 from services.submission_filters import answer_text
 from services.survey_config import (
     CAPABILITY_ENUMERATOR_PERFORMANCE,
@@ -113,23 +114,71 @@ def _sent_since(sub: SubmissionCurrent, first_day: date) -> bool:
     return sub._submission_time is not None and sub._submission_time.date() >= first_day
 
 
+# Where a counted submission stands in review, the most settled first: the
+# order a group's submissions fill its target in, so the review split of what
+# counts toward it is the surest it can be.
+_SETTLED = ("approved", "clean", "on_hold", "needs_review")
+
+
+def _state(sub: SubmissionCurrent) -> str:
+    """Approved, clean, on hold or needs review: counted, so never Not approved."""
+    state = review_state(sub)
+    return "approved" if state == REVIEWED else state
+
+
 def _counts_by(
     counted: list[SubmissionCurrent],
     left_out: list[SubmissionCurrent],
     key: Callable[[SubmissionCurrent], Hashable],
     week_start: date,
 ) -> dict[Any, dict[str, int]]:
-    """Per group: the Approved part, the last 7 days, and the Not approved left out."""
+    """Per group: its review split, the last 7 days, and the Not approved left out."""
     rows: dict[Any, dict[str, int]] = defaultdict(
-        lambda: dict.fromkeys(("approved", "last_7_days", "not_approved"), 0)
+        lambda: dict.fromkeys((*_SETTLED, "last_7_days", "not_approved"), 0)
     )
     for sub in counted:
         row = rows[key(sub)]
-        row["approved"] += 1 if is_approved(sub) else 0
+        row[_state(sub)] += 1
         row["last_7_days"] += 1 if _sent_since(sub, week_start) else 0
     for sub in left_out:
         rows[key(sub)]["not_approved"] += 1
     return rows
+
+
+def _toward_targets(
+    counted: list[SubmissionCurrent],
+    key: Callable[[SubmissionCurrent], Hashable],
+    targets: dict[Any, int],
+) -> tuple[Counter[str], Counter[date], int, int]:
+    """
+    What the sampling plan counts: each group's submissions up to its target.
+    Extra interviews in one group don't make up for another's shortfall.
+
+    Returns the review split of what counts, what counts by the day it was
+    sent, and how many are beyond a group's target or in a group with none.
+    Which submissions fill a target: for the split, the most settled first;
+    for the days, the first sent, so a group's line stops once it is full.
+    """
+    groups: dict[Any, list[SubmissionCurrent]] = defaultdict(list)
+    for sub in counted:
+        groups[key(sub)].append(sub)
+    split: Counter[str] = Counter()
+    by_day: Counter[date] = Counter()
+    over = no_target = 0
+    for group, subs in groups.items():
+        target = targets.get(group)
+        if target is None:
+            no_target += len(subs)
+            continue
+        settled = sorted(subs, key=lambda sub: _SETTLED.index(_state(sub)))
+        split.update(_state(sub) for sub in settled[:target])
+        over += max(0, len(subs) - target)
+        sent = sorted(
+            (sub for sub in subs if sub._submission_time is not None),
+            key=lambda sub: sub._submission_time,
+        )
+        by_day.update(sub._submission_time.date() for sub in sent[:target])
+    return split, by_day, over, no_target
 
 
 def _planned_end(config: dict[str, Any] | None) -> str | None:
@@ -226,9 +275,10 @@ def compute_progress(
     """
     Overall progress, progress per sampling column value, and per combination.
 
-    Every submission except Not approved counts toward the target (decided
-    2026-10-09); beside each count, the Approved part of it, how many came in
-    the last 7 days, and how many Not approved were left out.
+    Every submission except Not approved counts (decided 2026-10-09), and
+    toward the targets as the sampling plan counts them: each group up to its
+    target (decided 2026-10-10). Beside each count, its review split, how many
+    came in the last 7 days, and how many Not approved were left out.
     """
     today = today or datetime.now(UTC).date()
     week_start = today - timedelta(days=PACE_DAYS - 1)
@@ -269,14 +319,38 @@ def compute_progress(
 
     days_active, submissions_per_day = _collection_rate(submissions)
 
+    # The sampling plan's groups and their targets: one for a single total,
+    # each value of the sampling variable, or each combination in the file.
+    strata: tuple[Callable[[SubmissionCurrent], Hashable], dict[Any, int]] | None = None
+    if total_target and mode == SAMPLING_MODE_BY_VARIABLE and sampling_variable:
+        strata = (lambda sub: _value(sub, sampling_variable), targets_by_value)
+    elif total_target and mode == SAMPLING_MODE_UPLOADED and sampling_cols:
+        strata = (lambda sub: tuple(_value(sub, col) for col in sampling_cols), targets_by_combo)
+    elif total_target:
+        strata = (lambda sub: (), {(): total_target})
+
+    if strata:
+        split, toward_by_day, over_target, no_target = _toward_targets(submissions, *strata)
+        toward: int | None = sum(split.values())
+    else:
+        split = Counter(_state(sub) for sub in submissions)
+        toward_by_day = Counter(
+            sub._submission_time.date() for sub in submissions if sub._submission_time is not None
+        )
+        over_target = no_target = 0
+        toward = None
+
     overall = OverallProgress(
         conducted=total_conducted,
         target=total_target,
-        progress=_percentage(total_conducted, total_target),
+        toward_target=toward,
+        over_target=over_target,
+        no_target=no_target,
+        progress=_percentage(toward, total_target) if toward is not None else None,
         days_active=days_active,
         submissions_per_day=submissions_per_day,
-        approved=sum(1 for sub in submissions if is_approved(sub)),
-        last_7_days=sum(1 for sub in submissions if _sent_since(sub, week_start)),
+        last_7_days=sum(n for day, n in toward_by_day.items() if day >= week_start),
+        **{state: split[state] for state in _SETTLED},
     )
 
     # Group by each sampling column dynamically
@@ -394,7 +468,10 @@ def compute_progress(
         detailed=detailed,
         samplingColumns=sampling_cols,
         not_approved=len(left_out),
-        daily=[ProgressDay(day=day.isoformat(), counted=per_day[day]) for day in sorted(per_day)],
+        daily=[
+            ProgressDay(day=day.isoformat(), counted=per_day[day], toward=toward_by_day[day])
+            for day in sorted(per_day)
+        ],
         planned_end=_planned_end(config),
         today=today.isoformat(),
     )

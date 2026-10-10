@@ -75,7 +75,7 @@ const DataCollectionProgressPage: React.FC<DataCollectionProgressPageProps> = ({
           <div className="mx-auto max-w-screen-2xl space-y-5">
             <ProgressSummary data={progressData} onOpenSettings={() => navigate({ view: 'settings' })} />
             <Card className="p-5">
-              <CardHeader className="mb-3" title="Collection over time" />
+              <CardHeader className="mb-3" title="Submissions over time" />
               <CollectionChart data={progressData} />
             </Card>
             <ProgressTable
@@ -87,17 +87,6 @@ const DataCollectionProgressPage: React.FC<DataCollectionProgressPageProps> = ({
                   : undefined
               }
             />
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              How far review has got, and what is flagged, is on{' '}
-              <button
-                type="button"
-                onClick={() => navigate({ view: 'qualityOverview' })}
-                className="font-medium text-indigo-700 hover:underline dark:text-indigo-300"
-              >
-                Data quality
-              </button>
-              .
-            </p>
           </div>
         ) : null}
       </div>

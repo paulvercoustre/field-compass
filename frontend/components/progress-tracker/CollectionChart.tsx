@@ -26,11 +26,12 @@ const MARGIN = { top: 8, right: 16, left: 0, bottom: 0 };
 const SURFACE = 'var(--fc-chart-tooltip-bg)';
 const MUTED = 'var(--fc-chart-tick)';
 
-const DayTooltip: React.FC<{ active?: boolean; payload?: { payload: CollectionDay }[]; plannedEnd: string | null }> = ({
-  active,
-  payload,
-  plannedEnd,
-}) => {
+const DayTooltip: React.FC<{
+  active?: boolean;
+  payload?: { payload: CollectionDay }[];
+  plannedEnd: string | null;
+  towardTargets: boolean;
+}> = ({ active, payload, plannedEnd, towardTargets }) => {
   const row = payload?.[0]?.payload;
   if (!active || !row) return null;
   return (
@@ -39,7 +40,9 @@ const DayTooltip: React.FC<{ active?: boolean; payload?: { payload: CollectionDa
       {row.total !== undefined ? (
         <>
           <div>{row.counted} that day</div>
-          <div>{row.total} done so far</div>
+          <div>
+            {row.total} done so far{towardTargets ? ' toward the targets' : ''}
+          </div>
         </>
       ) : row.projected !== undefined ? (
         <div>About {row.projected} at the recent pace</div>
@@ -80,7 +83,7 @@ const Key: React.FC<{ dash: string; colour?: string; vertical?: boolean; childre
 );
 
 /**
- * Collection over time, as two charts on the same days rather than one chart
+ * Submissions over time, as two charts on the same days rather than one chart
  * with two scales: what is done so far against the target, with where the
  * recent pace would take it, and how many came in each day.
  */
@@ -104,7 +107,9 @@ const CollectionChart: React.FC<{ data: ProgressData }> = ({ data }) => {
 
   return (
     <div role="img" aria-label={summary}>
-      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Done so far</p>
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+        {target === null ? 'Done so far' : 'Done so far, toward the targets'}
+      </p>
       <div style={{ width: '100%', height: 210 }}>
         <ResponsiveContainer>
           <ComposedChart data={days} syncId={SYNC} margin={MARGIN}>
@@ -112,7 +117,10 @@ const CollectionChart: React.FC<{ data: ProgressData }> = ({ data }) => {
             <XAxis dataKey="day" hide />
             {/* Round steps, with a little air above the target line. */}
             <YAxis {...axisProps} width={Y_WIDTH} domain={[0, scale.max]} ticks={scale.ticks} />
-            <Tooltip content={<DayTooltip plannedEnd={plannedEnd} />} cursor={{ stroke: MUTED, strokeWidth: 1 }} />
+            <Tooltip
+              content={<DayTooltip plannedEnd={plannedEnd} towardTargets={target !== null} />}
+              cursor={{ stroke: MUTED, strokeWidth: 1 }}
+            />
             {target !== null && (
               <ReferenceLine y={target} ifOverflow="extendDomain" stroke={MUTED} strokeDasharray="4 4" />
             )}
@@ -157,7 +165,7 @@ const CollectionChart: React.FC<{ data: ProgressData }> = ({ data }) => {
           </Key>
         )}
       </div>
-      <p className="mt-4 text-xs font-medium text-gray-500 dark:text-gray-400">Each day</p>
+      <p className="mt-4 text-xs font-medium text-gray-500 dark:text-gray-400">Submissions each day</p>
       <div style={{ width: '100%', height: 110 }}>
         <ResponsiveContainer>
           <BarChart data={days} syncId={SYNC} margin={{ ...MARGIN, top: 6 }}>

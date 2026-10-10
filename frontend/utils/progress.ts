@@ -43,9 +43,9 @@ export const chartEnd = (daily: { day: string }[], today: string): string | null
 
 export interface CollectionDay {
   day: string;
-  /** Counted that day; undefined on a projected day. */
+  /** Submissions counted that day; undefined on a projected day. */
   counted?: number;
-  /** Counted up to and including that day; undefined on a projected day. */
+  /** Done toward the targets up to and including that day; undefined on a projected day. */
   total?: number;
   /** Where the total would be at the recent pace, from the last day on. */
   projected?: number;
@@ -53,26 +53,27 @@ export interface CollectionDay {
 
 /**
  * Every day from the first submission to the end, gaps as 0, with the total
- * so far; then, when there is a pace and something left, the days to the
+ * toward the targets so far (every one counted, without targets); then, when there is a pace and something left, the days to the
  * target at that pace, and on to the planned end if that is later and near.
  */
 export const collectionDays = (
-  daily: { day: string; counted: number }[],
+  daily: { day: string; counted: number; toward: number }[],
   today: string,
   target: number | null,
   plannedEnd: string | null
 ): CollectionDay[] => {
   const end = chartEnd(daily, today);
   if (!end) return [];
-  const counts = new Map(daily.map((d) => [d.day, d.counted]));
+  const byDay = new Map(daily.map((d) => [d.day, d]));
   const days: CollectionDay[] = [];
   let total = 0;
   for (let day = daily[0].day; day <= end; day = addDays(day, 1)) {
-    total += counts.get(day) ?? 0;
-    days.push({ day, counted: counts.get(day) ?? 0, total });
+    total += byDay.get(day)?.toward ?? 0;
+    days.push({ day, counted: byDay.get(day)?.counted ?? 0, total });
   }
 
-  const recent = daily.filter((d) => daysBetween(d.day, today) < PACE_DAYS).reduce((n, d) => n + d.counted, 0);
+  // The pace toward the targets: interviews in a group already full bring them no nearer.
+  const recent = daily.filter((d) => daysBetween(d.day, today) < PACE_DAYS).reduce((n, d) => n + d.toward, 0);
   const perDay = pacePerDay(recent);
   const left = toGo(target, total);
   const needed = end === today && left ? daysAtPace(left, perDay) : null;

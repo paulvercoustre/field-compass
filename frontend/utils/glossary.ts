@@ -50,7 +50,7 @@ export const GLOSSARY = {
   done: {
     name: 'Done',
     definition:
-      'Every submission except Not approved: what counts toward the target, whether or not a reviewer has approved it yet.',
+      'Every submission except Not approved, approved yet or not. Toward the targets, each group of the sampling plan counts up to its own target: extra interviews in one group don’t make up for another’s shortfall.',
   },
   duration: {
     name: 'Duration',

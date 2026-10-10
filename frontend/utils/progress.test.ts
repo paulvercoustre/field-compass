@@ -32,8 +32,8 @@ describe('the chart’s scale', () => {
 
 describe('the chart’s days', () => {
   const daily = [
-    { day: '2026-10-07', counted: 4 },
-    { day: '2026-10-09', counted: 10 },
+    { day: '2026-10-07', counted: 4, toward: 4 },
+    { day: '2026-10-09', counted: 10, toward: 10 },
   ];
 
   it('fills the gaps and adds up as it goes', () => {
@@ -59,6 +59,17 @@ describe('the chart’s days', () => {
     const days = collectionDays(daily, '2026-10-09', null, '2026-10-12');
     expect(days.map((d) => d.day).slice(-1)).toEqual(['2026-10-12']);
     expect(days[days.length - 1].total).toBeUndefined();
+  });
+
+  it('draws the line toward the targets, and every submission as a bar', () => {
+    const full = [
+      { day: '2026-10-07', counted: 4, toward: 4 },
+      { day: '2026-10-08', counted: 6, toward: 1 },
+    ];
+    expect(collectionDays(full, '2026-10-08', null, null).map((d) => [d.counted, d.total])).toEqual([
+      [4, 4],
+      [6, 5],
+    ]);
   });
 
   it('projects nothing once collection has stopped', () => {

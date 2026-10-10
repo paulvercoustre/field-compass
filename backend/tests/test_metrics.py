@@ -355,3 +355,61 @@ class TestProgressCounts:
         }
         assert (detailed["north"].approved, detailed["north"].not_approved) == (1, 1)
         assert detailed["east"].not_approved == 1
+
+
+class TestTowardTheTargets:
+    """The sampling plan's count: each group up to its target, decided 2026-10-10."""
+
+    CONFIG = {
+        **CONFIG,
+        "sampling_frame": {
+            "mode": "by_variable",
+            "variable": "district",
+            "sampling_cols": ["district"],
+            "targets_by_value": {"north": 2, "south": 2},
+        },
+    }
+
+    def _subs(self):
+        def sub(district, day, issues=0, decision=None):
+            s = _sub(data={"district": district}, issues=issues, decision=decision)
+            s._submission_time = datetime(2026, 10, day, 9)
+            return s
+
+        return [
+            sub("north", 1, issues=1),  # needs review, sent first
+            sub("north", 2, decision="Approved"),
+            sub("north", 3),  # clean: one more than north's target
+            sub("south", 3),
+            sub("east", 4),  # no target
+        ]
+
+    def test_extra_interviews_in_one_group_dont_make_up_for_another(self):
+        overall = compute_progress(self._subs(), self.CONFIG, today=date(2026, 10, 10)).overall
+        assert (overall.conducted, overall.target, overall.toward_target) == (5, 4, 3)
+        assert (overall.over_target, overall.no_target) == (1, 1)
+        assert overall.progress == 75.0
+
+    def test_the_most_settled_fill_a_target_first(self):
+        overall = compute_progress(self._subs(), self.CONFIG, today=date(2026, 10, 10)).overall
+        # North's Approved and Clean count; its Needs review is the extra one.
+        assert (overall.approved, overall.clean, overall.needs_review) == (1, 2, 0)
+
+    def test_by_day_the_first_sent_count(self):
+        days = compute_progress(self._subs(), self.CONFIG, today=date(2026, 10, 10)).daily
+        assert [(d.day[-2:], d.counted, d.toward) for d in days] == [
+            ("01", 1, 1),
+            ("02", 1, 1),
+            ("03", 2, 1),  # north is full; south's counts
+            ("04", 1, 0),  # east has no target
+        ]
+
+    def test_a_single_total_is_one_group(self):
+        config = {**CONFIG, "sampling_frame": {"mode": "total", "total_target": 3}}
+        overall = compute_progress(self._subs(), config, today=date(2026, 10, 10)).overall
+        assert (overall.toward_target, overall.over_target, overall.progress) == (3, 2, 100.0)
+
+    def test_without_targets_everything_counted_is_split(self):
+        overall = compute_progress(self._subs(), CONFIG, today=date(2026, 10, 10)).overall
+        assert overall.toward_target is None
+        assert (overall.approved, overall.clean, overall.needs_review) == (1, 3, 1)

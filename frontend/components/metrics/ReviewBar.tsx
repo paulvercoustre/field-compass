@@ -1,5 +1,5 @@
 import React from 'react';
-import { SubmissionSummary } from '../../types';
+import { ReviewSplit } from '../../types';
 import { GLOSSARY, Term } from '../../utils/glossary';
 
 /** The review states a link opens in Submissions. Clean has no tab of its own. */
@@ -13,7 +13,7 @@ export interface ReviewPart {
 }
 
 /** Where every submission stands in review: the five parts add up to the submissions. */
-export const reviewParts = (summary: SubmissionSummary): ReviewPart[] => [
+export const reviewParts = (summary: ReviewSplit & { not_approved: number }): ReviewPart[] => [
   { key: 'needs_review', term: GLOSSARY.needsReview, count: summary.needs_review, colour: 'bg-amber-600' },
   { key: 'on_hold', term: GLOSSARY.onHold, count: summary.on_hold, colour: 'bg-amber-300' },
   { key: 'clean', term: GLOSSARY.clean, count: summary.clean, colour: 'bg-gray-300 dark:bg-gray-600' },

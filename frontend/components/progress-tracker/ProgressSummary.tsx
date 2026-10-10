@@ -1,36 +1,40 @@
 import React from 'react';
-import { ProgressData } from '../../types';
+import { ProgressData, ReviewSplit } from '../../types';
 import { GLOSSARY } from '../../utils/glossary';
 import { shortDay } from '../../utils/daily';
 import { daysAtPace, pacePerDay, toGo } from '../../utils/progress';
+import { ReviewPart, reviewParts } from '../metrics/ReviewBar';
 import { Card } from '../ui/Card';
 import TermInfo from '../ui/TermInfo';
 
-// Approved keeps its colour from the review bar; the rest of what is done is
-// the chart's indigo. The pair passes the dataviz palette checks in both modes.
-const APPROVED_FILL = 'bg-emerald-600';
-const NOT_DECIDED_FILL = 'bg-indigo-500';
-const TO_GO_FILL = 'bg-gray-100 dark:bg-gray-800';
+/**
+ * What is done, by where it stands in review, in the words and colours the
+ * review bar uses everywhere else: the most settled first, as they fill a
+ * target. Not approved never counts, so it has no part here.
+ */
+export const progressParts = (split: ReviewSplit): ReviewPart[] =>
+  reviewParts({ ...split, not_approved: 0 })
+    .filter((p) => p.key !== 'not_approved')
+    .reverse();
 
-const NOT_DECIDED = 'Not decided yet';
-
-/** Done against the target: the Approved part, the rest not decided yet, and what is left. */
-export const TwoPartBar: React.FC<{
-  approved: number;
-  done: number;
-  target: number | null;
-  className?: string;
-}> = ({ approved, done, target, className = 'h-3' }) => {
+/** Done against the target, part by part; the rest of the track is what is left. */
+export const PlanBar: React.FC<{ parts: ReviewPart[]; target: number | null; className?: string }> = ({
+  parts,
+  target,
+  className = 'h-3',
+}) => {
+  const done = parts.reduce((n, p) => n + p.count, 0);
   const whole = Math.max(target ?? done, done, 1);
-  const parts = [
-    { key: 'approved', width: approved, fill: APPROVED_FILL },
-    { key: 'not-decided', width: done - approved, fill: NOT_DECIDED_FILL },
-  ].filter((p) => p.width > 0);
   return (
-    <div className={`flex gap-0.5 overflow-hidden rounded-full ${TO_GO_FILL} ${className}`} aria-hidden="true">
-      {parts.map((p) => (
-        <span key={p.key} className={p.fill} style={{ width: `${(p.width / whole) * 100}%` }} />
-      ))}
+    <div
+      className={`flex gap-0.5 overflow-hidden rounded-full bg-white ring-1 ring-inset ring-gray-200 dark:bg-gray-950 dark:ring-gray-700 ${className}`}
+      aria-hidden="true"
+    >
+      {parts
+        .filter((p) => p.count > 0)
+        .map((p) => (
+          <span key={p.key} className={p.colour} style={{ width: `${(p.count / whole) * 100}%` }} />
+        ))}
     </div>
   );
 };
@@ -55,21 +59,25 @@ interface ProgressSummaryProps {
 }
 
 /**
- * Will we reach the sample? Done against the target, the Approved part of it,
- * what is left out, and the pace over the last 7 days.
+ * Will we reach the sample? Done toward the targets as the sampling plan
+ * counts it, each group up to its own target; where it stands in review;
+ * what is left out; and the pace over the last 7 days.
  */
 const ProgressSummary: React.FC<ProgressSummaryProps> = ({ data, onOpenSettings }) => {
   const { overall } = data;
-  const done = overall.conducted;
   const target = overall.target;
+  const done = overall.toward_target ?? overall.conducted;
   const left = toGo(target, done);
   const perDay = pacePerDay(overall.last_7_days);
   const days = left ? daysAtPace(left, perDay) : null;
   const first = data.daily[0]?.day;
+  const parts = progressParts(overall);
+  const group = data.samplingColumns.length === 1 ? data.samplingColumns[0] : 'group';
+  const beyond = overall.over_target + overall.no_target;
 
   const atPace =
     left === 0
-      ? { value: 'Target reached', label: done > target! ? `${done - target!} over the target` : 'every one done' }
+      ? { value: 'Target reached', label: 'nothing left to go' }
       : perDay === 0
         ? { value: '—', label: 'no recent pace to go by' }
         : days === null
@@ -80,8 +88,9 @@ const ProgressSummary: React.FC<ProgressSummaryProps> = ({ data, onOpenSettings 
     <Card className="p-5">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">
-          <p className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
+          <p className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
             {target === null ? `${done} done` : `${done} of ${target} done`}
+            <TermInfo term={GLOSSARY.done} />
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-x-1 text-sm text-gray-600 dark:text-gray-300">
             {overall.approved} of them {GLOSSARY.approved.name.toLowerCase()}
@@ -93,6 +102,19 @@ const ProgressSummary: React.FC<ProgressSummaryProps> = ({ data, onOpenSettings 
               </>
             )}
           </p>
+          {target !== null && beyond > 0 && (
+            <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-300">
+              {beyond} more {beyond === 1 ? 'doesn’t' : 'don’t'} count toward a target:{' '}
+              {[
+                overall.no_target > 0 && `${overall.no_target} in a ${group} with no target`,
+                overall.over_target > 0 &&
+                  `${overall.over_target} beyond ${group === 'group' ? 'their group' : `their ${group}`}’s target`,
+              ]
+                .filter(Boolean)
+                .join(', ')}
+              .
+            </p>
+          )}
         </div>
         {overall.progress !== null && (
           <p className="text-4xl font-semibold tracking-tight text-gray-900 dark:text-white">
@@ -101,16 +123,17 @@ const ProgressSummary: React.FC<ProgressSummaryProps> = ({ data, onOpenSettings 
         )}
       </div>
 
-      <TwoPartBar approved={overall.approved} done={done} target={target} className="mt-4 h-3" />
+      <PlanBar parts={parts} target={target} className="mt-4 h-3" />
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
-        <Swatch fill={APPROVED_FILL}>
-          {GLOSSARY.approved.name} {overall.approved}
-        </Swatch>
-        <Swatch fill={NOT_DECIDED_FILL}>
-          {NOT_DECIDED} {done - overall.approved}
-        </Swatch>
+        {parts.map((p) => (
+          <Swatch key={p.key} fill={p.colour}>
+            {p.term.name} {p.count}
+          </Swatch>
+        ))}
         {left !== null && left > 0 && (
-          <Swatch fill={`${TO_GO_FILL} ring-1 ring-inset ring-gray-300`}>To go {left}</Swatch>
+          <Swatch fill="bg-white ring-1 ring-inset ring-gray-300 dark:bg-gray-950 dark:ring-gray-600">
+            To go {left}
+          </Swatch>
         )}
       </div>
 
@@ -118,7 +141,13 @@ const ProgressSummary: React.FC<ProgressSummaryProps> = ({ data, onOpenSettings 
         {left !== null && <Stat value={String(left)} label="to go" />}
         <Stat
           value={perDay > 0 ? `${perDay} a day` : 'None'}
-          label={perDay > 0 ? 'over the last 7 days' : 'in the last 7 days'}
+          label={
+            perDay > 0
+              ? target === null
+                ? 'over the last 7 days'
+                : 'toward the targets, last 7 days'
+              : 'in the last 7 days'
+          }
         />
         {left !== null ? (
           <Stat value={atPace.value} label={atPace.label} />
