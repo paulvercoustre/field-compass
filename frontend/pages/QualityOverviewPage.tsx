@@ -210,7 +210,6 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
           allTime={period === 'all'}
           onOpenFormCheck={() => navigate({ view: 'settings' })}
           onOpenSubmission={(submissionId) => navigate({ view: 'dashboard', filters: { review: 'all' }, submissionId })}
-          onOpenEnumerator={(id) => navigate({ view: 'enumeratorPerformance', tab: id })}
           onOpenSettings={openSettings}
           onOpenCheck={
             onNavigateToSubmissions ? (check) => onNavigateToSubmissions({ review: 'all', issues: [check] }) : undefined
@@ -265,7 +264,6 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
               ? (check) => onNavigateToSubmissions({ review: 'needs_review', issues: [check] })
               : undefined
           }
-          onOpenEnumerator={(id) => navigate({ view: 'enumeratorPerformance', tab: id })}
           onOpenSettings={openSettings}
         />
       </>

@@ -13,6 +13,11 @@ interface DialogProps {
   children: React.ReactNode;
   /** The buttons along the bottom. */
   actions?: React.ReactNode;
+  /**
+   * A long read on a phone: up from the bottom, as wide as the screen and
+   * scrolling, the title left to the content's own heading (still announced).
+   */
+  sheet?: boolean;
 }
 
 /**
@@ -20,7 +25,7 @@ interface DialogProps {
  * keyboard focus moves into it, stays inside while it is open, and goes back
  * where it was when it closes. Escape or a click outside closes it.
  */
-const Dialog: React.FC<DialogProps> = ({ open, title, onClose, busy = false, children, actions }) => {
+const Dialog: React.FC<DialogProps> = ({ open, title, onClose, busy = false, children, actions, sheet = false }) => {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
   // Read when a key is pressed, so the effect below runs once per opening.
@@ -67,7 +72,7 @@ const Dialog: React.FC<DialogProps> = ({ open, title, onClose, busy = false, chi
   // inside a table heading it inherited no-wrap, and its text ran out of the box.
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950/40 backdrop-blur-[2px]"
+      className={`fixed inset-0 z-[60] flex justify-center bg-gray-950/40 backdrop-blur-[2px] ${sheet ? 'items-end sm:items-center' : 'items-center'}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !busy) onClose();
       }}
@@ -78,13 +83,30 @@ const Dialog: React.FC<DialogProps> = ({ open, title, onClose, busy = false, chi
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="mx-4 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-popover outline-none animate-fade-in dark:border-gray-800 dark:bg-gray-900"
+        className={`w-full border border-gray-200 bg-white shadow-popover outline-none animate-fade-in dark:border-gray-800 dark:bg-gray-900 ${
+          sheet
+            ? 'flex max-h-[92dvh] max-w-lg flex-col rounded-t-xl sm:mx-4 sm:rounded-xl'
+            : 'mx-4 max-w-md rounded-xl p-6'
+        }`}
       >
-        <h2 id={titleId} className="mb-3 text-base font-semibold tracking-tight text-gray-900 dark:text-white">
+        <h2
+          id={titleId}
+          className={sheet ? 'sr-only' : 'mb-3 text-base font-semibold tracking-tight text-gray-900 dark:text-white'}
+        >
           {title}
         </h2>
-        <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">{children}</div>
-        {actions && <div className="mt-5 flex justify-end gap-3">{actions}</div>}
+        <div
+          className={sheet ? 'min-h-0 flex-1 overflow-y-auto' : 'space-y-2 text-sm text-gray-700 dark:text-gray-300'}
+        >
+          {children}
+        </div>
+        {actions && (
+          <div
+            className={`flex justify-end gap-3 ${sheet ? 'border-t border-gray-100 px-4 py-3 dark:border-gray-800' : 'mt-5'}`}
+          >
+            {actions}
+          </div>
+        )}
       </div>
     </div>,
     document.body

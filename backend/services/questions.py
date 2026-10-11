@@ -62,6 +62,7 @@ MIN_ANSWERS = 5  # below this, a share is too noisy to call out
 OFTEN_FLAGGED = 20  # percent of the submissions it was asked in
 RUSHED = 20  # percent of its timed answers, given in under a third of its median
 SLOW = 2.0  # times the form's usual seconds per word of a question
+MIN_WORDS = 3  # a shorter label's time is the answering, not the asking
 TIME_BINS = 8
 
 _OTHER_NAMES = frozenset({"other", "others", "oth"})
@@ -242,7 +243,8 @@ def _question_time(
     Time on a question: its median; the answers given in under a third of it
     (2 s at least), too quick to have been read out; and its seconds per word,
     for the pace against the form's. A screen shared with other questions has
-    no pace of its own, and its rushed answers are the screen's.
+    no pace of its own, nor a label of a word or two, whose time is the
+    answering; a screen's rushed answers are the screen's.
     """
     if not answers:
         return None, set(), None
@@ -251,7 +253,11 @@ def _question_time(
     under = max(2.0, middle / 3)
     rushed = {sub for value, sub in answers if value < under}
     width, bins, rushed_bins = _time_bins(seconds, under)
-    per_word = middle / words if words and not screen_with and len(answers) >= MIN_ANSWERS else None
+    per_word = (
+        middle / words
+        if words >= MIN_WORDS and not screen_with and len(answers) >= MIN_ANSWERS
+        else None
+    )
     time = QuestionTime(
         timed=len(answers),
         median_seconds=round(middle, 1),

@@ -358,9 +358,32 @@ export interface QuestionRow {
   flagged_days: number[];
   asked_days: number[];
   corrections: { submission_id: number; old: unknown; new: unknown }[];
+  /** Its place in the form. */
+  order: number;
+  /** Time on it, from the audit logs; null without any. */
+  time: QuestionTime | null;
 }
 
-export type QuestionAttention = 'never_shown' | 'rarely_asked' | 'many_dk' | 'often_other' | 'often_corrected';
+/** Time on a question, from the submissions' audit logs. */
+export interface QuestionTime {
+  /** Answers with a time. */
+  timed: number;
+  median_seconds: number;
+  /** Answered in under `rushed_under` seconds: a third of its median, 2 s at least. */
+  rushed: number;
+  rushed_under: number;
+  /** Its seconds per word over the form's usual: 2 is twice as slow. Null on a shared screen or too few answers. */
+  pace: number | null;
+  /** Other questions on its screen (a field-list group): the times are the screen's. */
+  screen_with: number;
+  /** Answers by time in bins of `bin_width` seconds from 0, the last one and beyond; of those, rushed. */
+  bin_width: number;
+  bins: number[];
+  rushed_bins: number[];
+}
+
+export type QuestionAttention =
+  'never_shown' | 'rarely_asked' | 'many_dk' | 'often_other' | 'often_flagged' | 'often_corrected' | 'rushed' | 'slow';
 
 export interface QuestionsResponse {
   submissions: number;
@@ -371,6 +394,10 @@ export interface QuestionsResponse {
   last_day: string;
   form_missing: boolean;
   logic_missing: boolean;
+  /** Submissions with seconds per question, from an audit log. */
+  timed_submissions: number;
+  /** The form's usual seconds per word of a question. */
+  form_pace: number | null;
 }
 
 /** The enumerator a check flagged most often. */

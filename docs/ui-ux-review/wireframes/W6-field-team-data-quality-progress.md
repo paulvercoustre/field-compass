@@ -130,40 +130,51 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
   flagged; the count opens those still waiting. Built-in checks that are on and flagged nothing follow with 0, then
   those that are off, under "Off: these checks did not run", each with a link to Settings. Outliers are named by
   their question.
-- **By question (E1):** every question outside a repeat, at `/surveys/<id>/quality/by-question`. Filters with counts
-  pick out the questions worth a look (Can never be shown, Rarely asked, Many don't-know, Often "Other", Often
-  corrected) and a search finds one; the figure that makes a question worth a look is highlighted. Reworked
-  2026-10-11:
-  - **Columns:** Question, Don't-know, Flagged, Asked in, "Other", Corrected. Don't-know and "Other" are shares of
-    its answers; Flagged is a share of the submissions it was asked in, no longer a count.
-  - **Order:** the largest share of the submissions it was asked in with a don't-know or a flag on it first, counted
-    once each (from 5 submissions); then how many reasons it is worth a look, the corrections and the form's order.
+- **By question (E2 + E3, chosen 2026-10-11; E1 superseded):** every question outside a repeat, at
+  `/surveys/<id>/quality/by-question`, a list beside a side panel (a sheet on a phone). Lenses above the list, each
+  with how many it has worth a look:
+  - **Worth a look** (the default): each question with something that stands out, said in words, one chip per
+    reason with its kind (Don't-know, "Other", Checks, Time, Reach): "31% don't know, 7 of 8 enumerators", "Slow:
+    41 s, 2.3× the form's pace". Amber when over the line; a flag under it still shows, plainly. The ones to look at
+    first on top: the largest share of the submissions it was asked in with a don't-know, a flag or a rushed answer,
+    counted once each (from 5 submissions); then how many reasons, the corrections and the form's order.
+  - **Don't-know & "Other"** (Don't-know, "Other", Answer variety), **Checks** (Flagged, Corrected), **Time**
+    (Rushed, Pace, Median time, Answers by time), **Reach** (Asked in, when, Form check): each sorted by its own
+    signal. **All questions**, in the form's order.
+  - Highlighted when worth a look: 20% or more don't-know, "Other", flagged (of the submissions it was asked in) or
+    rushed (from 5 answers); corrected in 3 submissions or more; asked in under 10% of submissions; twice the form's
+    pace or more; can never be shown (only when nothing was answered).
   - **Outliers are the outlier check's flags,** among the other flags, for the questions it is on for; nothing is
-    worked out for the others, which offer to turn it on in Settings (decided 2026-10-11, superseding a column of
-    outliers by the survey's rule).
+    worked out for the others, which offer to turn it on in Settings.
   - **"Other, specify" questions are left out** until "Show them": a text question whose condition asks for a choice
     question's "Other", or, with no condition, named after it (`water_source_other`). Rarely asked by design, and
     that question's "Other" share covers them; never called Rarely asked.
-  - The most common specified "Other" ("mostly …") is gone: without a thematic analysis it misleads.
-  - **Can never be shown** only when nothing was answered: answers prove Form check wrong, or the form changed.
   - **The header row stays in view** while scrolling, on every data table (By question, By check, Progress, Field
     team, collection targets in Settings): `frontend/components/ui/TableFrame.tsx`.
 
-  A row opens what is behind its numbers, about the question rather than the team:
+  The side panel, about the question, facts only (no advice, no breakdown by enumerator, which is Field team's):
   - **Answers.** A choice question shows every option as a share of its answers, with its count, its label given
-    the room (up to two lines); Don't know and "Other" in amber. A number question shows a histogram of its answers,
-    no grid, those the outlier check flagged in amber on top, the far-out ones said under the chart rather than
-    drawn; then the median. A written answer is not
-    charted.
-  - **Answer variety** for a single choice: how evenly the answers spread over the options (normalised entropy), 0%
-    when everyone gives the same answer. From 5 answers and 2 options.
-  - **Don't-know** as one sentence: the share, by how many of the enumerators, and when most of the team records it
-    (the wording or the translation) or only one does (them, with a link to their call sheet). No chart by
-    enumerator: that is Field team's view.
-  - **Flags on this question:** each check's share of the submissions it was asked in, its name opening Submissions
-    filtered to it, and that share each of the last 14 days. For a number question the outlier check is off for, a
-    link to turn it on.
-  - The latest corrections, each opening its submission, and what Form check found, with a link to it.
+    the room (up to two lines); Don't know and "Other" in amber; its answer variety (normalised entropy, from 5
+    answers and 2 options). A number question shows a histogram, no grid, those the outlier check flagged in amber
+    on top, the far-out ones said rather than drawn; then the median. Then the don't-know share and how many of the
+    enumerators recorded it.
+  - **Checks:** each check's share of the submissions it was asked in, its name opening Submissions filtered to it;
+    that share each of the last 14 days; the outlier check's offer when it is off; the latest corrections, each
+    opening its submission.
+  - **Time:** median, pace against the form's, and the rushed share; on a shared screen, the screen's.
+  - **Form check:** what it found, with a link to it.
+
+**Time per question, from the Kobo audit log** (2026-10-11). Each pull reads the submission's audit log (kept on
+disk, so submissions pulled before get times on the next refresh) and stores the seconds on each question by answer
+key, coming back to it included (`submissions_current.question_seconds`, migration 0015). A field-list screen is
+timed as one, under its group's key: its questions share the screen's time, with no pace of their own and no Rushed
+reason, so one rushed screen isn't eight rushed questions.
+- **Rushed:** answered in under a third of the question's median time, 2 s at least: too quick to have been read
+  out. Compared with the question itself, so a short question is not penalised.
+- **Pace:** seconds per word of the question as written in the survey's language (markup stripped, a `${name}` as
+  one word), over the form's usual (the median of its questions'). Not for a label under 3 words, whose time is the
+  answering. 2× or more is slow: likely hard to ask, or badly translated.
+- Who rushes which questions is for Field team, later, not this page.
 
 **No "middle half" anywhere** (2026-10-11): medians only, on By question and on the call sheet's interview lengths.
 
@@ -262,8 +273,9 @@ listed apart and not highlighted.
    period once: skip logic evaluated per submission, its groups' conditions included, cached by the answers each
    condition reads; don't-know per the rules above; "Other" by the `or_other` choice or one named or labelled
    "Other", with its specify text; findings by the field they name; corrections from the edit history; and Form
-   check run on the stored form; each question's option counts, histogram bins, answer variety, and answers and
-   flags per day for the last 14 days. About 1.3 s for 2,000 submissions of 120 questions.
+   check run on the stored form; each question's option counts, histogram bins, answer variety, asked and flagged
+   per day for the last 14 days, and its time from `question_seconds`. About 1.3 s for 2,000 submissions of 120
+   questions.
 
 Not covered, and not needed for now: exports and a cleaning log (Kobo exports; the edit history could feed a cleaning
 log later), back-checks, a daily objective per enumerator.
