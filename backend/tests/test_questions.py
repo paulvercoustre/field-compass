@@ -244,3 +244,50 @@ def test_labels_follow_the_language_chosen_in_settings():
     tool = {"survey": [row], "choices": [], "label_column_survey": "label::French (fr)"}
     survey = SurveyConfig(survey_id=uuid4(), config_data={**CONFIG, "kobo_tool": tool})
     assert by_question(_subs(), survey, []).questions[0].label == "Taille du ménage"
+
+
+def test_every_option_is_counted_with_don_t_know_and_other_marked():
+    _, rows = _rows()
+    assert [(c.name, c.count, c.kind) for c in rows["water"].choices] == [
+        ("piped", 1, None),
+        ("well", 1, None),
+        ("other", 3, "other"),
+    ]
+    assert [(c.name, c.count, c.kind) for c in rows["remit"].choices] == [
+        ("yes", 1, None),
+        ("no", 2, None),
+        ("dk", 2, "dk"),
+    ]
+    # Even spread is 1; these lean on one or two options.
+    assert (rows["remit"].variety, rows["water"].variety) == (0.96, 0.86)
+    assert rows["hh_size"].variety is None
+
+
+def test_numbers_as_a_histogram_with_the_far_ones_apart():
+    from services.questions import _histogram
+
+    _, rows = _rows()
+    size = rows["hh_size"].histogram
+    # Don't-know (-99) is no number: one bar per household size, 3 to 6.
+    assert size is not None
+    assert (size.start, size.width, size.counts, size.below, size.above) == (
+        3,
+        1,
+        [1, 1, 1, 1],
+        0,
+        0,
+    )
+
+    income = _histogram([float(v) for v in range(1000, 21000, 1000)] + [950000.0], integer=True)
+    assert income is not None and income.above == 1 and sum(income.counts) == 20
+    assert income.width == 2000 and len(income.counts) <= 13
+
+
+def test_flags_and_answers_over_the_last_14_days():
+    subs = _subs()
+    for sub, day in zip(subs[:5], (1, 1, 2, 2, 2), strict=True):
+        sub._submission_time = datetime(2026, 10, day, 9, tzinfo=UTC)
+    response = by_question(subs, SurveyConfig(survey_id=uuid4(), config_data=CONFIG), [])
+    size = next(row for row in response.questions if row.name == "hh_size")
+    assert (size.answered_days[-2:], size.flagged_days[-2:]) == ([2, 3], [1, 0])
+    assert len(size.answered_days) == 14

@@ -133,10 +133,20 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
 - **By question (E1):** every question outside a repeat, the ones to look at first on top, at
   `/surveys/<id>/quality/by-question`. Filters with counts pick out the questions worth a look (Can never be shown,
   Rarely asked, Many don't-know, Often "Other", Often corrected) and a search finds one; the figure that makes a
-  question worth a look is highlighted. A row opens what is behind its numbers: each enumerator's don't-know share,
-  with a line when most of the team records it (the wording or the translation) or only one does (them, with a link
-  to their call sheet); the answers (median and middle half, or the commonest choices); the latest corrections, each
-  opening its submission; and what Form check found, with a link to it.
+  question worth a look is highlighted. A row opens what is behind its numbers, about the question rather than the
+  team (2026-10-11):
+  - **Answers.** A choice question shows every option as a share of its answers, with its count; Don't know and
+    "Other" in amber. A number question shows a histogram of its answers, the far-out ones (beyond three times the
+    middle half from it) said under the chart rather than drawn, then the median and middle half. A written answer
+    is not charted.
+  - **Answer variety** for a single choice: how evenly the answers spread over the options (normalised entropy), 0%
+    when everyone gives the same answer. From 5 answers and 2 options.
+  - **Don't-know** as one sentence: the share, by how many of the enumerators, and when most of the team records it
+    (the wording or the translation) or only one does (them, with a link to their call sheet). No chart by
+    enumerator: that is Field team's view.
+  - **Flags on this question:** each check's share of its answers, and the share of its answers flagged each of the
+    last 14 days.
+  - The latest corrections, each opening its submission, and what Form check found, with a link to it.
 
 **Labels are in the language chosen in Settings › Form, on every screen** (2026-10-11): Submissions, Data quality,
 Progress, Field team, Form check, the rule builder and the AI review's prompts. Until one is saved, English when the
@@ -224,7 +234,8 @@ listed apart and not highlighted.
    period once: skip logic evaluated per submission, its groups' conditions included, cached by the answers each
    condition reads; don't-know per the rules above; "Other" by the `or_other` choice or one named or labelled
    "Other", with its specify text; findings by the field they name; corrections from the edit history; and Form
-   check run on the stored form. About 1.3 s for 2,000 submissions of 120 questions.
+   check run on the stored form; each question's option counts, histogram bins, answer variety, and answers and
+   flags per day for the last 14 days. About 1.3 s for 2,000 submissions of 120 questions.
 
 Not covered, and not needed for now: exports and a cleaning log (Kobo exports; the edit history could feed a cleaning
 log later), back-checks, a daily objective per enumerator.

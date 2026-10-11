@@ -529,6 +529,17 @@ class ChoiceCount(BaseModel):
     name: str
     label: str
     count: int
+    kind: str | None = Field(default=None, description="dk or other: the options that are signals")
+
+
+class Histogram(BaseModel):
+    """A number question's answers in equal bins; the outliers beyond them counted apart."""
+
+    start: float
+    width: float
+    counts: list[int]
+    below: int = Field(default=0, description="Answers below the first bin")
+    above: int = Field(default=0, description="Answers beyond the last bin")
 
 
 class Correction(BaseModel):
@@ -578,7 +589,24 @@ class QuestionRow(BaseModel):
     )
     dk_by_enumerator: list[EnumeratorShare] = Field(default_factory=list)
     numbers: NumberSummary | None = None
-    choices: list[ChoiceCount] = Field(default_factory=list)
+    histogram: Histogram | None = None
+    choices: list[ChoiceCount] = Field(
+        default_factory=list, description="Every option of its list, in the form's order"
+    )
+    variety: float | None = Field(
+        default=None,
+        description=(
+            "How evenly a single-choice question's answers spread over its options: "
+            "normalised entropy, 0 when all give the same answer, 1 when every option "
+            "is chosen as often"
+        ),
+    )
+    flagged_days: list[int] = Field(
+        default_factory=list, description="Submissions flagged on it, each of the last 14 days"
+    )
+    answered_days: list[int] = Field(
+        default_factory=list, description="Its answers, each of the last 14 days"
+    )
     corrections: list[Correction] = Field(default_factory=list)
 
 
@@ -588,6 +616,7 @@ class QuestionsResponse(BaseModel):
     submissions: int = 0
     questions: list[QuestionRow] = Field(default_factory=list)
     form_findings: int = Field(default=0, description="Everything Form check found in the form")
+    last_day: str = Field(default="", description="The day the 14 days end on (YYYY-MM-DD)")
     form_missing: bool = Field(default=False, description="No form is stored for the survey")
     logic_missing: bool = Field(
         default=False, description="The stored form has no skip logic, so `asked` is answers"

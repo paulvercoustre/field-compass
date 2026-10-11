@@ -29,7 +29,11 @@ const question = (name: string, over: Partial<QuestionRow> = {}): QuestionRow =>
   attention: [],
   dk_by_enumerator: [],
   numbers: null,
+  histogram: null,
   choices: [],
+  variety: null,
+  flagged_days: [],
+  answered_days: [],
   corrections: [],
   ...over,
 });
@@ -37,6 +41,7 @@ const question = (name: string, over: Partial<QuestionRow> = {}): QuestionRow =>
 const data = (): QuestionsResponse => ({
   submissions: 100,
   form_findings: 2,
+  last_day: '2026-09-28',
   form_missing: false,
   logic_missing: false,
   questions: [
@@ -54,10 +59,19 @@ const data = (): QuestionsResponse => ({
         { id: 'enum_01', dk: 8, answers: 20 },
       ],
       numbers: { median: 22000, p25: 9000, p75: 41000 },
+      histogram: { start: 0, width: 10000, counts: [20, 30, 25, 10, 4], below: 0, above: 1 },
+      answered_days: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 8],
+      flagged_days: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1],
     }),
     question('water', {
       type: 'select_one',
       dk_allowed: false,
+      variety: 0.86,
+      choices: [
+        { name: 'piped', label: 'Piped water', count: 41, kind: null },
+        { name: 'well', label: 'Protected well', count: 21, kind: null },
+        { name: 'other', label: 'Other', count: 38, kind: 'other' },
+      ],
       other: 38,
       other_top: 'tanker truck',
       other_top_count: 20,
@@ -100,11 +114,25 @@ describe('ByQuestionView', () => {
     const onOpenSubmission = vi.fn();
     const view = render(<ByQuestionView data={data()} config={null} allTime onOpenSubmission={onOpenSubmission} />);
     fireEvent.click(view.getByRole('button', { name: /Label of income/ }));
-    expect(view.container.textContent).toContain('Most of the team records “don’t know” here');
-    expect(view.container.textContent).toContain('22,000');
-    expect(view.container.textContent).toContain('950000 → 95000');
+    const text = view.container.textContent;
+    expect(text).toContain('31% don’t know, recorded by 7 of 8 enumerators. Most of the team');
+    expect(text).toContain('Median 22,000');
+    expect(text).toContain('1 above 50,000');
+    expect(text).toContain('Outlier9% · 9');
+    expect(view.getByRole('img', { name: /^3 flagged in the 14 days to / })).toBeTruthy();
+    expect(text).toContain('950000 → 95000');
     fireEvent.click(view.getByRole('button', { name: '#300246' }));
     expect(onOpenSubmission).toHaveBeenCalledWith(300246);
+  });
+
+  it('charts a choice question’s answers, Other picked out, with its variety', () => {
+    const view = render(<ByQuestionView data={data()} config={null} allTime />);
+    fireEvent.click(view.getByRole('button', { name: /Label of water/ }));
+    const text = view.container.textContent;
+    expect(text).toContain('Piped water41% · 41');
+    expect(text).toContain('Answer variety 86%');
+    const otherBar = view.getByTitle('Other').parentElement!.querySelector('.bg-amber-600');
+    expect(otherBar).toBeTruthy();
   });
 
   it('says when there is no form', () => {

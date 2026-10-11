@@ -11,9 +11,11 @@ Pure arithmetic over submissions and edits already loaded; which ones to
 include is the caller's business (routers/quality.py).
 """
 
+import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from datetime import date
 from statistics import median, quantiles
 from typing import Any
 
@@ -35,10 +37,12 @@ from schemas import (
     Correction,
     EnumeratorShare,
     FormFinding,
+    Histogram,
     NumberSummary,
     QuestionRow,
     QuestionsResponse,
 )
+from services.quality import trend_days
 from services.submission_filters import answer_text
 from services.survey_config import get_enumerator_field
 
@@ -123,6 +127,64 @@ def _group_line(question: Question, labels: dict[str, str], language: str | None
         if isinstance(key, str) and key.split("::", 1)[0] == "group_label" and value
     }
     return stored.get(language) or stored.get(None) or next(iter(stored.values()), "")
+
+
+HISTOGRAM_BINS = 12
+
+
+def _nice_step(raw: float) -> float:
+    """A round bin width at least `raw`: 1, 2, 2.5 or 5 times a power of ten."""
+    if raw <= 0:
+        return 1.0
+    base = 10 ** math.floor(math.log10(raw))
+    return next(m * base for m in (1, 2, 2.5, 5, 10) if m * base >= raw)
+
+
+def _histogram(values: list[float], integer: bool) -> Histogram | None:
+    """
+    A number question's answers in about a dozen round bins, one per value for
+    a small range of whole numbers. The bins span the answers but for those
+    far out (beyond three times the middle half from it), counted apart so one
+    950,000 doesn't flatten every other bar.
+    """
+    if not values:
+        return None
+    ordered = sorted(values)
+    q1, _, q3 = quantiles(ordered, n=4, method="inclusive") if len(ordered) > 1 else ordered * 3
+    spread = q3 - q1
+    # From the smallest to the largest answer within the fences, so no bar is empty for want of them.
+    lo = min(v for v in ordered if v >= q1 - 3 * spread)
+    hi = max(v for v in ordered if v <= q3 + 3 * spread)
+    if integer and hi - lo <= 24:
+        width, start = 1.0, float(math.floor(lo))
+    else:
+        width = _nice_step((hi - lo) / HISTOGRAM_BINS)
+        start = math.floor(lo / width) * width
+    count = int((hi - start) // width) + 1
+    counts = [0] * count
+    below = above = 0
+    for value in ordered:
+        index = math.floor((value - start) / width)
+        if index < 0:
+            below += 1
+        elif index >= count:
+            above += 1
+        else:
+            counts[index] += 1
+    return Histogram(start=start, width=width, counts=counts, below=below, above=above)
+
+
+def _variety(counts: list[int]) -> float | None:
+    """
+    How evenly answers spread over a question's options: Shannon entropy over
+    its maximum, from 0 (everyone gives the same answer) to 1 (every option as
+    often). None for too few answers or options to say.
+    """
+    total = sum(counts)
+    if total < MIN_ANSWERS or len(counts) < 2:
+        return None
+    entropy = -sum(n / total * math.log(n / total) for n in counts if n)
+    return round(entropy / math.log(len(counts)), 2)
 
 
 def _numbers(values: list[float]) -> NumberSummary | None:
@@ -211,6 +273,10 @@ class _Tally:
     flagged: dict[str, dict[str, set[int]]] = field(
         default_factory=lambda: defaultdict(lambda: defaultdict(set))
     )
+    answered_on: dict[str, Counter[date]] = field(default_factory=lambda: defaultdict(Counter))
+    flagged_on: dict[str, dict[date, set[int]]] = field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(set))
+    )
     _field_question: dict[str, str | None] = field(default_factory=dict)
     _cache: dict[tuple[str, tuple[Any, ...]], bool | None] = field(default_factory=dict)
 
@@ -222,6 +288,7 @@ class _Tally:
             if form.enumerator_field
             else None
         )
+        day = sub._submission_time.date() if sub._submission_time is not None else None
         for q in form.questions:
             if not form.conditions[q.name]:
                 self.asked[q.name] += 1
@@ -232,10 +299,14 @@ class _Tally:
             value = lookup(q.name)
             if _present(value):
                 self._answer(q, value, lookup, enum_id)
+                if day is not None:
+                    self.answered_on[q.name][day] += 1
         for issue in sub.data_quality_issues or []:
             name = self._question_of(str(issue.get("field") or ""))
             if name is not None:
                 self.flagged[name][issue.get("check", "unknown")].add(sub._id)
+                if day is not None:
+                    self.flagged_on[name][day].add(sub._id)
 
     def _answer(self, q: Question, value: Any, lookup: Any, enum_id: str | None) -> None:
         form = self.form
@@ -256,12 +327,16 @@ class _Tally:
             text = lookup(specify) if specify else None
             if _present(text):
                 self.specified[name][str(text).strip().lower()] += 1
-        if is_dk:
-            return
-        if q.type in ("integer", "decimal") and (number := _number(value)) is not None:
-            self.numbers[name].append(number)
-        elif q.type.startswith("select_") and isinstance(value, str):
+        # A don't-know option is one of a choice question's answers; a
+        # don't-know code is no number.
+        if q.type.startswith("select_") and isinstance(value, str):
             self.picked[name].update(value.split() if multiple else [value.strip()])
+        elif (
+            not is_dk
+            and q.type in ("integer", "decimal")
+            and (number := _number(value)) is not None
+        ):
+            self.numbers[name].append(number)
 
     def _question_of(self, issue_field: str) -> str | None:
         """The question a check's finding is about; None for the whole submission."""
@@ -273,6 +348,36 @@ class _Tally:
             )
             self._field_question[issue_field] = found.name if found else None
         return self._field_question[issue_field]
+
+
+def _option_counts(
+    q: Question, form: _Form, labels: dict[str, str], picked: Counter[str]
+) -> list[ChoiceCount]:
+    """
+    A choice question's options in the form's order, each with how often it
+    was chosen, and any answer not on the list after them. The don't-know and
+    "Other" options are marked: they are the ones a reader looks for.
+    """
+    if not q.type.startswith("select_"):
+        return []
+
+    def kind(name: str) -> str | None:
+        if q.name in form.dk_names and is_dk_value(
+            name, form.dk_codes, form.dk_tokens, split_multiple=False
+        ):
+            return "dk"
+        return "other" if name == form.other_of[q.name] else None
+
+    listed = [
+        ChoiceCount(name=name, label=label, count=picked[name], kind=kind(name))
+        for name, label in labels.items()
+    ]
+    unlisted = [
+        ChoiceCount(name=name, label=name, count=n, kind=kind(name))
+        for name, n in picked.most_common()
+        if name not in labels
+    ]
+    return listed + unlisted
 
 
 def _corrections(
@@ -359,12 +464,14 @@ def by_question(
     finding_count, findings = _form_findings(form, config, stored.logic_missing)
 
     total = len(submissions)
+    days = trend_days(submissions)
     rows: list[tuple[int, QuestionRow]] = []
     for order, q in enumerate(form.questions):
         name = q.name
         from_answers = stored.logic_missing or tally.unknown[name] > 0
         choices = {c.name: c.label_for(form.language) for c in form.schema.choices_for(q)}
         top = tally.specified[name].most_common(1)
+        option_counts = _option_counts(q, form, choices, tally.picked[name])
         row = QuestionRow(
             name=name,
             path=q.path,
@@ -391,10 +498,13 @@ def by_question(
                 for enum, n in sorted(tally.answers_by[name].items())
             ],
             numbers=_numbers(tally.numbers[name]),
-            choices=[
-                ChoiceCount(name=choice, label=choices.get(choice, choice), count=n)
-                for choice, n in tally.picked[name].most_common(5)
-            ],
+            histogram=_histogram(tally.numbers[name], integer=q.type == "integer"),
+            choices=option_counts,
+            variety=_variety([c.count for c in option_counts if c.name in choices])
+            if q.type == "select_one"
+            else None,
+            flagged_days=[len(tally.flagged_on[name][day]) for day in days],
+            answered_days=[tally.answered_on[name][day] for day in days],
             corrections=examples[name],
         )
         row.attention = _attention(row, bool(form.conditions[name]), total)
@@ -409,5 +519,6 @@ def by_question(
         submissions=total,
         questions=[row for _, row in sorted(rows, key=look_first)],
         form_findings=finding_count,
+        last_day=days[-1].isoformat() if days else "",
         logic_missing=stored.logic_missing,
     )

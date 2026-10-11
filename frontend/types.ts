@@ -342,7 +342,15 @@ export interface QuestionRow {
   attention: QuestionAttention[];
   dk_by_enumerator: { id: string; dk: number; answers: number }[];
   numbers: { median: number; p25: number; p75: number } | null;
-  choices: { name: string; label: string; count: number }[];
+  /** A number question's answers in equal bins from `start`; the far-out ones counted apart. */
+  histogram: { start: number; width: number; counts: number[]; below: number; above: number } | null;
+  /** Every option of a choice question, in the form's order; the don't-know and "Other" ones marked. */
+  choices: { name: string; label: string; count: number; kind: 'dk' | 'other' | null }[];
+  /** How evenly a single-choice question's answers spread over its options, 0 to 1. */
+  variety: number | null;
+  /** Submissions flagged on it, and its answers, each of the 14 days to `last_day`. */
+  flagged_days: number[];
+  answered_days: number[];
   corrections: { submission_id: number; old: unknown; new: unknown }[];
 }
 
@@ -353,6 +361,8 @@ export interface QuestionsResponse {
   questions: QuestionRow[];
   /** Everything Form check found in the form. */
   form_findings: number;
+  /** The day the 14 days end on. */
+  last_day: string;
   form_missing: boolean;
   logic_missing: boolean;
 }

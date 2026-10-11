@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { QuestionAttention, QuestionRow, QuestionsResponse } from '../../types';
+import { QuestionAttention, QuestionsResponse } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { formatPercent, percentOf } from '../../utils/glossary';
 import { checkName } from '../../utils/fieldTeam';
-import { ATTENTION, answerText, dkSpread } from '../../utils/questions';
+import { ATTENTION } from '../../utils/questions';
+import QuestionDetail from './QuestionDetail';
 import { ChevronDownIcon } from '../ui/icons';
 
 const link = 'rounded font-medium text-indigo-700 hover:underline dark:text-indigo-300';
@@ -22,13 +23,6 @@ const Sub: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{children}</div>
 );
 
-const Panel: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="min-w-0 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-950">
-    <h4 className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">{title}</h4>
-    {children}
-  </div>
-);
-
 interface ByQuestionViewProps {
   data: QuestionsResponse;
   config: SurveyConfig | null;
@@ -41,8 +35,8 @@ interface ByQuestionViewProps {
 
 /**
  * Data quality by question: every question of the form, the ones to look at
- * first on top. A row opens what is behind its numbers: who records "don't
- * know", the answers, the corrections and what Form check found.
+ * first on top. A row opens what is behind its numbers: how its answers
+ * spread, what the checks find on it, the corrections and Form check.
  */
 const ByQuestionView: React.FC<ByQuestionViewProps> = ({
   data,
@@ -95,118 +89,6 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
   );
 
   const pct = (part: number, whole: number) => formatPercent(percentOf(part, whole));
-
-  const detail = (q: QuestionRow) => {
-    const spread = dkSpread(q);
-    const outliers = Object.entries(q.flagged_by)
-      .filter(([check]) => check.startsWith('outlier_'))
-      .reduce((n, [, count]) => n + count, 0);
-    const recording = [...q.dk_by_enumerator].sort((a, b) => b.dk / b.answers - a.dk / a.answers);
-    return (
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {q.dk_allowed && q.dk > 0 && (
-          <Panel title="Don’t-know, by enumerator">
-            <ul className="space-y-1">
-              {recording.map((e) => (
-                <li key={e.id} className="grid grid-cols-[5.5rem_minmax(0,1fr)_3.5rem] items-center gap-2 text-xs">
-                  <span className="truncate">{e.id}</span>
-                  <span className="h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
-                    <span
-                      className="block h-1.5 rounded-full bg-amber-600"
-                      style={{ width: `${percentOf(e.dk, e.answers) ?? 0}%` }}
-                    />
-                  </span>
-                  <span className="tabular text-right">{pct(e.dk, e.answers)}</span>
-                </li>
-              ))}
-            </ul>
-            {spread && 'team' in spread && (
-              <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                Most of the team records “don’t know” here, so the wording or the translation is a likelier cause than
-                any one enumerator.
-              </p>
-            )}
-            {spread && 'one' in spread && (
-              <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                Only {spread.one} records “don’t know” here: worth a word with them.{' '}
-                {onOpenEnumerator && (
-                  <button type="button" onClick={() => onOpenEnumerator(spread.one)} className={link}>
-                    Their call sheet
-                  </button>
-                )}
-              </p>
-            )}
-          </Panel>
-        )}
-        {(q.numbers || q.choices.length > 0) && (
-          <Panel title="Answers">
-            {q.numbers ? (
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                <dt className="text-gray-500">Median</dt>
-                <dd className="tabular">{q.numbers.median.toLocaleString()}</dd>
-                <dt className="text-gray-500">Middle half</dt>
-                <dd className="tabular">
-                  {q.numbers.p25.toLocaleString()} – {q.numbers.p75.toLocaleString()}
-                </dd>
-                {outliers > 0 && (
-                  <>
-                    <dt className="text-gray-500">Outliers</dt>
-                    <dd className="tabular">{outliers} submissions</dd>
-                  </>
-                )}
-              </dl>
-            ) : (
-              <ul className="space-y-1 text-xs">
-                {q.choices.map((c) => (
-                  <li key={c.name} className="flex justify-between gap-3">
-                    <span className="truncate">{c.label}</span>
-                    <span className="tabular text-gray-500">
-                      {c.count} ({pct(c.count, q.answered)})
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-        )}
-        {q.corrected > 0 && (
-          <Panel title={`Corrected in Kobo, ${q.corrected} submission${q.corrected === 1 ? '' : 's'}`}>
-            <ul className="space-y-1 text-xs">
-              {q.corrections.map((c, i) => (
-                <li key={`${c.submission_id}-${i}`} className="truncate">
-                  {onOpenSubmission ? (
-                    <button type="button" onClick={() => onOpenSubmission(c.submission_id)} className={link}>
-                      #{c.submission_id}
-                    </button>
-                  ) : (
-                    `#${c.submission_id}`
-                  )}{' '}
-                  · {answerText(c.old)} → {answerText(c.new)}
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        )}
-        {q.form_findings.length > 0 && (
-          <Panel title="Form check, before collection">
-            <ul className="space-y-1 text-xs">
-              {q.form_findings.map((f) => (
-                <li key={f.check_id}>{f.message}</li>
-              ))}
-            </ul>
-            {onOpenFormCheck && (
-              <button type="button" onClick={onOpenFormCheck} className={`${link} mt-2 text-xs`}>
-                Open Form check
-              </button>
-            )}
-          </Panel>
-        )}
-        {!(q.dk_allowed && q.dk > 0) && !q.numbers && !q.choices.length && !q.corrected && !q.form_findings.length && (
-          <p className="text-xs text-gray-500">Nothing more to show for this question.</p>
-        )}
-      </div>
-    );
-  };
 
   return (
     <section aria-label="Questions" className="space-y-3">
@@ -351,7 +233,14 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
                   {isOpen && (
                     <tr className="bg-gray-50 dark:bg-gray-900">
                       <td colSpan={6} className="px-3 pb-3 pt-0">
-                        {detail(q)}
+                        <QuestionDetail
+                          question={q}
+                          config={config}
+                          lastDay={data.last_day}
+                          onOpenFormCheck={onOpenFormCheck}
+                          onOpenSubmission={onOpenSubmission}
+                          onOpenEnumerator={onOpenEnumerator}
+                        />
                       </td>
                     </tr>
                   )}
