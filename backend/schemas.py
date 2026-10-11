@@ -511,6 +511,89 @@ class ApproveCleanResult(BaseModel):
 # ============================================================================
 
 
+class EnumeratorShare(BaseModel):
+    """One enumerator's answers to a question, and how many were don't-know."""
+
+    id: str
+    dk: int
+    answers: int
+
+
+class NumberSummary(BaseModel):
+    median: float
+    p25: float
+    p75: float
+
+
+class ChoiceCount(BaseModel):
+    name: str
+    label: str
+    count: int
+
+
+class Correction(BaseModel):
+    """An answer edited in Kobo after it was sent."""
+
+    submission_id: int
+    old: Any = None
+    new: Any = None
+
+
+class FormFinding(BaseModel):
+    check_id: str
+    message: str
+
+
+class QuestionRow(BaseModel):
+    """One question on Data quality's By question view."""
+
+    name: str
+    path: str
+    label: str
+    group: str = Field(default="", description="Its groups' labels, outermost first, joined by ›")
+    type: str
+    condition: str | None = Field(
+        default=None, description="When it is asked, its groups' conditions included"
+    )
+    asked: int = Field(default=0, description="Submissions it was shown in")
+    asked_from_answers: bool = Field(
+        default=False,
+        description="The condition could not be worked out, so `asked` is how many answered",
+    )
+    answered: int = 0
+    dk_allowed: bool = False
+    dk: int = Field(default=0, description="Don't-know answers")
+    dk_enumerators: int = Field(default=0, description="Enumerators who recorded one")
+    answer_enumerators: int = Field(default=0, description="Enumerators who answered it")
+    other: int | None = Field(default=None, description="Answers choosing Other; None without one")
+    other_top: str | None = Field(default=None, description="The most common Other, specified")
+    other_top_count: int = 0
+    flagged: int = Field(default=0, description="Submissions with a finding on this question")
+    flagged_by: dict[str, int] = Field(default_factory=dict)
+    corrected: int = Field(default=0, description="Submissions where it was edited in Kobo")
+    form_findings: list[FormFinding] = Field(default_factory=list)
+    attention: list[str] = Field(
+        default_factory=list,
+        description="never_shown, rarely_asked, many_dk, often_other, often_corrected",
+    )
+    dk_by_enumerator: list[EnumeratorShare] = Field(default_factory=list)
+    numbers: NumberSummary | None = None
+    choices: list[ChoiceCount] = Field(default_factory=list)
+    corrections: list[Correction] = Field(default_factory=list)
+
+
+class QuestionsResponse(BaseModel):
+    """Data quality by question: every question, the ones to look at first on top."""
+
+    submissions: int = 0
+    questions: list[QuestionRow] = Field(default_factory=list)
+    form_findings: int = Field(default=0, description="Everything Form check found in the form")
+    form_missing: bool = Field(default=False, description="No form is stored for the survey")
+    logic_missing: bool = Field(
+        default=False, description="The stored form has no skip logic, so `asked` is answers"
+    )
+
+
 class TopEnumerator(BaseModel):
     """The enumerator a check flagged most often."""
 

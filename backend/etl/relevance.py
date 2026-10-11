@@ -16,7 +16,7 @@ that guesses wrong fills the review queue with questions nobody was asked.
 
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from simpleeval import SimpleEval
@@ -195,20 +195,56 @@ def evaluate(expression: str, lookup: Lookup) -> bool | None:
         return None
 
 
-def is_shown(schema: FormSchema, question: Question, lookup: Lookup) -> bool | None:
+def is_shown(
+    schema: FormSchema,
+    question: Question,
+    lookup: Lookup,
+    cache: dict[tuple[str, tuple[Any, ...]], bool | None] | None = None,
+) -> bool | None:
     """
     Whether ``question`` was shown: its own ``relevant`` and every enclosing
     group's all held. None when any of them cannot be evaluated, or when the
     question sits in a repeat (answers there are per instance).
+
+    ``cache`` keeps each expression's result by the answers it reads, for a
+    caller going through many submissions: most share those answers.
     """
     # Stored sheet rows drop the repeat markers and keep a `roster_name` column.
     if question.repeat_name or (question.raw or {}).get("roster_name"):
         return None
+    return all_hold((*enclosing_relevants(schema, question), question.relevant), lookup, cache)
 
-    for expression in (*enclosing_relevants(schema, question), question.relevant):
+
+def all_hold(
+    expressions: Iterable[str | None],
+    lookup: Lookup,
+    cache: dict[tuple[str, tuple[Any, ...]], bool | None] | None = None,
+) -> bool | None:
+    """
+    Whether every expression holds, in order; None as soon as one cannot be
+    evaluated. For a caller that has already gathered a question's conditions.
+    """
+    for expression in expressions:
         if not expression:
             continue
-        shown = evaluate(expression, lookup)
+        shown = _evaluate_cached(expression, lookup, cache)
         if shown is not True:
             return shown
     return True
+
+
+def _evaluate_cached(
+    expression: str,
+    lookup: Lookup,
+    cache: dict[tuple[str, tuple[Any, ...]], bool | None] | None,
+) -> bool | None:
+    if cache is None:
+        return evaluate(expression, lookup)
+    key = (expression, tuple(lookup(name) for name in _REF.findall(expression)))
+    try:
+        if key in cache:
+            return cache[key]
+    except TypeError:  # a repeat's answers are lists: not cacheable, and unknown anyway
+        return evaluate(expression, lookup)
+    cache[key] = evaluate(expression, lookup)
+    return cache[key]

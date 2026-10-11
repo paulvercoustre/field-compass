@@ -221,3 +221,19 @@ class TestNoAnswerUnderAFilter:
             params={"survey_id": unanswered, "sampling_filters": f"district={values}"},
         ).json()
         assert body["total"] == (0 if values == "None" else 1)
+
+
+class TestQualityByQuestion:
+    def test_answers_without_a_stored_form(self, client, three):  # noqa: F811
+        response = client.get("/api/quality/questions", params={"survey_id": three})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert (body["submissions"], body["form_missing"], body["questions"]) == (3, True, [])
+
+    def test_narrows_to_the_period(self, client, three):  # noqa: F811
+        body = client.get(
+            "/api/quality/questions", params={"survey_id": three, "start_date": "2026-03-02"}
+        ).json()
+        assert body["submissions"] == 1
+        bad = client.get("/api/quality/questions", params={"survey_id": three, "end_date": "March"})
+        assert bad.status_code == 400

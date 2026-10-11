@@ -2,7 +2,7 @@
  * Quality Overview API client
  */
 
-import { QualityOverviewResponse, QualityOverviewFilters } from '../types';
+import { QualityOverviewResponse, QualityOverviewFilters, QuestionsResponse } from '../types';
 
 import { request } from './apiBase';
 
@@ -14,4 +14,12 @@ export const fetchQualityOverview = (surveyId: string, filters?: QualityOverview
   if (filters?.enumerator) params.append('enumerator', filters.enumerator);
   if (filters?.samplingFilters) params.append('sampling_filters', filters.samplingFilters);
   return request<QualityOverviewResponse>(`/api/quality/overview?${params}`);
+};
+
+/** Data quality by question, over the submissions sent in the period. */
+export const fetchQualityQuestions = (surveyId: string, period?: { startDate?: string; endDate?: string }) => {
+  const params = new URLSearchParams({ survey_id: surveyId });
+  if (period?.startDate) params.append('start_date', period.startDate);
+  if (period?.endDate) params.append('end_date', period.endDate);
+  return request<QuestionsResponse>(`/api/quality/questions?${params}`);
 };

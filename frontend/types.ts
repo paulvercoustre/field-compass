@@ -308,6 +308,53 @@ export interface SubmissionFacets {
 
 // --- Quality Overview Types ---
 
+/** One question on Data quality's By question view (backend services/questions.py). */
+export interface QuestionRow {
+  name: string;
+  path: string;
+  label: string;
+  /** Its groups' labels, outermost first, joined by ›. */
+  group: string;
+  type: string;
+  /** When it is asked, its groups' conditions included; null when asked of everyone. */
+  condition: string | null;
+  /** Submissions it was shown in. */
+  asked: number;
+  /** The condition could not be worked out, so `asked` is how many answered. */
+  asked_from_answers: boolean;
+  answered: number;
+  dk_allowed: boolean;
+  dk: number;
+  dk_enumerators: number;
+  answer_enumerators: number;
+  /** Answers choosing Other; null when the question has no Other. */
+  other: number | null;
+  other_top: string | null;
+  other_top_count: number;
+  /** Submissions with a finding on this question, and by check. */
+  flagged: number;
+  flagged_by: Record<string, number>;
+  /** Submissions where it was edited in Kobo. */
+  corrected: number;
+  form_findings: { check_id: string; message: string }[];
+  attention: QuestionAttention[];
+  dk_by_enumerator: { id: string; dk: number; answers: number }[];
+  numbers: { median: number; p25: number; p75: number } | null;
+  choices: { name: string; label: string; count: number }[];
+  corrections: { submission_id: number; old: unknown; new: unknown }[];
+}
+
+export type QuestionAttention = 'never_shown' | 'rarely_asked' | 'many_dk' | 'often_other' | 'often_corrected';
+
+export interface QuestionsResponse {
+  submissions: number;
+  questions: QuestionRow[];
+  /** Everything Form check found in the form. */
+  form_findings: number;
+  form_missing: boolean;
+  logic_missing: boolean;
+}
+
 /** The enumerator a check flagged most often. */
 export interface TopEnumerator {
   id: string;

@@ -17,6 +17,8 @@ export interface NavigationTarget {
   tab?: string;
   /** Submissions filters, for the dashboard. */
   filters?: FilterState;
+  /** Submissions: the one to open. */
+  submissionId?: number;
 }
 
 /** A tab a link asked for; `at` makes the same tab asked for twice still switch. */
@@ -87,8 +89,8 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // the page's first tab rather than wherever an old link pointed.
       setRequestedTab(target.tab ? { tab: target.tab, at: Date.now() } : undefined);
       if (target.view === 'dashboard') setDashboardFilters(target.filters ?? {});
-      setRequestedSubmission(undefined);
-      setPage({ tab: target.tab, filters: target.filters });
+      setRequestedSubmission(target.submissionId != null ? { id: target.submissionId, at: Date.now() } : undefined);
+      setPage({ tab: target.tab, filters: target.filters, submissionId: target.submissionId });
       setView(target.view);
     },
     [surveys, setSelectedSurvey]

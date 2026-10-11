@@ -130,7 +130,14 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
   flagged; the count opens those still waiting. Built-in checks that are on and flagged nothing follow with 0, then
   those that are off, under "Off: these checks did not run", each with a link to Settings. Outliers are named by
   their question.
-- **By question (E1):** every question, the ones to look at first on top.
+- **By question (E1):** every question outside a repeat, the ones to look at first on top, at
+  `/surveys/<id>/quality/by-question`. Filters with counts pick out the questions worth a look (Can never be shown,
+  Rarely asked, Many don't-know, Often "Other", Often corrected) and a search finds one; the figure that makes a
+  question worth a look is highlighted. A row opens what is behind its numbers: each enumerator's don't-know share,
+  with a line when most of the team records it (the wording or the translation) or only one does (them, with a link
+  to their call sheet); the answers (median and middle half, or the commonest choices); the latest corrections, each
+  opening its submission; and what Form check found, with a link to it. The labels are in the survey's label
+  language, English when none is set, as on the other screens.
 
 | Column | Rule | Looked at when |
 |---|---|---|
@@ -209,7 +216,11 @@ listed apart and not highlighted.
 4. **Progress bar and chart.** `/api/progress` counts every submission but Not approved, always (the `approved_only`
    switch is gone), and adds the Approved part, the last 7 days and the Not approved left out, overall and for each
    group; the days of collection; the planned end; and the day it counts the last 7 days to.
-5. Data quality By question.
+5. **Data quality By question.** `/api/quality/questions` (`services/questions.py`) reads every answer of the
+   period once: skip logic evaluated per submission, its groups' conditions included, cached by the answers each
+   condition reads; don't-know per the rules above; "Other" by the `or_other` choice or one named or labelled
+   "Other", with its specify text; findings by the field they name; corrections from the edit history; and Form
+   check run on the stored form. About 1.3 s for 2,000 submissions of 120 questions.
 
 Not covered, and not needed for now: exports and a cleaning log (Kobo exports; the edit history could feed a cleaning
 log later), back-checks, a daily objective per enumerator.
