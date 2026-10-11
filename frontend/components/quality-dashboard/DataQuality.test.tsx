@@ -21,8 +21,6 @@ const summary: SubmissionSummary = {
   duration_measured: 100,
   duration_from_start_end: 0,
   dk_rate: 2.6,
-  duration_p25: 21,
-  duration_p75: 34,
   checks: {},
   first_submission: '2026-09-01T08:00:00',
   last_submission: '2026-09-28T15:00:00',

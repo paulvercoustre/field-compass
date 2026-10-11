@@ -207,7 +207,7 @@ const QuestionDetail: React.FC<QuestionDetailProps> = ({
         )}
         {q.numbers && (
           <p className="tabular mt-2 text-xs text-gray-600 dark:text-gray-300">
-            Median {plain(q.numbers.median)} · middle half {plain(q.numbers.p25)} – {plain(q.numbers.p75)}
+            Median {plain(q.numbers.median)}
             {q.dk > 0 && ` · ${q.dk} don’t know, not counted`}
           </p>
         )}

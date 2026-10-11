@@ -211,6 +211,19 @@ def test_findings_corrections_and_form_check():
     assert response.form_findings >= 1
 
 
+def test_a_finding_by_its_answer_key_belongs_to_the_stored_form_s_question():
+    """A stored form keeps the group apart: `hh_size`, not `hh/hh_size`."""
+    stored = {
+        "survey": [
+            {"type": "integer", "name": "hh_size", "label": "Household size", "group_path": "hh"}
+        ],
+        "choices": [],
+    }
+    survey = SurveyConfig(survey_id=uuid4(), config_data={**CONFIG, "kobo_tool": stored})
+    row = by_question(_subs(), survey, []).questions[0]
+    assert (row.flagged, row.flagged_by) == (1, {"outlier_hh_size": 1})
+
+
 def test_answers_prove_form_check_wrong():
     subs = _subs()
     subs[0].submission_data["hh/school_fees"] = "100"

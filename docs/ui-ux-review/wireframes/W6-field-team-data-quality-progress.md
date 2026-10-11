@@ -105,7 +105,7 @@ clean. A period with no submissions says so.
 The call sheet (C1) has its own address, `/surveys/<id>/team/<enumerator>`, and Back returns to the table. The team
 stays beside it as a scrolling list in the Submissions list's form: one row each (ID and submissions, then Flagged,
 Not approved and a highlighted main issue as tags), the open one marked. In order: Not approved and Flagged against
-the team; duration, their interviews as dots over the team's middle half and median; the don't-know rate against the
+the team; duration, their interviews as dots against the team's median; the don't-know rate against the
 team; the checks that flagged them, as a small table (check, their share with the count, the team's share, a link to
 those submissions); their submissions in review (Needs review, On hold, Clean, Approved, Not approved); issues per
 submission by day as bars, with the team's figure as a dashed line; and a plain summary to copy into a message or
@@ -152,8 +152,8 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
   A row opens what is behind its numbers, about the question rather than the team:
   - **Answers.** A choice question shows every option as a share of its answers, with its count, its label given
     the room (up to two lines); Don't know and "Other" in amber. A number question shows a histogram of its answers,
-    no grid, those the outlier check flagged in amber on top, the far-out ones (beyond three times the middle half
-    from it) said under the chart rather than drawn; then the median and middle half. A written answer is not
+    no grid, those the outlier check flagged in amber on top, the far-out ones said under the chart rather than
+    drawn; then the median. A written answer is not
     charted.
   - **Answer variety** for a single choice: how evenly the answers spread over the options (normalised entropy), 0%
     when everyone gives the same answer. From 5 answers and 2 options.
@@ -164,6 +164,12 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
     filtered to it, and that share each of the last 14 days. For a number question the outlier check is off for, a
     link to turn it on.
   - The latest corrections, each opening its submission, and what Form check found, with a link to it.
+
+**No "middle half" anywhere** (2026-10-11): medians only, on By question and on the call sheet's interview lengths.
+
+**Flags on a question in a group** (2026-10-11): a finding names the answer by its key (`hh/monthly_income`); a stored
+form keeps the question's group apart (`monthly_income`). By question now matches the two, so outlier flags, and any
+check on a question in a group, count on their question; they were dropped before.
 
 **Form check: a condition on a choice that doesn't exist** (2026-10-11). "Can never be shown" only when the condition
 cannot hold without that comparison, `and`ed at its top. Inside `not(…)` or an `or` it is never true, but the question
@@ -242,7 +248,7 @@ listed apart and not highlighted.
 
 1. **One calculation, one set of names.** `services/metrics.py` and `etl/duration.py`; Field team, Data quality,
    Progress and the pull summary read from them and use the named counts. Fixes F-10 A.
-2. **Field team table and call sheet.** `/api/performance` adds per-check counts, the middle half of durations,
+2. **Field team table and call sheet.** `/api/performance` adds per-check counts,
    first and last submission, a daily trend (all in the shared summary, for Data quality to use next), each
    enumerator's durations, which checks are on, and a period.
 3. **Data quality Overview and By check.** `/api/quality/overview` adds a row per check (flagged, Needs review, the

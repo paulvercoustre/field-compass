@@ -157,16 +157,9 @@ class TestTheCallSheetsFigures:
         subs[1].data_quality_issues = [{"check": "outlier_x"}, {"check": "duration_too_short"}]
         assert summarise(subs, CONFIG).checks == {"outlier_x": 2, "duration_too_short": 1}
 
-    def test_the_middle_half_of_durations(self):
+    def test_the_median_duration(self):
         subs = [_sub(data={"active_interview_time": m}) for m in (10, 20, 30, 40, 50)]
-        summary = summarise(subs, CONFIG)
-        assert (summary.duration_p25, summary.duration_minutes, summary.duration_p75) == (
-            20.0,
-            30.0,
-            40.0,
-        )
-        one = summarise([_sub(data={"active_interview_time": 12})], CONFIG)
-        assert (one.duration_p25, one.duration_p75) == (12.0, 12.0)
+        assert summarise(subs, CONFIG).duration_minutes == 30.0
 
     def test_by_day_and_first_and_last(self):
         days = [datetime(2026, 9, 20, 9), datetime(2026, 9, 20, 18), datetime(2026, 9, 21, 8)]

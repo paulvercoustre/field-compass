@@ -222,9 +222,6 @@ export interface SubmissionSummary {
   duration_from_start_end: number;
   /** Percent. Null when nothing could be measured. */
   dk_rate: number | null;
-  /** The middle half of durations, in minutes. */
-  duration_p25: number | null;
-  duration_p75: number | null;
   /** Submissions flagged by each check, by its issue key. */
   checks: Record<string, number>;
   first_submission: string | null;
@@ -343,7 +340,7 @@ export interface QuestionRow {
   form_findings: { check_id: string; message: string }[];
   attention: QuestionAttention[];
   dk_by_enumerator: { id: string; dk: number; answers: number }[];
-  numbers: { median: number; p25: number; p75: number } | null;
+  numbers: { median: number } | null;
   /** A number question's answers in equal bins from `start`, with those the outlier check flagged in each; the far-out ones counted apart. */
   histogram: {
     start: number;

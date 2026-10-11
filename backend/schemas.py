@@ -365,12 +365,6 @@ class SubmissionSummary(BaseModel):
             "Null when nothing could be measured."
         ),
     )
-    duration_p25: float | None = Field(
-        default=None, description="The quarter of durations below this: the middle half's start."
-    )
-    duration_p75: float | None = Field(
-        default=None, description="The quarter of durations above this: the middle half's end."
-    )
     checks: dict[str, int] = Field(
         default_factory=dict, description="Submissions flagged by each check, by its issue key."
     )
@@ -521,8 +515,6 @@ class EnumeratorShare(BaseModel):
 
 class NumberSummary(BaseModel):
     median: float
-    p25: float
-    p75: float
 
 
 class ChoiceCount(BaseModel):

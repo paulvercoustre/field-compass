@@ -26,7 +26,7 @@ caller's business.
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from datetime import datetime
-from statistics import median, quantiles
+from statistics import median
 from typing import Any
 
 from database.models import SubmissionCurrent
@@ -91,15 +91,6 @@ def durations(
     return minutes_list, from_start_end
 
 
-def _quartiles(values: list[float]) -> tuple[float | None, float | None]:
-    if not values:
-        return None, None
-    if len(values) == 1:
-        return values[0], values[0]
-    low, _, high = quantiles(values, n=4, method="inclusive")
-    return low, high
-
-
 def _round(value: float | None) -> float | None:
     return None if value is None else round(value, 1)
 
@@ -110,7 +101,6 @@ def summarise(
     """The named counts and the measurements of these submissions."""
     tally = counts(submissions)
     minutes, from_start_end = durations(submissions, config_data)
-    p25, p75 = _quartiles(minutes)
 
     dk_answers = dk_eligible = 0
     checks: Counter[str] = Counter()
@@ -138,8 +128,6 @@ def summarise(
         duration_minutes=_round(median(minutes)) if minutes else None,
         duration_measured=len(minutes),
         duration_from_start_end=from_start_end,
-        duration_p25=_round(p25),
-        duration_p75=_round(p75),
         dk_rate=round(dk_answers / dk_eligible * 100, 1) if dk_eligible else None,
         checks=dict(checks.most_common()),
         first_submission=min(times).isoformat() if times else None,

@@ -58,7 +58,7 @@ const data = (): QuestionsResponse => ({
         { id: 'enum_08', dk: 0, answers: 4 },
         { id: 'enum_01', dk: 8, answers: 20 },
       ],
-      numbers: { median: 22000, p25: 9000, p75: 41000 },
+      numbers: { median: 22000 },
       histogram: { start: 0, width: 10000, counts: [20, 30, 25, 10, 4], outliers: [0, 0, 0, 2, 4], below: 0, above: 1 },
       outlier_check: true,
       asked_days: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 8],

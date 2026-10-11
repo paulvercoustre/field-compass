@@ -199,13 +199,8 @@ def _variety(counts: list[int]) -> float | None:
 
 
 def _numbers(values: list[float]) -> NumberSummary | None:
-    """The median and the middle half of a question's numeric answers."""
-    if not values:
-        return None
-    if len(values) == 1:
-        return NumberSummary(median=values[0], p25=values[0], p75=values[0])
-    p25, _, p75 = quantiles(values, n=4, method="inclusive")
-    return NumberSummary(median=median(values), p25=p25, p75=p75)
+    """The median of a question's numeric answers."""
+    return NumberSummary(median=median(values)) if values else None
 
 
 @dataclass
@@ -369,10 +364,15 @@ class _Tally:
             self.numbers[name].append((number, submission))
 
     def _question_of(self, issue_field: str) -> str | None:
-        """The question a check's finding is about; None for the whole submission."""
+        """
+        The question a check's finding is about; None for the whole submission.
+        A finding names the answer by its key, `hh/monthly_income`; a stored
+        form's question is just `monthly_income`, its group kept apart.
+        """
         if issue_field not in self._field_question:
+            schema = self.form.schema
             found = (
-                self.form.schema.get(issue_field)
+                schema.get(issue_field) or schema.get(issue_field.rsplit("/", 1)[-1])
                 if issue_field and issue_field != "submission"
                 else None
             )
