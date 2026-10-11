@@ -550,6 +550,33 @@ class FormFinding(BaseModel):
     message: str
 
 
+class QuestionTime(BaseModel):
+    """Time on a question, from the submissions' audit logs."""
+
+    timed: int = Field(..., description="Answers with a time")
+    median_seconds: float
+    rushed: int = Field(..., description="Answered in under `rushed_under` seconds")
+    rushed_under: float = Field(
+        ..., description="A third of its median, 2 s at least: too quick to have been read out"
+    )
+    pace: float | None = Field(
+        default=None,
+        description=(
+            "Its seconds per word of the question, over the form's usual: 2 is twice as slow. "
+            "None on a screen shared with other questions, or too few answers to say"
+        ),
+    )
+    screen_with: int = Field(
+        default=0,
+        description="Other questions on its screen (a field-list group): the times are the screen's",
+    )
+    bin_width: float = Field(..., description="Seconds per bin of `bins`, from 0")
+    bins: list[int] = Field(
+        default_factory=list, description="Answers by time; the last bin and beyond"
+    )
+    rushed_bins: list[int] = Field(default_factory=list, description="Of those, rushed")
+
+
 class QuestionRow(BaseModel):
     """One question on Data quality's By question view."""
 
@@ -584,8 +611,13 @@ class QuestionRow(BaseModel):
     form_findings: list[FormFinding] = Field(default_factory=list)
     attention: list[str] = Field(
         default_factory=list,
-        description="never_shown, rarely_asked, many_dk, often_other, often_corrected",
+        description=(
+            "never_shown, rarely_asked, many_dk, often_other, often_flagged, often_corrected, "
+            "rushed, slow"
+        ),
     )
+    order: int = Field(default=0, description="Its place in the form")
+    time: QuestionTime | None = Field(default=None, description="From the audit logs")
     dk_by_enumerator: list[EnumeratorShare] = Field(default_factory=list)
     numbers: NumberSummary | None = None
     histogram: Histogram | None = None
@@ -619,6 +651,12 @@ class QuestionsResponse(BaseModel):
     form_missing: bool = Field(default=False, description="No form is stored for the survey")
     logic_missing: bool = Field(
         default=False, description="The stored form has no skip logic, so `asked` is answers"
+    )
+    timed_submissions: int = Field(
+        default=0, description="Submissions with seconds per question, from an audit log"
+    )
+    form_pace: float | None = Field(
+        default=None, description="The form's usual seconds per word of a question"
     )
 
 

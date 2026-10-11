@@ -195,6 +195,9 @@ class SubmissionCurrent(Base):
     dk_percentage: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2), nullable=True
     )  # DK percentage for the submission
+    question_seconds: Mapped[Any | None] = mapped_column(
+        JSONB, nullable=True
+    )  # Seconds on each question, by answer key, from the audit log
     kobo_validation_status: Mapped[str | None] = mapped_column(
         String(50), nullable=True
     )  # Stores Kobo's _validation_status

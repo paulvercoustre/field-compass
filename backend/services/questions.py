@@ -5,11 +5,11 @@ first on top (docs/ui-ux-review/wireframes/W6-field-team-data-quality-progress.m
 For each question: how often it was asked, from its skip logic and its
 groups'; how often "don't know" was answered, and by how many enumerators;
 how often "Other" was chosen; what the checks found on it, the outlier check
-among them; how often it was corrected in Kobo; and what Form check found in
-it before collection.
+among them; how often it was corrected in Kobo; how long it takes, from the
+audit logs; and what Form check found in it before collection.
 
-The ones to look at first are those with the largest share of don't-know or
-flagged answers (decided 2026-10-11).
+The ones to look at first are those with the largest share of don't-know,
+flagged or rushed answers (decided 2026-10-11).
 
 Pure arithmetic over submissions and edits already loaded; which ones to
 include is the caller's business (routers/quality.py).
@@ -46,6 +46,7 @@ from schemas import (
     NumberSummary,
     QuestionRow,
     QuestionsResponse,
+    QuestionTime,
 )
 from services.quality import trend_days
 from services.submission_filters import answer_text
@@ -57,10 +58,17 @@ MANY_DK = 20  # percent of its answers
 OFTEN_OTHER = 20  # percent of its answers
 OFTEN_CORRECTED = 3  # submissions
 MIN_ANSWERS = 5  # below this, a share is too noisy to call out
+# And by its flags and its time (decided 2026-10-11).
+OFTEN_FLAGGED = 20  # percent of the submissions it was asked in
+RUSHED = 20  # percent of its timed answers, given in under a third of its median
+SLOW = 2.0  # times the form's usual seconds per word of a question
+TIME_BINS = 8
 
 _OTHER_NAMES = frozenset({"other", "others", "oth"})
 _SPECIFY_SUFFIXES = ("_other", "_specify", "_oth")
 _REF = re.compile(r"\$\{([^}]+)\}")
+_TAG = re.compile(r"<[^>]+>")
+_WORD = re.compile(r"\w+")
 
 
 def _present(value: Any) -> bool:
@@ -134,6 +142,22 @@ def _group_line(question: Question, labels: dict[str, str], language: str | None
     return stored.get(language) or stored.get(None) or next(iter(stored.values()), "")
 
 
+def _words(label: str) -> int:
+    """A question's words as read out: its label without markup, a ${name} as one."""
+    return len(_WORD.findall(_REF.sub(r"\1", _TAG.sub(" ", label))))
+
+
+def _group_path(question: Question) -> str:
+    """Its groups' path: from the group rows, or a stored form's row, which has none."""
+    return question.group_path or str((question.raw or {}).get("group_path") or "")
+
+
+def _enclosing(group_path: str) -> list[str]:
+    """A question's groups, innermost first: `hh/income` is `hh/income`, then `hh`."""
+    parts = [p for p in group_path.split("/") if p]
+    return ["/".join(parts[:i]) for i in range(len(parts), 0, -1)]
+
+
 HISTOGRAM_BINS = 12
 
 
@@ -196,6 +220,49 @@ def _variety(counts: list[int]) -> float | None:
         return None
     entropy = -sum(n / total * math.log(n / total) for n in counts if n)
     return round(entropy / math.log(len(counts)), 2)
+
+
+def _time_bins(seconds: list[float], rushed_under: float) -> tuple[float, list[int], list[int]]:
+    """Answers by time in round bins up to most of them, and the rushed in each."""
+    top = quantiles(seconds, n=20, method="inclusive")[-1] if len(seconds) > 1 else seconds[0]
+    width = _nice_step(max(top, 1.0) / TIME_BINS)
+    count = min(int(top // width) + 1, TIME_BINS + 2)
+    bins, rushed = [0] * count, [0] * count
+    for value in seconds:
+        index = min(int(value // width), count - 1)
+        bins[index] += 1
+        rushed[index] += value < rushed_under
+    return width, bins, rushed
+
+
+def _question_time(
+    answers: list[tuple[float, int]], words: int, screen_with: int
+) -> tuple[QuestionTime | None, set[int], float | None]:
+    """
+    Time on a question: its median; the answers given in under a third of it
+    (2 s at least), too quick to have been read out; and its seconds per word,
+    for the pace against the form's. A screen shared with other questions has
+    no pace of its own, and its rushed answers are the screen's.
+    """
+    if not answers:
+        return None, set(), None
+    seconds = sorted(value for value, _ in answers)
+    middle = median(seconds)
+    under = max(2.0, middle / 3)
+    rushed = {sub for value, sub in answers if value < under}
+    width, bins, rushed_bins = _time_bins(seconds, under)
+    per_word = middle / words if words and not screen_with and len(answers) >= MIN_ANSWERS else None
+    time = QuestionTime(
+        timed=len(answers),
+        median_seconds=round(middle, 1),
+        rushed=len(rushed),
+        rushed_under=round(under, 1),
+        screen_with=screen_with,
+        bin_width=width,
+        bins=bins,
+        rushed_bins=rushed_bins,
+    )
+    return time, set() if screen_with else rushed, per_word
 
 
 def _numbers(values: list[float]) -> NumberSummary | None:
@@ -300,6 +367,9 @@ class _Tally:
     flagged_on: dict[str, dict[date, set[int]]] = field(
         default_factory=lambda: defaultdict(lambda: defaultdict(set))
     )
+    seconds: dict[str, list[tuple[float, int]]] = field(default_factory=lambda: defaultdict(list))
+    screen_of: dict[str, str] = field(default_factory=dict)
+    timed_submissions: int = 0
     _field_question: dict[str, str | None] = field(default_factory=dict)
     _cache: dict[tuple[str, tuple[Any, ...]], bool | None] = field(default_factory=dict)
 
@@ -312,6 +382,7 @@ class _Tally:
             else None
         )
         day = sub._submission_time.date() if sub._submission_time is not None else None
+        hidden: set[str] = set()
         for q in form.questions:
             shown = (
                 all_hold(form.conditions[q.name], lookup, self._cache)
@@ -324,6 +395,8 @@ class _Tally:
                 self.asked[q.name] += 1
                 if day is not None:
                     self.asked_on[q.name][day] += 1
+            else:
+                hidden.add(q.name)
             value = lookup(q.name)
             if _present(value):
                 self._answer(q, value, sub._id, enum_id)
@@ -335,6 +408,34 @@ class _Tally:
                 self.flagged[name][issue.get("check", "unknown")].add(sub._id)
                 if day is not None:
                     self.flagged_on[name][day].add(sub._id)
+        if sub.question_seconds:
+            self._time(sub.question_seconds, sub._id, hidden)
+
+    def _time(self, times: dict[str, Any], submission: int, hidden: set[str]) -> None:
+        """
+        Seconds on each question of a submission, from its audit log. A question
+        on a field-list screen has the screen's, under its group's key, unless
+        its own condition hid it.
+        """
+        self.timed_submissions += 1
+        alone: dict[str, float] = {}
+        screens: dict[str, float] = {}
+        for key, value in times.items():
+            if not isinstance(value, int | float) or isinstance(value, bool):
+                continue
+            name = self._question_of(key)
+            if name in self.form.conditions:
+                alone[name] = alone.get(name, 0) + value
+            else:
+                screens[key] = value
+        for q in self.form.questions:
+            if q.name in alone:
+                self.seconds[q.name].append((alone[q.name], submission))
+            elif q.name not in hidden and (
+                group := next((g for g in _enclosing(_group_path(q)) if g in screens), None)
+            ):
+                self.seconds[q.name].append((screens[group], submission))
+                self.screen_of[q.name] = group
 
     def _answer(self, q: Question, value: Any, submission: int, enum_id: str | None) -> None:
         form = self.form
@@ -472,8 +573,17 @@ def _attention(row: QuestionRow, conditioned: bool, total: int) -> list[str]:
         and row.other / row.answered * 100 >= OFTEN_OTHER
     ):
         reasons.append("often_other")
+    base = max(row.asked, row.answered)
+    if base >= MIN_ANSWERS and row.flagged / base * 100 >= OFTEN_FLAGGED:
+        reasons.append("often_flagged")
     if row.corrected >= OFTEN_CORRECTED:
         reasons.append("often_corrected")
+    time = row.time
+    if time and not time.screen_with and time.timed >= MIN_ANSWERS:
+        if time.rushed / time.timed * 100 >= RUSHED:
+            reasons.append("rushed")
+        if time.pace is not None and time.pace >= SLOW:
+            reasons.append("slow")
     return reasons
 
 
@@ -498,7 +608,8 @@ def by_question(
 
     total = len(submissions)
     days = trend_days(submissions)
-    rows: list[tuple[float, int, QuestionRow]] = []
+    sharing = Counter(tally.screen_of.values())
+    rows: list[tuple[QuestionRow, set[int], float | None]] = []
     for order, q in enumerate(form.questions):
         name = q.name
         from_answers = stored.logic_missing or tally.unknown[name] > 0
@@ -514,10 +625,16 @@ def by_question(
             *(ids for check, ids in tally.flagged[name].items() if check.startswith("outlier_"))
         )
         asked_on = tally.answered_on[name] if from_answers else tally.asked_on[name]
+        label = q.label_for(form.language)
+        screen = tally.screen_of.get(name)
+        time, rushed, per_word = _question_time(
+            tally.seconds[name], _words(label), sharing[screen] - 1 if screen else 0
+        )
         row = QuestionRow(
             name=name,
+            order=order,
             path=q.path,
-            label=q.label_for(form.language),
+            label=label,
             group=_group_line(q, form.groups, form.language),
             type=q.type,
             condition=_condition_text(form.conditions[name]),
@@ -548,22 +665,32 @@ def by_question(
             flagged_days=[len(tally.flagged_on[name][day]) for day in days],
             asked_days=[asked_on[day] for day in days],
             corrections=examples[name],
+            time=time,
         )
-        row.attention = _attention(row, bool(form.conditions[name]), total)
-        # The share of the submissions it was asked in with a don't-know or a
-        # flag on it; too few to say counts for nothing.
-        base = max(row.asked, row.answered)
-        concerns = len(tally.dk[name] | flagged) / base if base >= MIN_ANSWERS else 0
-        rows.append((concerns, order, row))
+        rows.append((row, tally.dk[name] | flagged | rushed, per_word))
 
-    def look_first(item: tuple[float, int, QuestionRow]) -> tuple[Any, ...]:
-        concerns, order, row = item
-        return (-concerns, -len(row.attention), -row.corrected, order)
+    # The form's usual seconds per word, for each question's pace against it.
+    paces = [per_word for _, _, per_word in rows if per_word is not None]
+    form_pace = median(paces) if paces else None
+    for row, _, per_word in rows:
+        if row.time and per_word is not None and form_pace:
+            row.time.pace = round(per_word / form_pace, 1)
+        row.attention = _attention(row, bool(form.conditions[row.name]), total)
+
+    def look_first(item: tuple[QuestionRow, set[int], float | None]) -> tuple[Any, ...]:
+        # The share of the submissions it was asked in with a don't-know, a
+        # flag or a rushed answer; too few to say counts for nothing.
+        row, concerns, _ = item
+        base = max(row.asked, row.answered)
+        share = len(concerns) / base if base >= MIN_ANSWERS else 0
+        return (-share, -len(row.attention), -row.corrected, row.order)
 
     return QuestionsResponse(
         submissions=total,
-        questions=[row for _, _, row in sorted(rows, key=look_first)],
+        questions=[row for row, _, _ in sorted(rows, key=look_first)],
         form_findings=finding_count,
         last_day=days[-1].isoformat() if days else "",
         logic_missing=stored.logic_missing,
+        timed_submissions=tally.timed_submissions,
+        form_pace=round(form_pace, 2) if form_pace else None,
     )

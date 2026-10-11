@@ -12,7 +12,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from database.models import Run, SurveyConfig
+from database.models import Run, SubmissionCurrent, SurveyConfig
 from etl.audio import is_transcription_issue
 from etl.audit_processor import download_and_process_audit
 from etl.data_merger import merge_submission, parse_kobo_submission
@@ -29,6 +29,47 @@ logger = logging.getLogger(__name__)
 # How often (in submissions) a pull reports its progress and checks whether
 # someone asked it to stop.
 _PROGRESS_EVERY = 25
+
+
+def _read_audit(parsed: dict[str, Any], kobo_token: str | None) -> dict[str, Any] | None:
+    """
+    The submission's audit log, downloaded once and read: its interview times
+    go into the answers, where the duration checks read them.
+    """
+    submission_uuid = parsed["_uuid"]
+    audit_url = parsed.get("audit_url")
+    if not audit_url:
+        logger.debug(f"No audit URL found for submission {submission_uuid}")
+        return None
+    logger.info(f"Processing audit log for {submission_uuid}: {audit_url}")
+    try:
+        audit_metrics = download_and_process_audit(
+            audit_url=audit_url, uuid=submission_uuid, kobo_token=kobo_token
+        )
+    except Exception as e:  # noqa: BLE001 -- one bad audit log must not stop the pull
+        logger.warning(f"Failed to process audit log for {submission_uuid}: {e}")
+        return None
+    if audit_metrics:
+        parsed["submission_data"]["active_interview_time"] = audit_metrics.get(
+            "active_interview_time"
+        )
+        parsed["submission_data"]["total_duration"] = audit_metrics.get("total_duration")
+        logger.debug(
+            f"Added audit metrics for {submission_uuid}: active_time={audit_metrics.get('active_interview_time')} min, total_duration={audit_metrics.get('total_duration')} min"
+        )
+    return audit_metrics
+
+
+def _keep_question_seconds(
+    submission: SubmissionCurrent, audit_metrics: dict[str, Any] | None
+) -> None:
+    """
+    Seconds on each question, for Data quality's By question. Read again on
+    every pull from the audit log kept on disk, so one pulled before gets them.
+    """
+    seconds = (audit_metrics or {}).get("question_seconds") or None
+    if seconds and submission.question_seconds != seconds:
+        submission.question_seconds = seconds
 
 
 def _is_llm_qual_issue(issue: dict[str, Any]) -> bool:
@@ -223,37 +264,7 @@ class ETLPipeline:
                     parsed = parse_kobo_submission(kobo_sub)
                     submission_uuid = parsed["_uuid"]
                     parsed["_id"]
-                    audit_url = parsed.get("audit_url")
-
-                    # Log audit URL for debugging
-                    if audit_url:
-                        logger.info(f"Processing audit log for {submission_uuid}: {audit_url}")
-                    else:
-                        logger.debug(f"No audit URL found for submission {submission_uuid}")
-
-                    # Download and process audit log (if available)
-                    audit_metrics = None
-                    if audit_url:
-                        try:
-                            logger.debug(f"Downloading audit log from: {audit_url}")
-                            audit_metrics = download_and_process_audit(
-                                audit_url=audit_url, uuid=submission_uuid, kobo_token=kobo_token
-                            )
-                            if audit_metrics:
-                                # Add audit metrics to submission_data
-                                parsed["submission_data"]["active_interview_time"] = (
-                                    audit_metrics.get("active_interview_time")
-                                )
-                                parsed["submission_data"]["total_duration"] = audit_metrics.get(
-                                    "total_duration"
-                                )
-                                logger.debug(
-                                    f"Added audit metrics for {submission_uuid}: active_time={audit_metrics.get('active_interview_time')} min, total_duration={audit_metrics.get('total_duration')} min"
-                                )
-                        except Exception as e:  # noqa: BLE001 -- one bad audit log must not stop the pull
-                            logger.warning(
-                                f"Failed to process audit log for {submission_uuid}: {e}"
-                            )
+                    audit_metrics = _read_audit(parsed, kobo_token)
 
                     # Merge submission (upsert with edit detection)
                     submission, history, is_new = merge_submission(
@@ -263,6 +274,8 @@ class ETLPipeline:
                         kobo_asset_id=survey_config.kobo_asset_id,
                         kobo_data=kobo_sub,  # Pass raw Kobo data for deprecatedID detection
                     )
+
+                    _keep_question_seconds(submission, audit_metrics)
 
                     if is_new:
                         stats["created"] += 1

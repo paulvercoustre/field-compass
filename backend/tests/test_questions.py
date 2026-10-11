@@ -372,3 +372,88 @@ def test_flags_and_asked_over_the_last_14_days():
     size = next(row for row in response.questions if row.name == "hh_size")
     assert (size.asked_days[-2:], size.flagged_days[-2:]) == ([2, 3], [1, 0])
     assert len(size.asked_days) == 14
+
+
+def _timed_survey():
+    """Seconds on each question from audit logs; the fcs group is one field-list screen."""
+    tool = {
+        "survey": [
+            {
+                "type": "select_one yesno",
+                "name": "consent",
+                "label": "Did you explain the purpose and get consent?",
+            },
+            {"type": "integer", "name": "income", "label": "Income", "group_path": "hh"},
+            {"type": "integer", "name": "fcs_a", "label": "Days ate cereals", "group_path": "fcs"},
+            {"type": "integer", "name": "fcs_b", "label": "Days ate pulses", "group_path": "fcs"},
+            {"type": "text", "name": "note", "label": "Any comment on the interview"},
+        ],
+        "choices": KOBO_TOOL["choices"],
+    }
+    consent = [1, 1, 1, 8, 9, 10, 10, 11, 12, 12]
+    subs = []
+    for i, seconds in enumerate(consent):
+        sub = _sub(
+            i + 1,
+            "e1",
+            {
+                "consent": "yes",
+                "hh/income": "100",
+                "fcs/fcs_a": "3",
+                "fcs/fcs_b": "2",
+                "note": "ok",
+            },
+        )
+        sub.question_seconds = {"consent": seconds, "hh/income": 30, "fcs": 40, "note": 5}
+        subs.append(sub)
+    for sub in subs[:2]:
+        sub.data_quality_issues = [{"check": "income_rule", "field": "hh/income"}]
+    survey = SurveyConfig(survey_id=uuid4(), config_data={**CONFIG, "kobo_tool": tool})
+    return by_question(subs, survey, [])
+
+
+def test_time_on_each_question_from_the_audit_logs():
+    response = _timed_survey()
+    rows = {row.name: row for row in response.questions}
+    assert response.timed_submissions == 10
+    consent = rows["consent"].time
+    assert consent is not None
+    # Median 9.5 s: under 3.2 s is too quick to have been read out.
+    assert (consent.timed, consent.median_seconds, consent.rushed, consent.rushed_under) == (
+        10,
+        9.5,
+        3,
+        3.2,
+    )
+    assert sum(consent.bins) == 10 and sum(consent.rushed_bins) == 3
+    assert "rushed" in rows["consent"].attention
+
+
+def test_pace_against_the_form_s_usual_seconds_per_word():
+    response = _timed_survey()
+    rows = {row.name: row for row in response.questions}
+    # Seconds per word: consent 9.5/8, income 30/1, note 5/5; the form's is the median.
+    assert response.form_pace == 1.19
+    assert (rows["consent"].time.pace, rows["note"].time.pace) == (1.0, 0.8)
+    assert rows["income"].time.pace == 25.3 and "slow" in rows["income"].attention
+
+
+def test_a_field_list_screen_is_timed_as_one():
+    rows = {row.name: row for row in _timed_survey().questions}
+    fcs = rows["fcs_a"].time
+    assert fcs is not None and (fcs.median_seconds, fcs.screen_with, fcs.pace) == (40, 1, None)
+    assert rows["fcs_a"].attention == []
+
+
+def test_often_flagged_and_rushed_count_among_the_ones_to_look_at_first():
+    response = _timed_survey()
+    rows = {row.name: row for row in response.questions}
+    # Flagged in 2 of 10: often flagged; consent's 3 rushed of 10 still come first.
+    assert "often_flagged" in rows["income"].attention
+    assert [row.name for row in response.questions][:2] == ["consent", "income"]
+    assert [row.order for row in response.questions if row.name == "fcs_b"] == [3]
+
+
+def test_no_audit_logs_no_time():
+    _, rows = _rows()
+    assert rows["hh_size"].time is None
