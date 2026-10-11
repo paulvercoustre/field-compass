@@ -218,3 +218,29 @@ def test_a_stored_form_s_labels_and_groups():
     survey = SurveyConfig(survey_id=uuid4(), config_data={**CONFIG, "kobo_tool": stored})
     row = by_question(_subs(), survey, []).questions[0]
     assert (row.label, row.group) == ("Household size", "Household")
+
+
+def test_labels_follow_the_language_chosen_in_settings():
+    """The language saved in Settings › Form; until then English, else the form's first."""
+    from linter.models import survey_label_column, survey_label_language
+
+    assert survey_label_language(
+        {"kobo_tool": {"label_column_survey": "label::French (fr)"}}, []
+    ) == ("French (fr)")
+    assert survey_label_language({}, ["French (fr)", "English (en)"]) == "English (en)"
+    assert survey_label_language({}, ["French (fr)", "Dari (prs)"]) == "French (fr)"
+    assert survey_label_language({}, []) is None
+    # The same choice as a sheet column, for code reading the stored rows.
+    fr_dari = {"survey": [{"label::French (fr)": "A", "label::Dari (prs)": "B"}]}
+    assert survey_label_column({"kobo_tool": fr_dari}) == "label::French (fr)"
+    assert survey_label_column({}) == "label::English (en)"
+
+    row = {
+        "type": "integer",
+        "name": "hh_size",
+        "label::French (fr)": "Taille du ménage",
+        "label::English (en)": "Household size",
+    }
+    tool = {"survey": [row], "choices": [], "label_column_survey": "label::French (fr)"}
+    survey = SurveyConfig(survey_id=uuid4(), config_data={**CONFIG, "kobo_tool": tool})
+    assert by_question(_subs(), survey, []).questions[0].label == "Taille du ménage"

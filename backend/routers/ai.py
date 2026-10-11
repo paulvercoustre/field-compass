@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database.models import SurveyConfig, User
+from linter.models import survey_label_column
 from services.ai_allowance import rule_requests_per_user_month, rule_requests_remaining
 from services.ai_client import ResolvedProvider
 from services.ai_errors import AIError
@@ -303,7 +304,7 @@ def _extract_variables_from_config(survey_config: SurveyConfig) -> list[dict[str
     choices_sheet = kobo_tool.get("choices", [])
 
     # Use configured label column for choices
-    label_col_choices = kobo_tool.get("label_column_choices", "label::English (en)")
+    label_col_choices = kobo_tool.get("label_column_choices") or survey_label_column(config_data)
 
     # Build choices lookup: list_name -> [{"name": "yes", "label": "Yes"}, ...]
     choices_by_list: dict[str, list[dict[str, str]]] = {}
@@ -317,15 +318,13 @@ def _extract_variables_from_config(survey_config: SurveyConfig) -> list[dict[str
             choices_by_list[list_name].append({"name": choice_name, "label": choice_label})
 
     # Use configured label column for survey questions
-    label_col_survey = kobo_tool.get("label_column_survey", "label::English (en)")
+    label_col_survey = survey_label_column(config_data)
 
     # Extract variables from survey
     for question in survey_sheet:
         q_type = question.get("type", "")
         q_name = question.get("name", "")
-        q_label = question.get(
-            label_col_survey, question.get("label::English (en)", question.get("label", ""))
-        )
+        q_label = question.get(label_col_survey, question.get("label", ""))
 
         # Skip metadata fields and groups (but keep 'calculate' as it can contain numeric calculations)
         if not q_name or q_type in [

@@ -81,6 +81,46 @@ def language_from_label_column(column: str | None) -> str | None:
     return None
 
 
+_ENGLISH = "English (en)"
+
+
+def survey_label_language(config_data: dict[str, Any] | None, languages: list[str]) -> str | None:
+    """
+    The language every screen shows labels in: the one chosen in Settings ›
+    Form. Until one is saved, English when the form has it, else the form's
+    first language, which is what that setting then shows as chosen
+    (frontend/utils/koboLabelUtils.ts, labelColumnOf).
+    """
+    saved = ((config_data or {}).get("kobo_tool") or {}).get("label_column_survey")
+    if saved:
+        return language_from_label_column(saved)
+    if _ENGLISH in languages:
+        return _ENGLISH
+    return languages[0] if languages else None
+
+
+def survey_label_column(config_data: dict[str, Any] | None) -> str:
+    """
+    The same choice as survey_label_language, as the sheet column a stored
+    form's rows carry it in, for code that reads those rows directly.
+    """
+    kobo_tool = (config_data or {}).get("kobo_tool") or {}
+    if kobo_tool.get("label_column_survey"):
+        return str(kobo_tool["label_column_survey"])
+    rows = [*(kobo_tool.get("survey") or []), *(kobo_tool.get("choices") or [])]
+    columns = list(
+        dict.fromkeys(
+            key
+            for row in rows
+            if isinstance(row, dict)
+            for key in row
+            if isinstance(key, str) and key.startswith("label::")
+        )
+    )
+    english = f"label::{_ENGLISH}"
+    return english if not columns or english in columns else columns[0]
+
+
 @dataclass
 class LintReport:
     findings: list[LintFinding] = field(default_factory=list)

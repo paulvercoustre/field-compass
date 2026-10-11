@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { getSurveyConfig, updateSurvey, SurveyConfig } from '../services/progressApi';
 import { reconstructKoboToolData } from '../utils/koboDataUtils';
+import { labelColumnOf, labelIn } from '../utils/koboLabelUtils';
 import { KoboToolData } from '../types';
 import CustomChecks from '../components/rule-builder/CustomChecks';
 import { Spinner } from '../components/Spinner';
@@ -125,8 +126,8 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
   // has none beyond the variable name.
   const questionLabel = (name: string): string | null => {
     const row = surveyRows.find((r) => r.name === name);
-    const label = row && (row[labelColumnSurvey] || row['label::English (en)'] || row.label);
-    return label && label !== name ? String(label) : null;
+    const label = row ? labelIn(row, labelColumnSurvey, name) : null;
+    return label && label !== name ? label : null;
   };
   // Open-text questions, plus the audio questions being transcribed: the AI
   // review reads their transcripts.
@@ -269,7 +270,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
         .filter((q) => q.name && (q.type === 'text' || q.type.startsWith('text')))
         .map((q) => ({
           name: q.name,
-          label: q['label::English (en)'] || q.name,
+          label: labelIn(q, labelColumnSurvey, q.name),
           type: q.type,
         }));
       setTextVariables(textQuestions);
@@ -296,8 +297,9 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
       return;
     }
     setFormRefreshed(false);
-    setLabelColumnSurvey(tool.label_column_survey ?? DEFAULT_LABEL_COLUMN);
-    setLabelColumnChoices(tool.label_column_choices ?? DEFAULT_LABEL_COLUMN);
+    // Until a language is saved, the one every screen shows (utils/koboLabelUtils).
+    setLabelColumnSurvey(labelColumnOf(tool));
+    setLabelColumnChoices(tool.label_column_choices ?? labelColumnOf(tool));
     // Reconstruct KoboToolData from stored tool with label column
     const reconstructed = reconstructKoboToolData(tool.survey, tool.choices, tool.label_column_survey);
     setKoboToolData({ ...reconstructed, has_audit: tool.has_audit ?? null });
@@ -428,7 +430,7 @@ const SurveySettingsPage: React.FC<SurveySettingsPageProps> = ({ requestedTab, o
     () => (formRefreshed ? koboToolPayload(koboToolData) : null),
     [formRefreshed, koboToolData]
   );
-  const savedLabelColumn = config?.config_data?.kobo_tool?.label_column_survey ?? DEFAULT_LABEL_COLUMN;
+  const savedLabelColumn = labelColumnOf(config?.config_data?.kobo_tool);
   const isKoboToolDirty = formRefreshed || labelColumnSurvey !== savedLabelColumn;
 
   const handleRefreshFormFromProject = async (assetId = config?.kobo_asset_id) => {

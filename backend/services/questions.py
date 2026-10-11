@@ -28,7 +28,7 @@ from etl.relevance import all_hold
 from forms.schema import FormSchema, Question
 from linter.engine import run_lint
 from linter.form_source import load_survey_form
-from linter.models import LintContext, language_from_label_column
+from linter.models import LintContext, survey_label_language
 from linter.questions import enclosing_relevants, iter_answerable
 from schemas import (
     ChoiceCount,
@@ -153,11 +153,8 @@ class _Form:
 
     @classmethod
     def of(cls, schema: FormSchema, config: dict[str, Any]) -> "_Form":
-        # The survey's label language; without one, English when the form has
-        # it, as the screens do (frontend/utils/koboLabelUtils.ts).
-        language = language_from_label_column(
-            (config.get("kobo_tool") or {}).get("label_column_survey")
-        ) or ("English (en)" if "English (en)" in schema.languages else None)
+        # The language chosen in Settings › Form, as on every screen.
+        language = survey_label_language(config, schema.languages)
         # Answers in a repeat are per instance; this view reads one answer each.
         questions = [
             q

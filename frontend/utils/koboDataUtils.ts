@@ -1,4 +1,5 @@
 import { KoboToolData, KoboQuestion, KoboVariable } from '../types';
+import { labelColumnOf, labelIn } from './koboLabelUtils';
 
 /**
  * Reconstructs KoboToolData from stored survey and choices data
@@ -21,13 +22,13 @@ export const reconstructKoboToolData = (
     return metadataTypes.includes(qType) || pickerTypes.some((t) => qType.startsWith(t));
   });
 
-  const labelCol = labelColumnSurvey || 'label::English (en)';
+  const labelCol = labelColumnSurvey || labelColumnOf({ survey, choices });
 
   const variableMap = new Map<string, KoboVariable>();
   pickerRows.forEach((q) => {
     if (q.name) {
       const choiceListName = q.type?.includes('select_') ? q.list_name || null : null;
-      const label = (q as any)[labelCol] || q['label::English (en)'] || q.name;
+      const label = labelIn(q, labelCol, q.name);
       variableMap.set(q.name, {
         type: q.type || '',
         label: label,
@@ -41,5 +42,6 @@ export const reconstructKoboToolData = (
     survey: survey,
     choices: choices,
     variableMap: variableMap,
+    labelColumn: labelCol,
   };
 };

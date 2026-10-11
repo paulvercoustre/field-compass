@@ -136,8 +136,12 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
   question worth a look is highlighted. A row opens what is behind its numbers: each enumerator's don't-know share,
   with a line when most of the team records it (the wording or the translation) or only one does (them, with a link
   to their call sheet); the answers (median and middle half, or the commonest choices); the latest corrections, each
-  opening its submission; and what Form check found, with a link to it. The labels are in the survey's label
-  language, English when none is set, as on the other screens.
+  opening its submission; and what Form check found, with a link to it.
+
+**Labels are in the language chosen in Settings › Form, on every screen** (2026-10-11): Submissions, Data quality,
+Progress, Field team, Form check, the rule builder and the AI review's prompts. Until one is saved, English when the
+form has it, else the form's first language, which is what Settings › Form then shows as chosen. One rule on each side:
+`labelColumnOf` in `frontend/utils/koboLabelUtils.ts`, `survey_label_language` in `backend/linter/models.py`.
 
 | Column | Rule | Looked at when |
 |---|---|---|

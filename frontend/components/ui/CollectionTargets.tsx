@@ -1,5 +1,6 @@
 import React from 'react';
 import { KoboToolData, SamplingMode } from '../../types';
+import { labelColumnOf, labelIn } from '../../utils/koboLabelUtils';
 
 /**
  * How many interviews a survey intends to do, and how that is expressed.
@@ -152,10 +153,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
       .filter((choice) => choice.list_name === listName)
       .map((choice) => ({
         value: choice.name,
-        label:
-          (labelColumnChoices && (choice as Record<string, any>)[labelColumnChoices]) ||
-          (choice as Record<string, any>)['label::English (en)'] ||
-          choice.name,
+        label: labelIn(choice, labelColumnChoices || labelColumnOf(koboToolData), choice.name),
       }));
   }, [koboToolData, variable, labelColumnChoices]);
 

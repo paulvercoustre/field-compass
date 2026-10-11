@@ -18,6 +18,7 @@ from etl.audio import ai_audio_fields, review_data
 from etl.dk_utils import is_dk_value
 from etl.hfc_engine import HFCEngine
 from forms.answers import find_answer
+from linter.models import survey_label_column
 from services.ai_errors import AIError
 from services.ai_providers import CHECKS, resolve_provider
 from services.ai_review_queue import transcript_views
@@ -35,7 +36,7 @@ def _extract_question_contexts(config_data: dict[str, Any], fields: list[str]) -
     """Get question labels for monitored fields."""
     kobo_tool = config_data.get("kobo_tool", {}) or {}
     survey_questions = kobo_tool.get("survey", []) or []
-    label_col = kobo_tool.get("label_column_survey", "label::English (en)")
+    label_col = survey_label_column(config_data)
 
     contexts: dict[str, str] = {}
     for field in fields:

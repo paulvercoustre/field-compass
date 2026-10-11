@@ -95,6 +95,8 @@ export interface KoboToolData {
    * survey rows are filtered and may not include it; undefined means unknown.
    */
   has_audit?: boolean | null;
+  /** The label column its labels were read from (utils/koboLabelUtils labelColumnOf). */
+  labelColumn?: string;
 }
 
 export interface RuleCondition {

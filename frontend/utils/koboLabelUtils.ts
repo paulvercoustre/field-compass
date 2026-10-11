@@ -4,6 +4,43 @@ import { formText } from './formText';
 import { findAnswer } from './answers';
 import { NO_ENUMERATOR } from './filterUtils';
 
+const ENGLISH = 'label::English (en)';
+
+type LabelledRow = Record<string, unknown>;
+
+/** A form's label columns (`label::<language>`), in the order they first appear. */
+export const formLabelColumns = (rows: readonly unknown[]): string[] =>
+  Array.from(
+    new Set((rows as LabelledRow[]).flatMap((row) => Object.keys(row).filter((k) => k.startsWith('label::'))))
+  );
+
+/**
+ * The column every screen reads labels from: the language chosen in
+ * Settings › Form. Until one is saved, English when the form has it, else the
+ * form's first language, which is what that setting then shows as chosen.
+ */
+export const labelColumnOf = (
+  tool:
+    | { survey?: readonly unknown[]; choices?: readonly unknown[]; label_column_survey?: string | null }
+    | null
+    | undefined
+): string => {
+  if (tool?.label_column_survey) return tool.label_column_survey;
+  const columns = formLabelColumns([...(tool?.survey ?? []), ...(tool?.choices ?? [])]);
+  // A form without translations has a plain `label`, which labelIn reads anyway.
+  return columns.length === 0 || columns.includes(ENGLISH) ? ENGLISH : columns[0];
+};
+
+/** A row's label in that column; else in any language it has; else `fallback`. */
+export const labelIn = (row: object, column: string, fallback: string): string => {
+  const cells = row as LabelledRow;
+  const text =
+    cells[column] ??
+    cells.label ??
+    Object.entries(cells).find(([key, value]) => key.startsWith('label::') && typeof value === 'string' && value)?.[1];
+  return typeof text === 'string' && text.trim() ? text : fallback;
+};
+
 /**
  * Get the label for a question variable from Kobo survey data
  */
@@ -16,7 +53,7 @@ export const getQuestionLabel = (
     return variableName;
   }
 
-  const labelCol = labelColumn || surveyConfig.config_data.kobo_tool.label_column_survey || 'label::English (en)';
+  const labelCol = labelColumn || labelColumnOf(surveyConfig.config_data.kobo_tool);
   const survey = surveyConfig.config_data.kobo_tool.survey || [];
 
   const question = survey.find((q: KoboQuestion) => q.name === variableName);
@@ -24,8 +61,7 @@ export const getQuestionLabel = (
     return variableName;
   }
 
-  // Try the specified label column, fallback to default, then to variable name
-  return (question as any)[labelCol] || question['label::English (en)'] || question.name || variableName;
+  return labelIn(question, labelCol, question.name || variableName);
 };
 
 /**
@@ -41,16 +77,16 @@ export const getChoiceLabel = (
     return choiceValue;
   }
 
-  const labelCol = labelColumn || surveyConfig.config_data.kobo_tool.label_column_choices || 'label::English (en)';
-  const choices = surveyConfig.config_data.kobo_tool.choices || [];
+  const tool = surveyConfig.config_data.kobo_tool;
+  const labelCol = labelColumn || tool.label_column_choices || labelColumnOf(tool);
+  const choices = tool.choices || [];
 
   const choice = choices.find((c: KoboChoice) => c.list_name === listName && c.name === choiceValue);
   if (!choice) {
     return choiceValue;
   }
 
-  // Try the specified label column, fallback to default, then to choice name
-  return (choice as any)[labelCol] || choice['label::English (en)'] || choice.name || choiceValue;
+  return labelIn(choice, labelCol, choice.name || choiceValue);
 };
 
 /**
@@ -63,12 +99,12 @@ export const getChoices = (
 ): Array<{ name: string; label: string; row: Record<string, unknown> }> => {
   const tool = surveyConfig?.config_data.kobo_tool;
   if (!listName || !tool) return [];
-  const labelCol = tool.label_column_choices || 'label::English (en)';
+  const labelCol = tool.label_column_choices || labelColumnOf(tool);
   return (tool.choices || [])
     .filter((c: KoboChoice) => c.list_name === listName)
     .map((c: KoboChoice) => ({
       name: String(c.name),
-      label: (c as any)[labelCol] || c['label::English (en)'] || String(c.name),
+      label: labelIn(c, labelCol, String(c.name)),
       row: c as unknown as Record<string, unknown>,
     }));
 };

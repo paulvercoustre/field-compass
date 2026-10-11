@@ -3,7 +3,7 @@ import { KoboQuestion, QualityIssue } from '../types';
 import { SurveyConfig } from '../services/progressApi';
 import { AudioAnswer } from '../services/transcriptionApi';
 import { SubmissionTranslations, Translation } from '../services/translationApi';
-import { getChoices, getQuestionLabel, formatValueForDisplay } from '../utils/koboLabelUtils';
+import { getChoices, getQuestionLabel, formatValueForDisplay, labelColumnOf } from '../utils/koboLabelUtils';
 import { Finding, answerAnchor } from '../utils/findings';
 import { AnswerText, formText } from '../utils/formText';
 import { FilterUnknown, holds, offeredChoices } from '../utils/choiceFilter';
@@ -70,10 +70,6 @@ const NOT_ANSWERS = new Set([
   'username',
 ]);
 
-/** The column a survey's labels are read from (`label::English (en)`). */
-const labelColumnOf = (config: SurveyConfig | null): string =>
-  config?.config_data.kobo_tool?.label_column_survey || 'label::English (en)';
-
 /** A group's name tidied, for forms saved before group labels were kept: "grp_livelihoods" reads "Livelihoods", "hh" "HH". */
 const groupName = (name: string): string => {
   const words = name
@@ -97,10 +93,8 @@ const groupOf = (
   const name = path.split('/').pop();
   if (!name) return null;
   const row = question as unknown as Record<string, unknown>;
-  const label =
-    row[`group_${labelColumn}`] ??
-    row['group_label::English (en)'] ??
-    Object.entries(row).find(([key]) => key.startsWith('group_label'))?.[1];
+  // The group's label in the survey's label language, else in any it has.
+  const label = row[`group_${labelColumn}`] ?? Object.entries(row).find(([key]) => key.startsWith('group_label'))?.[1];
   return {
     path,
     title: typeof label === 'string' && label.trim() ? formText(label, answer) : groupName(name),
@@ -476,7 +470,7 @@ interface RosterSectionProps {
 const RosterSection: React.FC<RosterSectionProps> = ({ rosterName, questions, rosterItems, surveyConfig, answers }) => {
   // Titled with the repeat's label, which its own questions carry.
   const group = questions
-    .map((q) => groupOf(q, labelColumnOf(surveyConfig), answers.text))
+    .map((q) => groupOf(q, labelColumnOf(surveyConfig?.config_data.kobo_tool), answers.text))
     .find((g) => g?.path.split('/').pop() === rosterName);
   return (
     <SectionCard title={group?.title ?? groupName(rosterName)}>
@@ -596,7 +590,7 @@ const SubmissionDataViewer: React.FC<SubmissionDataViewerProps> = ({
     );
   }
 
-  const labelColumn = labelColumnOf(surveyConfig);
+  const labelColumn = labelColumnOf(surveyConfig?.config_data.kobo_tool);
   let lastGroup: string | null = null;
   return (
     <div className="space-y-4">

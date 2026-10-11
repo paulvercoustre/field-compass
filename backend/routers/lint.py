@@ -18,7 +18,7 @@ from linter.adopt import adopt_findings, select_findings
 from linter.dk import dont_know_codes
 from linter.engine import run_lint
 from linter.form_source import SurveyForm, load_survey_form, schema_from_payload
-from linter.models import LintContext, language_from_label_column
+from linter.models import LintContext, language_from_label_column, survey_label_language
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
 from services.permissions import EditableSurvey, ViewableSurvey
@@ -54,10 +54,13 @@ class AdoptRulesRequest(BaseModel):
     label_column: str | None = None
 
 
-def _survey_language(survey: SurveyConfig, label_column: str | None) -> str | None:
-    """The label language the screen asked for, else the survey's saved one."""
-    saved = ((survey.config_data or {}).get("kobo_tool") or {}).get("label_column_survey")
-    return language_from_label_column(label_column) or language_from_label_column(saved)
+def _survey_language(
+    survey: SurveyConfig, label_column: str | None, schema: FormSchema
+) -> str | None:
+    """The label language the screen asked for, else the one the survey's screens show."""
+    return language_from_label_column(label_column) or survey_label_language(
+        survey.config_data, schema.languages
+    )
 
 
 def _require_form(schema: FormSchema) -> FormSchema:
@@ -154,7 +157,7 @@ def lint_survey(
         survey_form.schema,
         ctx=LintContext(
             config_data=survey.config_data,
-            language=_survey_language(survey, label_column),
+            language=_survey_language(survey, label_column, survey_form.schema),
         ),
         form_logic_missing=survey_form.logic_missing,
     ).as_dict()
@@ -178,7 +181,9 @@ def adopt_lint_rules(
     # text quotes the label they read.
     report = run_lint(
         survey_form.schema,
-        ctx=LintContext(language=_survey_language(survey, payload.label_column)),
+        ctx=LintContext(
+            language=_survey_language(survey, payload.label_column, survey_form.schema)
+        ),
         form_logic_missing=survey_form.logic_missing,
     )
     selected = select_findings(
