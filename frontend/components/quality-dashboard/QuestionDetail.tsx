@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { QuestionRow } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { Term, formatPercent, percentOf } from '../../utils/glossary';
 import { checkName } from '../../utils/fieldTeam';
 import { daysBefore, shortDay } from '../../utils/daily';
-import { answerText, dkSpread, outlierRule, plainNumber as plain } from '../../utils/questions';
-import { axisProps, gridProps, tooltipProps, CHART_ACCENT } from '../charts/chartTheme';
+import { answerText, dkSpread, plainNumber as plain } from '../../utils/questions';
+import { axisProps, tooltipProps, CHART_ACCENT } from '../charts/chartTheme';
 import Sparkline, { SparkBar } from '../charts/Sparkline';
 import TermInfo from '../ui/TermInfo';
 
@@ -42,11 +42,23 @@ const Panel: React.FC<{ title: React.ReactNode; className?: string; children: Re
  * as text. Labels get the room, on up to two lines; the bar shows a share
  * just as well shorter.
  */
-const ShareBar: React.FC<{ label: string; count: number; of: number; fill: string }> = ({ label, count, of, fill }) => (
+const ShareBar: React.FC<{ label: string; count: number; of: number; fill: string; onOpen?: () => void }> = ({
+  label,
+  count,
+  of,
+  fill,
+  onOpen,
+}) => (
   <li className="grid grid-cols-[minmax(7rem,3fr)_minmax(3rem,2fr)_5.5rem] items-center gap-2 text-xs">
-    <span className="line-clamp-2" title={label}>
-      {label}
-    </span>
+    {onOpen ? (
+      <button type="button" onClick={onOpen} className={`${link} line-clamp-2 text-left`} title="See these submissions">
+        {label}
+      </button>
+    ) : (
+      <span className="line-clamp-2" title={label}>
+        {label}
+      </span>
+    )}
     <span className="h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
       <span
         className={`block h-2.5 rounded-full ${fill}`}
@@ -60,8 +72,9 @@ const ShareBar: React.FC<{ label: string; count: number; of: number; fill: strin
 );
 
 /**
- * A number question's answers as bars over equal bins, the outliers in each
- * in amber on top; the far-out ones said, not drawn.
+ * A number question's answers as bars over equal bins, those the outlier
+ * check flagged in amber on top; the far-out ones said, not drawn. No grid:
+ * the bars' heights against each other are the point.
  */
 const NumberHistogram: React.FC<{ histogram: NonNullable<QuestionRow['histogram']> }> = ({ histogram }) => {
   const { start, width, counts, outliers, below, above } = histogram;
@@ -85,13 +98,12 @@ const NumberHistogram: React.FC<{ histogram: NonNullable<QuestionRow['histogram'
       <div style={{ width: '100%', height: 150 }}>
         <ResponsiveContainer>
           <BarChart data={bins} margin={{ top: 4, right: 4, left: -24, bottom: 0 }} barCategoryGap={2}>
-            <CartesianGrid {...gridProps} vertical={false} />
             <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={16} />
             <YAxis {...axisProps} allowDecimals={false} />
             <Tooltip
               {...tooltipProps}
               labelFormatter={(_, payload) => payload?.[0]?.payload.range ?? ''}
-              formatter={(value, name) => [value, name === 'outlying' ? 'outliers' : 'answers']}
+              formatter={(value, name) => [value, name === 'outlying' ? 'flagged as outliers' : 'answers']}
             />
             <Bar dataKey="inside" stackId="answers" fill={CHART_ACCENT} isAnimationActive={false} />
             <Bar dataKey="outlying" stackId="answers" fill={OUTLIER} isAnimationActive={false} />
@@ -101,7 +113,7 @@ const NumberHistogram: React.FC<{ histogram: NonNullable<QuestionRow['histogram'
       {drawnOutliers && (
         <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
           <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: OUTLIER }} aria-hidden="true" />
-          Outliers
+          Flagged as outliers
         </p>
       )}
       {(below > 0 || above > 0) && (
@@ -129,58 +141,12 @@ interface QuestionDetailProps {
   onOpenSubmission?: (submissionId: number) => void;
   onOpenEnumerator?: (enumeratorId: string) => void;
   onOpenSettings?: () => void;
+  onOpenCheck?: (check: string) => void;
 }
 
-/** How many outliers, and by what: the outlier check, or the survey's rule applied here. */
-const OutlierCount: React.FC<{ outliers: NonNullable<QuestionRow['outliers']>; answered: number }> = ({
-  outliers: o,
-  answered,
-}) => {
-  const share = formatPercent(percentOf(o.count, answered));
-  if (o.from_check)
-    return o.count === 0 ? (
-      <>The outlier check flagged none of its answers.</>
-    ) : (
-      <>
-        The outlier check flagged {o.count} of its answers, {share}.
-      </>
-    );
-  if (o.low === null || o.high === null) return <>No outliers: the answers are too alike to tell.</>;
-  const range = `outside ${plain(o.low)} – ${plain(o.high)} (${outlierRule(o.method, o.threshold)})`;
-  return o.count === 0 ? (
-    <>No outliers by the survey’s rule: none {range}.</>
-  ) : (
-    <>
-      {o.count} outlier{o.count === 1 ? '' : 's'}, {share} of its answers: {range}.
-    </>
-  );
-};
-
-/** Each outlying answer listed, opening its submission. */
-const Furthest: React.FC<{
-  values: NonNullable<QuestionRow['outliers']>['furthest'];
-  onOpenSubmission?: (submissionId: number) => void;
-}> = ({ values, onOpenSubmission }) => (
-  <>
-    {values.map((o, i) => (
-      <React.Fragment key={o.submission_id}>
-        {i > 0 && ' · '}
-        <span className="tabular">{plain(o.value)}</span>{' '}
-        {onOpenSubmission ? (
-          <button type="button" onClick={() => onOpenSubmission(o.submission_id)} className={link}>
-            #{o.submission_id}
-          </button>
-        ) : (
-          `#${o.submission_id}`
-        )}
-      </React.Fragment>
-    ))}
-  </>
-);
-
 /**
- * What is behind one question's numbers: how its answers spread and, for a
- * number, its outliers; what the checks find on it and when; the latest
+ * What is behind one question's numbers: how its answers spread; what the
+ * checks find on it and when, each opening its submissions; the latest
  * corrections; and Form check.
  */
 const QuestionDetail: React.FC<QuestionDetailProps> = ({
@@ -191,6 +157,7 @@ const QuestionDetail: React.FC<QuestionDetailProps> = ({
   onOpenSubmission,
   onOpenEnumerator,
   onOpenSettings,
+  onOpenCheck,
 }) => {
   const spread = dkSpread(q);
   const multiple = q.type === 'select_multiple';
@@ -201,7 +168,6 @@ const QuestionDetail: React.FC<QuestionDetailProps> = ({
     share: asked ? Math.min(100, percentOf(q.flagged_days[i], asked) ?? 0) : null,
     title: asked ? `${dayName(i)}: ${q.flagged_days[i]} of ${asked} flagged` : `${dayName(i)}: not asked`,
   }));
-  const outliers = q.outliers;
 
   return (
     <div className="grid gap-3 lg:grid-cols-3">
@@ -245,34 +211,6 @@ const QuestionDetail: React.FC<QuestionDetailProps> = ({
             {q.dk > 0 && ` · ${q.dk} don’t know, not counted`}
           </p>
         )}
-        {outliers && (
-          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-            <OutlierCount outliers={outliers} answered={q.answered} />
-            {outliers.furthest.length > 0 && (
-              <>
-                {' '}
-                Furthest: <Furthest values={outliers.furthest} onOpenSubmission={onOpenSubmission} />.
-              </>
-            )}
-            {!outliers.from_check && outliers.count > 0 && (
-              <>
-                {' '}
-                The outlier check doesn’t flag this question for review
-                {onOpenSettings ? (
-                  <>
-                    :{' '}
-                    <button type="button" onClick={onOpenSettings} className={link}>
-                      add it in Settings
-                    </button>
-                    .
-                  </>
-                ) : (
-                  '.'
-                )}
-              </>
-            )}
-          </p>
-        )}
         {q.dk > 0 && (
           <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
             {formatPercent(percentOf(q.dk, q.answered))} don’t know, recorded by {q.dk_enumerators} of{' '}
@@ -302,11 +240,25 @@ const QuestionDetail: React.FC<QuestionDetailProps> = ({
                 count={count}
                 of={q.asked}
                 fill="bg-amber-600"
+                onOpen={onOpenCheck && (() => onOpenCheck(check))}
               />
             ))}
           </ul>
         ) : (
           <p className="text-xs text-gray-500">No check has flagged it.</p>
+        )}
+        {(q.type === 'integer' || q.type === 'decimal') && !q.outlier_check && (
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            The outlier check is off for this question.
+            {onOpenSettings && (
+              <>
+                {' '}
+                <button type="button" onClick={onOpenSettings} className={link}>
+                  Turn it on in Settings
+                </button>
+              </>
+            )}
+          </p>
         )}
         {days > 0 && q.flagged > 0 && (
           <div className="mt-3">

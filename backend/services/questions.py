@@ -4,12 +4,12 @@ first on top (docs/ui-ux-review/wireframes/W6-field-team-data-quality-progress.m
 
 For each question: how often it was asked, from its skip logic and its
 groups'; how often "don't know" was answered, and by how many enumerators;
-how often "Other" was chosen; what the checks found on it; for a number, its
-outliers by the survey's outlier rule; how often it was corrected in Kobo;
-and what Form check found in it before collection.
+how often "Other" was chosen; what the checks found on it, the outlier check
+among them; how often it was corrected in Kobo; and what Form check found in
+it before collection.
 
-The ones to look at first are those with the largest share of don't-know,
-flagged or outlying answers (decided 2026-10-11).
+The ones to look at first are those with the largest share of don't-know or
+flagged answers (decided 2026-10-11).
 
 Pure arithmetic over submissions and edits already loaded; which ones to
 include is the caller's business (routers/quality.py).
@@ -30,7 +30,6 @@ from etl.dk_utils import (
     dk_string_tokens,
     is_dk_value,
 )
-from etl.hfc_engine import is_outlier, outlier_bounds, outlier_statistics
 from etl.relevance import all_hold
 from forms.schema import FormSchema, Question
 from linter.engine import run_lint
@@ -45,14 +44,12 @@ from schemas import (
     FormFinding,
     Histogram,
     NumberSummary,
-    Outliers,
-    OutlierValue,
     QuestionRow,
     QuestionsResponse,
 )
 from services.quality import trend_days
 from services.submission_filters import answer_text
-from services.survey_config import QualityChecks, get_enumerator_field, get_quality_checks
+from services.survey_config import get_enumerator_field, get_quality_checks
 
 # When a question is worth a look (decided 2026-10-09).
 RARELY_ASKED = 10  # percent of submissions, for a question asked under a condition
@@ -60,7 +57,6 @@ MANY_DK = 20  # percent of its answers
 OFTEN_OTHER = 20  # percent of its answers
 OFTEN_CORRECTED = 3  # submissions
 MIN_ANSWERS = 5  # below this, a share is too noisy to call out
-FURTHEST = 5  # outlying answers listed per question
 
 _OTHER_NAMES = frozenset({"other", "others", "oth"})
 _SPECIFY_SUFFIXES = ("_other", "_specify", "_oth")
@@ -154,7 +150,8 @@ def _histogram(
 ) -> Histogram | None:
     """
     A number question's answers in about a dozen round bins, one per value for
-    a small range of whole numbers, with how many in each are outliers. The
+    a small range of whole numbers, with how many in each the outlier check
+    flagged. The
     bins span the answers but for those far out (beyond three times the middle
     half from it), counted apart so one 950,000 doesn't flatten every other bar.
     """
@@ -185,52 +182,6 @@ def _histogram(
             outliers[index] += submission in outlying
     return Histogram(
         start=start, width=width, counts=counts, outliers=outliers, below=below, above=above
-    )
-
-
-def _outliers(
-    q: Question,
-    answers: list[tuple[float, int]],
-    checks: QualityChecks,
-    flagged: dict[str, set[int]],
-) -> tuple[Outliers | None, set[int]]:
-    """
-    A number question's outliers, by the outlier rule set in Settings: the
-    outlier check's flags where it is on for the question, else that rule
-    applied to these answers. With the submissions they are in.
-    """
-    if len(answers) < MIN_ANSWERS:
-        return None, set()
-    method = checks.outlier_method or "iqr"
-    threshold = float(checks.outlier_threshold if checks.outlier_threshold is not None else 1.5)
-    on = bool(checks.flag_outliers) and bool({q.name, q.path} & set(checks.outlier_variables or []))
-    low = high = None
-    if on:
-        ids = set().union(*(ids for check, ids in flagged.items() if check.startswith("outlier_")))
-        found = [(value, sub) for value, sub in answers if sub in ids]
-    else:
-        stats = outlier_statistics([value for value, _ in answers])
-        if stats is None:
-            return None, set()
-        found = [
-            (value, sub) for value, sub in answers if is_outlier(value, stats, method, threshold)
-        ]
-        bounds = outlier_bounds(0.0, stats, method, threshold)
-        if "note" not in bounds:
-            low, high = bounds["lower_bound"], bounds["upper_bound"]
-    middle = median(value for value, _ in answers)
-    furthest = sorted(found, key=lambda answer: abs(answer[0] - middle), reverse=True)
-    return (
-        Outliers(
-            count=len(found),
-            low=low,
-            high=high,
-            method=method,
-            threshold=threshold,
-            from_check=on,
-            furthest=[OutlierValue(submission_id=sub, value=v) for v, sub in furthest[:FURTHEST]],
-        ),
-        {sub for _, sub in found},
     )
 
 
@@ -554,10 +505,13 @@ def by_question(
         choices = {c.name: c.label_for(form.language) for c in form.schema.choices_for(q)}
         option_counts = _option_counts(q, form, choices, tally.picked[name])
         flagged = set().union(*tally.flagged[name].values())
-        outliers, outlying = (
-            _outliers(q, tally.numbers[name], checks, tally.flagged[name])
-            if q.type in ("integer", "decimal")
-            else (None, set())
+        number = q.type in ("integer", "decimal")
+        # Outliers are the outlier check's, for the questions it is on for.
+        outlier_check = number and bool(
+            checks.flag_outliers and {q.name, q.path} & set(checks.outlier_variables or [])
+        )
+        outlying = set().union(
+            *(ids for check, ids in tally.flagged[name].items() if check.startswith("outlier_"))
         )
         asked_on = tally.answered_on[name] if from_answers else tally.asked_on[name]
         row = QuestionRow(
@@ -576,7 +530,7 @@ def by_question(
             answer_enumerators=len(tally.answers_by[name]),
             other=tally.other[name] if form.other_of[name] else None,
             specifies=form.specifies[name],
-            outliers=outliers,
+            outlier_check=outlier_check,
             flagged=len(flagged),
             flagged_by={check: len(ids) for check, ids in tally.flagged[name].items()},
             corrected=len(corrected[name]),
@@ -596,10 +550,10 @@ def by_question(
             corrections=examples[name],
         )
         row.attention = _attention(row, bool(form.conditions[name]), total)
-        # The share of the submissions it was asked in with a don't-know, a
-        # flag or an outlier on it; too few to say counts for nothing.
+        # The share of the submissions it was asked in with a don't-know or a
+        # flag on it; too few to say counts for nothing.
         base = max(row.asked, row.answered)
-        concerns = len(tally.dk[name] | flagged | outlying) / base if base >= MIN_ANSWERS else 0
+        concerns = len(tally.dk[name] | flagged) / base if base >= MIN_ANSWERS else 0
         rows.append((concerns, order, row))
 
     def look_first(item: tuple[float, int, QuestionRow]) -> tuple[Any, ...]:

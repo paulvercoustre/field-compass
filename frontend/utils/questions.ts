@@ -35,7 +35,3 @@ export const answerText = (value: unknown): string => {
 
 /** A number as people write it: 22,000, 2.5, no more than two decimals. */
 export const plainNumber = (n: number): string => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-
-/** The outlier rule as Settings › Quality checks names it. */
-export const outlierRule = (method: 'iqr' | 'mad' | 'zscore', threshold: number): string =>
-  `${{ iqr: 'IQR', mad: 'MAD', zscore: 'Z-score' }[method]}, threshold ${plainNumber(threshold)}`;

@@ -212,6 +212,9 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
           onOpenSubmission={(submissionId) => navigate({ view: 'dashboard', filters: { review: 'all' }, submissionId })}
           onOpenEnumerator={(id) => navigate({ view: 'enumeratorPerformance', tab: id })}
           onOpenSettings={openSettings}
+          onOpenCheck={
+            onNavigateToSubmissions ? (check) => onNavigateToSubmissions({ review: 'all', issues: [check] }) : undefined
+          }
         />
       );
     }

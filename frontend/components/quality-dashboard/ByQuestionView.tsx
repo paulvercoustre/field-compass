@@ -3,7 +3,7 @@ import { QuestionAttention, QuestionsResponse } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { formatPercent, percentOf } from '../../utils/glossary';
 import { checkName } from '../../utils/fieldTeam';
-import { ATTENTION, plainNumber } from '../../utils/questions';
+import { ATTENTION } from '../../utils/questions';
 import QuestionDetail from './QuestionDetail';
 import { ChevronDownIcon } from '../ui/icons';
 import TableFrame, { STICKY_HEAD } from '../ui/TableFrame';
@@ -34,11 +34,13 @@ interface ByQuestionViewProps {
   onOpenEnumerator?: (enumeratorId: string) => void;
   /** Settings › Quality checks, where the outlier check is set. */
   onOpenSettings?: () => void;
+  /** Submissions, filtered to those a check flagged. */
+  onOpenCheck?: (check: string) => void;
 }
 
 /**
  * Data quality by question: every question of the form, those with the most
- * don't-know, flagged or outlying answers first. A row opens what is behind
+ * don't-know or flagged answers first. A row opens what is behind
  * its numbers: how its answers spread, what the checks find on it, the
  * corrections and Form check. The questions that specify an "Other" are left
  * out until asked for: rarely asked by design, and their choice question's
@@ -52,6 +54,7 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
   onOpenSubmission,
   onOpenEnumerator,
   onOpenSettings,
+  onOpenCheck,
 }) => {
   const [show, setShow] = useState<QuestionAttention | 'all'>('all');
   const [search, setSearch] = useState('');
@@ -149,7 +152,7 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
         <table className="min-w-full">
           <thead className={STICKY_HEAD}>
             <tr>
-              {['Question', 'Don’t-know', 'Flagged', 'Outliers', 'Asked in', '“Other”', 'Corrected'].map((h) => (
+              {['Question', 'Don’t-know', 'Flagged', 'Asked in', '“Other”', 'Corrected'].map((h) => (
                 <th
                   key={h}
                   className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap"
@@ -216,31 +219,6 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
                         none('No check flagged it')
                       )}
                     </td>
-                    <td className="px-3 py-2.5 align-top whitespace-nowrap">
-                      {q.outliers ? (
-                        <>
-                          <span className="tabular" title={`${q.outliers.count} of ${q.answered} answers`}>
-                            {pct(q.outliers.count, q.answered)}
-                          </span>
-                          {q.outliers.from_check ? (
-                            <Sub>flagged by the check</Sub>
-                          ) : (
-                            q.outliers.low !== null &&
-                            q.outliers.high !== null && (
-                              <Sub>
-                                outside {plainNumber(q.outliers.low)} – {plainNumber(q.outliers.high)}
-                              </Sub>
-                            )
-                          )}
-                        </>
-                      ) : (
-                        none(
-                          q.type === 'integer' || q.type === 'decimal'
-                            ? 'Too few answers to tell'
-                            : 'Outliers are for number questions'
-                        )
-                      )}
-                    </td>
                     <td className="min-w-[11rem] px-3 py-2.5 align-top">
                       {has('never_shown') ? (
                         <Figure on>Can never be shown</Figure>
@@ -272,7 +250,7 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
                   </tr>
                   {isOpen && (
                     <tr className="bg-gray-50 dark:bg-gray-900">
-                      <td colSpan={7} className="px-3 pb-3 pt-0">
+                      <td colSpan={6} className="px-3 pb-3 pt-0">
                         <QuestionDetail
                           question={q}
                           config={config}
@@ -281,6 +259,7 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
                           onOpenSubmission={onOpenSubmission}
                           onOpenEnumerator={onOpenEnumerator}
                           onOpenSettings={onOpenSettings}
+                          onOpenCheck={onOpenCheck}
                         />
                       </td>
                     </tr>
@@ -304,13 +283,12 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
       )}
       <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
         <p>
-          Most to look at first: the largest share of the submissions it was asked in with a don’t-know, a flag or an
-          outlier on it (from 5 submissions).
+          Most to look at first: the largest share of the submissions it was asked in with a don’t-know or a flag on it
+          (from 5 submissions). The outlier check’s flags are among them, for the questions it is on for.
         </p>
         <p>
-          Don’t-know, Outliers and “Other”: shares of its answers. Flagged: of the submissions it was asked in. Asked
-          in: of all submissions, from its condition and its groups’. Outliers by the survey’s outlier rule, or the
-          outlier check’s flags where it is on for the question.
+          Don’t-know and “Other”: shares of its answers. Flagged: of the submissions it was asked in. Asked in: of all
+          submissions, from its condition and its groups’.
         </p>
         <p>
           <span className="rounded bg-amber-100 px-1.5 font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">

@@ -333,8 +333,8 @@ export interface QuestionRow {
   other: number | null;
   /** The choice question whose "Other" this one asks to specify. */
   specifies: string | null;
-  /** A number question's outliers, by the survey's outlier rule. */
-  outliers: QuestionOutliers | null;
+  /** A number question the outlier check is on for: its outliers are among the flags. */
+  outlier_check: boolean;
   /** Submissions with a finding on this question, and by check. */
   flagged: number;
   flagged_by: Record<string, number>;
@@ -344,7 +344,7 @@ export interface QuestionRow {
   attention: QuestionAttention[];
   dk_by_enumerator: { id: string; dk: number; answers: number }[];
   numbers: { median: number; p25: number; p75: number } | null;
-  /** A number question's answers in equal bins from `start`, with the outliers in each; the far-out ones counted apart. */
+  /** A number question's answers in equal bins from `start`, with those the outlier check flagged in each; the far-out ones counted apart. */
   histogram: {
     start: number;
     width: number;
@@ -361,20 +361,6 @@ export interface QuestionRow {
   flagged_days: number[];
   asked_days: number[];
   corrections: { submission_id: number; old: unknown; new: unknown }[];
-}
-
-/** A number question's answers far from the rest. */
-export interface QuestionOutliers {
-  count: number;
-  /** Answers outside these are outliers; null when they are the outlier check's flags. */
-  low: number | null;
-  high: number | null;
-  method: 'iqr' | 'mad' | 'zscore';
-  threshold: number;
-  /** The outlier check is on for this question, so these are its flags. */
-  from_check: boolean;
-  /** The few furthest from the median. */
-  furthest: { submission_id: number; value: number }[];
 }
 
 export type QuestionAttention = 'never_shown' | 'rarely_asked' | 'many_dk' | 'often_other' | 'often_corrected';

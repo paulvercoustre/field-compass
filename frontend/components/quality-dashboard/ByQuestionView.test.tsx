@@ -21,7 +21,7 @@ const question = (name: string, over: Partial<QuestionRow> = {}): QuestionRow =>
   answer_enumerators: 8,
   other: null,
   specifies: null,
-  outliers: null,
+  outlier_check: false,
   flagged: 0,
   flagged_by: {},
   corrected: 0,
@@ -60,18 +60,7 @@ const data = (): QuestionsResponse => ({
       ],
       numbers: { median: 22000, p25: 9000, p75: 41000 },
       histogram: { start: 0, width: 10000, counts: [20, 30, 25, 10, 4], outliers: [0, 0, 0, 2, 4], below: 0, above: 1 },
-      outliers: {
-        count: 7,
-        low: 0,
-        high: 48000,
-        method: 'iqr',
-        threshold: 1.5,
-        from_check: false,
-        furthest: [
-          { submission_id: 300301, value: 950000 },
-          { submission_id: 300302, value: 61000 },
-        ],
-      },
+      outlier_check: true,
       asked_days: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 8],
       flagged_days: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1],
     }),
@@ -111,9 +100,8 @@ describe('ByQuestionView', () => {
     const row = (name: string) => view.getByText(`Label of ${name}`).closest('tr')!;
     expect(within(row('income')).getByText('31%').className).toContain('bg-amber-100');
     expect(row('income').textContent).toContain('7 of 8 enumerators');
-    // Flagged: of the submissions it was asked in; outliers: of its answers.
+    // Flagged: of the submissions it was asked in, the outlier check's among them.
     expect(row('income').textContent).toContain('9%Outlier');
-    expect(row('income').textContent).toContain('7%outside 0 – 48,000');
     expect(row('water').textContent).not.toContain('mostly');
     expect(within(row('school_fees')).getByText('Can never be shown')).toBeTruthy();
     expect(row('school_fees').textContent).toContain("Asked if school_attend = 'maybe'");
@@ -123,7 +111,7 @@ describe('ByQuestionView', () => {
   it('puts don’t-know and flagged first', () => {
     const view = render(<ByQuestionView data={data()} config={null} allTime />);
     const headings = view.getAllByRole('columnheader').map((h) => h.textContent);
-    expect(headings).toEqual(['Question', 'Don’t-know', 'Flagged', 'Outliers', 'Asked in', '“Other”', 'Corrected']);
+    expect(headings).toEqual(['Question', 'Don’t-know', 'Flagged', 'Asked in', '“Other”', 'Corrected']);
   });
 
   it('leaves out the questions that specify an “Other” until asked', () => {
@@ -148,14 +136,14 @@ describe('ByQuestionView', () => {
 
   it('opens what is behind a question', () => {
     const onOpenSubmission = vi.fn();
-    const onOpenSettings = vi.fn();
+    const onOpenCheck = vi.fn();
     const view = render(
       <ByQuestionView
         data={data()}
         config={null}
         allTime
         onOpenSubmission={onOpenSubmission}
-        onOpenSettings={onOpenSettings}
+        onOpenCheck={onOpenCheck}
       />
     );
     fireEvent.click(view.getByRole('button', { name: /Label of income/ }));
@@ -164,16 +152,24 @@ describe('ByQuestionView', () => {
     expect(text).toContain('Median 22,000');
     expect(text).toContain('1 above 50,000');
     expect(text).toContain('Outlier9% · 9');
-    expect(text).toContain('7 outliers, 7% of its answers: outside 0 – 48,000 (IQR, threshold 1.5).');
-    expect(text).toContain('Furthest: 950,000 #300301 · 61,000 #300302.');
-    fireEvent.click(view.getByRole('button', { name: '#300301' }));
-    expect(onOpenSubmission).toHaveBeenCalledWith(300301);
-    fireEvent.click(view.getByRole('button', { name: 'add it in Settings' }));
-    expect(onOpenSettings).toHaveBeenCalled();
+    expect(text).toContain('Flagged as outliers');
+    expect(text).not.toContain('Furthest');
+    // A flag opens the submissions it flagged.
+    fireEvent.click(view.getByRole('button', { name: 'Outlier' }));
+    expect(onOpenCheck).toHaveBeenCalledWith('outlier_income');
     expect(view.getByRole('img', { name: /^3 flagged in the 14 days to / })).toBeTruthy();
     expect(text).toContain('950000 → 95000');
     fireEvent.click(view.getByRole('button', { name: '#300246' }));
     expect(onOpenSubmission).toHaveBeenCalledWith(300246);
+  });
+
+  it('offers the outlier check for a number question it is off for, without working outliers out', () => {
+    const onOpenSettings = vi.fn();
+    const view = render(<ByQuestionView data={data()} config={null} allTime onOpenSettings={onOpenSettings} />);
+    fireEvent.click(view.getByRole('button', { name: /Label of hh_size/ }));
+    expect(view.container.textContent).toContain('The outlier check is off for this question.');
+    fireEvent.click(view.getByRole('button', { name: 'Turn it on in Settings' }));
+    expect(onOpenSettings).toHaveBeenCalled();
   });
 
   it('charts a choice question’s answers, Other picked out, with its variety', () => {

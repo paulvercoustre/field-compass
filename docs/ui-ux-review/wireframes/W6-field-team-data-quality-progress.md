@@ -134,13 +134,13 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
   pick out the questions worth a look (Can never be shown, Rarely asked, Many don't-know, Often "Other", Often
   corrected) and a search finds one; the figure that makes a question worth a look is highlighted. Reworked
   2026-10-11:
-  - **Columns:** Question, Don't-know, Flagged, Outliers, Asked in, "Other", Corrected. Don't-know, Outliers and
-    "Other" are shares of its answers; Flagged is a share of the submissions it was asked in, no longer a count.
-  - **Order:** the largest share of the submissions it was asked in with a don't-know, a flag or an outlier on it
-    first, counted once each (from 5 submissions); then how many reasons it is worth a look, the corrections and the
-    form's order.
-  - **Outliers,** for a number question from 5 answers: the outlier check's flags where it is on for the question,
-    else the survey's outlier rule (Settings › Quality checks: IQR 1.5 unless changed) applied to the answers shown.
+  - **Columns:** Question, Don't-know, Flagged, Asked in, "Other", Corrected. Don't-know and "Other" are shares of
+    its answers; Flagged is a share of the submissions it was asked in, no longer a count.
+  - **Order:** the largest share of the submissions it was asked in with a don't-know or a flag on it first, counted
+    once each (from 5 submissions); then how many reasons it is worth a look, the corrections and the form's order.
+  - **Outliers are the outlier check's flags,** among the other flags, for the questions it is on for; nothing is
+    worked out for the others, which offer to turn it on in Settings (decided 2026-10-11, superseding a column of
+    outliers by the survey's rule).
   - **"Other, specify" questions are left out** until "Show them": a text question whose condition asks for a choice
     question's "Other", or, with no condition, named after it (`water_source_other`). Rarely asked by design, and
     that question's "Other" share covers them; never called Rarely asked.
@@ -151,18 +151,18 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
 
   A row opens what is behind its numbers, about the question rather than the team:
   - **Answers.** A choice question shows every option as a share of its answers, with its count, its label given
-    the room (up to two lines); Don't know and "Other" in amber. A number question shows a histogram of its answers
-    with the outliers in amber on top, the far-out ones (beyond three times the middle half from it) said under the
-    chart rather than drawn; then the median and middle half, and the outliers: how many, the rule and its range,
-    the furthest few each opening its submission, and a link to Settings when the outlier check doesn't flag the
-    question. A written answer is not charted.
+    the room (up to two lines); Don't know and "Other" in amber. A number question shows a histogram of its answers,
+    no grid, those the outlier check flagged in amber on top, the far-out ones (beyond three times the middle half
+    from it) said under the chart rather than drawn; then the median and middle half. A written answer is not
+    charted.
   - **Answer variety** for a single choice: how evenly the answers spread over the options (normalised entropy), 0%
     when everyone gives the same answer. From 5 answers and 2 options.
   - **Don't-know** as one sentence: the share, by how many of the enumerators, and when most of the team records it
     (the wording or the translation) or only one does (them, with a link to their call sheet). No chart by
     enumerator: that is Field team's view.
-  - **Flags on this question:** each check's share of the submissions it was asked in, and that share each of the
-    last 14 days.
+  - **Flags on this question:** each check's share of the submissions it was asked in, its name opening Submissions
+    filtered to it, and that share each of the last 14 days. For a number question the outlier check is off for, a
+    link to turn it on.
   - The latest corrections, each opening its submission, and what Form check found, with a link to it.
 
 **Form check: a condition on a choice that doesn't exist** (2026-10-11). "Can never be shown" only when the condition

@@ -169,194 +169,6 @@ def signed_log1p_inverse(y: float) -> float:
     return 1 - math.exp(-y)
 
 
-def outlier_statistics(values: list[float]) -> dict[str, float] | None:
-    """
-    Compute statistics from a list of values.
-
-    Args:
-        values: List of numeric values
-
-    Returns:
-        Dictionary with statistics or None if computation fails
-    """
-    try:
-        values_sorted = sorted(values)
-        n = len(values_sorted)
-
-        # Basic statistics
-        mean = statistics.mean(values)
-        median = statistics.median(values)
-
-        # Standard deviation
-        std = statistics.stdev(values) if n > 1 else 0.0
-
-        # Quartiles for IQR
-        q1_idx = int(n * 0.25)
-        q3_idx = int(n * 0.75)
-        q1 = values_sorted[q1_idx] if q1_idx < n else values_sorted[0]
-        q3 = values_sorted[q3_idx] if q3_idx < n else values_sorted[-1]
-        iqr = q3 - q1 if q3 > q1 else 0.0
-
-        # Median Absolute Deviation (MAD)
-        deviations = [abs(v - median) for v in values]
-        mad = statistics.median(deviations) if deviations else 0.0
-        # Modified Z-score uses 1.4826 * MAD to approximate standard deviation
-        mad_std = 1.4826 * mad if mad > 0 else 0.0
-
-        return {
-            "mean": mean,
-            "median": median,
-            "std": std,
-            "q1": q1,
-            "q3": q3,
-            "iqr": iqr,
-            "mad": mad,
-            "mad_std": mad_std,
-            "count": n,
-        }
-    except Exception as e:
-        logger.error(f"Error computing statistics from values: {e}", exc_info=True)
-        return None
-
-
-def is_outlier(value: float, stats: dict[str, float], method: str, threshold: float) -> bool:
-    """
-    Check if a value is an outlier using the specified method.
-
-    Args:
-        value: Value to check
-        stats: Statistics dictionary from _compute_variable_statistics
-        method: Method to use ('iqr', 'mad', or 'zscore')
-        threshold: Threshold value (multiplier for IQR/MAD, or z-score threshold)
-
-    Returns:
-        True if value is an outlier, False otherwise
-    """
-    if method == "iqr":
-        # IQR method: outlier if value < Q1 - threshold*IQR or value > Q3 + threshold*IQR
-        q1 = stats["q1"]
-        q3 = stats["q3"]
-        iqr = stats["iqr"]
-
-        if iqr == 0:
-            return False  # Can't detect outliers if IQR is 0
-
-        lower_bound = q1 - threshold * iqr
-        upper_bound = q3 + threshold * iqr
-
-        return value < lower_bound or value > upper_bound
-
-    if method == "mad":
-        # Modified Z-score using MAD: outlier if |modified_z_score| > threshold
-        # Formula: M = 0.6745 * (x - median) / MAD
-        median = stats["median"]
-        mad = stats["mad"]
-
-        if mad == 0:
-            return False  # Can't detect outliers if MAD is 0
-
-        modified_z_score = 0.6745 * (value - median) / mad
-
-        return abs(modified_z_score) > threshold
-
-    if method == "zscore":
-        # Z-score method: outlier if |z_score| > threshold
-        mean = stats["mean"]
-        std = stats["std"]
-
-        if std == 0:
-            return False  # Can't detect outliers if std is 0
-
-        z_score = (value - mean) / std
-
-        return abs(z_score) > threshold
-
-    logger.warning(f"Unknown outlier method: {method}")
-    return False
-
-
-def outlier_bounds(
-    value: float,
-    stats: dict[str, float],
-    method: str,
-    threshold: float,
-    log_transform: bool = False,
-) -> dict[str, Any]:
-    """
-    Calculate the upper and lower bounds for an outlier based on the detection method.
-
-    Args:
-        value: The outlier value (for context)
-        stats: Statistics dictionary
-        method: Detection method ('iqr', 'mad', or 'zscore')
-        threshold: Threshold value
-        log_transform: If True, inverse-transform bounds to raw space for display
-
-    Returns:
-        Dictionary with lower_bound and upper_bound (in raw space when log_transform=True)
-    """
-    if method == "iqr":
-        q1 = stats["q1"]
-        q3 = stats["q3"]
-        iqr = stats["iqr"]
-
-        if iqr == 0:
-            result = {"lower_bound": q1, "upper_bound": q3, "note": "No variation in data"}
-        else:
-            lower_bound = q1 - threshold * iqr
-            upper_bound = q3 + threshold * iqr
-            result = {
-                "lower_bound": round(lower_bound, 3),
-                "upper_bound": round(upper_bound, 3),
-            }
-
-    elif method == "mad":
-        median = stats["median"]
-        mad = stats["mad"]
-
-        if mad == 0:
-            result = {
-                "lower_bound": median,
-                "upper_bound": median,
-                "note": "No variation in data",
-            }
-        else:
-            bound_distance = (threshold * mad) / 0.6745
-            lower_bound = median - bound_distance
-            upper_bound = median + bound_distance
-            result = {
-                "lower_bound": round(lower_bound, 3),
-                "upper_bound": round(upper_bound, 3),
-            }
-
-    elif method == "zscore":
-        mean = stats["mean"]
-        std = stats["std"]
-
-        if std == 0:
-            result = {"lower_bound": mean, "upper_bound": mean, "note": "No variation in data"}
-        else:
-            lower_bound = mean - threshold * std
-            upper_bound = mean + threshold * std
-            result = {
-                "lower_bound": round(lower_bound, 3),
-                "upper_bound": round(upper_bound, 3),
-            }
-
-    else:
-        result = {"lower_bound": 0, "upper_bound": 0, "note": "Unknown method"}
-
-    # Inverse-transform bounds to raw space when detection used log transform
-    if log_transform and "note" not in result:
-        lb = result.get("lower_bound")
-        ub = result.get("upper_bound")
-        if lb is not None and ub is not None:
-            result["lower_bound"] = round(signed_log1p_inverse(lb), 3)
-            result["upper_bound"] = round(signed_log1p_inverse(ub), 3)
-
-    return result
-
-
 class HFCEngine:
     """High-Frequency Check engine for data quality validation."""
 
@@ -521,7 +333,7 @@ class HFCEngine:
                 )
 
                 # Compute detection stats (for IQR/MAD/Z-score) from detection values
-                detection_stats = outlier_statistics(detection_values)
+                detection_stats = self._compute_statistics_from_values(detection_values)
                 if not detection_stats:
                     logger.warning(f"Failed to compute statistics for variable {variable}")
                     continue
@@ -545,6 +357,55 @@ class HFCEngine:
                 logger.error(
                     f"Error pre-computing statistics for variable {variable}: {e}", exc_info=True
                 )
+
+    def _compute_statistics_from_values(self, values: list[float]) -> dict[str, float] | None:
+        """
+        Compute statistics from a list of values.
+
+        Args:
+            values: List of numeric values
+
+        Returns:
+            Dictionary with statistics or None if computation fails
+        """
+        try:
+            values_sorted = sorted(values)
+            n = len(values_sorted)
+
+            # Basic statistics
+            mean = statistics.mean(values)
+            median = statistics.median(values)
+
+            # Standard deviation
+            std = statistics.stdev(values) if n > 1 else 0.0
+
+            # Quartiles for IQR
+            q1_idx = int(n * 0.25)
+            q3_idx = int(n * 0.75)
+            q1 = values_sorted[q1_idx] if q1_idx < n else values_sorted[0]
+            q3 = values_sorted[q3_idx] if q3_idx < n else values_sorted[-1]
+            iqr = q3 - q1 if q3 > q1 else 0.0
+
+            # Median Absolute Deviation (MAD)
+            deviations = [abs(v - median) for v in values]
+            mad = statistics.median(deviations) if deviations else 0.0
+            # Modified Z-score uses 1.4826 * MAD to approximate standard deviation
+            mad_std = 1.4826 * mad if mad > 0 else 0.0
+
+            return {
+                "mean": mean,
+                "median": median,
+                "std": std,
+                "q1": q1,
+                "q3": q3,
+                "iqr": iqr,
+                "mad": mad,
+                "mad_std": mad_std,
+                "count": n,
+            }
+        except Exception as e:
+            logger.error(f"Error computing statistics from values: {e}", exc_info=True)
+            return None
 
     def _convert_value_type(self, value: Any) -> Any:
         """
@@ -1296,13 +1157,13 @@ class HFCEngine:
                 value_for_detection = signed_log1p(raw_value) if use_log_transform else raw_value
 
                 # Check if value is an outlier using the configured method
-                outlier = is_outlier(value_for_detection, stats, method, threshold)
+                is_outlier = self._is_outlier(value_for_detection, stats, method, threshold)
 
-                if outlier:
+                if is_outlier:
                     method_name = method.upper()
 
                     # Calculate bounds for display (inverse-transform to raw space when needed)
-                    bounds_info = outlier_bounds(
+                    bounds_info = self._get_outlier_bounds(
                         value_for_detection,
                         stats,
                         method,
@@ -1353,6 +1214,145 @@ class HFCEngine:
                 continue
 
         return issues
+
+    def _is_outlier(
+        self, value: float, stats: dict[str, float], method: str, threshold: float
+    ) -> bool:
+        """
+        Check if a value is an outlier using the specified method.
+
+        Args:
+            value: Value to check
+            stats: Statistics dictionary from _compute_variable_statistics
+            method: Method to use ('iqr', 'mad', or 'zscore')
+            threshold: Threshold value (multiplier for IQR/MAD, or z-score threshold)
+
+        Returns:
+            True if value is an outlier, False otherwise
+        """
+        if method == "iqr":
+            # IQR method: outlier if value < Q1 - threshold*IQR or value > Q3 + threshold*IQR
+            q1 = stats["q1"]
+            q3 = stats["q3"]
+            iqr = stats["iqr"]
+
+            if iqr == 0:
+                return False  # Can't detect outliers if IQR is 0
+
+            lower_bound = q1 - threshold * iqr
+            upper_bound = q3 + threshold * iqr
+
+            return value < lower_bound or value > upper_bound
+
+        if method == "mad":
+            # Modified Z-score using MAD: outlier if |modified_z_score| > threshold
+            # Formula: M = 0.6745 * (x - median) / MAD
+            median = stats["median"]
+            mad = stats["mad"]
+
+            if mad == 0:
+                return False  # Can't detect outliers if MAD is 0
+
+            modified_z_score = 0.6745 * (value - median) / mad
+
+            return abs(modified_z_score) > threshold
+
+        if method == "zscore":
+            # Z-score method: outlier if |z_score| > threshold
+            mean = stats["mean"]
+            std = stats["std"]
+
+            if std == 0:
+                return False  # Can't detect outliers if std is 0
+
+            z_score = (value - mean) / std
+
+            return abs(z_score) > threshold
+
+        logger.warning(f"Unknown outlier method: {method}")
+        return False
+
+    def _get_outlier_bounds(
+        self,
+        value: float,
+        stats: dict[str, float],
+        method: str,
+        threshold: float,
+        log_transform: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Calculate the upper and lower bounds for an outlier based on the detection method.
+
+        Args:
+            value: The outlier value (for context)
+            stats: Statistics dictionary
+            method: Detection method ('iqr', 'mad', or 'zscore')
+            threshold: Threshold value
+            log_transform: If True, inverse-transform bounds to raw space for display
+
+        Returns:
+            Dictionary with lower_bound and upper_bound (in raw space when log_transform=True)
+        """
+        if method == "iqr":
+            q1 = stats["q1"]
+            q3 = stats["q3"]
+            iqr = stats["iqr"]
+
+            if iqr == 0:
+                result = {"lower_bound": q1, "upper_bound": q3, "note": "No variation in data"}
+            else:
+                lower_bound = q1 - threshold * iqr
+                upper_bound = q3 + threshold * iqr
+                result = {
+                    "lower_bound": round(lower_bound, 3),
+                    "upper_bound": round(upper_bound, 3),
+                }
+
+        elif method == "mad":
+            median = stats["median"]
+            mad = stats["mad"]
+
+            if mad == 0:
+                result = {
+                    "lower_bound": median,
+                    "upper_bound": median,
+                    "note": "No variation in data",
+                }
+            else:
+                bound_distance = (threshold * mad) / 0.6745
+                lower_bound = median - bound_distance
+                upper_bound = median + bound_distance
+                result = {
+                    "lower_bound": round(lower_bound, 3),
+                    "upper_bound": round(upper_bound, 3),
+                }
+
+        elif method == "zscore":
+            mean = stats["mean"]
+            std = stats["std"]
+
+            if std == 0:
+                result = {"lower_bound": mean, "upper_bound": mean, "note": "No variation in data"}
+            else:
+                lower_bound = mean - threshold * std
+                upper_bound = mean + threshold * std
+                result = {
+                    "lower_bound": round(lower_bound, 3),
+                    "upper_bound": round(upper_bound, 3),
+                }
+
+        else:
+            result = {"lower_bound": 0, "upper_bound": 0, "note": "Unknown method"}
+
+        # Inverse-transform bounds to raw space when detection used log transform
+        if log_transform and "note" not in result:
+            lb = result.get("lower_bound")
+            ub = result.get("upper_bound")
+            if lb is not None and ub is not None:
+                result["lower_bound"] = round(signed_log1p_inverse(lb), 3)
+                result["upper_bound"] = round(signed_log1p_inverse(ub), 3)
+
+        return result
 
     def _run_custom_rules(
         self, submission_data: dict[str, Any], submission_uuid: str

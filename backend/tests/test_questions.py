@@ -220,7 +220,7 @@ def test_answers_prove_form_check_wrong():
 
 
 def test_the_ones_to_look_at_first_come_first():
-    """By the share of don't-know, flagged or outlying answers, then the rest."""
+    """By the share of don't-know or flagged answers, then the rest."""
     response, _ = _rows()
     order = [row.name for row in response.questions]
     # hh_size: 1 don't-know and 1 flagged of 5; remit: 2 don't-know of 5.
@@ -319,7 +319,7 @@ def test_numbers_as_a_histogram_with_the_far_ones_apart():
     income = _histogram([(v, i) for i, v in enumerate(values)], True, {0, 20})
     assert income is not None and income.above == 1 and sum(income.counts) == 20
     assert income.width == 2000 and len(income.counts) <= 13
-    # Outliers drawn are counted in their bar; 950,000 is not drawn.
+    # Flagged outliers drawn are counted in their bar; 950,000 is not drawn.
     assert sum(income.outliers) == 1 and income.outliers[0] == 1
 
 
@@ -334,35 +334,21 @@ def _numbers_survey(**checks):
     return subs, SurveyConfig(survey_id=uuid4(), config_data=config)
 
 
-def test_outliers_by_the_survey_s_rule():
+def test_outliers_are_the_outlier_check_s_flags_only():
     subs, survey = _numbers_survey()
     row = by_question(subs, survey, []).questions[0]
-    outliers = row.outliers
-    assert outliers is not None
-    # IQR, 1.5 by default: quartiles 11 and 13, so outside 8 to 16.
-    assert (outliers.count, outliers.low, outliers.high) == (2, 8, 16)
-    assert (outliers.method, outliers.threshold, outliers.from_check) == ("iqr", 1.5, False)
-    assert [(o.submission_id, o.value) for o in outliers.furthest] == [(11, 400), (10, 17)]
-    # 17 is drawn, as an outlier; 400 too far to share the scale.
+    # The check is off for it: nothing worked out here, just the way to turn it on.
+    assert row.outlier_check is False and row.flagged == 0
+    assert row.histogram is not None and sum(row.histogram.outliers) == 0
+
+    subs, survey = _numbers_survey(flag_outliers=True, outlier_variables=["income"])
+    subs[9].data_quality_issues = [{"check": "outlier_income", "field": "income"}]
+    row = by_question(subs, survey, []).questions[0]
+    assert row.outlier_check is True
+    assert (row.flagged, row.flagged_by) == (1, {"outlier_income": 1})
+    # 17 is drawn, flagged; 400 is too far out to share the scale.
     assert row.histogram is not None and sum(row.histogram.outliers) == 1
     assert row.histogram.above == 1
-
-
-def test_outliers_are_the_check_s_flags_where_it_is_on():
-    subs, survey = _numbers_survey(
-        flag_outliers=True, outlier_variables=["income"], outlier_method="zscore"
-    )
-    subs[10].data_quality_issues = [{"check": "outlier_income", "field": "income"}]
-    row = by_question(subs, survey, []).questions[0]
-    assert row.outliers is not None
-    assert (row.outliers.count, row.outliers.from_check, row.outliers.low) == (1, True, None)
-    assert row.outliers.method == "zscore"
-
-
-def test_too_few_numbers_for_outliers():
-    _, rows = _rows()
-    # Four answers once don't-know is left out.
-    assert rows["hh_size"].outliers is None and rows["water"].outliers is None
 
 
 def test_flags_and_asked_over_the_last_14_days():
