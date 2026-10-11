@@ -533,13 +533,40 @@ class ChoiceCount(BaseModel):
 
 
 class Histogram(BaseModel):
-    """A number question's answers in equal bins; the outliers beyond them counted apart."""
+    """A number question's answers in equal bins; the far-out ones beyond them counted apart."""
 
     start: float
     width: float
     counts: list[int]
+    outliers: list[int] = Field(
+        default_factory=list, description="How many of each bin's answers are outliers"
+    )
     below: int = Field(default=0, description="Answers below the first bin")
     above: int = Field(default=0, description="Answers beyond the last bin")
+
+
+class OutlierValue(BaseModel):
+    """One outlying answer and the submission it is in."""
+
+    submission_id: int
+    value: float
+
+
+class Outliers(BaseModel):
+    """A number question's answers far from the rest, by the survey's outlier rule."""
+
+    count: int
+    low: float | None = Field(default=None, description="Answers below this are outliers")
+    high: float | None = Field(default=None, description="Answers above this are outliers")
+    method: str = Field(..., description="iqr, mad or zscore, as set in Settings")
+    threshold: float
+    from_check: bool = Field(
+        default=False,
+        description="The outlier check is on for this question, so these are its flags",
+    )
+    furthest: list[OutlierValue] = Field(
+        default_factory=list, description="The few furthest from the median"
+    )
 
 
 class Correction(BaseModel):
@@ -577,8 +604,10 @@ class QuestionRow(BaseModel):
     dk_enumerators: int = Field(default=0, description="Enumerators who recorded one")
     answer_enumerators: int = Field(default=0, description="Enumerators who answered it")
     other: int | None = Field(default=None, description="Answers choosing Other; None without one")
-    other_top: str | None = Field(default=None, description="The most common Other, specified")
-    other_top_count: int = 0
+    specifies: str | None = Field(
+        default=None, description='The choice question whose "Other" this one asks to specify'
+    )
+    outliers: Outliers | None = Field(default=None, description="For a number question")
     flagged: int = Field(default=0, description="Submissions with a finding on this question")
     flagged_by: dict[str, int] = Field(default_factory=dict)
     corrected: int = Field(default=0, description="Submissions where it was edited in Kobo")
@@ -604,8 +633,8 @@ class QuestionRow(BaseModel):
     flagged_days: list[int] = Field(
         default_factory=list, description="Submissions flagged on it, each of the last 14 days"
     )
-    answered_days: list[int] = Field(
-        default_factory=list, description="Its answers, each of the last 14 days"
+    asked_days: list[int] = Field(
+        default_factory=list, description="Submissions it was asked in, each of the last 14 days"
     )
     corrections: list[Correction] = Field(default_factory=list)
 

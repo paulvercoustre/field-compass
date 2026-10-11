@@ -130,23 +130,45 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
   flagged; the count opens those still waiting. Built-in checks that are on and flagged nothing follow with 0, then
   those that are off, under "Off: these checks did not run", each with a link to Settings. Outliers are named by
   their question.
-- **By question (E1):** every question outside a repeat, the ones to look at first on top, at
-  `/surveys/<id>/quality/by-question`. Filters with counts pick out the questions worth a look (Can never be shown,
-  Rarely asked, Many don't-know, Often "Other", Often corrected) and a search finds one; the figure that makes a
-  question worth a look is highlighted. A row opens what is behind its numbers, about the question rather than the
-  team (2026-10-11):
-  - **Answers.** A choice question shows every option as a share of its answers, with its count; Don't know and
-    "Other" in amber. A number question shows a histogram of its answers, the far-out ones (beyond three times the
-    middle half from it) said under the chart rather than drawn, then the median and middle half. A written answer
-    is not charted.
+- **By question (E1):** every question outside a repeat, at `/surveys/<id>/quality/by-question`. Filters with counts
+  pick out the questions worth a look (Can never be shown, Rarely asked, Many don't-know, Often "Other", Often
+  corrected) and a search finds one; the figure that makes a question worth a look is highlighted. Reworked
+  2026-10-11:
+  - **Columns:** Question, Don't-know, Flagged, Outliers, Asked in, "Other", Corrected. Don't-know, Outliers and
+    "Other" are shares of its answers; Flagged is a share of the submissions it was asked in, no longer a count.
+  - **Order:** the largest share of the submissions it was asked in with a don't-know, a flag or an outlier on it
+    first, counted once each (from 5 submissions); then how many reasons it is worth a look, the corrections and the
+    form's order.
+  - **Outliers,** for a number question from 5 answers: the outlier check's flags where it is on for the question,
+    else the survey's outlier rule (Settings › Quality checks: IQR 1.5 unless changed) applied to the answers shown.
+  - **"Other, specify" questions are left out** until "Show them": a text question whose condition asks for a choice
+    question's "Other", or, with no condition, named after it (`water_source_other`). Rarely asked by design, and
+    that question's "Other" share covers them; never called Rarely asked.
+  - The most common specified "Other" ("mostly …") is gone: without a thematic analysis it misleads.
+  - **Can never be shown** only when nothing was answered: answers prove Form check wrong, or the form changed.
+  - **The header row stays in view** while scrolling, on every data table (By question, By check, Progress, Field
+    team, collection targets in Settings): `frontend/components/ui/TableFrame.tsx`.
+
+  A row opens what is behind its numbers, about the question rather than the team:
+  - **Answers.** A choice question shows every option as a share of its answers, with its count, its label given
+    the room (up to two lines); Don't know and "Other" in amber. A number question shows a histogram of its answers
+    with the outliers in amber on top, the far-out ones (beyond three times the middle half from it) said under the
+    chart rather than drawn; then the median and middle half, and the outliers: how many, the rule and its range,
+    the furthest few each opening its submission, and a link to Settings when the outlier check doesn't flag the
+    question. A written answer is not charted.
   - **Answer variety** for a single choice: how evenly the answers spread over the options (normalised entropy), 0%
     when everyone gives the same answer. From 5 answers and 2 options.
   - **Don't-know** as one sentence: the share, by how many of the enumerators, and when most of the team records it
     (the wording or the translation) or only one does (them, with a link to their call sheet). No chart by
     enumerator: that is Field team's view.
-  - **Flags on this question:** each check's share of its answers, and the share of its answers flagged each of the
+  - **Flags on this question:** each check's share of the submissions it was asked in, and that share each of the
     last 14 days.
   - The latest corrections, each opening its submission, and what Form check found, with a link to it.
+
+**Form check: a condition on a choice that doesn't exist** (2026-10-11). "Can never be shown" only when the condition
+cannot hold without that comparison, `and`ed at its top. Inside `not(…)` or an `or` it is never true, but the question
+still shows, every time with `not(selected(${q}, 'typo'))`: that is "has a condition on a missing choice"
+(`condition_missing_choice`). The "other" a `select_one list or_other` adds counts as on the list.
 
 **Labels are in the language chosen in Settings › Form, on every screen** (2026-10-11): Submissions, Data quality,
 Progress, Field team, Form check, the rule builder and the AI review's prompts. Until one is saved, English when the

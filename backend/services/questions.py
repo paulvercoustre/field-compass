@@ -4,8 +4,12 @@ first on top (docs/ui-ux-review/wireframes/W6-field-team-data-quality-progress.m
 
 For each question: how often it was asked, from its skip logic and its
 groups'; how often "don't know" was answered, and by how many enumerators;
-how often "Other" was chosen; what the checks found on it; how often it was
-corrected in Kobo; and what Form check found in it before collection.
+how often "Other" was chosen; what the checks found on it; for a number, its
+outliers by the survey's outlier rule; how often it was corrected in Kobo;
+and what Form check found in it before collection.
+
+The ones to look at first are those with the largest share of don't-know,
+flagged or outlying answers (decided 2026-10-11).
 
 Pure arithmetic over submissions and edits already loaded; which ones to
 include is the caller's business (routers/quality.py).
@@ -26,9 +30,11 @@ from etl.dk_utils import (
     dk_string_tokens,
     is_dk_value,
 )
+from etl.hfc_engine import is_outlier, outlier_bounds, outlier_statistics
 from etl.relevance import all_hold
 from forms.schema import FormSchema, Question
 from linter.engine import run_lint
+from linter.expressions import referenced_choice_equalities
 from linter.form_source import load_survey_form
 from linter.models import LintContext, survey_label_language
 from linter.questions import enclosing_relevants, iter_answerable
@@ -39,12 +45,14 @@ from schemas import (
     FormFinding,
     Histogram,
     NumberSummary,
+    Outliers,
+    OutlierValue,
     QuestionRow,
     QuestionsResponse,
 )
 from services.quality import trend_days
 from services.submission_filters import answer_text
-from services.survey_config import get_enumerator_field
+from services.survey_config import QualityChecks, get_enumerator_field, get_quality_checks
 
 # When a question is worth a look (decided 2026-10-09).
 RARELY_ASKED = 10  # percent of submissions, for a question asked under a condition
@@ -52,6 +60,7 @@ MANY_DK = 20  # percent of its answers
 OFTEN_OTHER = 20  # percent of its answers
 OFTEN_CORRECTED = 3  # submissions
 MIN_ANSWERS = 5  # below this, a share is too noisy to call out
+FURTHEST = 5  # outlying answers listed per question
 
 _OTHER_NAMES = frozenset({"other", "others", "oth"})
 _SPECIFY_SUFFIXES = ("_other", "_specify", "_oth")
@@ -140,16 +149,18 @@ def _nice_step(raw: float) -> float:
     return next(m * base for m in (1, 2, 2.5, 5, 10) if m * base >= raw)
 
 
-def _histogram(values: list[float], integer: bool) -> Histogram | None:
+def _histogram(
+    answers: list[tuple[float, int]], integer: bool, outlying: set[int]
+) -> Histogram | None:
     """
     A number question's answers in about a dozen round bins, one per value for
-    a small range of whole numbers. The bins span the answers but for those
-    far out (beyond three times the middle half from it), counted apart so one
-    950,000 doesn't flatten every other bar.
+    a small range of whole numbers, with how many in each are outliers. The
+    bins span the answers but for those far out (beyond three times the middle
+    half from it), counted apart so one 950,000 doesn't flatten every other bar.
     """
-    if not values:
+    if not answers:
         return None
-    ordered = sorted(values)
+    ordered = sorted(value for value, _ in answers)
     q1, _, q3 = quantiles(ordered, n=4, method="inclusive") if len(ordered) > 1 else ordered * 3
     spread = q3 - q1
     # From the smallest to the largest answer within the fences, so no bar is empty for want of them.
@@ -161,9 +172,9 @@ def _histogram(values: list[float], integer: bool) -> Histogram | None:
         width = _nice_step((hi - lo) / HISTOGRAM_BINS)
         start = math.floor(lo / width) * width
     count = int((hi - start) // width) + 1
-    counts = [0] * count
+    counts, outliers = [0] * count, [0] * count
     below = above = 0
-    for value in ordered:
+    for value, submission in answers:
         index = math.floor((value - start) / width)
         if index < 0:
             below += 1
@@ -171,7 +182,56 @@ def _histogram(values: list[float], integer: bool) -> Histogram | None:
             above += 1
         else:
             counts[index] += 1
-    return Histogram(start=start, width=width, counts=counts, below=below, above=above)
+            outliers[index] += submission in outlying
+    return Histogram(
+        start=start, width=width, counts=counts, outliers=outliers, below=below, above=above
+    )
+
+
+def _outliers(
+    q: Question,
+    answers: list[tuple[float, int]],
+    checks: QualityChecks,
+    flagged: dict[str, set[int]],
+) -> tuple[Outliers | None, set[int]]:
+    """
+    A number question's outliers, by the outlier rule set in Settings: the
+    outlier check's flags where it is on for the question, else that rule
+    applied to these answers. With the submissions they are in.
+    """
+    if len(answers) < MIN_ANSWERS:
+        return None, set()
+    method = checks.outlier_method or "iqr"
+    threshold = float(checks.outlier_threshold if checks.outlier_threshold is not None else 1.5)
+    on = bool(checks.flag_outliers) and bool({q.name, q.path} & set(checks.outlier_variables or []))
+    low = high = None
+    if on:
+        ids = set().union(*(ids for check, ids in flagged.items() if check.startswith("outlier_")))
+        found = [(value, sub) for value, sub in answers if sub in ids]
+    else:
+        stats = outlier_statistics([value for value, _ in answers])
+        if stats is None:
+            return None, set()
+        found = [
+            (value, sub) for value, sub in answers if is_outlier(value, stats, method, threshold)
+        ]
+        bounds = outlier_bounds(0.0, stats, method, threshold)
+        if "note" not in bounds:
+            low, high = bounds["lower_bound"], bounds["upper_bound"]
+    middle = median(value for value, _ in answers)
+    furthest = sorted(found, key=lambda answer: abs(answer[0] - middle), reverse=True)
+    return (
+        Outliers(
+            count=len(found),
+            low=low,
+            high=high,
+            method=method,
+            threshold=threshold,
+            from_check=on,
+            furthest=[OutlierValue(submission_id=sub, value=v) for v, sub in furthest[:FURTHEST]],
+        ),
+        {sub for _, sub in found},
+    )
 
 
 def _variety(counts: list[int]) -> float | None:
@@ -210,7 +270,7 @@ class _Form:
     dk_tokens: set[str]
     dk_names: set[str]
     other_of: dict[str, str | None]
-    specify_of: dict[str, str | None]
+    specifies: dict[str, str | None]
     enumerator_field: str | None
 
     @classmethod
@@ -241,17 +301,34 @@ class _Form:
             if dk_codes or dk_tokens
             else set(),
             other_of={q.name: _other_choice(schema, q, language) for q in questions},
-            specify_of={q.name: _specify_question(schema, q) for q in questions},
+            specifies={q.name: _specifies(schema, q, language) for q in questions},
             enumerator_field=get_enumerator_field(config),
         )
 
 
-def _specify_question(schema: FormSchema, question: Question) -> str | None:
-    """The text question where an "Other" answer is specified, by Kobo's naming."""
+def _specifies(schema: FormSchema, question: Question, language: str | None) -> str | None:
+    """
+    The choice question whose "Other" this text question asks to specify: its
+    condition asks for that "Other", or failing a condition, Kobo's naming
+    (`water_source_other`). Rarely asked by design, and covered by that
+    question's "Other" share.
+    """
+    if question.type != "text":
+        return None
+    for name, value in referenced_choice_equalities(question.relevant):
+        chosen = schema.get(name)
+        if chosen is not None and _other_choice(schema, chosen, language) == value:
+            return chosen.name
+    if question.relevant:
+        return None
     for suffix in _SPECIFY_SUFFIXES:
-        found = schema.get(question.name + suffix)
-        if found is not None:
-            return found.name
+        chosen = schema.get(question.name.removesuffix(suffix))
+        if (
+            question.name.endswith(suffix)
+            and chosen is not None
+            and _other_choice(schema, chosen, language)
+        ):
+            return chosen.name
     return None
 
 
@@ -263,16 +340,16 @@ class _Tally:
     asked: Counter[str] = field(default_factory=Counter)
     unknown: Counter[str] = field(default_factory=Counter)
     answered: Counter[str] = field(default_factory=Counter)
-    dk: Counter[str] = field(default_factory=Counter)
+    dk: dict[str, set[int]] = field(default_factory=lambda: defaultdict(set))
     other: Counter[str] = field(default_factory=Counter)
-    specified: dict[str, Counter[str]] = field(default_factory=lambda: defaultdict(Counter))
     dk_by: dict[str, Counter[str]] = field(default_factory=lambda: defaultdict(Counter))
     answers_by: dict[str, Counter[str]] = field(default_factory=lambda: defaultdict(Counter))
-    numbers: dict[str, list[float]] = field(default_factory=lambda: defaultdict(list))
+    numbers: dict[str, list[tuple[float, int]]] = field(default_factory=lambda: defaultdict(list))
     picked: dict[str, Counter[str]] = field(default_factory=lambda: defaultdict(Counter))
     flagged: dict[str, dict[str, set[int]]] = field(
         default_factory=lambda: defaultdict(lambda: defaultdict(set))
     )
+    asked_on: dict[str, Counter[date]] = field(default_factory=lambda: defaultdict(Counter))
     answered_on: dict[str, Counter[date]] = field(default_factory=lambda: defaultdict(Counter))
     flagged_on: dict[str, dict[date, set[int]]] = field(
         default_factory=lambda: defaultdict(lambda: defaultdict(set))
@@ -290,15 +367,20 @@ class _Tally:
         )
         day = sub._submission_time.date() if sub._submission_time is not None else None
         for q in form.questions:
-            if not form.conditions[q.name]:
-                self.asked[q.name] += 1
-            elif (shown := all_hold(form.conditions[q.name], lookup, self._cache)) is None:
+            shown = (
+                all_hold(form.conditions[q.name], lookup, self._cache)
+                if form.conditions[q.name]
+                else True
+            )
+            if shown is None:
                 self.unknown[q.name] += 1
             elif shown:
                 self.asked[q.name] += 1
+                if day is not None:
+                    self.asked_on[q.name][day] += 1
             value = lookup(q.name)
             if _present(value):
-                self._answer(q, value, lookup, enum_id)
+                self._answer(q, value, sub._id, enum_id)
                 if day is not None:
                     self.answered_on[q.name][day] += 1
         for issue in sub.data_quality_issues or []:
@@ -308,7 +390,7 @@ class _Tally:
                 if day is not None:
                     self.flagged_on[name][day].add(sub._id)
 
-    def _answer(self, q: Question, value: Any, lookup: Any, enum_id: str | None) -> None:
+    def _answer(self, q: Question, value: Any, submission: int, enum_id: str | None) -> None:
         form = self.form
         name = q.name
         multiple = q.type == "select_multiple"
@@ -316,17 +398,14 @@ class _Tally:
         is_dk = name in form.dk_names and is_dk_value(
             value, form.dk_codes, form.dk_tokens, split_multiple=multiple
         )
-        self.dk[name] += 1 if is_dk else 0
+        if is_dk:
+            self.dk[name].add(submission)
         if enum_id is not None:
             self.answers_by[name][enum_id] += 1
             self.dk_by[name][enum_id] += 1 if is_dk else 0
         choice = form.other_of[name]
         if choice and _chose(value, choice, multiple):
             self.other[name] += 1
-            specify = form.specify_of[name]
-            text = lookup(specify) if specify else None
-            if _present(text):
-                self.specified[name][str(text).strip().lower()] += 1
         # A don't-know option is one of a choice question's answers; a
         # don't-know code is no number.
         if q.type.startswith("select_") and isinstance(value, str):
@@ -336,7 +415,7 @@ class _Tally:
             and q.type in ("integer", "decimal")
             and (number := _number(value)) is not None
         ):
-            self.numbers[name].append(number)
+            self.numbers[name].append((number, submission))
 
     def _question_of(self, issue_field: str) -> str | None:
         """The question a check's finding is about; None for the whole submission."""
@@ -423,10 +502,12 @@ def _form_findings(
 def _attention(row: QuestionRow, conditioned: bool, total: int) -> list[str]:
     """Why a question is worth a look, by the thresholds above."""
     reasons = []
-    if any(f.check_id == "unreachable_question" for f in row.form_findings):
+    # Answers prove Form check wrong, or the form changed since.
+    if not row.answered and any(f.check_id == "unreachable_question" for f in row.form_findings):
         reasons.append("never_shown")
     elif (
         conditioned
+        and not row.specifies
         and not row.asked_from_answers
         and total
         and row.asked / total * 100 < RARELY_ASKED
@@ -457,6 +538,7 @@ def by_question(
         return QuestionsResponse(submissions=len(submissions), form_missing=True)
 
     form = _Form.of(stored.schema, config)
+    checks = get_quality_checks(config)
     tally = _Tally(form)
     for sub in submissions:
         tally.add(sub)
@@ -465,13 +547,19 @@ def by_question(
 
     total = len(submissions)
     days = trend_days(submissions)
-    rows: list[tuple[int, QuestionRow]] = []
+    rows: list[tuple[float, int, QuestionRow]] = []
     for order, q in enumerate(form.questions):
         name = q.name
         from_answers = stored.logic_missing or tally.unknown[name] > 0
         choices = {c.name: c.label_for(form.language) for c in form.schema.choices_for(q)}
-        top = tally.specified[name].most_common(1)
         option_counts = _option_counts(q, form, choices, tally.picked[name])
+        flagged = set().union(*tally.flagged[name].values())
+        outliers, outlying = (
+            _outliers(q, tally.numbers[name], checks, tally.flagged[name])
+            if q.type in ("integer", "decimal")
+            else (None, set())
+        )
+        asked_on = tally.answered_on[name] if from_answers else tally.asked_on[name]
         row = QuestionRow(
             name=name,
             path=q.path,
@@ -483,13 +571,13 @@ def by_question(
             asked_from_answers=from_answers and bool(form.conditions[name]),
             answered=tally.answered[name],
             dk_allowed=name in form.dk_names,
-            dk=tally.dk[name],
+            dk=len(tally.dk[name]),
             dk_enumerators=sum(1 for n in tally.dk_by[name].values() if n),
             answer_enumerators=len(tally.answers_by[name]),
             other=tally.other[name] if form.other_of[name] else None,
-            other_top=choices.get(top[0][0], top[0][0]) if top else None,
-            other_top_count=top[0][1] if top else 0,
-            flagged=len(set().union(*tally.flagged[name].values())),
+            specifies=form.specifies[name],
+            outliers=outliers,
+            flagged=len(flagged),
             flagged_by={check: len(ids) for check, ids in tally.flagged[name].items()},
             corrected=len(corrected[name]),
             form_findings=findings[name],
@@ -497,27 +585,30 @@ def by_question(
                 EnumeratorShare(id=enum, dk=tally.dk_by[name][enum], answers=n)
                 for enum, n in sorted(tally.answers_by[name].items())
             ],
-            numbers=_numbers(tally.numbers[name]),
-            histogram=_histogram(tally.numbers[name], integer=q.type == "integer"),
+            numbers=_numbers([value for value, _ in tally.numbers[name]]),
+            histogram=_histogram(tally.numbers[name], q.type == "integer", outlying),
             choices=option_counts,
             variety=_variety([c.count for c in option_counts if c.name in choices])
             if q.type == "select_one"
             else None,
             flagged_days=[len(tally.flagged_on[name][day]) for day in days],
-            answered_days=[tally.answered_on[name][day] for day in days],
+            asked_days=[asked_on[day] for day in days],
             corrections=examples[name],
         )
         row.attention = _attention(row, bool(form.conditions[name]), total)
-        rows.append((order, row))
+        # The share of the submissions it was asked in with a don't-know, a
+        # flag or an outlier on it; too few to say counts for nothing.
+        base = max(row.asked, row.answered)
+        concerns = len(tally.dk[name] | flagged | outlying) / base if base >= MIN_ANSWERS else 0
+        rows.append((concerns, order, row))
 
-    def look_first(item: tuple[int, QuestionRow]) -> tuple[Any, ...]:
-        order, row = item
-        dk_share = row.dk / row.answered if row.answered else 0
-        return (-len(row.attention), -row.flagged, -row.corrected, -dk_share, order)
+    def look_first(item: tuple[float, int, QuestionRow]) -> tuple[Any, ...]:
+        concerns, order, row = item
+        return (-concerns, -len(row.attention), -row.corrected, order)
 
     return QuestionsResponse(
         submissions=total,
-        questions=[row for _, row in sorted(rows, key=look_first)],
+        questions=[row for _, _, row in sorted(rows, key=look_first)],
         form_findings=finding_count,
         last_day=days[-1].isoformat() if days else "",
         logic_missing=stored.logic_missing,

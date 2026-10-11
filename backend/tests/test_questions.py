@@ -158,12 +158,36 @@ def test_dont_know_out_of_answers_and_who_records_it():
     assert rows["water"].dk_allowed is False
 
 
-def test_other_and_what_it_was_specified_as():
+def test_other_and_the_question_that_specifies_it():
     _, rows = _rows()
     water = rows["water"]
-    assert (water.other, water.other_top, water.other_top_count) == (3, "tanker truck", 2)
-    assert "often_other" in water.attention
+    assert water.other == 3 and "often_other" in water.attention
     assert rows["remit"].other is None
+    # Asked when "Other" is chosen: covered by water's "Other" share.
+    assert rows["water_other"].specifies == "water"
+    assert rows["remit_months"].specifies is None
+
+
+def test_a_specify_question_is_found_by_its_name_without_a_condition():
+    tool = {
+        **KOBO_TOOL,
+        "survey": [
+            {"type": "select_one water", "name": "water", "label": "Water source"},
+            {"type": "text", "name": "water_specify", "label": "Which?"},
+            {"type": "text", "name": "remit_other", "label": "Not a choice question's"},
+            {
+                "type": "text",
+                "name": "why_no",
+                "label": "Why not?",
+                "relevant": "${water} = 'piped'",
+            },
+        ],
+    }
+    survey = SurveyConfig(survey_id=uuid4(), config_data={**CONFIG, "kobo_tool": tool})
+    rows = {row.name: row for row in by_question(_subs(), survey, []).questions}
+    assert rows["water_specify"].specifies == "water"
+    assert rows["remit_other"].specifies is None
+    assert rows["why_no"].specifies is None
 
 
 def test_findings_corrections_and_form_check():
@@ -187,9 +211,22 @@ def test_findings_corrections_and_form_check():
     assert response.form_findings >= 1
 
 
+def test_answers_prove_form_check_wrong():
+    subs = _subs()
+    subs[0].submission_data["hh/school_fees"] = "100"
+    response = by_question(subs, SurveyConfig(survey_id=uuid4(), config_data=CONFIG), [])
+    fees = next(row for row in response.questions if row.name == "school_fees")
+    assert fees.form_findings and "never_shown" not in fees.attention
+
+
 def test_the_ones_to_look_at_first_come_first():
+    """By the share of don't-know, flagged or outlying answers, then the rest."""
     response, _ = _rows()
-    assert response.questions[0].name == "hh_size"
+    order = [row.name for row in response.questions]
+    # hh_size: 1 don't-know and 1 flagged of 5; remit: 2 don't-know of 5.
+    assert order[:2] == ["hh_size", "remit"]
+    # Often "Other" or never shown, but nothing don't-know or flagged: after them.
+    assert order.index("water") > order.index("remit")
     assert response.questions[-1].attention == []
 
 
@@ -278,16 +315,61 @@ def test_numbers_as_a_histogram_with_the_far_ones_apart():
         0,
     )
 
-    income = _histogram([float(v) for v in range(1000, 21000, 1000)] + [950000.0], integer=True)
+    values = [float(v) for v in range(1000, 21000, 1000)] + [950000.0]
+    income = _histogram([(v, i) for i, v in enumerate(values)], True, {0, 20})
     assert income is not None and income.above == 1 and sum(income.counts) == 20
     assert income.width == 2000 and len(income.counts) <= 13
+    # Outliers drawn are counted in their bar; 950,000 is not drawn.
+    assert sum(income.outliers) == 1 and income.outliers[0] == 1
 
 
-def test_flags_and_answers_over_the_last_14_days():
+def _numbers_survey(**checks):
+    tool = {
+        "survey": [{"type": "decimal", "name": "income", "label": "Income"}],
+        "choices": [],
+    }
+    config = {**CONFIG, "kobo_tool": tool, "quality_checks": checks}
+    values = [10, 10, 11, 11, 11, 12, 12, 12, 13, 17, 400]
+    subs = [_sub(i + 1, "e1", {"income": str(v)}) for i, v in enumerate(values)]
+    return subs, SurveyConfig(survey_id=uuid4(), config_data=config)
+
+
+def test_outliers_by_the_survey_s_rule():
+    subs, survey = _numbers_survey()
+    row = by_question(subs, survey, []).questions[0]
+    outliers = row.outliers
+    assert outliers is not None
+    # IQR, 1.5 by default: quartiles 11 and 13, so outside 8 to 16.
+    assert (outliers.count, outliers.low, outliers.high) == (2, 8, 16)
+    assert (outliers.method, outliers.threshold, outliers.from_check) == ("iqr", 1.5, False)
+    assert [(o.submission_id, o.value) for o in outliers.furthest] == [(11, 400), (10, 17)]
+    # 17 is drawn, as an outlier; 400 too far to share the scale.
+    assert row.histogram is not None and sum(row.histogram.outliers) == 1
+    assert row.histogram.above == 1
+
+
+def test_outliers_are_the_check_s_flags_where_it_is_on():
+    subs, survey = _numbers_survey(
+        flag_outliers=True, outlier_variables=["income"], outlier_method="zscore"
+    )
+    subs[10].data_quality_issues = [{"check": "outlier_income", "field": "income"}]
+    row = by_question(subs, survey, []).questions[0]
+    assert row.outliers is not None
+    assert (row.outliers.count, row.outliers.from_check, row.outliers.low) == (1, True, None)
+    assert row.outliers.method == "zscore"
+
+
+def test_too_few_numbers_for_outliers():
+    _, rows = _rows()
+    # Four answers once don't-know is left out.
+    assert rows["hh_size"].outliers is None and rows["water"].outliers is None
+
+
+def test_flags_and_asked_over_the_last_14_days():
     subs = _subs()
     for sub, day in zip(subs[:5], (1, 1, 2, 2, 2), strict=True):
         sub._submission_time = datetime(2026, 10, day, 9, tzinfo=UTC)
     response = by_question(subs, SurveyConfig(survey_id=uuid4(), config_data=CONFIG), [])
     size = next(row for row in response.questions if row.name == "hh_size")
-    assert (size.answered_days[-2:], size.flagged_days[-2:]) == ([2, 3], [1, 0])
-    assert len(size.answered_days) == 14
+    assert (size.asked_days[-2:], size.flagged_days[-2:]) == ([2, 3], [1, 0])
+    assert len(size.asked_days) == 14

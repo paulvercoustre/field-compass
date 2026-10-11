@@ -3,9 +3,10 @@ import { QuestionAttention, QuestionsResponse } from '../../types';
 import { SurveyConfig } from '../../services/progressApi';
 import { formatPercent, percentOf } from '../../utils/glossary';
 import { checkName } from '../../utils/fieldTeam';
-import { ATTENTION } from '../../utils/questions';
+import { ATTENTION, plainNumber } from '../../utils/questions';
 import QuestionDetail from './QuestionDetail';
 import { ChevronDownIcon } from '../ui/icons';
+import TableFrame, { STICKY_HEAD } from '../ui/TableFrame';
 
 const link = 'rounded font-medium text-indigo-700 hover:underline dark:text-indigo-300';
 
@@ -31,12 +32,17 @@ interface ByQuestionViewProps {
   onOpenFormCheck?: () => void;
   onOpenSubmission?: (submissionId: number) => void;
   onOpenEnumerator?: (enumeratorId: string) => void;
+  /** Settings › Quality checks, where the outlier check is set. */
+  onOpenSettings?: () => void;
 }
 
 /**
- * Data quality by question: every question of the form, the ones to look at
- * first on top. A row opens what is behind its numbers: how its answers
- * spread, what the checks find on it, the corrections and Form check.
+ * Data quality by question: every question of the form, those with the most
+ * don't-know, flagged or outlying answers first. A row opens what is behind
+ * its numbers: how its answers spread, what the checks find on it, the
+ * corrections and Form check. The questions that specify an "Other" are left
+ * out until asked for: rarely asked by design, and their choice question's
+ * "Other" share covers them.
  */
 const ByQuestionView: React.FC<ByQuestionViewProps> = ({
   data,
@@ -45,23 +51,29 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
   onOpenFormCheck,
   onOpenSubmission,
   onOpenEnumerator,
+  onOpenSettings,
 }) => {
   const [show, setShow] = useState<QuestionAttention | 'all'>('all');
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const [withSpecify, setWithSpecify] = useState(false);
+  const specifying = data.questions.filter((q) => q.specifies).length;
+  const listed = useMemo(
+    () => (withSpecify ? data.questions : data.questions.filter((q) => !q.specifies)),
+    [data.questions, withSpecify]
+  );
   const counts = useMemo(
-    () =>
-      Object.fromEntries(ATTENTION.map((a) => [a.id, data.questions.filter((q) => q.attention.includes(a.id)).length])),
-    [data.questions]
+    () => Object.fromEntries(ATTENTION.map((a) => [a.id, listed.filter((q) => q.attention.includes(a.id)).length])),
+    [listed]
   );
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return data.questions.filter(
+    return listed.filter(
       (q) =>
         (show === 'all' || q.attention.includes(show)) &&
         (!needle || `${q.label} ${q.name} ${q.group}`.toLowerCase().includes(needle))
     );
-  }, [data.questions, show, search]);
+  }, [listed, show, search]);
 
   if (data.form_missing) {
     return (
@@ -88,7 +100,12 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
     </button>
   );
 
-  const pct = (part: number, whole: number) => formatPercent(percentOf(part, whole));
+  const pct = (part: number, whole: number) => formatPercent(Math.min(100, percentOf(part, whole) ?? 0));
+  const none = (title: string) => (
+    <span className="text-gray-400" title={title}>
+      —
+    </span>
+  );
 
   return (
     <section aria-label="Questions" className="space-y-3">
@@ -115,7 +132,7 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        {chip('all', 'All, most to look at first', data.questions.length)}
+        {chip('all', 'All, most to look at first', listed.length)}
         {ATTENTION.filter((a) => counts[a.id] > 0).map((a) => chip(a.id, a.label, counts[a.id]))}
         <span className="flex-1" />
         <input
@@ -128,11 +145,11 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
         />
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-card dark:border-gray-800 dark:bg-gray-950">
+      <TableFrame className="rounded-xl border border-gray-200 bg-white shadow-card dark:border-gray-800 dark:bg-gray-950">
         <table className="min-w-full">
-          <thead className="bg-gray-50 dark:bg-gray-900">
+          <thead className={STICKY_HEAD}>
             <tr>
-              {['Question', 'Asked in', 'Don’t-know', '“Other”', 'Flagged', 'Corrected'].map((h) => (
+              {['Question', 'Don’t-know', 'Flagged', 'Outliers', 'Asked in', '“Other”', 'Corrected'].map((h) => (
                 <th
                   key={h}
                   className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap"
@@ -165,9 +182,64 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
                           <Sub>
                             {q.name}
                             {q.group && ` · ${q.group}`}
+                            {q.specifies && ` · specifies ${q.specifies}’s “Other”`}
                           </Sub>
                         </span>
                       </button>
+                    </td>
+                    <td className="px-3 py-2.5 align-top whitespace-nowrap">
+                      {q.dk_allowed ? (
+                        <>
+                          <Figure on={has('many_dk')}>{pct(q.dk, q.answered)}</Figure>
+                          {q.dk > 0 && (
+                            <Sub>
+                              {q.dk_enumerators} of {q.answer_enumerators} enumerators
+                            </Sub>
+                          )}
+                        </>
+                      ) : (
+                        none('No don’t-know option')
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 align-top whitespace-nowrap">
+                      {q.flagged > 0 ? (
+                        <>
+                          <span className="tabular" title={`${q.flagged} of ${q.asked} submissions`}>
+                            {pct(q.flagged, q.asked)}
+                          </span>
+                          {/* An outlier is named by its question elsewhere; here the row is the question. */}
+                          {topCheck && (
+                            <Sub>{topCheck.startsWith('outlier_') ? 'Outlier' : checkName(topCheck, config)}</Sub>
+                          )}
+                        </>
+                      ) : (
+                        none('No check flagged it')
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 align-top whitespace-nowrap">
+                      {q.outliers ? (
+                        <>
+                          <span className="tabular" title={`${q.outliers.count} of ${q.answered} answers`}>
+                            {pct(q.outliers.count, q.answered)}
+                          </span>
+                          {q.outliers.from_check ? (
+                            <Sub>flagged by the check</Sub>
+                          ) : (
+                            q.outliers.low !== null &&
+                            q.outliers.high !== null && (
+                              <Sub>
+                                outside {plainNumber(q.outliers.low)} – {plainNumber(q.outliers.high)}
+                              </Sub>
+                            )
+                          )}
+                        </>
+                      ) : (
+                        none(
+                          q.type === 'integer' || q.type === 'decimal'
+                            ? 'Too few answers to tell'
+                            : 'Outliers are for number questions'
+                        )
+                      )}
                     </td>
                     <td className="min-w-[11rem] px-3 py-2.5 align-top">
                       {has('never_shown') ? (
@@ -183,56 +255,24 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
                             : 'asked of everyone'}
                       </Sub>
                     </td>
-                    <td className="px-3 py-2.5 align-top whitespace-nowrap">
-                      {q.dk_allowed ? (
-                        <>
-                          <Figure on={has('many_dk')}>{pct(q.dk, q.answered)}</Figure>
-                          {q.dk > 0 && (
-                            <Sub>
-                              {q.dk_enumerators} of {q.answer_enumerators} enumerators
-                            </Sub>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-gray-400" title="No don’t-know option">
-                          —
-                        </span>
-                      )}
-                    </td>
                     <td className="px-3 py-2.5 align-top">
                       {q.other === null ? (
-                        <span className="text-gray-400">—</span>
+                        none('No “Other” option')
                       ) : (
-                        <>
-                          <Figure on={has('often_other')}>{pct(q.other, q.answered)}</Figure>
-                          {q.other_top && q.other_top_count >= 2 && <Sub>mostly “{q.other_top}”</Sub>}
-                        </>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 align-top whitespace-nowrap">
-                      {q.flagged > 0 ? (
-                        <>
-                          <span className="tabular">{q.flagged}</span>
-                          {/* An outlier is named by its question elsewhere; here the row is the question. */}
-                          {topCheck && (
-                            <Sub>{topCheck.startsWith('outlier_') ? 'Outlier' : checkName(topCheck, config)}</Sub>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-gray-400">—</span>
+                        <Figure on={has('often_other')}>{pct(q.other, q.answered)}</Figure>
                       )}
                     </td>
                     <td className="tabular px-3 py-2.5 align-top">
                       {q.corrected > 0 ? (
                         <Figure on={has('often_corrected')}>{q.corrected}</Figure>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        none('Not corrected in Kobo')
                       )}
                     </td>
                   </tr>
                   {isOpen && (
                     <tr className="bg-gray-50 dark:bg-gray-900">
-                      <td colSpan={6} className="px-3 pb-3 pt-0">
+                      <td colSpan={7} className="px-3 pb-3 pt-0">
                         <QuestionDetail
                           question={q}
                           config={config}
@@ -240,6 +280,7 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
                           onOpenFormCheck={onOpenFormCheck}
                           onOpenSubmission={onOpenSubmission}
                           onOpenEnumerator={onOpenEnumerator}
+                          onOpenSettings={onOpenSettings}
                         />
                       </td>
                     </tr>
@@ -250,16 +291,35 @@ const ByQuestionView: React.FC<ByQuestionViewProps> = ({
           </tbody>
         </table>
         {rows.length === 0 && <p className="px-4 py-6 text-center text-sm text-gray-500">No question matches.</p>}
+      </TableFrame>
+      {specifying > 0 && (
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          {withSpecify
+            ? `With the ${specifying} question${specifying === 1 ? '' : 's'} that specify an “Other” answer.`
+            : `${specifying} question${specifying === 1 ? ' that specifies' : 's that specify'} an “Other” answer ${specifying === 1 ? 'is' : 'are'} left out: each is its choice question’s “Other”.`}{' '}
+          <button type="button" onClick={() => setWithSpecify(!withSpecify)} className={link}>
+            {withSpecify ? 'Leave them out' : 'Show them'}
+          </button>
+        </p>
+      )}
+      <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
+        <p>
+          Most to look at first: the largest share of the submissions it was asked in with a don’t-know, a flag or an
+          outlier on it (from 5 submissions).
+        </p>
+        <p>
+          Don’t-know, Outliers and “Other”: shares of its answers. Flagged: of the submissions it was asked in. Asked
+          in: of all submissions, from its condition and its groups’. Outliers by the survey’s outlier rule, or the
+          outlier check’s flags where it is on for the question.
+        </p>
+        <p>
+          <span className="rounded bg-amber-100 px-1.5 font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+            Highlighted
+          </span>{' '}
+          when worth a look: asked in under 10% of submissions, 20% or more don’t-know or “Other” (from 5 answers), or
+          corrected in 3 submissions or more.
+        </p>
       </div>
-      <p className="text-xs text-gray-500 dark:text-gray-400">
-        Asked in: the share of submissions it was shown in, from its condition and its groups’. Don’t-know and “Other”:
-        shares of its answers.{' '}
-        <span className="rounded bg-amber-100 px-1.5 font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-          Highlighted
-        </span>{' '}
-        when worth a look: asked in under 10% of submissions, 20% or more don’t-know or “Other” (from 5 answers), or
-        corrected in 3 submissions or more.
-      </p>
     </section>
   );
 };

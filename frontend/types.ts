@@ -331,8 +331,10 @@ export interface QuestionRow {
   answer_enumerators: number;
   /** Answers choosing Other; null when the question has no Other. */
   other: number | null;
-  other_top: string | null;
-  other_top_count: number;
+  /** The choice question whose "Other" this one asks to specify. */
+  specifies: string | null;
+  /** A number question's outliers, by the survey's outlier rule. */
+  outliers: QuestionOutliers | null;
   /** Submissions with a finding on this question, and by check. */
   flagged: number;
   flagged_by: Record<string, number>;
@@ -342,16 +344,37 @@ export interface QuestionRow {
   attention: QuestionAttention[];
   dk_by_enumerator: { id: string; dk: number; answers: number }[];
   numbers: { median: number; p25: number; p75: number } | null;
-  /** A number question's answers in equal bins from `start`; the far-out ones counted apart. */
-  histogram: { start: number; width: number; counts: number[]; below: number; above: number } | null;
+  /** A number question's answers in equal bins from `start`, with the outliers in each; the far-out ones counted apart. */
+  histogram: {
+    start: number;
+    width: number;
+    counts: number[];
+    outliers: number[];
+    below: number;
+    above: number;
+  } | null;
   /** Every option of a choice question, in the form's order; the don't-know and "Other" ones marked. */
   choices: { name: string; label: string; count: number; kind: 'dk' | 'other' | null }[];
   /** How evenly a single-choice question's answers spread over its options, 0 to 1. */
   variety: number | null;
-  /** Submissions flagged on it, and its answers, each of the 14 days to `last_day`. */
+  /** Submissions flagged on it, and those it was asked in, each of the 14 days to `last_day`. */
   flagged_days: number[];
-  answered_days: number[];
+  asked_days: number[];
   corrections: { submission_id: number; old: unknown; new: unknown }[];
+}
+
+/** A number question's answers far from the rest. */
+export interface QuestionOutliers {
+  count: number;
+  /** Answers outside these are outliers; null when they are the outlier check's flags. */
+  low: number | null;
+  high: number | null;
+  method: 'iqr' | 'mad' | 'zscore';
+  threshold: number;
+  /** The outlier check is on for this question, so these are its flags. */
+  from_check: boolean;
+  /** The few furthest from the median. */
+  furthest: { submission_id: number; value: number }[];
 }
 
 export type QuestionAttention = 'never_shown' | 'rarely_asked' | 'many_dk' | 'often_other' | 'often_corrected';
