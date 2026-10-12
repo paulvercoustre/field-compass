@@ -365,12 +365,6 @@ class SubmissionSummary(BaseModel):
             "Null when nothing could be measured."
         ),
     )
-    duration_p25: float | None = Field(
-        default=None, description="The quarter of durations below this: the middle half's start."
-    )
-    duration_p75: float | None = Field(
-        default=None, description="The quarter of durations above this: the middle half's end."
-    )
     checks: dict[str, int] = Field(
         default_factory=dict, description="Submissions flagged by each check, by its issue key."
     )
@@ -509,6 +503,161 @@ class ApproveCleanResult(BaseModel):
 # ============================================================================
 # Quality Overview Models
 # ============================================================================
+
+
+class EnumeratorShare(BaseModel):
+    """One enumerator's answers to a question, and how many were don't-know."""
+
+    id: str
+    dk: int
+    answers: int
+
+
+class NumberSummary(BaseModel):
+    median: float
+
+
+class ChoiceCount(BaseModel):
+    name: str
+    label: str
+    count: int
+    kind: str | None = Field(default=None, description="dk or other: the options that are signals")
+
+
+class Histogram(BaseModel):
+    """A number question's answers in equal bins; the far-out ones beyond them counted apart."""
+
+    start: float
+    width: float
+    counts: list[int]
+    outliers: list[int] = Field(
+        default_factory=list, description="How many of each bin's answers the outlier check flagged"
+    )
+    below: int = Field(default=0, description="Answers below the first bin")
+    above: int = Field(default=0, description="Answers beyond the last bin")
+
+
+class Correction(BaseModel):
+    """An answer edited in Kobo after it was sent."""
+
+    submission_id: int
+    old: Any = None
+    new: Any = None
+
+
+class FormFinding(BaseModel):
+    check_id: str
+    message: str
+
+
+class QuestionTime(BaseModel):
+    """Time on a question, from the submissions' audit logs."""
+
+    timed: int = Field(..., description="Answers with a time")
+    median_seconds: float
+    rushed: int = Field(..., description="Answered in under `rushed_under` seconds")
+    rushed_under: float = Field(
+        ..., description="A third of its median, 2 s at least: too quick to have been read out"
+    )
+    pace: float | None = Field(
+        default=None,
+        description=(
+            "Its seconds per word of the question, over the form's usual: 2 is twice as slow. "
+            "None on a screen shared with other questions, or too few answers to say"
+        ),
+    )
+    screen_with: int = Field(
+        default=0,
+        description="Other questions on its screen (a field-list group): the times are the screen's",
+    )
+    bin_width: float = Field(..., description="Seconds per bin of `bins`, from 0")
+    bins: list[int] = Field(
+        default_factory=list, description="Answers by time; the last bin and beyond"
+    )
+    rushed_bins: list[int] = Field(default_factory=list, description="Of those, rushed")
+
+
+class QuestionRow(BaseModel):
+    """One question on Data quality's By question view."""
+
+    name: str
+    path: str
+    label: str
+    group: str = Field(default="", description="Its groups' labels, outermost first, joined by ›")
+    type: str
+    condition: str | None = Field(
+        default=None, description="When it is asked, its groups' conditions included"
+    )
+    asked: int = Field(default=0, description="Submissions it was shown in")
+    asked_from_answers: bool = Field(
+        default=False,
+        description="The condition could not be worked out, so `asked` is how many answered",
+    )
+    answered: int = 0
+    dk_allowed: bool = False
+    dk: int = Field(default=0, description="Don't-know answers")
+    dk_enumerators: int = Field(default=0, description="Enumerators who recorded one")
+    answer_enumerators: int = Field(default=0, description="Enumerators who answered it")
+    other: int | None = Field(default=None, description="Answers choosing Other; None without one")
+    specifies: str | None = Field(
+        default=None, description='The choice question whose "Other" this one asks to specify'
+    )
+    outlier_check: bool = Field(
+        default=False, description="A number question the outlier check is on for"
+    )
+    flagged: int = Field(default=0, description="Submissions with a finding on this question")
+    flagged_by: dict[str, int] = Field(default_factory=dict)
+    corrected: int = Field(default=0, description="Submissions where it was edited in Kobo")
+    form_findings: list[FormFinding] = Field(default_factory=list)
+    attention: list[str] = Field(
+        default_factory=list,
+        description=(
+            "never_shown, rarely_asked, many_dk, often_other, often_flagged, often_corrected, "
+            "rushed, slow"
+        ),
+    )
+    order: int = Field(default=0, description="Its place in the form")
+    time: QuestionTime | None = Field(default=None, description="From the audit logs")
+    dk_by_enumerator: list[EnumeratorShare] = Field(default_factory=list)
+    numbers: NumberSummary | None = None
+    histogram: Histogram | None = None
+    choices: list[ChoiceCount] = Field(
+        default_factory=list, description="Every option of its list, in the form's order"
+    )
+    variety: float | None = Field(
+        default=None,
+        description=(
+            "How evenly a single-choice question's answers spread over its options: "
+            "normalised entropy, 0 when all give the same answer, 1 when every option "
+            "is chosen as often"
+        ),
+    )
+    flagged_days: list[int] = Field(
+        default_factory=list, description="Submissions flagged on it, each of the last 14 days"
+    )
+    asked_days: list[int] = Field(
+        default_factory=list, description="Submissions it was asked in, each of the last 14 days"
+    )
+    corrections: list[Correction] = Field(default_factory=list)
+
+
+class QuestionsResponse(BaseModel):
+    """Data quality by question: every question, the ones to look at first on top."""
+
+    submissions: int = 0
+    questions: list[QuestionRow] = Field(default_factory=list)
+    form_findings: int = Field(default=0, description="Everything Form check found in the form")
+    last_day: str = Field(default="", description="The day the 14 days end on (YYYY-MM-DD)")
+    form_missing: bool = Field(default=False, description="No form is stored for the survey")
+    logic_missing: bool = Field(
+        default=False, description="The stored form has no skip logic, so `asked` is answers"
+    )
+    timed_submissions: int = Field(
+        default=0, description="Submissions with seconds per question, from an audit log"
+    )
+    form_pace: float | None = Field(
+        default=None, description="The form's usual seconds per word of a question"
+    )
 
 
 class TopEnumerator(BaseModel):

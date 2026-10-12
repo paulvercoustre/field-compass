@@ -36,3 +36,10 @@ export const byDay = (daily: DayPoint[], measure: DailyMeasure): DayValue[] =>
 /** "14 Sep": a date alone is read as UTC midnight, so it is read here as the local day. */
 export const shortDay = (iso: string): string =>
   new Date(`${iso}T00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+/** The day `n` days before an ISO day, as an ISO day. */
+export const daysBefore = (iso: string, n: number): string => {
+  const day = new Date(`${iso}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - n);
+  return day.toISOString().slice(0, 10);
+};

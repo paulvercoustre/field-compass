@@ -6,6 +6,7 @@ import { MIN_SUBMISSIONS, checkName, highlightTopEnumerator } from '../../utils/
 import Sparkline, { SparkBar } from '../charts/Sparkline';
 import { shortDay } from '../../utils/daily';
 import TermInfo from '../ui/TermInfo';
+import TableFrame, { STICKY_HEAD } from '../ui/TableFrame';
 
 const MOST_FROM: Term = {
   name: 'Most from',
@@ -186,9 +187,9 @@ const ByCheckTable: React.FC<ByCheckTableProps> = ({
       <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
         <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white">Issues by check</h2>
       </div>
-      <div className="overflow-x-auto">
+      <TableFrame>
         <table className="min-w-full">
-          <thead className="bg-gray-50 dark:bg-gray-900">
+          <thead className={STICKY_HEAD}>
             <tr>
               <Header label="Check" />
               <Header label="Flagged submissions" term={GLOSSARY.flagged} />
@@ -225,7 +226,7 @@ const ByCheckTable: React.FC<ByCheckTableProps> = ({
             ))}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
       <p className="border-t border-gray-100 px-4 py-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
         <span className="rounded bg-amber-100 px-1.5 font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
           Highlighted

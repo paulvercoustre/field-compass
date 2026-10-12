@@ -132,3 +132,25 @@ class TestAuditProcessor:
                     os.environ["AUDIT_DIR"] = original_dir
                 elif "AUDIT_DIR" in os.environ:
                     del os.environ["AUDIT_DIR"]
+
+    def test_seconds_on_each_question_and_screen(self):
+        """By answer key, coming back added; a field-list screen under its group."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            writer = csv.DictWriter(f, fieldnames=["event", "start", "end", "node"])
+            writer.writeheader()
+            writer.writerow({"event": "form start", "start": "1000", "end": "", "node": ""})
+            for event, start, end, node in (
+                ("question", 2000, 14000, "/data/hh/income"),
+                ("question", 15000, 18500, "/data/consent"),
+                ("group questions", 19000, 67000, "/data/fcs"),
+                ("question", 70000, 76000, "/data/hh/income"),
+                ("jump", 77000, 77000, ""),
+            ):
+                writer.writerow({"event": event, "start": start, "end": end, "node": node})
+            temp_file = f.name
+        try:
+            metrics = process_audit_log(temp_file, "test-uuid")
+            assert metrics is not None
+            assert metrics["question_seconds"] == {"hh/income": 18.0, "consent": 3.5, "fcs": 48.0}
+        finally:
+            os.unlink(temp_file)

@@ -19,8 +19,6 @@ const summary = (over: Partial<SubmissionSummary> = {}): SubmissionSummary => ({
   duration_measured: 10,
   duration_from_start_end: 0,
   dk_rate: 2,
-  duration_p25: 20,
-  duration_p75: 30,
   checks: { duration_too_short: 1 },
   first_submission: '2026-09-15T08:00:00',
   last_submission: '2026-09-28T15:38:00',

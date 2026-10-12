@@ -79,6 +79,20 @@ def download_audit_log(audit_url: str, uuid: str, kobo_token: str | None = None)
         return None
 
 
+# A screen with one question, and a screen with a whole field-list group.
+_TIMED_EVENTS = ("question", "group questions")
+
+
+def _node_key(node: str) -> str:
+    """
+    An audit node as its answer's key: `/data/hh/income` is `hh/income`. The
+    first segment of an absolute node is the form's root, whatever it is named.
+    """
+    node = node.strip()
+    parts = [p for p in node.split("/") if p]
+    return "/".join(parts[1:] if node.startswith("/") else parts)
+
+
 def process_audit_log(file_path: str, uuid: str) -> dict[str, Any] | None:
     """
     Process a single audit log CSV file and calculate metrics.
@@ -94,8 +108,10 @@ def process_audit_log(file_path: str, uuid: str) -> dict[str, Any] | None:
             'active_interview_time': float (minutes),
             'total_duration': float (minutes),
             'jump_count': int,
-            'median_question_time': float (seconds)
+            'median_question_time': float (seconds),
+            'question_seconds': {answer key: seconds on it, coming back included}
         }
+        A field-list group's screen is timed as one, under the group's key.
         Returns None if processing fails
     """
     if not os.path.exists(file_path):
@@ -105,6 +121,7 @@ def process_audit_log(file_path: str, uuid: str) -> dict[str, Any] | None:
         # Read CSV file
         question_events = []
         all_events = []
+        question_seconds: dict[str, float] = {}
 
         with open(file_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -120,6 +137,12 @@ def process_audit_log(file_path: str, uuid: str) -> dict[str, Any] | None:
                     # Filter for question events
                     if event == "question":
                         question_events.append({"start": start, "end": end})
+                    if (
+                        event in _TIMED_EVENTS
+                        and end > start
+                        and (key := _node_key(row.get("node") or ""))
+                    ):
+                        question_seconds[key] = question_seconds.get(key, 0) + (end - start) / 1000
 
                 except (ValueError, KeyError) as e:
                     logger.debug(f"Skipping invalid row in audit log {file_path}: {e}")
@@ -175,6 +198,7 @@ def process_audit_log(file_path: str, uuid: str) -> dict[str, Any] | None:
             "total_duration": total_duration,
             "jump_count": jump_count,
             "median_question_time": median_question_time,
+            "question_seconds": {key: round(sec, 1) for key, sec in question_seconds.items()},
         }
 
     except Exception as e:

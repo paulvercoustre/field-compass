@@ -6,7 +6,7 @@ import { buildFilterParams, filtersFromParams } from './filterUtils';
  * opens the same place, Back goes back, and a reload keeps it.
  *
  *   /surveys/<id>/submissions[/<kobo id>]?review=…&issue=…   the queue, and a submission
- *   /surveys/<id>/quality[/by-check]                          Data quality, and its view
+ *   /surveys/<id>/quality[/by-check | /by-question]           Data quality, and its view
  *   /surveys/<id>/progress | team
  *   /surveys/<id>/team/<enumerator>                           an enumerator's call sheet
  *   /surveys/<id>/settings[/<tab>]
@@ -57,6 +57,7 @@ export const DEFAULT_TABS: Partial<Record<View, string>> = {
 export const QUALITY_TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'by-check', label: 'By check' },
+  { id: 'by-question', label: 'By question' },
 ] as const;
 
 export type QualityTab = (typeof QUALITY_TABS)[number]['id'];

@@ -1,6 +1,7 @@
 import React from 'react';
 import { KoboToolData, RuleCondition } from '../../types';
 import { isValuelessOperator } from '../../utils/ruleConverter';
+import { labelColumnOf, labelIn } from '../../utils/koboLabelUtils';
 
 interface ConditionRowProps {
   condition: RuleCondition;
@@ -29,6 +30,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
 
   // Notes hold no answer to test.
   const variables = koboToolData.survey.filter((q) => q.type !== 'note');
+  const labelColumn = koboToolData.labelColumn ?? labelColumnOf(koboToolData);
   const selectedVarInfo = koboToolData.variableMap.get(condition.variable);
   const isSelectQuestion = selectedVarInfo?.type.startsWith('select');
   const isNumericVariable =
@@ -51,7 +53,11 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
           {variables.map((q) => {
             const context = q.roster_name ? `(${q.roster_name})` : '(Main)';
             return (
-              <option key={q.name} value={q.name} title={q['label::English (en)']}>{`${context} ${q.name}`}</option>
+              <option
+                key={q.name}
+                value={q.name}
+                title={labelIn(q, labelColumn, q.name)}
+              >{`${context} ${q.name}`}</option>
             );
           })}
         </select>
@@ -68,7 +74,7 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
           <option value="">Select choice...</option>
           {uniqueChoices.map((c) => (
             <option key={c.name} value={c.name}>
-              {c['label::English (en)'] || c.name}
+              {labelIn(c, labelColumn, c.name)}
             </option>
           ))}
         </select>
@@ -99,7 +105,13 @@ const ConditionRow: React.FC<ConditionRowProps> = ({ condition, koboToolData, on
         <option value="">Select variable...</option>
         {variables.map((q) => {
           const context = q.roster_name ? `(${q.roster_name})` : '(Main)';
-          return <option key={q.name} value={q.name} title={q['label::English (en)']}>{`${context} ${q.name}`}</option>;
+          return (
+            <option
+              key={q.name}
+              value={q.name}
+              title={labelIn(q, labelColumn, q.name)}
+            >{`${context} ${q.name}`}</option>
+          );
         })}
       </select>
 

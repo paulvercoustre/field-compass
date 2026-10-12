@@ -12,6 +12,7 @@ import {
 } from '../../utils/fieldTeam';
 import TermInfo from '../ui/TermInfo';
 import { ChevronDownIcon, ChevronUpDownIcon } from '../ui/icons';
+import TableFrame, { STICKY_HEAD } from '../ui/TableFrame';
 
 type SortKey = 'id' | 'submissions' | 'flagged' | 'not_approved' | 'duration' | 'dk';
 type SortDirection = 'asc' | 'desc';
@@ -246,9 +247,9 @@ const FollowUpTable: React.FC<FollowUpTableProps> = ({ data, config, onOpen, onN
           className="h-8 w-56 max-w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 placeholder-gray-500 shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
         />
       </div>
-      <div className="overflow-x-auto">
+      <TableFrame>
         <table className="min-w-full">
-          <thead className="bg-gray-50 dark:bg-gray-900">
+          <thead className={STICKY_HEAD}>
             <tr>
               <SortHeader label="Enumerator" sortKey="id" sort={sort} onSort={handleSort} />
               <SortHeader
@@ -331,7 +332,7 @@ const FollowUpTable: React.FC<FollowUpTableProps> = ({ data, config, onOpen, onN
             )}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
       <p className="border-t border-gray-100 px-4 py-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
         <span className="rounded bg-amber-100 px-1.5 font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
           Highlighted

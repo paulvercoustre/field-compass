@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FilterState, QualityOverviewResponse } from '../types';
+import { FilterState, QualityOverviewResponse, QuestionsResponse } from '../types';
 import { useSurvey } from '../contexts/SurveyContext';
 import { RequestedTab, useNavigation } from '../contexts/NavigationContext';
-import { fetchQualityOverview } from '../services/qualityApi';
+import { fetchQualityOverview, fetchQualityQuestions } from '../services/qualityApi';
 import { getSurveyConfig, SurveyConfig } from '../services/progressApi';
 import { QUALITY_TABS, QualityTab } from '../utils/appUrl';
 import { GLOSSARY, Term, percentOf } from '../utils/glossary';
@@ -20,6 +20,7 @@ import { ReviewCount } from '../components/metrics/ReviewBar';
 import DailyChart from '../components/charts/DailyChart';
 import ReviewCard from '../components/quality-dashboard/ReviewCard';
 import ByCheckTable from '../components/quality-dashboard/ByCheckTable';
+import ByQuestionView from '../components/quality-dashboard/ByQuestionView';
 
 /** "Flagged, by day ⓘ". */
 const ChartTitle: React.FC<{ term: Term }> = ({ term }) => (
@@ -98,7 +99,29 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
       .catch(() => setConfig(null));
   }, [selectedSurvey]);
 
-  const pull = usePull(() => load(true));
+  // By question reads every answer, so it is loaded only when opened, and again
+  // for another survey or period.
+  const [questions, setQuestions] = useState<{ key: string; data: QuestionsResponse } | null>(null);
+  const [questionsError, setQuestionsError] = useState<string | null>(null);
+  const questionsKey = `${selectedSurvey?.survey_id}|${period}`;
+  const loadQuestions = useCallback(async () => {
+    if (!selectedSurvey) return;
+    setQuestionsError(null);
+    try {
+      const key = `${selectedSurvey.survey_id}|${period}`;
+      setQuestions({ key, data: await fetchQualityQuestions(selectedSurvey.survey_id, periodDates(period)) });
+    } catch {
+      setQuestionsError('Failed to load the questions.');
+    }
+  }, [selectedSurvey, period]);
+  useEffect(() => {
+    if (tab === 'by-question' && questions?.key !== questionsKey) loadQuestions();
+  }, [tab, questions?.key, questionsKey, loadQuestions]);
+
+  const pull = usePull(() => {
+    load(true);
+    if (questions) loadQuestions();
+  });
 
   if (!selectedSurvey) {
     return (
@@ -161,6 +184,40 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
         </div>
       );
 
+    if (tab === 'by-question') {
+      if (questionsError)
+        return (
+          <Banner tone="error">
+            <p>{questionsError}</p>
+            <button
+              onClick={() => loadQuestions()}
+              className="mt-1 text-sm font-medium underline underline-offset-2 hover:no-underline"
+            >
+              Try again
+            </button>
+          </Banner>
+        );
+      if (questions?.key !== questionsKey)
+        return (
+          <div className="flex h-64 items-center justify-center">
+            <Spinner />
+          </div>
+        );
+      return (
+        <ByQuestionView
+          data={questions.data}
+          config={config}
+          allTime={period === 'all'}
+          onOpenFormCheck={() => navigate({ view: 'settings' })}
+          onOpenSubmission={(submissionId) => navigate({ view: 'dashboard', filters: { review: 'all' }, submissionId })}
+          onOpenSettings={openSettings}
+          onOpenCheck={
+            onNavigateToSubmissions ? (check) => onNavigateToSubmissions({ review: 'all', issues: [check] }) : undefined
+          }
+        />
+      );
+    }
+
     return tab === 'overview' ? (
       <>
         <NoChecksNotice checks={data} onOpenSettings={openSettings} />
@@ -207,7 +264,6 @@ const QualityOverviewPage: React.FC<QualityOverviewPageProps> = ({
               ? (check) => onNavigateToSubmissions({ review: 'needs_review', issues: [check] })
               : undefined
           }
-          onOpenEnumerator={(id) => navigate({ view: 'enumeratorPerformance', tab: id })}
           onOpenSettings={openSettings}
         />
       </>

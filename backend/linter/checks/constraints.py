@@ -18,6 +18,7 @@ from linter.dk import CATEGORY_LABELS, DONT_KNOW, classify_choice, exclusive_cho
 from linter.expressions import (
     has_exclusive_select_constraint,
     referenced_choice_equalities,
+    required_choice_equalities,
     unresolved_references,
 )
 from linter.models import LintContext, LintFinding, finding_for
@@ -230,49 +231,85 @@ def check_missing_required(schema: FormSchema, ctx: LintContext) -> Iterable[Lin
     return findings
 
 
-@lint_check("unreachable_question", severity="warning", tags=("constraints", "form_logic"))
-def check_unreachable_question(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
+def _missing_choices(schema: FormSchema) -> Iterable[tuple[Question, str, str, str, bool]]:
     """
-    A `relevant` that references a choice value the list does not contain.
+    Each condition's comparison with a choice value the list does not contain:
+    the question, the one it names, the value, its list, and whether the
+    condition cannot hold without that comparison.
 
     Restricted to this statically-decidable case. Questions with
     ``choice_filter`` are skipped — those filters are data-dependent.
     """
-    findings: list[LintFinding] = []
     for question in schema.questions:
         if not is_answerable(question) or not question.relevant:
             continue
         if _has_choice_filter(question):
             continue
-        for ref_name, value in referenced_choice_equalities(question.relevant):
+        required = required_choice_equalities(question.relevant)
+        for ref_name, value in dict.fromkeys(referenced_choice_equalities(question.relevant)):
             referenced = schema.get(ref_name)
             if referenced is None or not referenced.list_name:
                 continue
             names = {choice.name for choice in schema.choices_for(referenced)}
-            if value in names:
+            # `or_other` adds an "other" choice the list does not carry.
+            if value in names or (value == "other" and referenced.or_other):
                 continue
-            findings.append(
-                finding_for(
-                    "unreachable_question",
-                    "warning",
-                    question=question,
-                    message=f"“{headline_label(question, ctx.language)}” can never be shown",
-                    details=(
-                        f"`{question.name}` is relevant when `{ref_name}` is `{value}`, "
-                        f"but that value is not in the `{referenced.list_name}` list."
-                    ),
-                    why_it_matters=(
-                        "The question can never display, so it will always be "
-                        "blank. Anything that depends on it — skip logic, "
-                        "calculations, quality rules — is dead code."
-                    ),
-                    suggested_fix=(
-                        f"Use a value that exists on `{referenced.list_name}`, "
-                        f"or add `{value}` to that list."
-                    ),
-                )
-            )
-    return findings
+            yield question, ref_name, value, referenced.list_name, (ref_name, value) in required
+
+
+@lint_check("unreachable_question", severity="warning", tags=("constraints", "form_logic"))
+def check_unreachable_question(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
+    """A `relevant` that cannot hold: it requires a choice the list does not contain."""
+    return [
+        finding_for(
+            "unreachable_question",
+            "warning",
+            question=question,
+            message=f"“{headline_label(question, ctx.language)}” can never be shown",
+            details=(
+                f"`{question.name}` is relevant when `{ref_name}` is `{value}`, "
+                f"but that value is not in the `{list_name}` list."
+            ),
+            why_it_matters=(
+                "The question can never display, so it will always be "
+                "blank. Anything that depends on it — skip logic, "
+                "calculations, quality rules — is dead code."
+            ),
+            suggested_fix=f"Use a value that exists on `{list_name}`, or add `{value}` to that list.",
+        )
+        for question, ref_name, value, list_name, required in _missing_choices(schema)
+        if required
+    ]
+
+
+@lint_check("condition_missing_choice", severity="warning", tags=("constraints", "form_logic"))
+def check_condition_missing_choice(schema: FormSchema, ctx: LintContext) -> Iterable[LintFinding]:
+    """
+    A comparison with a missing choice the condition can hold without, inside
+    ``not()`` or an ``or``. It is never true, so the question still shows, but
+    not when meant: `not(selected(${q}, 'typo'))` shows it every time.
+    """
+    return [
+        finding_for(
+            "condition_missing_choice",
+            "warning",
+            question=question,
+            message=f"“{headline_label(question, ctx.language)}” has a condition on a missing choice",
+            details=(
+                f"`{question.name}`'s condition checks whether `{ref_name}` is `{value}`, "
+                f"but that value is not in the `{list_name}` list, so that part of the "
+                "condition is never true."
+            ),
+            why_it_matters=(
+                "The question is shown, but not when you meant it to be. With "
+                "`not(…)` around that part, it is shown every time, even to "
+                "those it was meant to skip."
+            ),
+            suggested_fix=f"Use a value that exists on `{list_name}`, or add `{value}` to that list.",
+        )
+        for question, ref_name, value, list_name, required in _missing_choices(schema)
+        if not required
+    ]
 
 
 @lint_check("orphan_choice_list", severity="info", tags=("constraints",))

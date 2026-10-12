@@ -266,6 +266,42 @@ UNREACHABLE = form(
     ],
 )
 
+# The missing choice inside not() or an or: never true, so the question still shows.
+MISSING_CHOICE_NEGATED = form(
+    _q("audit", "audit"),
+    _q("select_one enumerator_id", "enumerator_id", label="Enumerator ID"),
+    _q("today", "today"),
+    _q("select_one yn", "consent", label="Consent"),
+    _q("select_multiple hiring", "hiring_challenges", label="Hiring challenges"),
+    _q(
+        "text",
+        "skill_impact",
+        label="Impact of missing skills",
+        relevant="${consent}='yes' and not(selected(${hiring_challenges}, 'no_difficulties'))",
+    ),
+    _q(
+        "text",
+        "either",
+        label="Either",
+        relevant="(${consent} = 'yess' or selected(${hiring_challenges}, 'skills'))",
+    ),
+    _q(
+        "text",
+        "nested",
+        label="Nested",
+        relevant="${consent}='yes' and (selected(${hiring_challenges}, 'skills') and ${consent} = 'maybe')",
+    ),
+    _q("select_one yn or_other", "work", label="Work"),
+    _q("text", "work_other", label="Other work", relevant="${work} = 'other'"),
+    choices=[
+        _choice("enumerator_id", "E01"),
+        _choice("yn", "yes"),
+        _choice("yn", "no"),
+        _choice("hiring", "skills"),
+        _choice("hiring", "none"),
+    ],
+)
+
 # choice_filter means we must NOT flag even if relevant looks static.
 UNREACHABLE_FILTERED = form(
     _q("audit", "audit"),

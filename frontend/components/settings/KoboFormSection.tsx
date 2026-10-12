@@ -1,5 +1,6 @@
 import React from 'react';
 import { KoboToolData } from '../../types';
+import { formLabelColumns } from '../../utils/koboLabelUtils';
 import { Spinner } from '../Spinner';
 import { SavedNote, SectionActions, SectionControls } from './SectionControls';
 
@@ -18,14 +19,6 @@ interface KoboFormSectionProps {
   controls: SectionControls;
   savedAt?: Date;
 }
-
-/** Translations are stored as `label::<language>` columns, so those are the form's languages. */
-const labelColumns = (form: KoboToolData): string[] =>
-  Array.from(
-    new Set(
-      [...form.survey, ...form.choices].flatMap((row) => Object.keys(row).filter((key) => key.startsWith('label::')))
-    )
-  );
 
 const FormSummary: React.FC<{ fileName: string; variableCount: number }> = ({ fileName, variableCount }) => (
   <div>
@@ -50,7 +43,8 @@ const KoboFormSection: React.FC<KoboFormSectionProps> = ({
 }) => {
   // Only offered when the form has more than one translation: a control with
   // a single option asks the user to read something they cannot act on.
-  const languages = koboToolData ? labelColumns(koboToolData) : [];
+  // Translations are stored as `label::<language>` columns, so those are the form's languages.
+  const languages = koboToolData ? formLabelColumns([...koboToolData.survey, ...koboToolData.choices]) : [];
 
   return (
     <section className="bg-white dark:bg-gray-900 p-5 rounded-xl border border-gray-200 dark:border-gray-800 shadow-card">

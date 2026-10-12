@@ -95,6 +95,8 @@ export interface KoboToolData {
    * survey rows are filtered and may not include it; undefined means unknown.
    */
   has_audit?: boolean | null;
+  /** The label column its labels were read from (utils/koboLabelUtils labelColumnOf). */
+  labelColumn?: string;
 }
 
 export interface RuleCondition {
@@ -220,9 +222,6 @@ export interface SubmissionSummary {
   duration_from_start_end: number;
   /** Percent. Null when nothing could be measured. */
   dk_rate: number | null;
-  /** The middle half of durations, in minutes. */
-  duration_p25: number | null;
-  duration_p75: number | null;
   /** Submissions flagged by each check, by its issue key. */
   checks: Record<string, number>;
   first_submission: string | null;
@@ -307,6 +306,99 @@ export interface SubmissionFacets {
 }
 
 // --- Quality Overview Types ---
+
+/** One question on Data quality's By question view (backend services/questions.py). */
+export interface QuestionRow {
+  name: string;
+  path: string;
+  label: string;
+  /** Its groups' labels, outermost first, joined by ›. */
+  group: string;
+  type: string;
+  /** When it is asked, its groups' conditions included; null when asked of everyone. */
+  condition: string | null;
+  /** Submissions it was shown in. */
+  asked: number;
+  /** The condition could not be worked out, so `asked` is how many answered. */
+  asked_from_answers: boolean;
+  answered: number;
+  dk_allowed: boolean;
+  dk: number;
+  dk_enumerators: number;
+  answer_enumerators: number;
+  /** Answers choosing Other; null when the question has no Other. */
+  other: number | null;
+  /** The choice question whose "Other" this one asks to specify. */
+  specifies: string | null;
+  /** A number question the outlier check is on for: its outliers are among the flags. */
+  outlier_check: boolean;
+  /** Submissions with a finding on this question, and by check. */
+  flagged: number;
+  flagged_by: Record<string, number>;
+  /** Submissions where it was edited in Kobo. */
+  corrected: number;
+  form_findings: { check_id: string; message: string }[];
+  attention: QuestionAttention[];
+  dk_by_enumerator: { id: string; dk: number; answers: number }[];
+  numbers: { median: number } | null;
+  /** A number question's answers in equal bins from `start`, with those the outlier check flagged in each; the far-out ones counted apart. */
+  histogram: {
+    start: number;
+    width: number;
+    counts: number[];
+    outliers: number[];
+    below: number;
+    above: number;
+  } | null;
+  /** Every option of a choice question, in the form's order; the don't-know and "Other" ones marked. */
+  choices: { name: string; label: string; count: number; kind: 'dk' | 'other' | null }[];
+  /** How evenly a single-choice question's answers spread over its options, 0 to 1. */
+  variety: number | null;
+  /** Submissions flagged on it, and those it was asked in, each of the 14 days to `last_day`. */
+  flagged_days: number[];
+  asked_days: number[];
+  corrections: { submission_id: number; old: unknown; new: unknown }[];
+  /** Its place in the form. */
+  order: number;
+  /** Time on it, from the audit logs; null without any. */
+  time: QuestionTime | null;
+}
+
+/** Time on a question, from the submissions' audit logs. */
+export interface QuestionTime {
+  /** Answers with a time. */
+  timed: number;
+  median_seconds: number;
+  /** Answered in under `rushed_under` seconds: a third of its median, 2 s at least. */
+  rushed: number;
+  rushed_under: number;
+  /** Its seconds per word over the form's usual: 2 is twice as slow. Null on a shared screen or too few answers. */
+  pace: number | null;
+  /** Other questions on its screen (a field-list group): the times are the screen's. */
+  screen_with: number;
+  /** Answers by time in bins of `bin_width` seconds from 0, the last one and beyond; of those, rushed. */
+  bin_width: number;
+  bins: number[];
+  rushed_bins: number[];
+}
+
+export type QuestionAttention =
+  'never_shown' | 'rarely_asked' | 'many_dk' | 'often_other' | 'often_flagged' | 'often_corrected' | 'rushed' | 'slow';
+
+export interface QuestionsResponse {
+  submissions: number;
+  questions: QuestionRow[];
+  /** Everything Form check found in the form. */
+  form_findings: number;
+  /** The day the 14 days end on. */
+  last_day: string;
+  form_missing: boolean;
+  logic_missing: boolean;
+  /** Submissions with seconds per question, from an audit log. */
+  timed_submissions: number;
+  /** The form's usual seconds per word of a question. */
+  form_pace: number | null;
+}
 
 /** The enumerator a check flagged most often. */
 export interface TopEnumerator {

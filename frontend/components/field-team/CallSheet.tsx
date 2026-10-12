@@ -68,24 +68,18 @@ const Compare: React.FC<{ id: string; mine: number; team: number; format: (v: nu
   );
 };
 
-/** Their interviews as dots, over the team's middle half and median. */
+/** Their interviews as dots, against the team's median. */
 const DurationStrip: React.FC<{ enumerator: EnumeratorSummary; team: SubmissionSummary }> = ({ enumerator, team }) => {
-  const top = Math.max(15, ...enumerator.durations, team.duration_p75 ?? 0);
+  const top = Math.max(15, ...enumerator.durations, team.duration_minutes ?? 0);
   // Ticks on round minutes: every 15 up to an hour and a half, then every 30, 60…
   const step = [15, 30, 60, 120, 240].find((s) => top / s <= 6) ?? 480;
   const max = Math.ceil(top / step) * step;
   const at = (minutes: number) => `${Math.min(100, Math.max(0, (minutes / max) * 100))}%`;
   const ticks = Array.from({ length: max / step + 1 }, (_, i) => i * step);
   return (
-    <div className="mt-3" role="img" aria-label={`${enumerator.id}’s interviews against the team’s middle half`}>
+    <div className="mt-3" role="img" aria-label={`${enumerator.id}’s interviews against the team’s median`}>
       <div className="relative h-7">
         <span className="absolute inset-x-0 top-3 h-0.5 bg-gray-200 dark:bg-gray-700" />
-        {team.duration_p25 !== null && team.duration_p75 !== null && (
-          <span
-            className="absolute top-1.5 h-4 rounded bg-gray-200 dark:bg-gray-700"
-            style={{ left: at(team.duration_p25), width: `calc(${at(team.duration_p75)} - ${at(team.duration_p25)})` }}
-          />
-        )}
         {team.duration_minutes !== null && (
           <span
             className="absolute top-0.5 h-6 w-0.5 bg-gray-600 dark:bg-gray-300"
@@ -106,7 +100,7 @@ const DurationStrip: React.FC<{ enumerator: EnumeratorSummary; team: SubmissionS
         ))}
       </div>
       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        Dots: their interviews. Grey: the team’s middle half; the line, its median.
+        Dots: their interviews. The line: the team’s median.
       </p>
     </div>
   );

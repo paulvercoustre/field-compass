@@ -1,5 +1,7 @@
 import React from 'react';
 import { KoboToolData, SamplingMode } from '../../types';
+import { labelColumnOf, labelIn } from '../../utils/koboLabelUtils';
+import TableFrame, { STICKY_HEAD } from './TableFrame';
 
 /**
  * How many interviews a survey intends to do, and how that is expressed.
@@ -152,10 +154,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
       .filter((choice) => choice.list_name === listName)
       .map((choice) => ({
         value: choice.name,
-        label:
-          (labelColumnChoices && (choice as Record<string, any>)[labelColumnChoices]) ||
-          (choice as Record<string, any>)['label::English (en)'] ||
-          choice.name,
+        label: labelIn(choice, labelColumnChoices || labelColumnOf(koboToolData), choice.name),
       }));
   }, [koboToolData, variable, labelColumnChoices]);
 
@@ -375,9 +374,9 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+              <TableFrame className="rounded-md border border-gray-200 dark:border-gray-700">
                 <table className="min-w-full">
-                  <thead className="bg-gray-100 dark:bg-gray-900">
+                  <thead className={STICKY_HEAD}>
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
                         Group
@@ -422,7 +421,7 @@ const CollectionTargets: React.FC<CollectionTargetsProps> = ({
                     </tr>
                   </tfoot>
                 </table>
-              </div>
+              </TableFrame>
             </>
           )}
         </div>

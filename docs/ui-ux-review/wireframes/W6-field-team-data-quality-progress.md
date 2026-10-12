@@ -105,7 +105,7 @@ clean. A period with no submissions says so.
 The call sheet (C1) has its own address, `/surveys/<id>/team/<enumerator>`, and Back returns to the table. The team
 stays beside it as a scrolling list in the Submissions list's form: one row each (ID and submissions, then Flagged,
 Not approved and a highlighted main issue as tags), the open one marked. In order: Not approved and Flagged against
-the team; duration, their interviews as dots over the team's middle half and median; the don't-know rate against the
+the team; duration, their interviews as dots against the team's median; the don't-know rate against the
 team; the checks that flagged them, as a small table (check, their share with the count, the team's share, a link to
 those submissions); their submissions in review (Needs review, On hold, Clean, Approved, Not approved); issues per
 submission by day as bars, with the team's figure as a dashed line; and a plain summary to copy into a message or
@@ -130,7 +130,67 @@ top; the period menu is Field team's (All time, Last 7 days, Last 30 days).
   flagged; the count opens those still waiting. Built-in checks that are on and flagged nothing follow with 0, then
   those that are off, under "Off: these checks did not run", each with a link to Settings. Outliers are named by
   their question.
-- **By question (E1):** every question, the ones to look at first on top.
+- **By question (E2 + E3, chosen 2026-10-11; E1 superseded):** every question outside a repeat, at
+  `/surveys/<id>/quality/by-question`, a list beside a side panel (a sheet on a phone). Lenses above the list, each
+  with how many it has worth a look:
+  - **Worth a look** (the default): each question with something that stands out, said in words, one chip per
+    reason with its kind (Don't-know, "Other", Checks, Time, Reach): "31% don't know, 7 of 8 enumerators", "Slow:
+    41 s, 2.3× the form's pace". Amber when over the line; a flag under it still shows, plainly. The ones to look at
+    first on top: the largest share of the submissions it was asked in with a don't-know, a flag or a rushed answer,
+    counted once each (from 5 submissions); then how many reasons, the corrections and the form's order.
+  - **Don't-know & "Other"** (Don't-know, "Other", Answer variety), **Checks** (Flagged, Corrected), **Time**
+    (Rushed, Pace, Median time, Answers by time), **Reach** (Asked in, when, Form check): each sorted by its own
+    signal. **All questions**, in the form's order.
+  - Highlighted when worth a look: 20% or more don't-know, "Other", flagged (of the submissions it was asked in) or
+    rushed (from 5 answers); corrected in 3 submissions or more; asked in under 10% of submissions; twice the form's
+    pace or more; can never be shown (only when nothing was answered).
+  - **Outliers are the outlier check's flags,** among the other flags, for the questions it is on for; nothing is
+    worked out for the others, which offer to turn it on in Settings.
+  - **"Other, specify" questions are left out** until "Show them": a text question whose condition asks for a choice
+    question's "Other", or, with no condition, named after it (`water_source_other`). Rarely asked by design, and
+    that question's "Other" share covers them; never called Rarely asked.
+  - **The header row stays in view** while scrolling, on every data table (By question, By check, Progress, Field
+    team, collection targets in Settings): `frontend/components/ui/TableFrame.tsx`.
+
+  The side panel, about the question, facts only (no advice, no breakdown by enumerator, which is Field team's):
+  - **Answers.** A choice question shows every option as a share of its answers, with its count, its label given
+    the room (up to two lines); Don't know and "Other" in amber; its answer variety (normalised entropy, from 5
+    answers and 2 options). A number question shows a histogram, no grid, those the outlier check flagged in amber
+    on top, the far-out ones said rather than drawn; then the median. Then the don't-know share and how many of the
+    enumerators recorded it.
+  - **Checks:** each check's share of the submissions it was asked in, its name opening Submissions filtered to it;
+    that share each of the last 14 days; the outlier check's offer when it is off; the latest corrections, each
+    opening its submission.
+  - **Time:** median, pace against the form's, and the rushed share; on a shared screen, the screen's.
+  - **Form check:** what it found, with a link to it.
+
+**Time per question, from the Kobo audit log** (2026-10-11). Each pull reads the submission's audit log (kept on
+disk, so submissions pulled before get times on the next refresh) and stores the seconds on each question by answer
+key, coming back to it included (`submissions_current.question_seconds`, migration 0015). A field-list screen is
+timed as one, under its group's key: its questions share the screen's time, with no pace of their own and no Rushed
+reason, so one rushed screen isn't eight rushed questions.
+- **Rushed:** answered in under a third of the question's median time, 2 s at least: too quick to have been read
+  out. Compared with the question itself, so a short question is not penalised.
+- **Pace:** seconds per word of the question as written in the survey's language (markup stripped, a `${name}` as
+  one word), over the form's usual (the median of its questions'). Not for a label under 3 words, whose time is the
+  answering. 2× or more is slow: likely hard to ask, or badly translated.
+- Who rushes which questions is for Field team, later, not this page.
+
+**No "middle half" anywhere** (2026-10-11): medians only, on By question and on the call sheet's interview lengths.
+
+**Flags on a question in a group** (2026-10-11): a finding names the answer by its key (`hh/monthly_income`); a stored
+form keeps the question's group apart (`monthly_income`). By question now matches the two, so outlier flags, and any
+check on a question in a group, count on their question; they were dropped before.
+
+**Form check: a condition on a choice that doesn't exist** (2026-10-11). "Can never be shown" only when the condition
+cannot hold without that comparison, `and`ed at its top. Inside `not(…)` or an `or` it is never true, but the question
+still shows, every time with `not(selected(${q}, 'typo'))`: that is "has a condition on a missing choice"
+(`condition_missing_choice`). The "other" a `select_one list or_other` adds counts as on the list.
+
+**Labels are in the language chosen in Settings › Form, on every screen** (2026-10-11): Submissions, Data quality,
+Progress, Field team, Form check, the rule builder and the AI review's prompts. Until one is saved, English when the
+form has it, else the form's first language, which is what Settings › Form then shows as chosen. One rule on each side:
+`labelColumnOf` in `frontend/utils/koboLabelUtils.ts`, `survey_label_language` in `backend/linter/models.py`.
 
 | Column | Rule | Looked at when |
 |---|---|---|
@@ -199,7 +259,7 @@ listed apart and not highlighted.
 
 1. **One calculation, one set of names.** `services/metrics.py` and `etl/duration.py`; Field team, Data quality,
    Progress and the pull summary read from them and use the named counts. Fixes F-10 A.
-2. **Field team table and call sheet.** `/api/performance` adds per-check counts, the middle half of durations,
+2. **Field team table and call sheet.** `/api/performance` adds per-check counts,
    first and last submission, a daily trend (all in the shared summary, for Data quality to use next), each
    enumerator's durations, which checks are on, and a period.
 3. **Data quality Overview and By check.** `/api/quality/overview` adds a row per check (flagged, Needs review, the
@@ -209,7 +269,13 @@ listed apart and not highlighted.
 4. **Progress bar and chart.** `/api/progress` counts every submission but Not approved, always (the `approved_only`
    switch is gone), and adds the Approved part, the last 7 days and the Not approved left out, overall and for each
    group; the days of collection; the planned end; and the day it counts the last 7 days to.
-5. Data quality By question.
+5. **Data quality By question.** `/api/quality/questions` (`services/questions.py`) reads every answer of the
+   period once: skip logic evaluated per submission, its groups' conditions included, cached by the answers each
+   condition reads; don't-know per the rules above; "Other" by the `or_other` choice or one named or labelled
+   "Other", with its specify text; findings by the field they name; corrections from the edit history; and Form
+   check run on the stored form; each question's option counts, histogram bins, answer variety, asked and flagged
+   per day for the last 14 days, and its time from `question_seconds`. About 1.3 s for 2,000 submissions of 120
+   questions.
 
 Not covered, and not needed for now: exports and a cleaning log (Kobo exports; the edit history could feed a cleaning
 log later), back-checks, a daily objective per enumerator.

@@ -78,6 +78,79 @@ def referenced_choice_equalities(expression: str | None) -> list[tuple[str, str]
     return pairs
 
 
+_AND = re.compile(r"(?<![\w.-])and(?![\w.-])")
+
+
+def _closing(expression: str, start: int) -> int:
+    """Where the bracket opened at `start` closes; -1 if it never does."""
+    depth, quote = 0, ""
+    for i in range(start, len(expression)):
+        char = expression[i]
+        if quote:
+            quote = "" if char == quote else quote
+        elif char in "'\"":
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def _conjuncts(expression: str) -> list[str]:
+    """
+    The parts an expression's top-level ``and`` joins, each without the
+    brackets around it. ``a and (b and c)`` is a, b and c; ``a or b`` is itself.
+    """
+    expression = expression.strip()
+    while expression.startswith("(") and _closing(expression, 0) == len(expression) - 1:
+        expression = expression[1:-1].strip()
+    parts: list[str] = []
+    depth, quote, braces, start, i = 0, "", False, 0, 0
+    while i < len(expression):
+        char = expression[i]
+        if quote:
+            quote = "" if char == quote else quote
+        elif braces:
+            braces = char != "}"
+        elif char in "'\"":
+            quote = char
+        elif char == "{":
+            braces = True
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif depth == 0 and (match := _AND.match(expression, i)):
+            parts.append(expression[start:i])
+            start = i = match.end()
+            continue
+        i += 1
+    if not parts:
+        return [expression]
+    return [c for part in [*parts, expression[start:]] for c in _conjuncts(part)]
+
+
+def required_choice_equalities(expression: str | None) -> set[tuple[str, str]]:
+    """
+    The ``(question, choice_value)`` equalities the expression cannot hold
+    without: those it ``and``s at the top. One inside ``not()`` or an ``or``
+    is not required; it may even be what lets the expression hold.
+    """
+    if not expression:
+        return set()
+    required: set[tuple[str, str]] = set()
+    for part in _conjuncts(expression):
+        match = _EQ_CHOICE.fullmatch(part.strip())
+        if match:
+            name = (match.group("name") or match.group("sel_name") or "").strip()
+            value = (match.group("value") or match.group("sel_value") or "").strip()
+            required.add((name, value))
+    return required
+
+
 def has_exclusive_select_constraint(constraint: str | None, choice_name: str) -> bool:
     """
     Whether a constraint already stops ``choice_name`` being co-selected.

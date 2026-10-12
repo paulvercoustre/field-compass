@@ -61,6 +61,7 @@ describe('the app’s address', () => {
     expect(at('/surveys/s1/quality/by-check')).toEqual(place);
     expect(urlFor({ ...place, tab: 'overview' })).toBe('/surveys/s1/quality');
     expect(titleFor(place, 'Household 2026')).toBe('By check · Data quality · Household 2026 · Field Compass');
+    expect(urlFor({ ...place, tab: 'by-question' })).toBe('/surveys/s1/quality/by-question');
     expect(titleFor({ ...place, tab: 'overview' }, 'Household 2026')).toBe(
       'Data quality · Household 2026 · Field Compass'
     );

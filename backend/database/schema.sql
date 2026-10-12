@@ -172,6 +172,7 @@ CREATE TABLE submissions_current (
     dk_count INTEGER,
     dk_eligible_count INTEGER,
     dk_percentage NUMERIC(5,2),
+    question_seconds JSONB,
     kobo_validation_status VARCHAR(50),
     kobo_edit_url VARCHAR(500),
     reviewer_notes TEXT,
@@ -206,6 +207,8 @@ COMMENT ON COLUMN submissions_current.qa_status IS 'QA status: PENDING_APPROVAL,
 COMMENT ON COLUMN submissions_current.dk_count IS 'Count of DK answers for eligible questions in this submission';
 COMMENT ON COLUMN submissions_current.dk_eligible_count IS 'Count of eligible question instances included in DK denominator';
 COMMENT ON COLUMN submissions_current.dk_percentage IS 'DK percentage for this submission (dk_count / dk_eligible_count * 100)';
+COMMENT ON COLUMN submissions_current.question_seconds IS
+    'Seconds on each question, by answer key, from the Kobo audit log; a field-list screen under its group''s key';
 COMMENT ON COLUMN submissions_current.kobo_validation_status IS 'KoboToolbox validation status: Approved, Not Approved, On Hold, or NULL';
 COMMENT ON COLUMN submissions_current.kobo_edit_url IS 'Deep link to view/edit this submission in Kobo';
 COMMENT ON COLUMN submissions_current.reviewer_notes IS 'Optional free-text notes entered by reviewers';

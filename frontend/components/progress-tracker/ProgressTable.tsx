@@ -7,6 +7,7 @@ import { toGo } from '../../utils/progress';
 import { SubTabButton } from '../ui/SubTabButton';
 import TermInfo from '../ui/TermInfo';
 import { PlanBar, progressParts } from './ProgressSummary';
+import TableFrame, { STICKY_HEAD } from '../ui/TableFrame';
 
 interface Row {
   key: string;
@@ -121,9 +122,9 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ data, surveyConfig, onOpe
           />
         )}
       </div>
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-card dark:border-gray-800 dark:bg-gray-950">
+      <TableFrame className="rounded-xl border border-gray-200 bg-white shadow-card dark:border-gray-800 dark:bg-gray-950">
         <table className="min-w-full">
-          <thead className="bg-gray-50 dark:bg-gray-900">
+          <thead className={STICKY_HEAD}>
             <tr>
               {tab.cols.map((c) => (
                 <Header key={c} label={c.charAt(0).toUpperCase() + c.slice(1)} />
@@ -189,7 +190,7 @@ const ProgressTable: React.FC<ProgressTableProps> = ({ data, surveyConfig, onOpe
             })}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </section>
   );
 };

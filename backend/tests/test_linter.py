@@ -40,6 +40,7 @@ from tests.lint_forms import (
     HEALTHY,
     INCONSISTENT_DK,
     LEGACY_STORED,
+    MISSING_CHOICE_NEGATED,
     MISSING_REQUIRED,
     MIXED_SPECIAL_VALUES,
     NO_AUDIT,
@@ -82,6 +83,7 @@ class TestRegistry:
             "unbounded_date",
             "missing_required",
             "unreachable_question",
+            "condition_missing_choice",
             "orphan_choice_list",
             "broken_calculation",
             "missing_translations",
@@ -383,6 +385,32 @@ class TestUnreachable:
     def test_choice_filter_is_skipped(self):
         report = run_lint(load_form_schema(UNREACHABLE_FILTERED))
         assert _ids(report, "unreachable_question") == []
+
+    def test_only_a_required_comparison_makes_it_unreachable(self):
+        report = run_lint(load_form_schema(MISSING_CHOICE_NEGATED))
+        unreachable = [
+            f.question_path for f in report.findings if f.check_id == "unreachable_question"
+        ]
+        # `and (… and ${consent} = 'maybe')` cannot hold; the rest still can.
+        assert unreachable == ["nested"]
+        missing = {
+            f.question_path: f for f in report.findings if f.check_id == "condition_missing_choice"
+        }
+        # not(selected(…, 'no_difficulties')) is always true: shown every time.
+        assert set(missing) == {"skill_impact", "either"}
+        assert "no_difficulties" in missing["skill_impact"].details
+        assert missing["skill_impact"].message == (
+            "“Impact of missing skills” has a condition on a missing choice"
+        )
+
+    def test_or_other_adds_the_other_choice(self):
+        report = run_lint(load_form_schema(MISSING_CHOICE_NEGATED))
+        paths = {
+            f.question_path
+            for f in report.findings
+            if f.check_id in ("unreachable_question", "condition_missing_choice")
+        }
+        assert "work_other" not in paths
 
 
 class TestOrphanAndBroken:

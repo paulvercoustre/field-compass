@@ -7,11 +7,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from database.models import SubmissionCurrent
-from schemas import QualityOverviewResponse
+from database.models import SubmissionCurrent, SubmissionHistory
+from schemas import QualityOverviewResponse, QuestionsResponse
 from services.database import DbSession
 from services.permissions import ViewableSurvey
 from services.quality import quality_overview
+from services.questions import by_question
 from services.submission_filters import (
     filter_by_answers,
     parse_list,
@@ -61,3 +62,27 @@ async def get_quality_overview(
     overview = quality_overview(submissions, config)
     overview.custom_checks = custom_checks(survey_config)
     return overview
+
+
+@router.get("/quality/questions", response_model=QuestionsResponse)
+async def get_quality_by_question(
+    survey_config: ViewableSurvey,
+    db: DbSession,
+    start_date: Annotated[str | None, Query(description="Start date filter (YYYY-MM-DD)")] = None,
+    end_date: Annotated[str | None, Query(description="End date filter (YYYY-MM-DD)")] = None,
+):
+    """
+    Data quality by question (services/questions.py): every question of the
+    form, how often it was asked, answered "don't know" or "Other", flagged
+    and corrected in Kobo, with what Form check found; the ones to look at
+    first on top. Requires viewer access to the survey.
+    """
+    query = db.query(SubmissionCurrent).filter(
+        SubmissionCurrent.survey_id == survey_config.survey_id
+    )
+    submissions = within_dates(query, start_date, end_date).all()
+    ids = [sub._id for sub in submissions]
+    history = (
+        db.query(SubmissionHistory).filter(SubmissionHistory.kobo_id.in_(ids)).all() if ids else []
+    )
+    return by_question(submissions, survey_config, history)
