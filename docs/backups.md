@@ -23,10 +23,11 @@ Run these in [Azure Cloud Shell](https://shell.azure.com), using the Bash option
 
 ```bash
 RG=<the VM's resource group>
-LOC=<the VM's region, e.g. westeurope>
+LOC=northeurope                # the VM's region; production runs in North Europe
 ACCT=fcbackups$RANDOM          # 3-24 lowercase letters/digits, unique across Azure; note it down
 
-# 1. A storage account. Standard_GRS keeps a second copy in another region;
+# 1. A storage account. Standard_GRS keeps a second copy in the region's pair:
+#    West Europe (Netherlands) for North Europe, so backups stay in the EU.
 #    Standard_LRS is cheaper and still separate from the VM.
 az storage account create -n "$ACCT" -g "$RG" -l "$LOC" \
   --sku Standard_GRS --kind StorageV2 \
