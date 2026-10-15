@@ -83,7 +83,7 @@
 #
 # The separation buys two things. The app's session cookies and tokens are
 # scoped to the app origin, so nothing the marketing page ever loads can read
-# them. And the marketing page can have the looser policy it needs (webfonts)
+# them. And the marketing page can have the looser policy it needs (analytics)
 # without weakening the app's policy by one directive.
 #
 # THIS BLOCK IS DORMANT. The marketing site is hosted on Cloudflare Workers, so
@@ -107,10 +107,10 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		# Deliberately NOT the app's policy. This origin holds no session and
-		# talks to no API, and it loads Inter from Google Fonts.
+		# talks to no API, and it loads Cloudflare's analytics beacon.
 		# 'unsafe-inline' for styles only: the dashboard illustration sets bar
 		# heights with style attributes, same reason the app needs it.
-		Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 	}
 
 	# Static files only — no API, no SPA fallback.
