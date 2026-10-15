@@ -426,7 +426,7 @@ def approve_clean_submissions(db: DbSession, current_user: CurrentUser, params: 
 
     logger.info(
         f"Approved {len(approved)} clean submissions of survey {survey_config.survey_id} "
-        f"({len(ready) - len(approved)} refused by Kobo) by user {current_user.email}"
+        f"({len(ready) - len(approved)} refused by Kobo) by user {current_user.user_id}"
     )
     return ApproveCleanResult(approved=len(approved), failed=len(ready) - len(approved))
 
@@ -644,7 +644,7 @@ async def update_submission_validation_status(
 
     logger.info(
         f"Updated validation status for submission {kobo_id} to '{status_update.validation_status}' "
-        f"and qa_status to '{submission.qa_status}' by user {current_user.email}"
+        f"and qa_status to '{submission.qa_status}' by user {current_user.user_id}"
     )
     return _orm_to_pydantic_submission(submission)
 
@@ -687,5 +687,5 @@ async def update_submission_reviewer_notes(
     db.commit()
     db.refresh(submission)
 
-    logger.info(f"Updated reviewer notes for submission {kobo_id} by user {current_user.email}")
+    logger.info(f"Updated reviewer notes for submission {kobo_id} by user {current_user.user_id}")
     return _orm_to_pydantic_submission(submission)

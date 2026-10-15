@@ -163,7 +163,7 @@ async def create_survey(
     db.commit()
     db.refresh(survey)
 
-    logger.info(f"User {current_user.email} created survey {survey.survey_id}")
+    logger.info(f"User {current_user.user_id} created survey {survey.survey_id}")
 
     return {
         "survey_id": str(survey.survey_id),
@@ -224,7 +224,7 @@ async def update_survey(
     db.commit()
     db.refresh(survey)
 
-    logger.info(f"User {current_user.email} updated survey {survey.survey_id}")
+    logger.info(f"User {current_user.user_id} updated survey {survey.survey_id}")
 
     return {
         "survey_id": str(survey.survey_id),
@@ -369,7 +369,7 @@ async def share_survey(
     db.commit()
 
     logger.info(
-        f"User {current_user.email} shared survey {survey.survey_id} with {share_request.email} as {share_request.permission_level}"
+        f"User {current_user.user_id} shared survey {survey.survey_id} with user {target_user.user_id} as {share_request.permission_level}"
     )
 
     return {
@@ -412,7 +412,7 @@ async def update_survey_access(
     )
 
     logger.info(
-        f"User {current_user.email} updated access for user {user_id} on survey {survey.survey_id} to {update_request.permission_level}"
+        f"User {current_user.user_id} updated access for user {user_id} on survey {survey.survey_id} to {update_request.permission_level}"
     )
 
     return {
@@ -450,7 +450,7 @@ async def revoke_survey_access_endpoint(
         )
 
     logger.info(
-        f"User {current_user.email} revoked access for user {user_id} on survey {survey.survey_id}"
+        f"User {current_user.user_id} revoked access for user {user_id} on survey {survey.survey_id}"
     )
 
     return {"message": "Access revoked", "user_id": str(target_user_uuid)}

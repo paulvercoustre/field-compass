@@ -1,3 +1,12 @@
+# Every container's log is capped at 5 files of 10 MB, the oldest dropped
+# first; Docker otherwise keeps logs without limit. They name users by ID, not
+# email, but are still personal data, so they must not be kept forever.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   # Reverse proxy: TLS termination, static frontend, /api -> backend.
   # Caddy obtains and renews Let's Encrypt certificates automatically when
@@ -6,6 +15,7 @@ services:
     image: caddy:2.8-alpine
     container_name: field-compass-caddy
     restart: unless-stopped
+    logging: *logging
     ports:
       - "80:80"
       - "443:443"
@@ -58,6 +68,7 @@ services:
         VITE_API_URL: ${VITE_API_URL:-}
     container_name: field-compass-frontend-build
     restart: "no"
+    logging: *logging
     command: ["sh", "-c", "cp -r /app/dist/* /out/ && echo 'Frontend built'"]
     environment:
       - VITE_API_URL=${VITE_API_URL:-}
@@ -72,6 +83,7 @@ services:
     image: postgres:15-alpine
     container_name: field-compass-db
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env - see .env.example}
@@ -108,6 +120,7 @@ services:
     image: ${BACKEND_IMAGE:?set BACKEND_IMAGE to the image tag for the commit being deployed - deploy/vm/deploy.sh sets this}
     container_name: field-compass-migrate
     restart: "no"
+    logging: *logging
     environment:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env - see .env.example}
     command: alembic upgrade head
@@ -122,6 +135,7 @@ services:
     image: ${BACKEND_IMAGE:?set BACKEND_IMAGE to the image tag for the commit being deployed - deploy/vm/deploy.sh sets this}
     container_name: field-compass-api
     restart: unless-stopped
+    logging: *logging
     env_file:
       - .env
     environment:
@@ -168,6 +182,7 @@ services:
     image: redis:7-alpine
     container_name: field-compass-redis
     restart: unless-stopped
+    logging: *logging
     networks:
       - field-compass-network
 
@@ -176,6 +191,7 @@ services:
     image: ${BACKEND_IMAGE:?set BACKEND_IMAGE to the image tag for the commit being deployed - deploy/vm/deploy.sh sets this}
     container_name: field-compass-worker
     restart: unless-stopped
+    logging: *logging
     env_file:
       - .env
     environment:
@@ -218,6 +234,7 @@ services:
       context: ./deploy/backup
     container_name: field-compass-backup
     restart: unless-stopped
+    logging: *logging
     environment:
       PGHOST: postgres
       PGUSER: ${POSTGRES_USER:-postgres}

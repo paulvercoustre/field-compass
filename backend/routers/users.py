@@ -96,7 +96,7 @@ async def register(request: Request, user_data: UserCreate, db: DbSession):
     db.commit()
     db.refresh(user)
 
-    logger.info(f"New user registered: {user.email}")
+    logger.info(f"New user registered: {user.user_id}")
 
     return user_to_response(user)
 
@@ -136,7 +136,7 @@ async def login(
         data={"sub": str(user.user_id), "email": user.email}, expires_delta=access_token_expires
     )
 
-    logger.info(f"User logged in: {user.email}")
+    logger.info(f"User logged in: {user.user_id}")
 
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -273,7 +273,7 @@ async def set_kobo_api_key(
     db.commit()
     db.refresh(current_user)
 
-    logger.info(f"Kobo API key updated for user: {current_user.email}")
+    logger.info(f"Kobo API key updated for user: {current_user.user_id}")
 
     return user_to_response(current_user)
 
@@ -288,7 +288,7 @@ async def delete_kobo_api_key(current_user: CurrentUser, db: DbSession):
     db.commit()
     db.refresh(current_user)
 
-    logger.info(f"Kobo API key removed for user: {current_user.email}")
+    logger.info(f"Kobo API key removed for user: {current_user.user_id}")
 
     return user_to_response(current_user)
 
@@ -411,7 +411,7 @@ async def set_kobo_connection(
     db.commit()
     db.refresh(current_user)
 
-    logger.info(f"Kobo connection saved for user: {current_user.email} ({api_url})")
+    logger.info(f"Kobo connection saved for user: {current_user.user_id} ({api_url})")
 
     return {"user": user_to_response(current_user), "kobo_user": kobo_user}
 
@@ -472,6 +472,6 @@ async def change_password(
     current_user.updated_at = datetime.utcnow()
     db.commit()
 
-    logger.info(f"Password changed for user: {current_user.email}")
+    logger.info(f"Password changed for user: {current_user.user_id}")
 
     return {"message": "Password updated successfully"}
