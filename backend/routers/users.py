@@ -12,7 +12,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from database.models import User
+from database.models import SurveyConfig, User
 from services import app_events
 from services.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -38,6 +38,7 @@ from services.auth import (
 )
 from services.database import DbSession
 from services.rate_limit import limiter
+from services.survey_deletion import delete_survey_and_data
 
 logger = logging.getLogger(__name__)
 
@@ -226,15 +227,21 @@ async def update_current_user_profile(
 @router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_current_user(current_user: CurrentUser, db: DbSession):
     """
-    Delete the current user's account.
+    Delete the current user's account, and every survey they own with all its
+    data, for the people it was shared with too. Surveys others shared with
+    them stay; they only lose access.
 
     WARNING: This action is permanent and cannot be undone.
-    All associated surveys will have their user_id set to NULL (orphaned).
     """
-    logger.info(f"User account deleted: {current_user.email}")
+    owned = db.query(SurveyConfig).filter(SurveyConfig.user_id == current_user.user_id).all()
+    for survey in owned:
+        delete_survey_and_data(db, survey)
+        app_events.record(db, app_events.SURVEY_DELETED, survey_id=survey.survey_id)
     app_events.record(db, app_events.ACCOUNT_DELETED)
+    user_id = current_user.user_id
     db.delete(current_user)
     db.commit()
+    logger.info(f"User account deleted: {user_id}, with the {len(owned)} surveys it owned")
     return
 
 

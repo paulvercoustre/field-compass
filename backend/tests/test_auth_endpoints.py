@@ -14,11 +14,21 @@ with credentials, or with a token the login endpoint actually minted, and
 nothing is stubbed but the database session.
 """
 
+from datetime import datetime
+from uuid import UUID, uuid4
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
-from database.models import Base, User
+from database.models import (
+    Base,
+    SubmissionCurrent,
+    SubmissionHistory,
+    SurveyAccess,
+    SurveyConfig,
+    User,
+)
 from tests.sqlite_compat import sqlite_engine
 
 
@@ -249,6 +259,93 @@ class TestAuthenticatedAccess:
     def test_garbage_token_is_rejected(self, client):
         response = client.get("/api/users/me", headers={"Authorization": "Bearer not-a-real-token"})
         assert response.status_code == 401
+
+
+def sign_in(client, email: str) -> dict[str, str]:
+    token = client.post(
+        "/api/auth/login", data={"username": email, "password": GOOD_PASSWORD}
+    ).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def create_survey(client, headers, name: str) -> UUID:
+    response = client.post("/api/surveys", json={"survey_name": name}, headers=headers)
+    assert response.status_code == 201, response.text
+    return UUID(response.json()["survey_id"])
+
+
+class TestDeleteAccount:
+    """
+    A deleted account takes the surveys it owns with it. Before, they stayed
+    in the database with no owner, respondents' answers and all.
+    """
+
+    @pytest.fixture
+    def accounts(self, client):
+        register(client)
+        register(client, email="bob@example.com", username="bob")
+        return sign_in(client, "alice@example.com"), sign_in(client, "bob@example.com")
+
+    def test_owned_surveys_and_their_submissions_are_deleted(self, client, accounts):
+        alice, bob = accounts
+        survey_id = create_survey(client, alice, "Alice's survey")
+        db = client.db_factory()
+        try:
+            db.add(
+                SubmissionCurrent(
+                    _id=1,
+                    survey_id=survey_id,
+                    _uuid=str(uuid4()),
+                    _submission_time=datetime.utcnow(),
+                    end=datetime.utcnow(),
+                    submission_data={"respondent_name": "A respondent"},
+                )
+            )
+            db.add(
+                SubmissionHistory(
+                    kobo_id=1, deprecated_uuid=str(uuid4()), data_delta={"age": [30, 31]}
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+        # Shared, so deleting it reaches past its owner.
+        client.post(
+            f"/api/surveys/{survey_id}/access",
+            json={"email": "bob@example.com", "permission_level": "editor"},
+            headers=alice,
+        )
+
+        assert client.delete("/api/users/me", headers=alice).status_code == 204
+
+        db = client.db_factory()
+        try:
+            assert db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_id).count() == 0
+            assert db.query(SubmissionCurrent).count() == 0
+            assert db.query(SubmissionHistory).count() == 0
+            assert db.query(User).filter(User.email == "alice@example.com").count() == 0
+        finally:
+            db.close()
+        assert client.get(f"/api/surveys/{survey_id}", headers=bob).status_code == 404
+
+    def test_surveys_shared_with_them_stay(self, client, accounts):
+        alice, bob = accounts
+        survey_id = create_survey(client, bob, "Bob's survey")
+        client.post(
+            f"/api/surveys/{survey_id}/access",
+            json={"email": "alice@example.com", "permission_level": "viewer"},
+            headers=bob,
+        )
+
+        assert client.delete("/api/users/me", headers=alice).status_code == 204
+
+        response = client.get(f"/api/surveys/{survey_id}", headers=bob)
+        assert response.status_code == 200, response.text
+        db = client.db_factory()
+        try:
+            assert db.query(SurveyAccess).filter(SurveyAccess.survey_id == survey_id).count() == 0
+        finally:
+            db.close()
 
 
 def response_text(body) -> str:

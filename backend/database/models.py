@@ -66,8 +66,14 @@ class User(Base):
     owned_surveys: Mapped[list["SurveyConfig"]] = relationship(
         "SurveyConfig", back_populates="owner", foreign_keys="SurveyConfig.user_id"
     )
+    # Deleted with the user, as the table's ON DELETE CASCADE says. Without the
+    # cascade the ORM blanks user_id, part of the primary key, and deleting an
+    # account that had been given access to a survey failed.
     survey_access: Mapped[list["SurveyAccess"]] = relationship(
-        "SurveyAccess", back_populates="user", foreign_keys="SurveyAccess.user_id"
+        "SurveyAccess",
+        back_populates="user",
+        foreign_keys="SurveyAccess.user_id",
+        cascade="all, delete-orphan",
     )
 
 

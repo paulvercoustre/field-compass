@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from database.models import SubmissionCurrent, SurveyConfig, User, ValidationRule
+from database.models import SubmissionCurrent, SurveyConfig, User
 from routers.ai_connections import connection_summary
 from services import app_events
 from services.ai_providers import survey_connection
@@ -27,6 +27,7 @@ from services.permissions import (
     parse_uuid,
     revoke_survey_access,
 )
+from services.survey_deletion import delete_survey_and_data
 
 logger = logging.getLogger(__name__)
 
@@ -256,36 +257,16 @@ async def delete_survey(
     survey_name = survey.survey_name
 
     try:
-        # Step 1: Delete all submissions_current for this survey
-        submissions_count = (
-            db.query(SubmissionCurrent)
-            .filter(SubmissionCurrent.survey_id == survey.survey_id)
-            .count()
-        )
-
-        if submissions_count > 0:
-            logger.info(f"Deleting {submissions_count} submissions for survey {survey.survey_id}")
-            db.query(SubmissionCurrent).filter(
-                SubmissionCurrent.survey_id == survey.survey_id
-            ).delete()
-
-        # Step 2: Delete all validation rules for this survey
-        rules_count = (
-            db.query(ValidationRule).filter(ValidationRule.survey_id == survey.survey_id).count()
-        )
-
-        if rules_count > 0:
-            logger.info(f"Deleting {rules_count} validation rules for survey {survey.survey_id}")
-            db.query(ValidationRule).filter(ValidationRule.survey_id == survey.survey_id).delete()
-
-        # Step 3: Delete the survey (shared_access will cascade delete)
-        db.delete(survey)
+        submissions_count, rules_count = delete_survey_and_data(db, survey)
         app_events.record(
             db, app_events.SURVEY_DELETED, user=current_user, survey_id=survey.survey_id
         )
         db.commit()
 
-        logger.info(f"User {current_user.email} deleted survey {survey.survey_id} ({survey_name})")
+        logger.info(
+            f"User {current_user.user_id} deleted survey {survey.survey_id}: "
+            f"{submissions_count} submissions, {rules_count} validation rules"
+        )
 
         return {
             "message": f"Survey '{survey_name}' has been deleted successfully",
