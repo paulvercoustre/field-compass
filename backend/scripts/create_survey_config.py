@@ -1,6 +1,10 @@
 """
 Helper script to create a survey configuration in the database.
-Usage: python scripts/create_survey_config.py --name "Survey Name" --asset-id "abc123" [--config-file config.json]
+Usage: python scripts/create_survey_config.py --name "Survey Name" --asset-id "abc123" \
+    --owner-email owner@example.org [--config-file config.json]
+
+Every survey has an owner, as one created in the app does: a survey with none
+would outlive everyone who could delete it.
 """
 
 import argparse
@@ -14,13 +18,15 @@ sys.path.insert(0, ".")
 
 from uuid import uuid4
 
-from database.models import SurveyConfig
+from database.models import SurveyConfig, User
 from services.database import get_db, init_db
 
 load_dotenv()
 
 
-def create_survey_config(survey_name: str, kobo_asset_id: str, config_data: dict) -> str:
+def create_survey_config(
+    survey_name: str, kobo_asset_id: str, config_data: dict, owner_email: str
+) -> str:
     """
     Create a survey configuration.
 
@@ -33,6 +39,11 @@ def create_survey_config(survey_name: str, kobo_asset_id: str, config_data: dict
 
     db = next(get_db())
     try:
+        owner = db.query(User).filter(User.email == owner_email.strip().lower()).first()
+        if owner is None:
+            print(f"ERROR: No account with the email {owner_email}. Register it in the app first.")
+            sys.exit(1)
+
         # Check if survey name already exists
         existing = db.query(SurveyConfig).filter(SurveyConfig.survey_name == survey_name).first()
 
@@ -46,6 +57,7 @@ def create_survey_config(survey_name: str, kobo_asset_id: str, config_data: dict
             survey_name=survey_name,
             kobo_asset_id=kobo_asset_id,
             config_data=config_data,
+            user_id=owner.user_id,
         )
 
         db.add(survey)
@@ -92,6 +104,7 @@ def main():
     parser = argparse.ArgumentParser(description="Create a survey configuration")
     parser.add_argument("--name", required=True, help="Survey name")
     parser.add_argument("--asset-id", required=True, help="KoboToolbox asset ID")
+    parser.add_argument("--owner-email", required=True, help="Email of the account that owns it")
     parser.add_argument("--config-file", help="Path to JSON config file")
     parser.add_argument("--use-defaults", action="store_true", help="Use default configuration")
 
@@ -112,7 +125,10 @@ def main():
 
     # Create survey
     survey_id = create_survey_config(
-        survey_name=args.name, kobo_asset_id=args.asset_id, config_data=config_data
+        survey_name=args.name,
+        kobo_asset_id=args.asset_id,
+        config_data=config_data,
+        owner_email=args.owner_email,
     )
 
     print("\n✓ Survey created successfully!")
