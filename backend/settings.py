@@ -73,6 +73,9 @@ class Settings(BaseModel):
     trust_proxy_headers: bool = False
     ratelimit_storage_uri: str = "memory://"
     usage_admin_emails: str = ""
+    # Sign-ins, days active, staff access and AI use older than this are deleted
+    # nightly (services/retention_worker.py). The privacy notice says 24.
+    usage_retention_months: int = Field(default=24, gt=0)
 
     # --- Accounts -------------------------------------------------------------
     jwt_secret_key: str = "change-this-secret-in-production-please"
