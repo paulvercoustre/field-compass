@@ -96,7 +96,7 @@ COMMENT ON TABLE survey_configs IS 'Survey-specific configuration settings';
 COMMENT ON COLUMN survey_configs.survey_id IS 'Primary key, auto-generated UUID';
 COMMENT ON COLUMN survey_configs.survey_name IS 'Human-readable survey name';
 COMMENT ON COLUMN survey_configs.kobo_asset_id IS 'KoboToolbox asset ID for API integration';
-COMMENT ON COLUMN survey_configs.user_id IS 'Owner user ID, NULL for system/legacy surveys';
+COMMENT ON COLUMN survey_configs.user_id IS 'Owner user ID. Deleting the account deletes its surveys (routers/users.py)';
 COMMENT ON COLUMN survey_configs.config_data IS 'JSONB containing all survey configuration: core identifiers, sampling frame, special values, PII columns, roster configs, global parameters';
 
 -- ============================================================================

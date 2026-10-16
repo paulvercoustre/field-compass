@@ -131,11 +131,12 @@ lose the CSP.
 
 ## Notes
 
-- **Fonts.** Inter loads from Google Fonts, with a system-font fallback stack,
-  so the page still reads correctly if that request is blocked. To go fully
-  self-contained, drop the two `<link rel="preconnect">` tags and the
-  stylesheet link, and remove `fonts.googleapis.com` / `fonts.gstatic.com`
-  from the site's CSP in `deploy/caddy/Caddyfile`.
+- **Fonts.** Inter is served from `fonts/`, not Google Fonts, so a visit sends
+  nothing to Google (visitors' addresses are personal data under the GDPR).
+  The files are the app's own, from `@fontsource-variable/inter`; to update
+  them, copy `inter-latin-wght-normal.woff2` and `inter-latin-ext-wght-normal.woff2`
+  from `node_modules/@fontsource-variable/inter/files/`. Its licence is in
+  `fonts/OFL.txt`, which must be published with them.
 - **The quality-loop animation** (`#flow`) is CSS only. Each stage runs the
   same 7s keyframe track offset by a `--i` custom property, so stages fade in
   one after another, light up as the record reaches them, then clear out for

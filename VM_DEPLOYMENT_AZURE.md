@@ -19,6 +19,9 @@ To stop costs: **stop/deallocate the VM** (or delete the resource group).
 
 In Azure Portal:
 - Create VM (Ubuntu 22.04 LTS)
+- Region: **North Europe** (Ireland), where production runs. Field Compass tells
+  customers their data is hosted in the EU, so any other deployment must stay
+  in an EU region too, with its backups (see [docs/backups.md](docs/backups.md)).
 - Size: smallest acceptable (e.g. B1s/B2s)
 - Open inbound ports:
   - 22 (SSH)

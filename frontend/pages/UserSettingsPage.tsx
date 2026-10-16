@@ -417,6 +417,7 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
         onCancel={handleDeleteAccountCancel}
       >
         <p>This can't be undone. Your account and everything in it are deleted for good.</p>
+        <p>That includes the surveys you own and all their submissions, for everyone you shared them with.</p>
         {deleteError && (
           <p role="alert" className="text-red-700 dark:text-red-400">
             {deleteError}

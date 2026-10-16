@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from database.models import SubmissionCurrent, SurveyConfig, User, ValidationRule
+from database.models import SubmissionCurrent, SurveyConfig, User
 from routers.ai_connections import connection_summary
 from services import app_events
 from services.ai_providers import survey_connection
@@ -27,6 +27,7 @@ from services.permissions import (
     parse_uuid,
     revoke_survey_access,
 )
+from services.survey_deletion import delete_survey_and_data
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ async def create_survey(
     db.commit()
     db.refresh(survey)
 
-    logger.info(f"User {current_user.email} created survey {survey.survey_id}")
+    logger.info(f"User {current_user.user_id} created survey {survey.survey_id}")
 
     return {
         "survey_id": str(survey.survey_id),
@@ -223,7 +224,7 @@ async def update_survey(
     db.commit()
     db.refresh(survey)
 
-    logger.info(f"User {current_user.email} updated survey {survey.survey_id}")
+    logger.info(f"User {current_user.user_id} updated survey {survey.survey_id}")
 
     return {
         "survey_id": str(survey.survey_id),
@@ -256,36 +257,16 @@ async def delete_survey(
     survey_name = survey.survey_name
 
     try:
-        # Step 1: Delete all submissions_current for this survey
-        submissions_count = (
-            db.query(SubmissionCurrent)
-            .filter(SubmissionCurrent.survey_id == survey.survey_id)
-            .count()
-        )
-
-        if submissions_count > 0:
-            logger.info(f"Deleting {submissions_count} submissions for survey {survey.survey_id}")
-            db.query(SubmissionCurrent).filter(
-                SubmissionCurrent.survey_id == survey.survey_id
-            ).delete()
-
-        # Step 2: Delete all validation rules for this survey
-        rules_count = (
-            db.query(ValidationRule).filter(ValidationRule.survey_id == survey.survey_id).count()
-        )
-
-        if rules_count > 0:
-            logger.info(f"Deleting {rules_count} validation rules for survey {survey.survey_id}")
-            db.query(ValidationRule).filter(ValidationRule.survey_id == survey.survey_id).delete()
-
-        # Step 3: Delete the survey (shared_access will cascade delete)
-        db.delete(survey)
+        submissions_count, rules_count = delete_survey_and_data(db, survey)
         app_events.record(
             db, app_events.SURVEY_DELETED, user=current_user, survey_id=survey.survey_id
         )
         db.commit()
 
-        logger.info(f"User {current_user.email} deleted survey {survey.survey_id} ({survey_name})")
+        logger.info(
+            f"User {current_user.user_id} deleted survey {survey.survey_id}: "
+            f"{submissions_count} submissions, {rules_count} validation rules"
+        )
 
         return {
             "message": f"Survey '{survey_name}' has been deleted successfully",
@@ -388,7 +369,7 @@ async def share_survey(
     db.commit()
 
     logger.info(
-        f"User {current_user.email} shared survey {survey.survey_id} with {share_request.email} as {share_request.permission_level}"
+        f"User {current_user.user_id} shared survey {survey.survey_id} with user {target_user.user_id} as {share_request.permission_level}"
     )
 
     return {
@@ -431,7 +412,7 @@ async def update_survey_access(
     )
 
     logger.info(
-        f"User {current_user.email} updated access for user {user_id} on survey {survey.survey_id} to {update_request.permission_level}"
+        f"User {current_user.user_id} updated access for user {user_id} on survey {survey.survey_id} to {update_request.permission_level}"
     )
 
     return {
@@ -469,7 +450,7 @@ async def revoke_survey_access_endpoint(
         )
 
     logger.info(
-        f"User {current_user.email} revoked access for user {user_id} on survey {survey.survey_id}"
+        f"User {current_user.user_id} revoked access for user {user_id} on survey {survey.survey_id}"
     )
 
     return {"message": "Access revoked", "user_id": str(target_user_uuid)}
