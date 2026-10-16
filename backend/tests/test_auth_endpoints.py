@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
 from database.models import (
+    AppEvent,
     Base,
     SubmissionCurrent,
     SubmissionHistory,
@@ -29,6 +30,7 @@ from database.models import (
     SurveyConfig,
     User,
 )
+from services import app_events
 from tests.sqlite_compat import sqlite_engine
 
 
@@ -346,6 +348,70 @@ class TestDeleteAccount:
             assert db.query(SurveyAccess).filter(SurveyAccess.survey_id == survey_id).count() == 0
         finally:
             db.close()
+
+
+class TestStaffAccess:
+    """
+    Admins can open every survey. When their admin rights are all that let
+    them in, the day they did is recorded, so a customer can be told.
+    """
+
+    @pytest.fixture
+    def accounts(self, client):
+        register(client)
+        register(client, email="carol@example.com", username="carol")
+        db = client.db_factory()
+        try:
+            db.query(User).filter(User.email == "carol@example.com").one().is_admin = True
+            db.commit()
+        finally:
+            db.close()
+        return sign_in(client, "alice@example.com"), sign_in(client, "carol@example.com")
+
+    def staff_events(self, client) -> list[tuple]:
+        db = client.db_factory()
+        try:
+            return [
+                (event.user_id, event.survey_id)
+                for event in db.query(AppEvent).filter(
+                    AppEvent.kind == app_events.STAFF_SURVEY_ACCESS
+                )
+            ]
+        finally:
+            db.close()
+
+    def user_id(self, client, email: str) -> UUID:
+        db = client.db_factory()
+        try:
+            return db.query(User).filter(User.email == email).one().user_id
+        finally:
+            db.close()
+
+    def test_an_admin_opening_a_customers_survey_is_recorded_once_a_day(self, client, accounts):
+        alice, carol = accounts
+        survey_id = create_survey(client, alice, "Alice's survey")
+
+        assert client.get(f"/api/surveys/{survey_id}", headers=carol).status_code == 200
+        assert client.get(f"/api/surveys/{survey_id}", headers=carol).status_code == 200
+
+        carol_id = self.user_id(client, "carol@example.com")
+        assert self.staff_events(client) == [(carol_id, survey_id)]
+
+    def test_the_owner_and_admins_it_is_shared_with_are_not_recorded(self, client, accounts):
+        alice, carol = accounts
+        survey_id = create_survey(client, alice, "Alice's survey")
+        client.post(
+            f"/api/surveys/{survey_id}/access",
+            json={"email": "carol@example.com", "permission_level": "viewer"},
+            headers=alice,
+        )
+        own_survey = create_survey(client, carol, "Carol's survey")
+
+        assert client.get(f"/api/surveys/{survey_id}", headers=alice).status_code == 200
+        assert client.get(f"/api/surveys/{survey_id}", headers=carol).status_code == 200
+        assert client.get(f"/api/surveys/{own_survey}", headers=carol).status_code == 200
+
+        assert self.staff_events(client) == []
 
 
 def response_text(body) -> str:

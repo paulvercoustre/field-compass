@@ -27,6 +27,8 @@ SURVEY_CREATED = "survey_created"
 SURVEY_DELETED = "survey_deleted"
 SURVEY_SHARED = "survey_shared"
 ACCOUNT_DELETED = "account_deleted"
+# An admin opened a survey only their admin rights let them see, once a day
+STAFF_SURVEY_ACCESS = "staff_survey_access"
 
 # The campaign tags the marketing site forwards to the signup form. Anything
 # else in the payload is dropped, and values are cut short, so a crafted
@@ -94,3 +96,33 @@ def mark_active(db: Session, user: User) -> None:
     except Exception:
         db.rollback()
         logger.exception("Could not record an active day for user %s", user.user_id)
+
+
+def record_staff_access(db: Session, user: User, survey_id: UUID) -> None:
+    """
+    Record that an admin opened a survey that is neither theirs nor shared
+    with them: the first time each (UTC) day, so the record says on which
+    days staff looked at a customer's data, not every request they made.
+
+    Committed here, like mark_active, because a read-only request never
+    commits; the access check calls it before the request changes anything.
+    A failure here must never fail the request it rides on.
+    """
+    start_of_day = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    try:
+        seen = (
+            db.query(AppEvent.event_id)
+            .filter(
+                AppEvent.kind == STAFF_SURVEY_ACCESS,
+                AppEvent.user_id == user.user_id,
+                AppEvent.survey_id == survey_id,
+                AppEvent.created_at >= start_of_day,
+            )
+            .first()
+        )
+        if seen is None:
+            record(db, STAFF_SURVEY_ACCESS, user=user, survey_id=survey_id)
+            db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Could not record staff access to survey %s", survey_id)
