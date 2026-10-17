@@ -1,12 +1,12 @@
 # Field Compass — marketing site
 
-A single static landing page. No build step, no dependencies: `index.html`,
-`styles.css`, `main.js`. Copy the three files anywhere that serves static
-files and it works.
+A static landing page and a privacy notice. No build step, no dependencies:
+copy the folder anywhere that serves static files and it works.
 
 ```
 site/
 ├── index.html   # the page
+├── privacy/     # privacy notice and sub-processor list, linked from the app
 ├── styles.css   # hand-written, mirrors the app's dark indigo palette
 └── main.js      # one listener that borders the nav on scroll
 ```
@@ -99,7 +99,8 @@ pipeline, so nothing else notices when that deploy breaks.
 It asserts, with retries to allow for Cloudflare's build finishing after the
 workflow starts: the page returns 200; it is the marketing page and not the app
 shell; the CSP and framing headers are present; the CTAs point at the app with
-no placeholder host left behind; and `set-app-url.sh` and `README.md` still 404.
+no placeholder host left behind; the privacy notice is served at `/privacy/`;
+and `set-app-url.sh` and `README.md` still 404.
 
 It does **not** check that the newest commit is live — there is no build step
 and so no version stamp to match against. It catches a broken deploy or a
@@ -131,6 +132,10 @@ lose the CSP.
 
 ## Notes
 
+- **Privacy notice.** `privacy/index.html` is wording approved by
+  Fieldcompass.org's lawyer: change it only with their approval, and update
+  both "Last updated" dates when you do. The app's sign-up form and user menu
+  link to it (`frontend/constants/links.ts`), and so does the footer here.
 - **Fonts.** Inter is served from `fonts/`, not Google Fonts, so a visit sends
   nothing to Google (visitors' addresses are personal data under the GDPR).
   The files are the app's own, from `@fontsource-variable/inter`; to update

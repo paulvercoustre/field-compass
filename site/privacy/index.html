@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<!--
+  Privacy notice and sub-processor list, as approved by Fieldcompass.org's
+  lawyer. Change the wording only with their approval, and update "Last
+  updated" (twice) when you do. The app links here (frontend/constants/links.ts).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy notice — Field Compass</title>
+  <meta name="description" content="How Fieldcompass.org handles the personal data of the people who use Field Compass and the survey data organisations bring into it, and which companies process it.">
+  <meta name="theme-color" content="#070b16">
+  <link rel="canonical" href="https://fieldcompass.org/privacy/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Privacy notice — Field Compass">
+  <meta property="og:description" content="How Fieldcompass.org handles personal data, and which companies process it.">
+  <meta property="og:url" content="https://fieldcompass.org/privacy/">
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23818cf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z'/%3E%3C/svg%3E">
+
+  <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav" id="nav">
+    <div class="container nav__inner">
+      <a class="brand" href="/" aria-label="Field Compass, home">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z"/>
+          </svg>
+        </span>
+        Field Compass
+      </a>
+
+      <nav class="nav__links" aria-label="Main">
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/#flow">Quality loop</a>
+        <a href="/#ai">AI agents</a>
+      </nav>
+
+      <div class="nav__actions">
+        <a class="btn btn--quiet" href="https://app.fieldcompass.org">Log in</a>
+        <a class="btn btn--primary" href="https://app.fieldcompass.org/#register">Get started</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="legal">
+    <div class="container">
+      <article class="legal__body">
+        <p class="eyebrow">Legal</p>
+        <h1>Privacy notice</h1>
+        <p class="legal__meta">Last updated: 17 October 2026 · <a href="#sub-processors">Sub-processors</a></p>
+
+        <p class="legal__lead">Fieldcompass.org, an international non-profit organization based in Paris, France, is responsible for the personal data of the people who use Field Compass. It processes survey data only on behalf of the organisations that collect it.</p>
+
+        <h2 id="who-we-are">Who we are</h2>
+        <p>Fieldcompass.org, International Non-Profit Organization, Paris, France. For anything about your data, write to <a href="mailto:privacy@fieldcompass.org">privacy@fieldcompass.org</a>.</p>
+
+        <h2 id="roles">Our two roles</h2>
+        <ul>
+          <li><strong>For your account</strong> (people who use the app or visit fieldcompass.org), we are the controller.</li>
+          <li><strong>For survey data</strong> that an organisation brings into Field Compass from KoboToolbox, we are a processor. We act only on that organisation's instructions, under a data processing agreement. The organisation is the controller.</li>
+        </ul>
+        <p>If you were interviewed for a survey, please contact the organisation that interviewed you. If you write to us, we will pass your request to them.</p>
+
+        <h2 id="users">What we hold about users, and why</h2>
+        <div class="legal__table">
+          <table>
+            <thead>
+              <tr><th scope="col">Data</th><th scope="col">Why</th><th scope="col">Legal basis</th><th scope="col">Kept for</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-label="Data">Email, username, full name, and your password as a bcrypt hash (never the password itself)</td>
+                <td data-label="Why">To give you an account</td>
+                <td data-label="Legal basis">Contract (Art. 6(1)(b))</td>
+                <td data-label="Kept for">Until you delete your account</td>
+              </tr>
+              <tr>
+                <td data-label="Data">Your Kobo server address and API token, the token encrypted</td>
+                <td data-label="Why">To read your surveys from KoboToolbox</td>
+                <td data-label="Legal basis">Contract</td>
+                <td data-label="Kept for">Until you remove it or delete your account</td>
+              </tr>
+              <tr>
+                <td data-label="Data">AI provider connections you add: a label, an address, the API key encrypted, its last 4 characters</td>
+                <td data-label="Why">To run AI features on your own provider</td>
+                <td data-label="Legal basis">Contract</td>
+                <td data-label="Kept for">Until you remove them or delete your account</td>
+              </tr>
+              <tr>
+                <td data-label="Data">Your settings, your reviewer notes, and who you share surveys with</td>
+                <td data-label="Why">To provide the features you use</td>
+                <td data-label="Legal basis">Contract</td>
+                <td data-label="Kept for">With the survey, or until you delete your account</td>
+              </tr>
+              <tr>
+                <td data-label="Data">Usage records: sign-ups, sign-ins, days active, surveys created, deleted and shared, AI use per survey, and the campaign tags of the link you signed up from</td>
+                <td data-label="Why">To run the service, apply the monthly AI allowance and see how it is used</td>
+                <td data-label="Legal basis">Legitimate interest (Art. 6(1)(f))</td>
+                <td data-label="Kept for">24 months. After your account is deleted they no longer name you.</td>
+              </tr>
+              <tr>
+                <td data-label="Data">Your IP address</td>
+                <td data-label="Why">To limit repeated sign-in and sign-up attempts</td>
+                <td data-label="Legal basis">Legitimate interest</td>
+                <td data-label="Kept for">Up to an hour</td>
+              </tr>
+              <tr>
+                <td data-label="Data">Server logs: your user ID, what failed, and when</td>
+                <td data-label="Why">To keep the service running and secure</td>
+                <td data-label="Legal basis">Legitimate interest</td>
+                <td data-label="Kept for">Overwritten as new logs arrive: at most 50 MB per service</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>In your browser</strong>, the app keeps your sign-in token, your profile and your display preferences in local storage. It sets no cookies and uses no tracking or advertising tools. Sign-ins last 2 hours.</p>
+
+        <h2 id="organisations">What we process for organisations</h2>
+        <p>When an organisation connects a KoboToolbox project, Field Compass stores:</p>
+        <ul>
+          <li>the form and the submissions, with their edit history;</li>
+          <li>the time spent on each question, from Kobo's audit logs;</li>
+          <li>transcripts of recorded answers, translations, and the findings of the quality checks, including AI review;</li>
+          <li>review decisions and reviewer notes.</li>
+        </ul>
+        <p>Recordings are read from Kobo when someone plays them or when they are transcribed, and are not kept. All of this is deleted when the organisation deletes the survey, or when its owner deletes their account. Copies in backups are gone within 97 days: weekly copies are kept 90 days, then 7 more as deleted copies. What Field Compass wrote back to Kobo (review decisions, transcripts, translations) stays in Kobo.</p>
+
+        <h2 id="visitors">Visitors to fieldcompass.org</h2>
+        <p>The website is hosted by Cloudflare. It counts visits with Cloudflare Web Analytics, which sets no cookies. It loads no fonts or scripts from other services.</p>
+
+        <h2 id="recipients">Who receives data</h2>
+        <p>Only our sub-processors, <a href="#sub-processors">listed below</a> with where they process data, and only to provide the service. We never sell data or use it for advertising. We do not use account or survey data to train AI models, and neither do our AI sub-processors.</p>
+
+        <h2 id="transfers">Transfers outside the EU</h2>
+        <p>Field Compass is hosted in the EU: Microsoft Azure in Ireland, with backups in the Netherlands.</p>
+        <p>When a survey uses AI review, translation or transcription on the allowance Field Compass provides, the answers or recordings concerned are sent to OpenAI or ElevenLabs. They may process them in the United States, under the European Commission's standard contractual clauses. A survey's owner can connect their own AI provider instead, or leave these features off.</p>
+
+        <h2 id="rights">Your rights</h2>
+        <p>You can ask to see, correct, delete or receive a copy of your data, to limit its use, or object to uses based on our legitimate interest. You can delete your account yourself in Account settings; this also deletes the surveys you own and all their data.</p>
+        <p>Write to <a href="mailto:privacy@fieldcompass.org">privacy@fieldcompass.org</a>. We answer within one month. You can also complain to the CNIL: 3 place de Fontenoy, TSA 80715, 75334 Paris Cedex 07, <a href="https://www.cnil.fr">cnil.fr</a>.</p>
+
+        <h2 id="security">Security</h2>
+        <p>Data is encrypted in transit and at rest, stored keys are encrypted again by Field Compass, and access is limited by role. The security annex to our data processing agreement lists the measures.</p>
+
+        <h2 id="changes">Changes</h2>
+        <p>We will post changes here and tell account holders about important ones in the app. Last updated: 17 October 2026.</p>
+
+        <hr class="rule legal__break">
+
+        <h2 id="sub-processors">Sub-processors</h2>
+        <p>Three companies process customers' personal data for Field Compass: Microsoft hosts everything in the EU, and OpenAI and ElevenLabs receive data only when a survey uses the AI allowance Field Compass provides.</p>
+        <div class="legal__table">
+          <table>
+            <thead>
+              <tr><th scope="col">Sub-processor</th><th scope="col">What it does</th><th scope="col">Data it receives</th><th scope="col">Where</th><th scope="col">Safeguards</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-label="Sub-processor">Microsoft Ireland Operations Ltd (Azure)</td>
+                <td data-label="What it does">Hosts the app, its database and its backups</td>
+                <td data-label="Data it receives">All account and survey data</td>
+                <td data-label="Where">North Europe (Ireland); backups copied to West Europe (Netherlands)</td>
+                <td data-label="Safeguards">Processed in the EU; Microsoft Products and Services Data Protection Addendum</td>
+              </tr>
+              <tr>
+                <td data-label="Sub-processor">OpenAI Ireland Ltd</td>
+                <td data-label="What it does">Reviews open-text answers, translates answers, drafts quality checks</td>
+                <td data-label="Data it receives">The answers sent for review or translation, with their question labels; the form's structure for drafted checks</td>
+                <td data-label="Where">Mainly the United States</td>
+                <td data-label="Safeguards">Standard contractual clauses. API data is not used for training; requests are kept up to 30 days for abuse monitoring.</td>
+              </tr>
+              <tr>
+                <td data-label="Sub-processor">Eleven Labs Inc. (ElevenLabs)</td>
+                <td data-label="What it does">Transcribes recorded answers</td>
+                <td data-label="Data it receives">The recordings sent for transcription</td>
+                <td data-label="Where">United States</td>
+                <td data-label="Safeguards">DPA with standard contractual clauses. Zero Retention Mode: most request and response data is deleted as soon as each request is done. Enterprise data is not used for training.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>We will tell customers 30 days before adding or replacing a sub-processor, so they can object.</p>
+
+        <h3 id="not-sub-processors">Not sub-processors</h3>
+        <div class="legal__table">
+          <table>
+            <thead>
+              <tr><th scope="col">Service</th><th scope="col">Why it is not on the list</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-label="Service">KoboToolbox (Kobo, Inc.)</td>
+                <td data-label="Why it is not on the list">The organisation's own processor. Field Compass reads from it with the organisation's own token.</td>
+              </tr>
+              <tr>
+                <td data-label="Service">An AI provider a survey's owner connects</td>
+                <td data-label="Why it is not on the list">Used under the owner's own contract with that provider.</td>
+              </tr>
+              <tr>
+                <td data-label="Service">Cloudflare</td>
+                <td data-label="Why it is not on the list">Hosts the marketing website and its analytics. Handles no account or survey data: the app's address is not routed through it. Listed in the <a href="#visitors">privacy notice for website visitors</a>.</td>
+              </tr>
+              <tr>
+                <td data-label="Service">GitHub</td>
+                <td data-label="Why it is not on the list">Holds the source code and the app's container images, no personal data.</td>
+              </tr>
+              <tr>
+                <td data-label="Service">Let's Encrypt</td>
+                <td data-label="Why it is not on the list">Issues the app's HTTPS certificates, and receives no personal data.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <a class="brand" href="/">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z"/>
+          </svg>
+        </span>
+        Field Compass
+      </a>
+
+      <nav class="footer__links" aria-label="Footer">
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/privacy/" aria-current="page">Privacy</a>
+        <a href="https://app.fieldcompass.org">Log in</a>
+      </nav>
+
+      <p class="footer__note">© 2026 Field Compass · MIT licensed</p>
+    </div>
+  </footer>
+
+  <script src="/main.js" defer></script>
+</body>
+</html>
