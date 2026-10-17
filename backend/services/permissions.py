@@ -12,6 +12,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database.models import SurveyAccess, SurveyConfig, User
+from services import app_events
 from services.auth import CurrentUser
 from services.database import DbSession
 
@@ -36,19 +37,22 @@ def get_user_permission(db: Session, user: User, survey_id: UUID) -> PermissionL
     if user.is_admin:
         return "admin"
 
-    # Check if user owns the survey
     survey = db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_id).first()
 
     if not survey:
         return None
 
+    return _own_permission(db, user, survey)
+
+
+def _own_permission(db: Session, user: User, survey: SurveyConfig) -> PermissionLevel | None:
+    """The user's access to the survey without admin rights: owner, shared, or none."""
     if survey.user_id == user.user_id:
         return "owner"
 
-    # Check shared access
     access = (
         db.query(SurveyAccess)
-        .filter(SurveyAccess.survey_id == survey_id, SurveyAccess.user_id == user.user_id)
+        .filter(SurveyAccess.survey_id == survey.survey_id, SurveyAccess.user_id == user.user_id)
         .first()
     )
 
@@ -116,6 +120,11 @@ def require_survey_access(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"This action requires {min_level} access or higher",
         )
+
+    # Admin rights open every survey; when they are all that opened this one,
+    # it is a customer's data seen by staff, and that is recorded.
+    if permission == "admin" and _own_permission(db, user, survey) is None:
+        app_events.record_staff_access(db, user, survey.survey_id)
 
     return survey
 

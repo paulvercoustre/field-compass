@@ -5,6 +5,7 @@ import random
 import sys
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import worker_process_init
 
 from settings import get_settings
@@ -37,6 +38,7 @@ celery_app = Celery(
         "services.transcription_worker",
         "services.translation_worker",
         "services.kobo_sync_worker",
+        "services.retention_worker",
     ],
 )
 
@@ -64,6 +66,8 @@ celery_app.conf.update(
         "services.kobo_sync_worker.send_translation_to_kobo_task": {"queue": "kobo_sync"},
         # A translation is an AI call, like a review: the same queue.
         "services.translation_worker.translate_answer_task": {"queue": "qualitative_checks"},
+        # Housekeeping goes on a queue the worker reads; there is no "default" consumer.
+        "services.retention_worker.delete_old_usage_records_task": {"queue": "transcriptions"},
     },
     # Run by the worker's embedded beat (`-B`). The sweep is an idempotent
     # UPDATE, so a second beat from a scaled-out worker only repeats it.
@@ -75,6 +79,11 @@ celery_app.conf.update(
         "sweep-background-work": {
             "task": "services.transcription_worker.sweep_background_work",
             "schedule": 300.0,
+        },
+        # After the 02:00 backup. A second beat deletes nothing more.
+        "delete-old-usage-records": {
+            "task": "services.retention_worker.delete_old_usage_records_task",
+            "schedule": crontab(hour="3", minute="30"),
         },
     },
 )
