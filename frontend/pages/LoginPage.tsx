@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogoTile } from '../components/ui/Logo';
 import { Spinner } from '../components/Spinner';
-import { PRIVACY_NOTICE_URL } from '../constants/links';
+import { DPA_URL, PRIVACY_NOTICE_URL, TERMS_URL } from '../constants/links';
 
 const LoginPage: React.FC = () => {
   const { login, register, isLoading: authLoading } = useAuth();
@@ -17,6 +17,7 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -36,7 +37,10 @@ const LoginPage: React.FC = () => {
         if (password.length < 8) {
           throw new Error('Password must be at least 8 characters');
         }
-        await register(email, username, password, fullName || undefined);
+        if (!acceptTerms) {
+          throw new Error('Accept the terms of service and the data processing agreement to create an account');
+        }
+        await register(email, username, password, fullName || undefined, acceptTerms);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -176,6 +180,40 @@ const LoginPage: React.FC = () => {
               </div>
             )}
 
+            {!isLogin && (
+              <div className="flex items-start gap-2.5">
+                <input
+                  id="acceptTerms"
+                  type="checkbox"
+                  checked={acceptTerms}
+                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                  required
+                  className="mt-0.5 h-4 w-4 flex-none rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+                />
+                <label htmlFor="acceptTerms" className="text-sm text-gray-600 dark:text-gray-400">
+                  I accept the{' '}
+                  <a
+                    href={TERMS_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  >
+                    terms of service
+                  </a>{' '}
+                  and, for my organisation, the{' '}
+                  <a
+                    href={DPA_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  >
+                    data processing agreement
+                  </a>
+                  .
+                </label>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isSubmitting || authLoading}
@@ -230,6 +268,10 @@ const LoginPage: React.FC = () => {
           className="hover:text-gray-600 dark:hover:text-gray-300"
         >
           Privacy
+        </a>{' '}
+        ·{' '}
+        <a href={TERMS_URL} target="_blank" rel="noreferrer" className="hover:text-gray-600 dark:hover:text-gray-300">
+          Terms
         </a>
       </p>
     </div>

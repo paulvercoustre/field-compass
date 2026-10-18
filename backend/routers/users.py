@@ -16,6 +16,7 @@ from database.models import SurveyConfig, User
 from services import app_events
 from services.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    TERMS_VERSION,
     CurrentUser,
     KoboApiKeyUpdate,
     KoboConnectionUpdate,
@@ -58,6 +59,12 @@ async def register(request: Request, user_data: UserCreate, db: DbSession):
 
     After registration, users can configure their Kobo API key through the profile settings.
     """
+    if not user_data.accept_terms:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Accept the terms of service and the data processing agreement to create an account",
+        )
+
     # Check if email already exists
     if get_user_by_email(db, user_data.email):
         raise HTTPException(
@@ -83,6 +90,8 @@ async def register(request: Request, user_data: UserCreate, db: DbSession):
         username=user_data.username.strip(),
         password_hash=get_password_hash(user_data.password),
         full_name=user_data.full_name,
+        terms_accepted_at=datetime.utcnow(),
+        terms_version=TERMS_VERSION,
     )
 
     db.add(user)

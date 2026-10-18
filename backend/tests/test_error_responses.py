@@ -70,6 +70,7 @@ def test_server_error_is_json_not_plain_text(broken_db_client):
             "email": "alice@example.com",
             "username": "alice",
             "password": "Str0ngPassw0rd!23",
+            "accept_terms": True,
         },
     )
 

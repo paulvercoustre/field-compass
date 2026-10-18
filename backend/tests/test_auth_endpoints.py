@@ -31,6 +31,7 @@ from database.models import (
     User,
 )
 from services import app_events
+from services.auth import TERMS_VERSION
 from tests.sqlite_compat import sqlite_engine
 
 
@@ -77,6 +78,7 @@ def register(client, **overrides):
         "username": "alice",
         "password": GOOD_PASSWORD,
         "full_name": "Alice Example",
+        "accept_terms": True,
     }
     payload.update(overrides)
     return client.post("/api/auth/register", json=payload)
@@ -98,6 +100,30 @@ class TestRegister:
         assert body["is_active"] is True
         assert body["is_admin"] is False
         assert body["has_kobo_api_key"] is False
+
+    def test_register_records_which_terms_were_accepted(self, client):
+        register(client)
+
+        db = client.db_factory()
+        try:
+            user = db.query(User).filter(User.email == "alice@example.com").one()
+            assert user.terms_version == TERMS_VERSION
+            assert user.terms_accepted_at is not None
+        finally:
+            db.close()
+
+    @pytest.mark.parametrize("accepted", [{"accept_terms": False}, {}])
+    def test_register_without_accepting_the_terms_is_refused(self, client, accepted):
+        payload = {"email": "alice@example.com", "username": "alice", "password": GOOD_PASSWORD}
+        response = client.post("/api/auth/register", json=payload | accepted)
+
+        assert response.status_code == 400
+        assert "terms of service" in response.json()["detail"]
+        db = client.db_factory()
+        try:
+            assert db.query(User).count() == 0
+        finally:
+            db.close()
 
     def test_register_never_leaks_the_password(self, client):
         body = register(client).json()
