@@ -313,6 +313,17 @@ def sign_in(client, email: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def confirm_email(client, *emails: str) -> None:
+    """Mark addresses confirmed: a survey is shared directly only with a confirmed one."""
+    db = client.db_factory()
+    try:
+        for user in db.query(User).filter(User.email.in_(emails)):
+            user.email_verified_at = datetime.utcnow()
+        db.commit()
+    finally:
+        db.close()
+
+
 def create_survey(client, headers, name: str) -> UUID:
     response = client.post("/api/surveys", json={"survey_name": name}, headers=headers)
     assert response.status_code == 201, response.text
@@ -329,6 +340,7 @@ class TestDeleteAccount:
     def accounts(self, client):
         register(client)
         register(client, email="bob@example.com", username="bob")
+        confirm_email(client, "alice@example.com", "bob@example.com")
         return sign_in(client, "alice@example.com"), sign_in(client, "bob@example.com")
 
     def test_owned_surveys_and_their_submissions_are_deleted(self, client, accounts):
@@ -403,6 +415,7 @@ class TestStaffAccess:
     def accounts(self, client):
         register(client)
         register(client, email="carol@example.com", username="carol")
+        confirm_email(client, "alice@example.com", "carol@example.com")
         db = client.db_factory()
         try:
             db.query(User).filter(User.email == "carol@example.com").one().is_admin = True

@@ -68,6 +68,12 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
     terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # When the user showed they read mail at their address: a confirmation
+    # link, a password reset or an invitation sent there. Only a confirmed
+    # address is given a survey directly; any other gets an invitation.
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
     owned_surveys: Mapped[list["SurveyConfig"]] = relationship(
@@ -438,6 +444,79 @@ class SurveyAccess(Base):
         "User", back_populates="survey_access", foreign_keys=[user_id]
     )
     granter: Mapped["User | None"] = relationship("User", foreign_keys=[granted_by])
+
+
+class EmailToken(Base):
+    """
+    A link sent by email to confirm an address or reset a password
+    (services/email_tokens.py). Only a hash of the token is kept, so a copy of
+    the table opens no account.
+    """
+
+    __tablename__ = "email_tokens"
+
+    token_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    purpose: Mapped[str] = mapped_column(String(20), nullable=False)  # verify_email, reset_password
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    # The address it was sent to
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("idx_email_tokens_user_purpose", "user_id", "purpose"),)
+
+
+class SurveyInvitation(Base):
+    """
+    A survey shared with an address that has no confirmed account yet
+    (services/invitations.py). Accepting it, signed in with that address,
+    gives the access; one invitation per survey and address.
+    """
+
+    __tablename__ = "survey_invitations"
+
+    invitation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    survey_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("survey_configs.survey_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    permission_level: Mapped[str] = mapped_column(String(20), nullable=False)  # editor, viewer
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    invited_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+    # The last time it was emailed: sending again gives a new link.
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    accepted_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+
+    survey: Mapped["SurveyConfig"] = relationship("SurveyConfig")
+    inviter: Mapped["User | None"] = relationship("User", foreign_keys=[invited_by])
+
+    __table_args__ = (
+        UniqueConstraint("survey_id", "email", name="uq_survey_invitations_survey_email"),
+        Index("idx_survey_invitations_email", "email"),
+    )
 
 
 # Run statuses. "queued" and "running" are the pull itself (one at a time per

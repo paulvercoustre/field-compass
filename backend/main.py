@@ -20,6 +20,7 @@ from routers import (
     ai,
     ai_connections,
     etl,
+    invitations,
     kobo,
     lint,
     progress,
@@ -131,6 +132,7 @@ app.include_router(activity.router, prefix="/api", tags=["activity"])
 app.include_router(transcription.router, prefix="/api", tags=["transcription"])
 app.include_router(translation.router, prefix="/api", tags=["translation"])
 app.include_router(admin.router, prefix="/api", tags=["admin"])
+app.include_router(invitations.router, prefix="/api", tags=["surveys"])
 
 
 @app.get("/")

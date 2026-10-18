@@ -34,7 +34,8 @@ CREATE TABLE users (
     last_seen_at TIMESTAMP WITH TIME ZONE,
     preferences JSONB,
     terms_accepted_at TIMESTAMP WITH TIME ZONE,
-    terms_version VARCHAR(20)
+    terms_version VARCHAR(20),
+    email_verified_at TIMESTAMP WITH TIME ZONE
 );
 
 COMMENT ON TABLE users IS 'User accounts with authentication and Kobo API credentials';
@@ -51,6 +52,7 @@ COMMENT ON COLUMN users.last_seen_at IS 'Last authenticated request; updated at 
 COMMENT ON COLUMN users.preferences IS 'How the app behaves for this user, e.g. auto_advance; null means the defaults';
 COMMENT ON COLUMN users.terms_accepted_at IS 'When the user accepted the terms of service and the data processing agreement; null for accounts from before them';
 COMMENT ON COLUMN users.terms_version IS 'Which version they accepted: the terms'' Last updated date, e.g. 2026-10-18';
+COMMENT ON COLUMN users.email_verified_at IS 'When the user showed they read mail at their address; only confirmed addresses are given surveys directly';
 
 CREATE TABLE ai_connections (
     connection_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -269,6 +271,46 @@ CREATE TABLE survey_access (
 COMMENT ON TABLE survey_access IS 'Junction table for sharing surveys with users';
 COMMENT ON COLUMN survey_access.permission_level IS 'Access level: editor (can run ETL, resolve flags) or viewer (read-only)';
 COMMENT ON COLUMN survey_access.granted_by IS 'User who granted this access';
+
+-- ============================================================================
+-- Table: email_tokens, survey_invitations
+-- ============================================================================
+-- Links sent by email (address confirmation, password reset) and surveys
+-- shared with an address that has no confirmed account yet. Only hashes of
+-- the tokens are kept.
+-- ============================================================================
+
+CREATE TABLE email_tokens (
+    token_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('verify_email', 'reset_password')),
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    used_at TIMESTAMP WITH TIME ZONE
+);
+
+COMMENT ON TABLE email_tokens IS 'Links sent by email to confirm an address or reset a password; the token is stored hashed';
+COMMENT ON COLUMN email_tokens.email IS 'The address the link was sent to';
+
+CREATE TABLE survey_invitations (
+    invitation_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    survey_id UUID NOT NULL REFERENCES survey_configs(survey_id) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL,
+    permission_level VARCHAR(20) NOT NULL CHECK (permission_level IN ('editor', 'viewer')),
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    invited_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    accepted_at TIMESTAMP WITH TIME ZONE,
+    accepted_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    CONSTRAINT uq_survey_invitations_survey_email UNIQUE (survey_id, email)
+);
+
+COMMENT ON TABLE survey_invitations IS 'Surveys shared with an address that has no confirmed account yet; accepted signed in with that address';
+COMMENT ON COLUMN survey_invitations.sent_at IS 'When it was last emailed; sending again gives a new link';
 
 CREATE TABLE ai_usage (
     usage_id BIGSERIAL PRIMARY KEY,
@@ -490,6 +532,8 @@ CREATE INDEX idx_answer_translations_transcript ON answer_translations(transcrip
 CREATE INDEX idx_notifications_user ON notifications(user_id, created_at);
 CREATE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 CREATE INDEX idx_app_events_kind_created ON app_events(kind, created_at);
+CREATE INDEX idx_email_tokens_user_purpose ON email_tokens(user_id, purpose);
+CREATE INDEX idx_survey_invitations_email ON survey_invitations(email);
 -- Composite index for common triage queue queries
 CREATE INDEX idx_submissions_triage ON submissions_current(qa_status, survey_id)
     WHERE qa_status = 'FLAGGED';

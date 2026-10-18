@@ -4,7 +4,9 @@ Deleting what Field Compass keeps only for a while.
 Usage records -- sign-ups, sign-ins, days active, surveys created, deleted
 and shared, staff access to surveys, AI use -- are kept for
 USAGE_RETENTION_MONTHS (24 unless set), as the privacy notice says, and
-deleted by a nightly task on Celery beat.
+deleted by a nightly task on Celery beat. The same task deletes emailed links
+a day after they expire or are used, and survey invitations 30 days after
+they are accepted or expire.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from database.models import AIUsage, AppEvent
+from services import email_tokens, invitations
 from services.database import SessionLocal
 from services.job_queue import celery_app
 from settings import get_settings
@@ -49,11 +52,27 @@ def delete_old_usage_records(
     return events, usage
 
 
+def delete_finished_links(db: Session, now: datetime | None = None) -> tuple[int, int]:
+    """Delete spent emailed links and finished invitations, and commit."""
+    links = email_tokens.delete_finished(db, now)
+    finished = invitations.delete_finished(db, now)
+    db.commit()
+    return links, finished
+
+
 @celery_app.task(name="services.retention_worker.delete_old_usage_records_task")
 def delete_old_usage_records_task() -> dict[str, int]:
     """Run nightly on beat; deleting nothing the second time is not an error."""
     with SessionLocal() as db:
         events, usage = delete_old_usage_records(db)
+        links, finished = delete_finished_links(db)
     if events or usage:
         logger.info("Deleted %s usage events and %s AI usage rows past retention", events, usage)
-    return {"app_events": events, "ai_usage": usage}
+    if links or finished:
+        logger.info("Deleted %s spent email links and %s finished invitations", links, finished)
+    return {
+        "app_events": events,
+        "ai_usage": usage,
+        "email_tokens": links,
+        "survey_invitations": finished,
+    }

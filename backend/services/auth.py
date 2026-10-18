@@ -91,6 +91,8 @@ class UserCreate(BaseModel):
     accept_terms: bool = False
     # Campaign tags the marketing site passed along (utm_source, ref...)
     signup_source: dict[str, str] | None = None
+    # Signing up from a survey invitation: the link reached this address.
+    invite_token: str | None = None
 
 
 class UserLogin(BaseModel):
@@ -129,6 +131,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_admin: bool
     can_view_usage: bool = False
+    email_verified: bool = False
     created_at: datetime
     last_login_at: datetime | None
     preferences: UserPreferences = UserPreferences()
@@ -167,6 +170,19 @@ class PasswordChange(BaseModel):
 
     current_password: str
     new_password: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+
+class EmailVerification(BaseModel):
+    token: str
 
 
 # =============================================================================
@@ -349,6 +365,7 @@ def user_to_response(user: User) -> dict:
         "is_active": user.is_active,
         "is_admin": user.is_admin,
         "can_view_usage": can_view_usage(user),
+        "email_verified": user.email_verified_at is not None,
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
         "preferences": user_preferences(user).model_dump(),
