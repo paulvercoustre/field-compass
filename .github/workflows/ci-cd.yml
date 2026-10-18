@@ -399,11 +399,20 @@ jobs:
         REGISTER_STATUS=$(curl -s -o /tmp/register.json -w '%{http_code}' \
           -X POST http://localhost:8001/api/auth/register \
           -H 'Content-Type: application/json' \
-          -d "{\"email\":\"${EMAIL}\",\"username\":\"${USERNAME}\",\"password\":\"${PASSWORD}\"}")
+          -d "{\"email\":\"${EMAIL}\",\"username\":\"${USERNAME}\",\"password\":\"${PASSWORD}\",\"accept_terms\":true}")
 
         [ "$REGISTER_STATUS" = "201" ] \
           || fail_with_logs "POST /api/auth/register returned $REGISTER_STATUS, expected 201" /tmp/register.json
         echo "✓ register returned 201"
+
+        # The sign-up form requires the terms; the API must too.
+        REFUSED_STATUS=$(curl -s -o /tmp/register-refused.json -w '%{http_code}' \
+          -X POST http://localhost:8001/api/auth/register \
+          -H 'Content-Type: application/json' \
+          -d "{\"email\":\"no-terms-${EMAIL}\",\"username\":\"no-terms-${USERNAME}\",\"password\":\"${PASSWORD}\"}")
+        [ "$REFUSED_STATUS" = "400" ] \
+          || fail_with_logs "register without accept_terms returned $REFUSED_STATUS, expected 400" /tmp/register-refused.json
+        echo "✓ register without the terms returned 400"
 
         LOGIN_STATUS=$(curl -s -o /tmp/login.json -w '%{http_code}' \
           -X POST http://localhost:8001/api/auth/login \

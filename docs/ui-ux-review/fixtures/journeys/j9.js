@@ -3,7 +3,7 @@ const { launch, loginUI, API, api } = require('./lib');
 (async () => {
   // Throwaway colleague account (registered through the API)
   await fetch(API + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'viewer@example.org', username: 'omar', password: 'synthetic-pass-456', full_name: 'Omar Viewer' }) });
+    body: JSON.stringify({ email: 'viewer@example.org', username: 'omar', password: 'synthetic-pass-456', full_name: 'Omar Viewer', accept_terms: true }) });
 
   const j = await launch();
   const { page } = j;
