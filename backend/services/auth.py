@@ -30,7 +30,7 @@ from settings import get_settings
 _settings = get_settings()
 SECRET_KEY = _settings.jwt_secret_key
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = _settings.jwt_expire_minutes  # Default: 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = _settings.jwt_expire_minutes  # Default: 2 hours
 
 # Encryption key for Kobo API tokens
 # In production, this should be a proper 32-byte Fernet key
@@ -75,11 +75,20 @@ class TokenData(BaseModel):
     email: str | None = None
 
 
+# The "Last updated" date of the terms of service and the data processing
+# agreement (site/terms/, site/dpa/). Change it when either changes, so each
+# account records which version it accepted.
+TERMS_VERSION = "2026-10-18"
+
+
 class UserCreate(BaseModel):
     email: str
     username: str
     password: str
     full_name: str | None = None
+    # The sign-up form's checkbox: the terms of service and, for the user's
+    # organisation, the data processing agreement.
+    accept_terms: bool = False
     # Campaign tags the marketing site passed along (utm_source, ref...)
     signup_source: dict[str, str] | None = None
 

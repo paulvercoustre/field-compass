@@ -129,6 +129,16 @@ chmod 600 .env
 
 **Notes**
 
+- **Upgrading a server set up before 2-hour sign-ins:** its `.env` probably
+  has `JWT_EXPIRE_MINUTES=1440`, from the old `.env.example`. A value in `.env`
+  overrides the default, so sign-ins keep lasting 24 hours, while the privacy
+  notice and the data processing agreement say 2. Change it, and the next
+  deploy picks it up:
+
+  ```bash
+  sed -i 's/^JWT_EXPIRE_MINUTES=.*/JWT_EXPIRE_MINUTES=120/' .env
+  ```
+
 - `.env` is gitignored. Never commit it, and never paste real secrets into
   the repo, an issue, or a chat.
 - Each user supplies their own KoboToolbox token through the UI; it is stored

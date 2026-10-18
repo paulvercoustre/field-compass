@@ -61,6 +61,13 @@ class User(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # How the app behaves for this user (services/auth.py UserPreferences); null = defaults
     preferences: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    # When the user accepted the terms of service and the data processing
+    # agreement at sign-up, and which version (services/auth.py TERMS_VERSION).
+    # Null for accounts created before the terms existed.
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Relationships
     owned_surveys: Mapped[list["SurveyConfig"]] = relationship(

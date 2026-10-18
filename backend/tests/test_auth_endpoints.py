@@ -14,11 +14,12 @@ with credentials, or with a token the login endpoint actually minted, and
 nothing is stubbed but the database session.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from jose import jwt
 from sqlalchemy.orm import sessionmaker
 
 from database.models import (
@@ -31,6 +32,7 @@ from database.models import (
     User,
 )
 from services import app_events
+from services.auth import TERMS_VERSION
 from tests.sqlite_compat import sqlite_engine
 
 
@@ -77,6 +79,7 @@ def register(client, **overrides):
         "username": "alice",
         "password": GOOD_PASSWORD,
         "full_name": "Alice Example",
+        "accept_terms": True,
     }
     payload.update(overrides)
     return client.post("/api/auth/register", json=payload)
@@ -98,6 +101,30 @@ class TestRegister:
         assert body["is_active"] is True
         assert body["is_admin"] is False
         assert body["has_kobo_api_key"] is False
+
+    def test_register_records_which_terms_were_accepted(self, client):
+        register(client)
+
+        db = client.db_factory()
+        try:
+            user = db.query(User).filter(User.email == "alice@example.com").one()
+            assert user.terms_version == TERMS_VERSION
+            assert user.terms_accepted_at is not None
+        finally:
+            db.close()
+
+    @pytest.mark.parametrize("accepted", [{"accept_terms": False}, {}])
+    def test_register_without_accepting_the_terms_is_refused(self, client, accepted):
+        payload = {"email": "alice@example.com", "username": "alice", "password": GOOD_PASSWORD}
+        response = client.post("/api/auth/register", json=payload | accepted)
+
+        assert response.status_code == 400
+        assert "terms of service" in response.json()["detail"]
+        db = client.db_factory()
+        try:
+            assert db.query(User).count() == 0
+        finally:
+            db.close()
 
     def test_register_never_leaks_the_password(self, client):
         body = register(client).json()
@@ -199,6 +226,22 @@ class TestLogin:
         )
 
         assert response.status_code == 200, response.text
+
+    def test_a_sign_in_lasts_two_hours(self, client):
+        """The privacy notice and the security annex promise 2 hours."""
+        register(client)
+        before = datetime.utcnow()
+
+        token = client.post(
+            "/api/auth/login",
+            data={"username": "alice@example.com", "password": GOOD_PASSWORD},
+        ).json()["access_token"]
+
+        after = datetime.utcnow()
+        expires = datetime.fromtimestamp(jwt.get_unverified_claims(token)["exp"], UTC)
+        expires = expires.replace(tzinfo=None)
+        # exp is whole seconds, so it can fall up to a second short.
+        assert before + timedelta(hours=2, seconds=-1) <= expires <= after + timedelta(hours=2)
 
     def test_wrong_password_is_401(self, client):
         register(client)

@@ -51,7 +51,13 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, username: string, password: string, fullName?: string) => Promise<void>;
+  register: (
+    email: string,
+    username: string,
+    password: string,
+    fullName: string | undefined,
+    acceptTerms: boolean
+  ) => Promise<void>;
   logout: () => void;
   updateUser: (updates: UserUpdates) => Promise<void>;
   connectKobo: (apiUrl: string, apiKey: string) => Promise<KoboUser | null>;
@@ -253,7 +259,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const register = async (email: string, username: string, password: string, fullName?: string) => {
+  const register = async (
+    email: string,
+    username: string,
+    password: string,
+    fullName: string | undefined,
+    acceptTerms: boolean
+  ) => {
     const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
       method: 'POST',
       headers: {
@@ -264,6 +276,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         username,
         password,
         full_name: fullName,
+        accept_terms: acceptTerms,
         signup_source: readSignupSource(),
       }),
     });

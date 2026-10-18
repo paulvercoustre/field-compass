@@ -79,7 +79,8 @@ class Settings(BaseModel):
 
     # --- Accounts -------------------------------------------------------------
     jwt_secret_key: str = "change-this-secret-in-production-please"
-    jwt_expire_minutes: int = Field(default=1440, gt=0)
+    # The privacy notice and the security annex say sign-ins last 2 hours.
+    jwt_expire_minutes: int = Field(default=120, gt=0)
     encryption_key: str | None = None
 
     # --- Background jobs ------------------------------------------------------
