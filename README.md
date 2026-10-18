@@ -9,7 +9,7 @@ Field Compass pulls submissions from a Kobo project, checks each one against the
 - **Audio transcription and translation:** recordings are transcribed (ElevenLabs) and answers translated. Both can be sent back to Kobo.
 - **Form readiness check:** finds form issues that would switch quality checks off before fieldwork starts.
 - **Review and follow-up:** approve or flag submissions (synced to Kobo's validation status), see progress against targets, and follow each enumerator's results.
-- **Teams:** surveys are shared with editors and viewers. AI features run on each owner's own API key, or on a monthly allowance included per user.
+- **Teams:** surveys are shared with editors and viewers by email; someone without an account is sent an invitation. AI features run on each owner's own API key, or on a monthly allowance included per user.
 
 ## Architecture
 
@@ -61,6 +61,7 @@ The ones you're most likely to set:
 | `ELEVENLABS_API_KEY` | The same, for transcription. |
 | `AI_ALLOWANCE_*`, `TRANSCRIPTION_ALLOWANCE_*` | Included usage per user per month. |
 | `CORS_ORIGINS`, `SITE_ADDRESS` | Production origin and domain. |
+| `SMTP_HOST`, `SMTP_*`, `EMAIL_FROM` | Email for password resets, address confirmation and invitations. Without `SMTP_HOST`, development prints each email to the API log and production sends none. |
 
 ## Development
 
