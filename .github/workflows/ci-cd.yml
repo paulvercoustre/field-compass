@@ -612,7 +612,11 @@ jobs:
             echo "  attempt $i: /$1 HTTP $C — retrying"
             sleep 6
           done
-          if [ "$C" != "200" ] || ! curl -fsS --max-time 15 "$BASE/$1" | grep -q "id=\"$2\""; then
+          # Read the page whole, then search it. Piped into grep -q, curl fails
+          # with "(23) Failure writing output" when grep stops reading first,
+          # and pipefail turns that into a missing page.
+          PAGE=$(curl -fsS --max-time 15 "$BASE/$1" || true)
+          if [ "$C" != "200" ] || ! grep -q "id=\"$2\"" <<< "$PAGE"; then
             echo "::error::/$1 is not served at $BASE (HTTP $C)"; exit 1
           fi
           echo "✓ /$1 published"
