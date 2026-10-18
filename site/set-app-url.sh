@@ -3,14 +3,17 @@
 #
 #   ./site/set-app-url.sh https://app.fieldcompass.org
 #
-# Rewrites every app link in site/index.html. Sign-in CTAs go to the app root;
+# Rewrites every app link in the site's pages. Sign-in CTAs go to the app root;
 # sign-up CTAs keep the #register fragment, which opens the app's registration
 # form directly instead of dropping people on Sign In.
 #
 # Safe to run repeatedly -- it rewrites whatever origin is currently in place.
 set -euo pipefail
 
-HTML="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/index.html"
+SITE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HTML="$SITE/index.html"
+# Every page that links to the app. The current origin is read from the first.
+PAGES=("$HTML" "$SITE/privacy/index.html")
 
 ALLOW_INSECURE=0
 ARGS=()
@@ -71,15 +74,17 @@ if [ "$CURRENT" = "$NEW" ]; then
 fi
 
 # -i takes a mandatory argument on BSD sed and none on GNU; sidestep both.
-tmp="$(mktemp)"
-sed "s|${CURRENT}|${NEW}|g" "$HTML" > "$tmp" && mv "$tmp" "$HTML"
+for page in "${PAGES[@]}"; do
+  tmp="$(mktemp)"
+  sed "s|${CURRENT}|${NEW}|g" "$page" > "$tmp" && mv "$tmp" "$page"
+done
 
 echo "rewrote ${CURRENT} -> ${NEW}"
 echo
 grep -oE 'href="'"${NEW}"'[^"]*"[^>]*>[^<]+' "$HTML" \
   | sed -E 's|href="([^"]+)"[^>]*>(.*)|  \2  ->  \1|'
 echo
-remaining="$(grep -c "$CURRENT" "$HTML" || true)"
+remaining="$(cat "${PAGES[@]}" | grep -c "$CURRENT" || true)"
 [ "$remaining" = "0" ] || { echo "WARNING: $remaining reference(s) to $CURRENT remain" >&2; exit 1; }
 echo "Remember:"
 echo "  - the app must be reachable at $NEW"

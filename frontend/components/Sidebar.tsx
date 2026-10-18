@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSurvey } from '../contexts/SurveyContext';
 import { useActivity } from '../contexts/ActivityContext';
 import { forgetSurveyId } from '../utils/selectedSurveyStorage';
+import { PRIVACY_NOTICE_URL } from '../constants/links';
 import { LogoTile } from './ui/Logo';
-import { ChevronUpDownIcon, LogoutIcon, PlusIcon, SidebarIcon, UserCogIcon } from './ui/icons';
+import { ChevronUpDownIcon, ExternalLinkIcon, LogoutIcon, PlusIcon, SidebarIcon, UserCogIcon } from './ui/icons';
 
 interface User {
   username: string;
@@ -225,6 +226,17 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <UserCogIcon className="w-4 h-4 text-gray-400" />
                 <span>Account settings</span>
               </button>
+              <a
+                role="menuitem"
+                href={PRIVACY_NOTICE_URL}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => setIsUserMenuOpen(false)}
+                className={`${rowClass} h-8 px-2.5 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800`}
+              >
+                <ExternalLinkIcon className="w-4 h-4 text-gray-400" />
+                <span>Privacy notice</span>
+              </a>
               <button
                 role="menuitem"
                 onClick={() => {

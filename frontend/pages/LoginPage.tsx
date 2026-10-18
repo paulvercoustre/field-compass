@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogoTile } from '../components/ui/Logo';
 import { Spinner } from '../components/Spinner';
+import { PRIVACY_NOTICE_URL } from '../constants/links';
 
 const LoginPage: React.FC = () => {
   const { login, register, isLoading: authLoading } = useAuth();
@@ -189,6 +190,21 @@ const LoginPage: React.FC = () => {
                 <span>{isLogin ? 'Sign in' : 'Create account'}</span>
               )}
             </button>
+
+            {!isLogin && (
+              <p className="text-center text-xs text-gray-500 dark:text-gray-400">
+                Read how we handle your data in our{' '}
+                <a
+                  href={PRIVACY_NOTICE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                >
+                  privacy notice
+                </a>
+                .
+              </p>
+            )}
           </form>
         </div>
 
@@ -206,7 +222,15 @@ const LoginPage: React.FC = () => {
 
       {/* Footer */}
       <p className="relative mt-12 text-xs text-gray-400 dark:text-gray-500">
-        Field Compass © {new Date().getFullYear()}
+        Field Compass © {new Date().getFullYear()} ·{' '}
+        <a
+          href={PRIVACY_NOTICE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="hover:text-gray-600 dark:hover:text-gray-300"
+        >
+          Privacy
+        </a>
       </p>
     </div>
   );
