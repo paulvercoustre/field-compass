@@ -30,7 +30,7 @@ from settings import get_settings
 _settings = get_settings()
 SECRET_KEY = _settings.jwt_secret_key
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = _settings.jwt_expire_minutes  # Default: 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = _settings.jwt_expire_minutes  # Default: 2 hours
 
 # Encryption key for Kobo API tokens
 # In production, this should be a proper 32-byte Fernet key

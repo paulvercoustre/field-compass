@@ -14,11 +14,12 @@ with credentials, or with a token the login endpoint actually minted, and
 nothing is stubbed but the database session.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from jose import jwt
 from sqlalchemy.orm import sessionmaker
 
 from database.models import (
@@ -225,6 +226,22 @@ class TestLogin:
         )
 
         assert response.status_code == 200, response.text
+
+    def test_a_sign_in_lasts_two_hours(self, client):
+        """The privacy notice and the security annex promise 2 hours."""
+        register(client)
+        before = datetime.utcnow()
+
+        token = client.post(
+            "/api/auth/login",
+            data={"username": "alice@example.com", "password": GOOD_PASSWORD},
+        ).json()["access_token"]
+
+        after = datetime.utcnow()
+        expires = datetime.fromtimestamp(jwt.get_unverified_claims(token)["exp"], UTC)
+        expires = expires.replace(tzinfo=None)
+        # exp is whole seconds, so it can fall up to a second short.
+        assert before + timedelta(hours=2, seconds=-1) <= expires <= after + timedelta(hours=2)
 
     def test_wrong_password_is_401(self, client):
         register(client)
