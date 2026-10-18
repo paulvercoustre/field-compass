@@ -997,7 +997,8 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 
 /* --------------------------------------------------------------- legal --- */
 
-/* privacy/: long-form text and tables, in a column narrow enough to read. */
+/* privacy/, terms/, dpa/: long-form text and tables, in a column narrow
+   enough to read. Clause numbers (1.1) are muted so the text leads. */
 .legal { padding-block: 72px 104px; }
 .legal__body { max-width: 860px; }
 .legal h1 { font-size: clamp(34px, 4.6vw, 48px); }
@@ -1008,6 +1009,8 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 .legal p, .legal li { color: var(--text-muted); }
 .legal p + p, .legal ul + p, .legal .legal__table + p { margin-top: 14px; }
 .legal ul { margin: 0; padding-left: 22px; }
+.legal p + ul { margin-top: 10px; }
+.legal__n { margin-right: 4px; color: var(--text-dim); font-weight: 500; font-variant-numeric: tabular-nums; }
 .legal li + li { margin-top: 8px; }
 .legal strong { color: var(--text); font-weight: 600; }
 .legal__body a { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
@@ -1031,6 +1034,8 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
 .legal__table td { color: var(--text-muted); }
 .legal__table tbody tr:last-child td { border-bottom: 0; }
 .legal__table td:first-child { color: var(--text); }
+/* Label | value rows (Annex I): the label is a row header. */
+.legal__table--pairs th { width: 28%; }
 
 /* -------------------------------------------------------------- footer --- */
 
@@ -1095,7 +1100,9 @@ h2 { font-size: clamp(28px, 3.6vw, 40px); }
      headed by its column's name. */
   .legal { padding-block: 52px 76px; }
   .legal__table thead { display: none; }
-  .legal__table table, .legal__table tbody, .legal__table tr, .legal__table td { display: block; }
+  .legal__table table, .legal__table tbody, .legal__table tr, .legal__table td,
+  .legal__table th[scope="row"] { display: block; }
+  .legal__table--pairs th { width: auto; padding: 8px 14px 2px; border-bottom: 0; background: none; font-size: 12px; color: var(--text-dim); }
   .legal__table tr { padding: 6px 0; border-bottom: 1px solid var(--border); }
   .legal__table tbody tr:last-child { border-bottom: 0; }
   .legal__table td { padding: 6px 14px; border-bottom: 0; }

@@ -13,7 +13,7 @@ set -euo pipefail
 SITE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HTML="$SITE/index.html"
 # Every page that links to the app. The current origin is read from the first.
-PAGES=("$HTML" "$SITE/privacy/index.html")
+PAGES=("$HTML" "$SITE/privacy/index.html" "$SITE/terms/index.html" "$SITE/dpa/index.html")
 
 ALLOW_INSECURE=0
 ARGS=()

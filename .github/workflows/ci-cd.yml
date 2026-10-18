@@ -589,20 +589,25 @@ jobs:
         fi
         echo "✓ CTAs point at $APP"
 
-        # The app's sign-up form and user menu link to the privacy notice, so a
-        # missing page is a broken promise, not just a broken link. Retried like
-        # the home page: the first deploy that adds it may still be building.
-        C=000
-        for i in $(seq 1 20); do
-          C=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$BASE/privacy/" || echo 000)
-          if [ "$C" = "200" ]; then break; fi
-          echo "  attempt $i: /privacy/ HTTP $C — retrying"
-          sleep 6
+        # The app's sign-up form links to these and asks people to accept the
+        # terms and the agreement, so a missing page is a broken promise, not
+        # just a broken link. Retried like the home page: the first deploy that
+        # adds one may still be building. Each page is checked for one of its
+        # own anchors, so a fallback page can't pass for it.
+        for page in "privacy/ sub-processors" "terms/ liability" "dpa/ annex-ii"; do
+          set -- $page
+          C=000
+          for i in $(seq 1 20); do
+            C=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$BASE/$1" || echo 000)
+            if [ "$C" = "200" ]; then break; fi
+            echo "  attempt $i: /$1 HTTP $C — retrying"
+            sleep 6
+          done
+          if [ "$C" != "200" ] || ! curl -fsS --max-time 15 "$BASE/$1" | grep -q "id=\"$2\""; then
+            echo "::error::/$1 is not served at $BASE (HTTP $C)"; exit 1
+          fi
+          echo "✓ /$1 published"
         done
-        if [ "$C" != "200" ] || ! curl -fsS --max-time 15 "$BASE/privacy/" | grep -q 'id="sub-processors"'; then
-          echo "::error::the privacy notice is not served at $BASE/privacy/ (HTTP $C)"; exit 1
-        fi
-        echo "✓ privacy notice and sub-processor list published"
 
         # site/.assetsignore keeps these out of the upload.
         for p in set-app-url.sh README.md; do

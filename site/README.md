@@ -1,12 +1,14 @@
 # Field Compass — marketing site
 
-A static landing page and a privacy notice. No build step, no dependencies:
+A static landing page and its legal pages. No build step, no dependencies:
 copy the folder anywhere that serves static files and it works.
 
 ```
 site/
 ├── index.html   # the page
 ├── privacy/     # privacy notice and sub-processor list, linked from the app
+├── terms/       # terms of service, accepted at sign-up
+├── dpa/         # data processing agreement, accepted at sign-up
 ├── styles.css   # hand-written, mirrors the app's dark indigo palette
 └── main.js      # one listener that borders the nav on scroll
 ```
@@ -99,7 +101,7 @@ pipeline, so nothing else notices when that deploy breaks.
 It asserts, with retries to allow for Cloudflare's build finishing after the
 workflow starts: the page returns 200; it is the marketing page and not the app
 shell; the CSP and framing headers are present; the CTAs point at the app with
-no placeholder host left behind; the privacy notice is served at `/privacy/`;
+no placeholder host left behind; `/privacy/`, `/terms/` and `/dpa/` are served;
 and `set-app-url.sh` and `README.md` still 404.
 
 It does **not** check that the newest commit is live — there is no build step
@@ -132,10 +134,13 @@ lose the CSP.
 
 ## Notes
 
-- **Privacy notice.** `privacy/index.html` is wording approved by
-  Fieldcompass.org's lawyer: change it only with their approval, and update
-  both "Last updated" dates when you do. The app's sign-up form and user menu
-  link to it (`frontend/constants/links.ts`), and so does the footer here.
+- **Legal pages.** `privacy/`, `terms/` and `dpa/` are Fieldcompass.org's
+  privacy notice, terms of service and data processing agreement. When one
+  changes, update its "Last updated" date; for the terms or the agreement, also
+  set `TERMS_VERSION` in `backend/services/auth.py` to that date, so each
+  account records which version it accepted. The app links to them
+  (`frontend/constants/links.ts`), and its sign-up form asks people to accept
+  the terms and the agreement.
 - **Fonts.** Inter is served from `fonts/`, not Google Fonts, so a visit sends
   nothing to Google (visitors' addresses are personal data under the GDPR).
   The files are the app's own, from `@fontsource-variable/inter`; to update
