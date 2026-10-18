@@ -167,11 +167,38 @@ export const rerunAiChecks = async (surveyId: string): Promise<number> => {
 
 export const getSurveyAccess = (surveyId: string) => request<SurveyAccessEntry[]>(`/api/surveys/${surveyId}/access`);
 
+/** A survey shared with an address with no confirmed account yet, not yet accepted. */
+export interface SurveyInvitation {
+  invitation_id: string;
+  email: string;
+  permission_level: 'editor' | 'viewer';
+  invited_by: string | null;
+  sent_at: string;
+  expires_at: string;
+  expired: boolean;
+}
+
+/**
+ * Shared at once with a confirmed account ("shared"), or an invitation
+ * emailed to anyone else ("invited").
+ */
+export type ShareResult = { status: 'shared' } | ({ status: 'invited' } & SurveyInvitation);
+
 export const shareSurvey = (surveyId: string, email: string, permissionLevel: 'editor' | 'viewer') =>
-  request<SurveyAccessEntry>(`/api/surveys/${surveyId}/access`, {
+  request<ShareResult>(`/api/surveys/${surveyId}/access`, {
     method: 'POST',
     body: JSON.stringify({ email, permission_level: permissionLevel }),
   });
+
+export const getSurveyInvitations = (surveyId: string) =>
+  request<SurveyInvitation[]>(`/api/surveys/${surveyId}/invitations`);
+
+export const resendInvitation = (surveyId: string, invitationId: string) =>
+  request<SurveyInvitation>(`/api/surveys/${surveyId}/invitations/${invitationId}/resend`, { method: 'POST' });
+
+export const withdrawInvitation = async (surveyId: string, invitationId: string): Promise<void> => {
+  await request(`/api/surveys/${surveyId}/invitations/${invitationId}`, { method: 'DELETE' });
+};
 
 export const updateSurveyAccess = async (
   surveyId: string,

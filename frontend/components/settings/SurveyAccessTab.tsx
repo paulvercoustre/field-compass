@@ -1,12 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   getSurveyAccess,
+  getSurveyInvitations,
+  resendInvitation,
   revokeSurveyAccess,
   shareSurvey,
   SurveyAccessEntry,
+  SurveyInvitation,
   updateSurveyAccess,
+  withdrawInvitation,
 } from '../../services/progressApi';
 import { ApiError } from '../../services/apiBase';
+import { useAuth } from '../../contexts/AuthContext';
 import { Spinner } from '../Spinner';
 
 type SharedLevel = 'editor' | 'viewer';
@@ -17,9 +22,17 @@ interface SurveyAccessTabProps {
   onSuccess: (message: string) => void;
 }
 
-/** Who can open the survey, and, for its owner, sharing it and changing or revoking access. */
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+/**
+ * Who can open the survey, and, for its owner, sharing it and changing or
+ * revoking access. Someone with no confirmed account is sent an invitation,
+ * listed here until they accept it.
+ */
 const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, onSuccess }) => {
+  const { emailEnabled } = useAuth();
   const [accessList, setAccessList] = useState<SurveyAccessEntry[]>([]);
+  const [invitations, setInvitations] = useState<SurveyInvitation[]>([]);
   const [isLoadingAccess, setIsLoadingAccess] = useState(false);
   const [shareEmail, setShareEmail] = useState('');
   const [sharePermission, setSharePermission] = useState<SharedLevel>('viewer');
@@ -31,6 +44,7 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
     try {
       setAccessList(await getSurveyAccess(surveyId));
       setCanManageAccess(true);
+      setInvitations(await getSurveyInvitations(surveyId));
     } catch (err) {
       // Only the owner may see the list; anyone else gets a 403.
       setCanManageAccess(false);
@@ -62,12 +76,25 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
     const email = shareEmail.trim();
     if (!email) return;
     setIsSharing(true);
-    if (await change(() => shareSurvey(surveyId, email, sharePermission), 'Failed to share survey')) {
-      onSuccess(`Survey shared with ${email}`);
+    let invited = false;
+    const shared = await change(async () => {
+      invited = (await shareSurvey(surveyId, email, sharePermission))?.status === 'invited';
+    }, 'Failed to share survey');
+    if (shared) {
+      onSuccess(invited ? `Invitation sent to ${email}` : `Survey shared with ${email}`);
       setShareEmail('');
     }
     setIsSharing(false);
   };
+
+  const handleResend = async (invitation: SurveyInvitation) => {
+    if (await change(() => resendInvitation(surveyId, invitation.invitation_id), 'Failed to resend the invitation')) {
+      onSuccess(`Invitation sent again to ${invitation.email}`);
+    }
+  };
+
+  const handleWithdraw = (invitation: SurveyInvitation) =>
+    change(() => withdrawInvitation(surveyId, invitation.invitation_id), 'Failed to withdraw the invitation');
 
   const handleUpdateAccess = (userId: string, newLevel: SharedLevel) =>
     change(() => updateSurveyAccess(surveyId, userId, newLevel), 'Failed to update access');
@@ -154,6 +181,56 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
                 </div>
               </div>
             ))}
+            {invitations.map((invitation) => (
+              <div
+                key={invitation.invitation_id}
+                className="flex items-center justify-between gap-3 py-3 px-4 bg-white dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-600"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="w-10 h-10 flex-none rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-300">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.75}
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="5" width="18" height="14" rx="2" />
+                      <path d="m3 7 9 6 9-6" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-gray-900 dark:text-white">{invitation.email}</div>
+                    <div
+                      className={`text-sm ${invitation.expired ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}
+                    >
+                      {invitation.expired
+                        ? 'Invitation expired'
+                        : `Invited as ${invitation.permission_level} · expires ${shortDate(invitation.expires_at)}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-none items-center gap-1">
+                  {emailEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => handleResend(invitation)}
+                      className="px-2.5 py-1.5 text-sm font-medium text-indigo-600 hover:bg-gray-100 dark:text-indigo-400 dark:hover:bg-gray-700 rounded-md"
+                    >
+                      Resend
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleWithdraw(invitation)}
+                    className="px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 rounded-md"
+                  >
+                    Withdraw
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -204,6 +281,8 @@ const SurveyAccessTab: React.FC<SurveyAccessTabProps> = ({ surveyId, onError, on
             <p className="text-xs text-gray-500 dark:text-gray-400">
               <strong>Viewer:</strong> Can see the submissions and reports. <strong>Editor:</strong> Can also pull from
               Kobo and review submissions.
+              {emailEnabled &&
+                ' Someone without a Field Compass account is emailed an invitation, and gets access when they accept it.'}
             </p>
           </form>
         )}
