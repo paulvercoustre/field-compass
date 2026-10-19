@@ -176,7 +176,10 @@ async def request_password_reset(
 @router.post("/auth/password-reset/confirm")
 @limiter.limit("10/hour")
 async def reset_password(request: Request, payload: PasswordResetConfirm, db: DbSession):
-    """Set a new password from a reset link. The link works once, and confirms the address."""
+    """
+    Set a new password from a reset link, and sign out every session made
+    before it. The link works once, and confirms the address.
+    """
     # Checked before the link is used, so a short password doesn't spend it.
     if len(payload.new_password) < 8:
         raise HTTPException(
@@ -192,13 +195,17 @@ async def reset_password(request: Request, payload: PasswordResetConfirm, db: Db
     now = datetime.utcnow()
     user.password_hash = get_password_hash(payload.new_password)
     user.updated_at = now
+    # Whoever knew the old password is signed out everywhere.
+    user.sessions_valid_after = now
     email_tokens.revoke_unused(db, user, email_tokens.RESET_PASSWORD)
     if user.email_verified_at is None:
         user.email_verified_at = now
         invitations.accept_waiting(db, user)
     db.commit()
     logger.info(f"Password reset for user: {user.user_id}")
-    return {"message": "Your password has been changed. Sign in with the new one."}
+    return {
+        "message": "Your password has been changed, and every device signed in with the old one is signed out."
+    }
 
 
 @router.post("/auth/verify-email")

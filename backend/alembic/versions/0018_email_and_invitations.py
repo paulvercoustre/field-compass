@@ -5,7 +5,8 @@ Revises: 0017_terms_acceptance
 Create Date: 2026-10-18
 
 users.email_verified_at records when someone showed they read mail at their
-address. email_tokens holds the links sent to confirm an address or reset a
+address, and users.sessions_valid_after when their password was last reset:
+sign-ins from before it stop working. email_tokens holds the links sent to confirm an address or reset a
 password, hashed. survey_invitations holds surveys shared with an address that
 has no confirmed account yet.
 
@@ -30,6 +31,9 @@ UPGRADE_SQL = """
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP WITH TIME ZONE;
 COMMENT ON COLUMN users.email_verified_at IS
     'When the user showed they read mail at their address; only confirmed addresses are given surveys directly';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_valid_after TIMESTAMP WITH TIME ZONE;
+COMMENT ON COLUMN users.sessions_valid_after IS
+    'Sign-ins from before this moment stop working; set when the password is reset';
 
 CREATE TABLE IF NOT EXISTS email_tokens (
     token_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -74,4 +78,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS survey_invitations;")
     op.execute("DROP TABLE IF EXISTS email_tokens;")
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS sessions_valid_after;")
     op.execute("ALTER TABLE users DROP COLUMN IF EXISTS email_verified_at;")

@@ -4,9 +4,10 @@ Handles JWT tokens, password hashing, and Kobo API key encryption.
 """
 
 import base64
+import calendar
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -73,6 +74,9 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     user_id: str | None = None
     email: str | None = None
+    # When the token was issued, in whole seconds; None for tokens from before
+    # it was recorded.
+    issued_at: int | None = None
 
 
 # The "Last updated" date of the terms of service and the data processing
@@ -227,7 +231,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    # "iat" lets a password reset end every sign-in made before it.
+    to_encode.update({"exp": expire, "iat": int(datetime.now(UTC).timestamp())})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -237,11 +242,30 @@ def decode_access_token(token: str) -> TokenData | None:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         email = payload.get("email")
+        issued_at = payload.get("iat")
         if user_id is None:
             return None
-        return TokenData(user_id=user_id, email=email)
+        return TokenData(
+            user_id=user_id,
+            email=email,
+            issued_at=issued_at if isinstance(issued_at, int) else None,
+        )
     except JWTError:
         return None
+
+
+def signed_in_before_cutoff(user: User, issued_at: int | None) -> bool:
+    """
+    Whether a token predates the user's last password reset, and so no longer
+    works. Compared in whole seconds, as tokens record them: a sign-in in the
+    same second as the reset still works, so the one just made is never lost.
+    """
+    cutoff = user.sessions_valid_after
+    if cutoff is None:
+        return False
+    if cutoff.tzinfo is not None:
+        cutoff = cutoff.astimezone(UTC).replace(tzinfo=None)
+    return issued_at is None or issued_at < calendar.timegm(cutoff.timetuple())
 
 
 # =============================================================================
@@ -311,7 +335,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Db
         raise credentials_exception
 
     user = get_user_by_id(db, token_data.user_id)
-    if user is None:
+    if user is None or signed_in_before_cutoff(user, token_data.issued_at):
         raise credentials_exception
 
     if user.is_active:

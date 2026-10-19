@@ -35,7 +35,8 @@ CREATE TABLE users (
     preferences JSONB,
     terms_accepted_at TIMESTAMP WITH TIME ZONE,
     terms_version VARCHAR(20),
-    email_verified_at TIMESTAMP WITH TIME ZONE
+    email_verified_at TIMESTAMP WITH TIME ZONE,
+    sessions_valid_after TIMESTAMP WITH TIME ZONE
 );
 
 COMMENT ON TABLE users IS 'User accounts with authentication and Kobo API credentials';
@@ -53,6 +54,7 @@ COMMENT ON COLUMN users.preferences IS 'How the app behaves for this user, e.g. 
 COMMENT ON COLUMN users.terms_accepted_at IS 'When the user accepted the terms of service and the data processing agreement; null for accounts from before them';
 COMMENT ON COLUMN users.terms_version IS 'Which version they accepted: the terms'' Last updated date, e.g. 2026-10-18';
 COMMENT ON COLUMN users.email_verified_at IS 'When the user showed they read mail at their address; only confirmed addresses are given surveys directly';
+COMMENT ON COLUMN users.sessions_valid_after IS 'Sign-ins from before this moment stop working; set when the password is reset';
 
 CREATE TABLE ai_connections (
     connection_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

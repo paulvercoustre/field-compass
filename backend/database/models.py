@@ -74,6 +74,11 @@ class User(Base):
     email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Sign-ins from before this moment stop working: set when the password is
+    # reset, so whoever knew the old one is signed out everywhere.
+    sessions_valid_after: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
     owned_surveys: Mapped[list["SurveyConfig"]] = relationship(

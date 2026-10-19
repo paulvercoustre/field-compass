@@ -493,6 +493,66 @@ class TestPasswordReset:
         me = client.get("/api/users/me", headers=sign_in(client, password=NEW_PASSWORD)).json()
         assert me["email_verified"] is True
 
+    def token_issued(self, client, seconds_ago: int, with_iat: bool = True) -> dict[str, str]:
+        """A sign-in made a while ago: tokens record when they were issued, in seconds."""
+        from jose import jwt
+
+        from services.auth import ALGORITHM, SECRET_KEY
+
+        db = client.db_factory()
+        user = db.query(User).filter(User.email == "alice@example.com").one()
+        claims = {
+            "sub": str(user.user_id),
+            "email": user.email,
+            "exp": datetime.utcnow() + timedelta(hours=1),
+        }
+        db.close()
+        if with_iat:
+            claims["iat"] = int(datetime.utcnow().timestamp()) - seconds_ago
+        return {"Authorization": f"Bearer {jwt.encode(claims, SECRET_KEY, algorithm=ALGORITHM)}"}
+
+    def reset(self, client, outbox):
+        self.ask(client)
+        token = token_in(outbox[-1], "/reset-password")
+        response = client.post(
+            "/api/auth/password-reset/confirm", json={"token": token, "new_password": NEW_PASSWORD}
+        )
+        assert response.status_code == 200, response.text
+
+    def test_a_reset_signs_out_every_earlier_session(self, client, outbox):
+        register(client)
+        earlier = self.token_issued(client, seconds_ago=60)
+        assert client.get("/api/users/me", headers=earlier).status_code == 200
+
+        self.reset(client, outbox)
+
+        assert client.get("/api/users/me", headers=earlier).status_code == 401
+        fresh = sign_in(client, password=NEW_PASSWORD)
+        assert client.get("/api/users/me", headers=fresh).status_code == 200
+
+    def test_a_sign_in_from_before_tokens_recorded_their_time(self, client, outbox):
+        """Tokens minted before this change have no "iat": fine until a reset, refused after."""
+        register(client)
+        old_style = self.token_issued(client, seconds_ago=0, with_iat=False)
+        assert client.get("/api/users/me", headers=old_style).status_code == 200
+
+        self.reset(client, outbox)
+
+        assert client.get("/api/users/me", headers=old_style).status_code == 401
+
+    def test_changing_the_password_in_settings_keeps_the_session(self, client):
+        register(client)
+        headers = sign_in(client)
+
+        response = client.put(
+            "/api/users/me/password",
+            json={"current_password": GOOD_PASSWORD, "new_password": NEW_PASSWORD},
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        assert client.get("/api/users/me", headers=headers).status_code == 200
+
     def test_without_email_it_says_so(self, client, no_email):
         register(client)
 

@@ -111,7 +111,10 @@ export const ResetPasswordPage: React.FC<{ token: string }> = ({ token }) => {
   if (isDone) {
     return (
       <Frame title="Password changed">
-        <Banner tone="success">Your password has been changed. Sign in with the new one.</Banner>
+        <Banner tone="success">
+          Your password has been changed, and every device signed in with the old one is signed out. Sign in with the
+          new one.
+        </Banner>
         <PrimaryButton onClick={() => leave()}>Sign in</PrimaryButton>
       </Frame>
     );
