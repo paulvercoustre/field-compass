@@ -23,7 +23,7 @@ const Check: React.FC<{ on: boolean }> = ({ on }) => (
 
 /**
  * Account Settings › App usage, for the accounts in USAGE_ADMIN_EMAILS: signups, who came back, how far
- * people get, and where they came from.
+ * people get, who brings others in, and where they came from.
  */
 const UsageTab: React.FC = () => {
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -90,12 +90,17 @@ const UsageTab: React.FC = () => {
 
       <div>
         <SectionLabel>Last 7 days</SectionLabel>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
           <Stat label="Signups" value={week.signups} hint={`${month.signups} in 30 days`} />
           <Stat label="Active users" value={week.active_users} hint={`${month.active_users} in 30 days`} />
           <Stat label="Logins" value={week.logins} hint={`${month.logins} in 30 days`} />
           <Stat label="Surveys added" value={week.surveys_created} hint={`${month.surveys_created} in 30 days`} />
           <Stat label="Pulls" value={week.pulls} hint={`${month.pulls} in 30 days`} />
+          <Stat
+            label="Invites sent"
+            value={week.invites_sent ?? 0}
+            hint={`${week.invites_accepted ?? 0} accepted · ${month.invites_sent ?? 0} sent in 30 days`}
+          />
         </div>
       </div>
 

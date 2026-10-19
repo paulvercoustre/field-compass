@@ -1,7 +1,8 @@
 """
 Usage figures for whoever runs this instance: how many people signed up,
-came back, connected Kobo, added surveys and pulled data. Only for the
-emails listed in USAGE_ADMIN_EMAILS (services/app_events.can_view_usage).
+came back, connected Kobo, added surveys, pulled data, and brought others in
+by sharing a survey or inviting someone. Only for the emails listed in
+USAGE_ADMIN_EMAILS (services/app_events.can_view_usage).
 
 Everything is counted in Python from a handful of plain queries, which keeps
 it identical on Postgres and on the SQLite the tests run. The tables are small
@@ -23,7 +24,9 @@ from database.models import (
     AudioTranscript,
     Run,
     SubmissionCurrent,
+    SurveyAccess,
     SurveyConfig,
+    SurveyInvitation,
     User,
 )
 from services import app_events
@@ -85,6 +88,10 @@ async def get_usage(
         (e.user_id, _naive_utc(e.created_at)) for e in events if e.kind == app_events.ACTIVE_DAY
     ]
     logins = [_naive_utc(e.created_at) for e in events if e.kind == app_events.LOGIN]
+    invites_sent = [_naive_utc(e.created_at) for e in events if e.kind == app_events.INVITE_SENT]
+    invites_accepted = [
+        _naive_utc(e.created_at) for e in events if e.kind == app_events.INVITE_ACCEPTED
+    ]
 
     def count_since(times, since):
         return sum(1 for t in times if t and _naive_utc(t) >= since)
@@ -173,11 +180,17 @@ async def get_usage(
     survey_owners = {owner for owner, _ in surveys if owner}
     pullers = {user_id for user_id, _ in pulls if user_id}
     kobo_connected = {u.user_id for u in users if u.kobo_api_token_encrypted}
+    # Brought someone in: gave a survey to an account, or invited an address.
+    # From the tables rather than events, so it reaches back before them.
+    sharers = {
+        granter for (granter,) in db.query(SurveyAccess.granted_by).distinct() if granter
+    } | {inviter for (inviter,) in db.query(SurveyInvitation.invited_by).distinct() if inviter}
     funnel = [
         {"step": "Signed up", "users": len(users)},
         {"step": "Connected Kobo", "users": len(kobo_connected)},
         {"step": "Added a survey", "users": len(survey_owners)},
         {"step": "Pulled data", "users": len(pullers)},
+        {"step": "Shared a survey", "users": len(sharers)},
     ]
 
     # Where signups came from, from the tags the marketing site forwards
@@ -227,6 +240,8 @@ async def get_usage(
             "logins": count_since(logins, since_7),
             "surveys_created": count_since([at for _, at in surveys], since_7),
             "pulls": count_since([at for _, at in pulls], since_7),
+            "invites_sent": count_since(invites_sent, since_7),
+            "invites_accepted": count_since(invites_accepted, since_7),
         },
         "last_30_days": {
             "signups": count_since(signups, since_30),
@@ -234,6 +249,8 @@ async def get_usage(
             "logins": count_since(logins, since_30),
             "surveys_created": count_since([at for _, at in surveys], since_30),
             "pulls": count_since([at for _, at in pulls], since_30),
+            "invites_sent": count_since(invites_sent, since_30),
+            "invites_accepted": count_since(invites_accepted, since_30),
             "submissions_synced": submissions_30,
             "ai_reviews": ai_30[0],
             "ai_cost_usd": round(ai_30[1] / 1_000_000, 2),

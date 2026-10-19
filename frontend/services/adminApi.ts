@@ -8,6 +8,9 @@ export interface UsagePeriod {
   logins: number;
   surveys_created: number;
   pulls: number;
+  /** Surveys shared with an address with no confirmed account. */
+  invites_sent: number;
+  invites_accepted: number;
 }
 
 export interface UsageLast30 extends UsagePeriod {

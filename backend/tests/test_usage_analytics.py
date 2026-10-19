@@ -7,7 +7,7 @@ record the figures are counted from, and deleting things must not erase it.
 from datetime import datetime, timedelta
 
 from database.models import AppEvent, User
-from services import app_events
+from services import app_events, mailer
 from tests import test_auth_endpoints
 from tests.test_auth_endpoints import GOOD_PASSWORD, register
 
@@ -157,7 +157,7 @@ def test_usage_figures(client, monkeypatch):
     assert usage["weekly"][-1]["signups"] == 2
     assert usage["weekly"][-1]["active_users"] == 1
 
-    assert [step["users"] for step in usage["funnel"]] == [2, 0, 1, 0]
+    assert [step["users"] for step in usage["funnel"]] == [2, 0, 1, 0, 0]
     assert {s["source"]: s["signups"] for s in usage["signup_sources_30_days"]} == {
         "linkedin": 1,
         "direct / unknown": 1,
@@ -167,3 +167,37 @@ def test_usage_figures(client, monkeypatch):
     assert by_email["alice@example.com"]["source"] == "linkedin"
     assert by_email["alice@example.com"]["surveys"] == 1
     assert by_email["bob@example.com"]["last_seen_at"] is None
+
+
+def test_invites_are_counted(client, monkeypatch):
+    """Invites sent and accepted, who brought others in, and signups that came from an invite."""
+    _allow_usage(monkeypatch)
+    sent: list[mailer.Email] = []
+    monkeypatch.setattr(mailer, "send", lambda email: sent.append(email) or True)
+    register(client)
+    db = client.db_factory()
+    db.query(User).one().email_verified_at = datetime.utcnow()
+    db.commit()
+    db.close()
+    alice = _login(client)
+    survey_id = client.post("/api/surveys", json={"survey_name": "Baseline"}, headers=alice).json()[
+        "survey_id"
+    ]
+    for email in ("carol@example.org", "dan@example.org"):
+        client.post(
+            f"/api/surveys/{survey_id}/access",
+            json={"email": email, "permission_level": "viewer"},
+            headers=alice,
+        )
+    invite = next(e for e in sent if e.to == "carol@example.org")
+    token = invite.text.split("/invite?token=")[1].split()[0]
+    register(client, email="carol@example.org", username="carol", invite_token=token)
+
+    usage = client.get("/api/admin/usage", headers=alice).json()
+
+    for period in ("last_7_days", "last_30_days"):
+        assert usage[period]["invites_sent"] == 2
+        assert usage[period]["invites_accepted"] == 1
+    assert usage["funnel"][-1] == {"step": "Shared a survey", "users": 1}
+    sources = {s["source"]: s["signups"] for s in usage["signup_sources_30_days"]}
+    assert sources["invite"] == 1
