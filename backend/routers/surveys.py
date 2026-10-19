@@ -7,15 +7,15 @@ import logging
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from database.models import SubmissionCurrent, SurveyConfig, User
+from database.models import SubmissionCurrent, SurveyAccess, SurveyConfig, SurveyInvitation
 from routers.ai_connections import connection_summary
-from services import app_events
+from services import account_emails, app_events, invitations, mailer
 from services.ai_providers import survey_connection
-from services.auth import CurrentUser
+from services.auth import CurrentUser, get_user_by_email
 from services.database import DbSession
 from services.permissions import (
     OwnedSurvey,
@@ -27,7 +27,9 @@ from services.permissions import (
     parse_uuid,
     revoke_survey_access,
 )
+from services.rate_limit import limiter
 from services.survey_deletion import delete_survey_and_data
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -324,62 +326,197 @@ async def get_survey_access(
 
 
 @router.post("/surveys/{survey_id}/access")
+# Per address: a training shares one office connection between many owners.
+@limiter.limit("100/hour")
 async def share_survey(
+    request: Request,
     share_request: ShareSurveyRequest,
     survey: OwnedSurvey,
     db: DbSession,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     """
-    Share survey with another user by email.
-    Requires owner access (or admin).
+    Share the survey with someone by email. Requires owner access (or admin).
+
+    An account whose address is confirmed gets access at once, and an email
+    saying so. Anyone else is sent an invitation: someone with no account
+    yet, or an account that never confirmed its address -- which might not
+    belong to the person whose address it registered. Without email, sharing
+    reaches existing accounts only, at once, as it always did.
     """
+    email = invitations.normalise_email(share_request.email)
+    email_enabled = get_settings().email_enabled
+    target_user = get_user_by_email(db, email)
 
-    # Find user by email
-    target_user = db.query(User).filter(User.email == share_request.email).first()
-
-    if not target_user:
-        raise HTTPException(
-            status_code=404, detail=f"User with email '{share_request.email}' not found"
-        )
-
-    # Cannot share with yourself
-    if target_user.user_id == current_user.user_id:
+    if target_user is not None and target_user.user_id == current_user.user_id:
         raise HTTPException(status_code=400, detail="Cannot share survey with yourself")
-
-    # Cannot share with the owner
-    if survey.user_id and target_user.user_id == survey.user_id:
+    if target_user is not None and survey.user_id and target_user.user_id == survey.user_id:
         raise HTTPException(status_code=400, detail="This user is already the owner of the survey")
 
-    # Grant access
-    access = grant_survey_access(
-        db=db,
-        survey_id=survey.survey_id,
-        user_id=target_user.user_id,
-        permission_level=share_request.permission_level,
-        granted_by=current_user.user_id,
+    if target_user is not None and (target_user.email_verified_at or not email_enabled):
+        had_access = (
+            db.query(SurveyAccess)
+            .filter(
+                SurveyAccess.survey_id == survey.survey_id,
+                SurveyAccess.user_id == target_user.user_id,
+            )
+            .first()
+            is not None
+        )
+        access = grant_survey_access(
+            db=db,
+            survey_id=survey.survey_id,
+            user_id=target_user.user_id,
+            permission_level=share_request.permission_level,
+            granted_by=current_user.user_id,
+        )
+        app_events.record(
+            db,
+            app_events.SURVEY_SHARED,
+            user=current_user,
+            survey_id=survey.survey_id,
+            details={"permission_level": share_request.permission_level},
+        )
+        db.commit()
+        if email_enabled and not had_access:
+            background_tasks.add_task(
+                mailer.send,
+                account_emails.shared_with_you_email(
+                    user=target_user,
+                    inviter=current_user,
+                    survey=survey,
+                    permission_level=access.permission_level,
+                ),
+            )
+        logger.info(
+            f"User {current_user.user_id} shared survey {survey.survey_id} with user {target_user.user_id} as {share_request.permission_level}"
+        )
+        return {
+            "status": "shared",
+            "message": f"Survey shared with {email}",
+            "user_id": str(target_user.user_id),
+            "email": target_user.email,
+            "username": target_user.username,
+            "permission_level": access.permission_level,
+            "granted_at": access.granted_at.isoformat() if access.granted_at else None,
+        }
+
+    if not email_enabled:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No account uses {email}. Ask them to create one, then share the survey again.",
+        )
+    if current_user.email_verified_at is None:
+        # Invitations go out under Field Compass's name to any address typed
+        # here, so only from someone who has shown they read their own mail.
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Confirm your own email address before inviting people: use the link we "
+                "emailed you, or send a new one from the banner at the top of the page."
+            ),
+        )
+
+    invitation, token = invitations.invite(
+        db, survey, email, share_request.permission_level, current_user
     )
     app_events.record(
         db,
-        app_events.SURVEY_SHARED,
+        app_events.INVITE_SENT,
         user=current_user,
         survey_id=survey.survey_id,
         details={"permission_level": share_request.permission_level},
     )
     db.commit()
-
+    background_tasks.add_task(mailer.send, _invitation_email(invitation, token, survey))
     logger.info(
-        f"User {current_user.user_id} shared survey {survey.survey_id} with user {target_user.user_id} as {share_request.permission_level}"
+        f"User {current_user.user_id} invited someone to survey {survey.survey_id} (invitation {invitation.invitation_id})"
+    )
+    return {
+        "status": "invited",
+        "message": f"Invitation sent to {email}",
+        **_invitation_response(invitation),
+    }
+
+
+def _invitation_email(invitation: SurveyInvitation, token: str, survey: SurveyConfig):
+    return account_emails.invitation_email(
+        to=invitation.email,
+        invitation_id=invitation.invitation_id,
+        inviter=invitation.inviter,
+        survey=survey,
+        permission_level=invitation.permission_level,
+        token=token,
+        valid_for=invitations.INVITATION_LIFETIME,
     )
 
+
+def _invitation_response(invitation: SurveyInvitation) -> dict:
     return {
-        "message": f"Survey shared with {share_request.email}",
-        "user_id": str(target_user.user_id),
-        "email": target_user.email,
-        "username": target_user.username,
-        "permission_level": access.permission_level,
-        "granted_at": access.granted_at.isoformat() if access.granted_at else None,
+        "invitation_id": str(invitation.invitation_id),
+        "email": invitation.email,
+        "permission_level": invitation.permission_level,
+        "invited_by": account_emails.person_name(invitation.inviter)
+        if invitation.inviter
+        else None,
+        "sent_at": invitation.sent_at.isoformat() if invitation.sent_at else None,
+        "expires_at": invitation.expires_at.isoformat() if invitation.expires_at else None,
+        "expired": invitations.is_expired(invitation),
     }
+
+
+def _pending_invitation(db: Session, survey: SurveyConfig, invitation_id: str) -> SurveyInvitation:
+    invitation = (
+        db.query(SurveyInvitation)
+        .filter(
+            SurveyInvitation.invitation_id == parse_uuid(invitation_id, "invitation_id"),
+            SurveyInvitation.survey_id == survey.survey_id,
+            SurveyInvitation.accepted_at.is_(None),
+        )
+        .first()
+    )
+    if invitation is None:
+        raise HTTPException(status_code=404, detail="No such invitation is waiting")
+    return invitation
+
+
+@router.get("/surveys/{survey_id}/invitations")
+async def list_invitations(survey: OwnedSurvey, db: DbSession):
+    """Invitations to the survey not yet accepted, expired ones included. Owner access."""
+    return [_invitation_response(i) for i in invitations.pending(db, survey.survey_id)]
+
+
+@router.post("/surveys/{survey_id}/invitations/{invitation_id}/resend")
+@limiter.limit("30/hour")
+async def resend_invitation(
+    request: Request,
+    invitation_id: str,
+    survey: OwnedSurvey,
+    db: DbSession,
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
+):
+    """Email the invitation again with a new link, good for another 14 days. Owner access."""
+    if not get_settings().email_enabled:
+        raise HTTPException(status_code=503, detail="This server can't send email.")
+    invitation = _pending_invitation(db, survey, invitation_id)
+    token = invitations.new_link(invitation)
+    db.commit()
+    background_tasks.add_task(mailer.send, _invitation_email(invitation, token, survey))
+    logger.info(f"User {current_user.user_id} resent invitation {invitation.invitation_id}")
+    return _invitation_response(invitation)
+
+
+@router.delete("/surveys/{survey_id}/invitations/{invitation_id}", status_code=204)
+async def withdraw_invitation(
+    invitation_id: str, survey: OwnedSurvey, db: DbSession, current_user: CurrentUser
+):
+    """Withdraw an invitation not yet accepted: its link stops working. Owner access."""
+    invitation = _pending_invitation(db, survey, invitation_id)
+    db.delete(invitation)
+    db.commit()
+    logger.info(f"User {current_user.user_id} withdrew invitation {invitation_id}")
 
 
 @router.put("/surveys/{survey_id}/access/{user_id}")

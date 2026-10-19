@@ -26,6 +26,9 @@ KOBO_CONNECTED = "kobo_connected"
 SURVEY_CREATED = "survey_created"
 SURVEY_DELETED = "survey_deleted"
 SURVEY_SHARED = "survey_shared"
+# A survey shared with an address with no confirmed account, and its acceptance
+INVITE_SENT = "invite_sent"
+INVITE_ACCEPTED = "invite_accepted"
 ACCOUNT_DELETED = "account_deleted"
 # An admin opened a survey only their admin rights let them see, once a day
 STAFF_SURVEY_ACCESS = "staff_survey_access"

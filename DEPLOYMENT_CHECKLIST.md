@@ -34,6 +34,10 @@ Use this checklist to ensure all deployment steps are completed.
   - [ ] `VITE_API_URL` (leave EMPTY when served through the bundled Caddy proxy)
   - [ ] `BACKEND_IMAGE` (the published image for the deployed commit --
         `deploy/vm/deploy.sh` maintains it after the first manual start)
+  - [ ] `SMTP_*`, `EMAIL_FROM`, `EMAIL_REPLY_TO`, `APP_URL` for Brevo, and
+        `scripts/send_test_email.py` delivers: see [docs/email.md](docs/email.md).
+        Without them there are no password resets or invitations, and
+        sharing reaches existing accounts only
 
 ### Deploy mechanics
 - [ ] `/usr/local/bin/field-compass-deploy` reinstalled from

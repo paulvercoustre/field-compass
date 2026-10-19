@@ -6,10 +6,14 @@ import SurveyAccessTab from './SurveyAccessTab';
 
 vi.mock('../../services/progressApi', () => ({
   getSurveyAccess: vi.fn(),
+  getSurveyInvitations: vi.fn(),
   shareSurvey: vi.fn(),
   updateSurveyAccess: vi.fn(),
   revokeSurveyAccess: vi.fn(),
+  resendInvitation: vi.fn(),
+  withdrawInvitation: vi.fn(),
 }));
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ emailEnabled: true }) }));
 
 const api = vi.mocked(progressApi);
 
@@ -20,6 +24,16 @@ const entry = (user_id: string, email: string, permission_level: 'owner' | 'edit
   full_name: null,
   permission_level,
   granted_at: '2026-01-01T00:00:00Z',
+});
+
+const invitation = (email: string, expired = false) => ({
+  invitation_id: `inv-${email}`,
+  email,
+  permission_level: 'viewer' as const,
+  invited_by: 'Owner',
+  sent_at: '2026-10-18T00:00:00Z',
+  expires_at: '2026-11-01T00:00:00Z',
+  expired,
 });
 
 const renderTab = () => {
@@ -33,11 +47,12 @@ describe('SurveyAccessTab', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     api.getSurveyAccess.mockResolvedValue([entry('u1', 'owner@x.org', 'owner'), entry('u2', 'ana@x.org', 'viewer')]);
+    api.getSurveyInvitations.mockResolvedValue([]);
   });
   afterEach(cleanup);
 
   it('shares the survey and shows the list again', async () => {
-    api.shareSurvey.mockResolvedValue(entry('u3', 'ben@x.org', 'editor'));
+    api.shareSurvey.mockResolvedValue({ status: 'shared' });
     const { view, onSuccess } = renderTab();
     await waitFor(() => expect(view.getByText('ana@x.org')).toBeTruthy());
 
@@ -49,6 +64,35 @@ describe('SurveyAccessTab', () => {
     expect(api.shareSurvey).toHaveBeenCalledWith('s1', 'ben@x.org', 'editor');
     expect(api.getSurveyAccess).toHaveBeenCalledTimes(2);
     expect((view.getByPlaceholderText('user@example.com') as HTMLInputElement).value).toBe('');
+  });
+
+  it('says when an invitation was emailed rather than access given', async () => {
+    api.shareSurvey.mockResolvedValue({ status: 'invited', ...invitation('cara@x.org') });
+    const { view, onSuccess } = renderTab();
+    await waitFor(() => expect(view.getByText('ana@x.org')).toBeTruthy());
+
+    fireEvent.change(view.getByPlaceholderText('user@example.com'), { target: { value: 'cara@x.org' } });
+    fireEvent.click(view.getByRole('button', { name: 'Share' }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith('Invitation sent to cara@x.org'));
+  });
+
+  it('lists invitations waiting, to send again or withdraw', async () => {
+    api.getSurveyInvitations.mockResolvedValue([invitation('cara@x.org'), invitation('dan@x.org', true)]);
+    api.resendInvitation.mockResolvedValue(invitation('dan@x.org'));
+    api.withdrawInvitation.mockResolvedValue(undefined);
+    const { view, onSuccess } = renderTab();
+
+    await waitFor(() => expect(view.getByText('cara@x.org')).toBeTruthy());
+    expect(view.getByText(/Invited as viewer · expires/)).toBeTruthy();
+    expect(view.getByText('Invitation expired')).toBeTruthy();
+
+    fireEvent.click(view.getAllByRole('button', { name: 'Resend' })[1]);
+    await waitFor(() => expect(api.resendInvitation).toHaveBeenCalledWith('s1', 'inv-dan@x.org'));
+    expect(onSuccess).toHaveBeenCalledWith('Invitation sent again to dan@x.org');
+
+    fireEvent.click(view.getAllByRole('button', { name: 'Withdraw' })[0]);
+    await waitFor(() => expect(api.withdrawInvitation).toHaveBeenCalledWith('s1', 'inv-cara@x.org'));
   });
 
   it('revokes access once confirmed', async () => {

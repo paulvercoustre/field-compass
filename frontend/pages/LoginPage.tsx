@@ -2,23 +2,38 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogoTile } from '../components/ui/Logo';
 import { Spinner } from '../components/Spinner';
+import Banner from '../components/ui/Banner';
 import { DPA_URL, PRIVACY_NOTICE_URL, TERMS_URL } from '../constants/links';
+import { InvitationOffer, requestPasswordReset } from '../services/accountApi';
 
-const LoginPage: React.FC = () => {
-  const { login, register, isLoading: authLoading } = useAuth();
+type Mode = 'login' | 'register' | 'forgot';
+
+interface LoginPageProps {
+  /** Opened from a survey invitation: the address is the invited one. */
+  invitation?: { token: string; offer: InvitationOffer };
+}
+
+const LoginPage: React.FC<LoginPageProps> = ({ invitation }) => {
+  const { login, register, emailEnabled, isLoading: authLoading } = useAuth();
 
   // The marketing site links straight here with #register on its "Create an
   // account" buttons, so that CTA opens the registration form rather than
   // dropping people on Sign In with an extra click to find. Any other entry
-  // opens on Sign In as before.
-  const [isLogin, setIsLogin] = useState(() => !['#register', '#signup'].includes(window.location.hash.toLowerCase()));
-  const [email, setEmail] = useState('');
+  // opens on Sign In as before. An invitation opens on whichever its address
+  // needs: signing in to the account it has, or creating one.
+  const [mode, setMode] = useState<Mode>(() => {
+    if (invitation) return invitation.offer.account_exists ? 'login' : 'register';
+    return ['#register', '#signup'].includes(window.location.hash.toLowerCase()) ? 'register' : 'login';
+  });
+  const isLogin = mode === 'login';
+  const [email, setEmail] = useState(invitation?.offer.email ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,7 +42,9 @@ const LoginPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      if (isLogin) {
+      if (mode === 'forgot') {
+        setResetSent((await requestPasswordReset(email)).message);
+      } else if (isLogin) {
         await login(email, password);
       } else {
         // Validate registration
@@ -40,7 +57,7 @@ const LoginPage: React.FC = () => {
         if (!acceptTerms) {
           throw new Error('Accept the terms of service and the data processing agreement to create an account');
         }
-        await register(email, username, password, fullName || undefined, acceptTerms);
+        await register(email, username, password, fullName || undefined, acceptTerms, invitation?.token);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -49,10 +66,16 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const switchMode = (toLogin: boolean) => {
-    setIsLogin(toLogin);
+  const switchMode = (to: Mode) => {
+    setMode(to);
     setError(null);
+    setResetSent(null);
   };
+
+  const title = { login: 'Sign in to Field Compass', register: 'Create your account', forgot: 'Reset your password' }[
+    mode
+  ];
+  const linkClass = 'font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300';
 
   const inputClass =
     'block w-full h-10 px-3 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xs text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15 transition-shadow';
@@ -74,11 +97,18 @@ const LoginPage: React.FC = () => {
         {/* Logo/Title */}
         <div className="flex flex-col items-center text-center mb-8">
           <LogoTile size="lg" />
-          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
-            {isLogin ? 'Sign in to Field Compass' : 'Create your account'}
-          </h1>
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">{title}</h1>
           <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">Data quality for KoboToolbox surveys</p>
         </div>
+
+        {invitation && (
+          <Banner tone="info" className="mb-4">
+            {invitation.offer.invited_by} invited you to <strong>{invitation.offer.survey_name}</strong>.{' '}
+            {invitation.offer.account_exists
+              ? 'Sign in to open it.'
+              : 'Create your account to open it: the invitation confirms your address.'}
+          </Banner>
+        )}
 
         {/* Card */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_32px_-12px_rgb(0_0_0/0.12)] dark:border-gray-800 dark:bg-gray-900/80 dark:shadow-none sm:p-7">
@@ -90,6 +120,18 @@ const LoginPage: React.FC = () => {
             >
               {error}
             </div>
+          )}
+
+          {resetSent && (
+            <Banner tone="success" className="mb-5">
+              {resetSent} The link works for one hour.
+            </Banner>
+          )}
+
+          {mode === 'forgot' && !resetSent && (
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+              Enter the address you sign in with, and we'll email you a link to choose a new password.
+            </p>
           )}
 
           {/* Form */}
@@ -105,12 +147,13 @@ const LoginPage: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className={inputClass}
+                readOnly={!!invitation}
+                className={`${inputClass} read-only:bg-gray-50 read-only:text-gray-600 dark:read-only:bg-gray-800/60 dark:read-only:text-gray-400`}
                 placeholder="you@example.com"
               />
             </div>
 
-            {!isLogin && (
+            {mode === 'register' && (
               <>
                 <div>
                   <label htmlFor="username" className={labelClass}>
@@ -145,24 +188,33 @@ const LoginPage: React.FC = () => {
               </>
             )}
 
-            <div>
-              <label htmlFor="password" className={labelClass}>
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete={isLogin ? 'current-password' : 'new-password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                className={inputClass}
-                placeholder={isLogin ? '••••••••' : 'At least 8 characters'}
-              />
-            </div>
+            {mode !== 'forgot' && (
+              <div>
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="password" className={labelClass}>
+                    Password
+                  </label>
+                  {isLogin && emailEnabled && (
+                    <button type="button" onClick={() => switchMode('forgot')} className={`text-sm ${linkClass}`}>
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  className={inputClass}
+                  placeholder={isLogin ? '••••••••' : 'At least 8 characters'}
+                />
+              </div>
+            )}
 
-            {!isLogin && (
+            {mode === 'register' && (
               <div>
                 <label htmlFor="confirmPassword" className={labelClass}>
                   Confirm password
@@ -180,7 +232,7 @@ const LoginPage: React.FC = () => {
               </div>
             )}
 
-            {!isLogin && (
+            {mode === 'register' && (
               <div className="flex items-start gap-2.5">
                 <input
                   id="acceptTerms"
@@ -214,22 +266,24 @@ const LoginPage: React.FC = () => {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={isSubmitting || authLoading}
-              className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 disabled:opacity-60 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-            >
-              {isSubmitting ? (
-                <>
-                  <Spinner size="sm" className="text-current" />
-                  <span>{isLogin ? 'Signing in…' : 'Creating account…'}</span>
-                </>
-              ) : (
-                <span>{isLogin ? 'Sign in' : 'Create account'}</span>
-              )}
-            </button>
+            {!(mode === 'forgot' && resetSent) && (
+              <button
+                type="submit"
+                disabled={isSubmitting || authLoading}
+                className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 disabled:opacity-60 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Spinner size="sm" className="text-current" />
+                    <span>{{ login: 'Signing in…', register: 'Creating account…', forgot: 'Sending…' }[mode]}</span>
+                  </>
+                ) : (
+                  <span>{{ login: 'Sign in', register: 'Create account', forgot: 'Email me a link' }[mode]}</span>
+                )}
+              </button>
+            )}
 
-            {!isLogin && (
+            {mode === 'register' && (
               <p className="text-center text-xs text-gray-500 dark:text-gray-400">
                 Read how we handle your data in our{' '}
                 <a
@@ -247,12 +301,8 @@ const LoginPage: React.FC = () => {
         </div>
 
         <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
-          {isLogin ? 'New to Field Compass?' : 'Already have an account?'}{' '}
-          <button
-            type="button"
-            onClick={() => switchMode(!isLogin)}
-            className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
-          >
+          {{ login: 'New to Field Compass?', register: 'Already have an account?', forgot: 'Remembered it?' }[mode]}{' '}
+          <button type="button" onClick={() => switchMode(isLogin ? 'register' : 'login')} className={linkClass}>
             {isLogin ? 'Create an account' : 'Sign in'}
           </button>
         </p>

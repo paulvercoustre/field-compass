@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -83,6 +83,24 @@ class Settings(BaseModel):
     jwt_expire_minutes: int = Field(default=120, gt=0)
     encryption_key: str | None = None
 
+    # --- Email ----------------------------------------------------------------
+    # Password resets, address confirmations and survey invitations
+    # (services/mailer.py). With no SMTP_HOST, development prints each email to
+    # the API's log and any other environment sends none.
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, gt=0)
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    # "starttls" (usually port 587), "ssl" (port 465), or "none" for a relay
+    # on a private network.
+    smtp_security: Literal["starttls", "ssl", "none"] = "starttls"
+    email_from: str = "Field Compass <no-reply@fieldcompass.org>"
+    email_reply_to: str | None = None
+    # The app's public address, which the links in emails open. SITE_ADDRESS
+    # when that is an address, else the first of CORS_ORIGINS.
+    app_url: str | None = None
+    site_address: str | None = None
+
     # --- Background jobs ------------------------------------------------------
     celery_broker_url: str = "redis://redis:6379/0"
     celery_result_backend: str | None = None  # the broker when unset
@@ -141,6 +159,25 @@ class Settings(BaseModel):
     @property
     def is_development(self) -> bool:
         return self.environment.lower() == "development"
+
+    @property
+    def email_backend(self) -> Literal["smtp", "console"] | None:
+        """How email leaves: an SMTP server, the log (development only), or not at all."""
+        if (self.smtp_host or "").strip():
+            return "smtp"
+        return "console" if self.is_development else None
+
+    @property
+    def email_enabled(self) -> bool:
+        return self.email_backend is not None
+
+    @property
+    def public_app_url(self) -> str:
+        """The address the links in emails open, without a trailing slash."""
+        for candidate in (self.app_url, self.site_address):
+            if candidate and candidate.startswith(("https://", "http://")):
+                return candidate.rstrip("/")
+        return self.allowed_origins[0].rstrip("/")
 
     @property
     def result_backend(self) -> str:

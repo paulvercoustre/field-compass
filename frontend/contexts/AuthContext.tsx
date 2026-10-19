@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
 import { API_BASE_URL, apiFetch, setReauthHandler, TOKEN_KEY } from '../services/apiBase';
+import { getAuthOptions } from '../services/accountApi';
 import SessionExpiredDialog from '../components/SessionExpiredDialog';
 import { forgetSurveyId } from '../utils/selectedSurveyStorage';
 import { readSignupSource } from '../utils/signupSource';
@@ -17,6 +18,8 @@ interface User {
   is_admin: boolean;
   /** Listed in USAGE_ADMIN_EMAILS on the server: sees Account Settings › App usage. */
   can_view_usage?: boolean;
+  /** The account showed it reads mail at its address; until then shares to it arrive as invitations. */
+  email_verified?: boolean;
   created_at: string;
   last_login_at: string | null;
   /** How the app behaves for this user; the server fills in defaults. */
@@ -50,13 +53,16 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  /** The server can send email: password resets, address confirmation and invitations work. */
+  emailEnabled: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (
     email: string,
     username: string,
     password: string,
     fullName: string | undefined,
-    acceptTerms: boolean
+    acceptTerms: boolean,
+    inviteToken?: string
   ) => Promise<void>;
   logout: () => void;
   updateUser: (updates: UserUpdates) => Promise<void>;
@@ -116,6 +122,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [isLoading, setIsLoading] = useState(true);
+  const [emailEnabled, setEmailEnabled] = useState(false);
   // A request came back 401 while signed in: the sign-in dialog is open, and
   // this settles the requests waiting on it (true: retry them).
   const [reauthPending, setReauthPending] = useState(false);
@@ -201,6 +208,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return response;
   };
 
+  // Whether email works decides what the sign-in page and the banner offer.
+  useEffect(() => {
+    getAuthOptions()
+      .then((options) => setEmailEnabled(options.email_enabled))
+      .catch(() => setEmailEnabled(false));
+  }, []);
+
   // Verify token and refresh user on mount
   useEffect(() => {
     const verifyToken = async () => {
@@ -264,7 +278,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     username: string,
     password: string,
     fullName: string | undefined,
-    acceptTerms: boolean
+    acceptTerms: boolean,
+    inviteToken?: string
   ) => {
     const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
       method: 'POST',
@@ -278,6 +293,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         full_name: fullName,
         accept_terms: acceptTerms,
         signup_source: readSignupSource(),
+        // From an invitation sent to this address: it confirms the address.
+        invite_token: inviteToken,
       }),
     });
 
@@ -399,6 +416,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         token,
         isLoading,
         isAuthenticated: !!user && !!token,
+        emailEnabled,
         login,
         register,
         logout,

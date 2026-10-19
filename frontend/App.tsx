@@ -11,9 +11,11 @@ import CreateSurveyPage from './pages/CreateSurveyPage';
 import SurveySettingsPage from './pages/SurveySettingsPage';
 import UserSettingsPage from './pages/UserSettingsPage';
 import LoginPage from './pages/LoginPage';
+import EmailLinkPage, { emailLinkFrom } from './pages/EmailLinkPages';
 import Sidebar from './components/Sidebar';
 import { Spinner } from './components/Spinner';
 import SetupChecklist from './components/onboarding/SetupChecklist';
+import VerifyEmailBanner from './components/onboarding/VerifyEmailBanner';
 import { ActivityProvider } from './contexts/ActivityContext';
 import ActivityIndicator, { ActivityPanel } from './components/activity/ActivityIndicator';
 import NotificationBell from './components/activity/NotificationBell';
@@ -205,6 +207,8 @@ const Shell: React.FC = () => {
             </div>
           </header>
 
+          <VerifyEmailBanner />
+
           <main className="flex-1 min-h-0 overflow-hidden">
             <RequiresSurvey view={view} onAddSurvey={handleAddSurvey}>
               {views[view]}
@@ -220,10 +224,12 @@ const Shell: React.FC = () => {
 // Main app content: sign-in first, then the survey-aware shell.
 const AppContent: React.FC = () => {
   const { user, isLoading } = useAuth();
+  // A link from an email opens its own page, signed in or not.
+  const [emailLink] = useState(() => emailLinkFrom(window.location));
 
   useEffect(() => {
-    if (!user && !isLoading) document.title = 'Sign in · Field Compass';
-  }, [user, isLoading]);
+    if (!user && !isLoading && !emailLink) document.title = 'Sign in · Field Compass';
+  }, [user, isLoading, emailLink]);
 
   if (isLoading) {
     return (
@@ -231,6 +237,10 @@ const AppContent: React.FC = () => {
         <Spinner />
       </div>
     );
+  }
+
+  if (emailLink) {
+    return <EmailLinkPage link={emailLink} />;
   }
 
   if (!user) {
