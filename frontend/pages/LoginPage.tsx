@@ -104,9 +104,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ invitation }) => {
         {invitation && (
           <Banner tone="info" className="mb-4">
             {invitation.offer.invited_by} invited you to <strong>{invitation.offer.survey_name}</strong>.{' '}
-            {invitation.offer.account_exists
-              ? 'Sign in to open it.'
-              : 'Create your account to open it: the invitation confirms your address.'}
+            {invitation.offer.account_exists ? 'Sign in to open it.' : 'Create your account to open it.'}
           </Banner>
         )}
 
@@ -124,13 +122,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ invitation }) => {
 
           {resetSent && (
             <Banner tone="success" className="mb-5">
-              {resetSent} The link works for one hour.
+              {resetSent}
             </Banner>
           )}
 
           {mode === 'forgot' && !resetSent && (
             <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-              Enter the address you sign in with, and we'll email you a link to choose a new password.
+              Enter your email and we'll send you a reset link.
             </p>
           )}
 

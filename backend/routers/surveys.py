@@ -17,6 +17,7 @@ from services import account_emails, app_events, invitations, mailer
 from services.ai_providers import survey_connection
 from services.auth import CurrentUser, get_user_by_email
 from services.database import DbSession
+from services.email_confirmation import require_confirmed_for_ai
 from services.permissions import (
     OwnedSurvey,
     ViewableSurvey,
@@ -291,6 +292,7 @@ async def delete_survey(
 async def rerun_ai_checks(
     survey: OwnedSurvey,
     db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Make the next pull run every submission's AI check again.
@@ -301,6 +303,7 @@ async def rerun_ai_checks(
     stored as such -- and for any time the owner wants a fresh pass.
     Requires owner access: re-running spends AI credit.
     """
+    require_confirmed_for_ai(current_user)
 
     count = (
         db.query(SubmissionCurrent)
@@ -412,10 +415,7 @@ async def share_survey(
         # here, so only from someone who has shown they read their own mail.
         raise HTTPException(
             status_code=403,
-            detail=(
-                "Confirm your own email address before inviting people: use the link we "
-                "emailed you, or send a new one from the banner at the top of the page."
-            ),
+            detail="Confirm your email address before inviting people.",
         )
 
     invitation, token = invitations.invite(

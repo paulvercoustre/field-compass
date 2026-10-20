@@ -55,6 +55,7 @@ const describeTranscript = (
       return { tone: 'warn', text: 'Not transcribed: Kobo has no recording for this answer.' };
     default: {
       const reasons: Record<string, string> = {
+        unconfirmed: "Not transcribed: the survey owner hasn't confirmed their email address yet.",
         auth: "Couldn't transcribe: ElevenLabs rejected the API key.",
         provider_quota: "Couldn't transcribe: the ElevenLabs account is out of credit.",
         not_configured: "Couldn't transcribe: transcription is not set up on this server.",

@@ -32,6 +32,7 @@ from forms.schema import load_form_schema
 from services.ai_allowance import Account, month_start
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
+from services.email_confirmation import require_confirmed_for_ai
 from services.permissions import (
     OwnedSurvey,
     ViewableSurvey,
@@ -368,6 +369,7 @@ async def transcribe_now(
     (owner). ``missing``: those with no transcript yet, or whose last attempt
     can be retried. ``all``: every recording again.
     """
+    require_confirmed_for_ai(current_user)
     _require_kobo_token(current_user)
     settings = transcription_settings(survey.config_data)
     if not settings.active:

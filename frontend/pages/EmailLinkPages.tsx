@@ -111,10 +111,7 @@ export const ResetPasswordPage: React.FC<{ token: string }> = ({ token }) => {
   if (isDone) {
     return (
       <Frame title="Password changed">
-        <Banner tone="success">
-          Your password has been changed, and every device signed in with the old one is signed out. Sign in with the
-          new one.
-        </Banner>
+        <Banner tone="success">Sign in with your new password.</Banner>
         <PrimaryButton onClick={() => leave()}>Sign in</PrimaryButton>
       </Frame>
     );
@@ -186,12 +183,10 @@ export const VerifyEmailPage: React.FC<{ token: string }> = ({ token }) => {
   return (
     <Frame title="Address confirmed">
       <Banner tone="success">
-        {result.email} is confirmed.{' '}
-        {added > 0
-          ? `${added === 1 ? 'A survey' : `${added} surveys`} shared with you ${added === 1 ? 'is' : 'are'} now in your list.`
-          : 'People can now share surveys with you.'}
+        {result.email} is confirmed.
+        {added > 0 && ` ${added === 1 ? 'A shared survey was' : `${added} shared surveys were`} added to your list.`}
       </Banner>
-      <PrimaryButton onClick={() => leave()}>Continue to Field Compass</PrimaryButton>
+      <PrimaryButton onClick={() => leave()}>Continue</PrimaryButton>
     </Frame>
   );
 };
@@ -245,8 +240,7 @@ export const InvitePage: React.FC<{ token: string }> = ({ token }) => {
     return (
       <Frame title="Invitation">
         <Banner tone="warning">
-          This invitation is for {offer.email}, and you're signed in as {user.email}. Sign in with {offer.email} to
-          accept it.
+          This invitation is for {offer.email}, but you're signed in as {user.email}.
         </Banner>
         {/* Signing out keeps this address, so the sign-in form opens on the invitation. */}
         <PrimaryButton onClick={logout}>Sign out and continue</PrimaryButton>

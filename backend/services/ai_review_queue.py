@@ -28,6 +28,7 @@ from services.ai_allowance import (
     not_run_message,
 )
 from services.ai_providers import paused_error, survey_connection
+from services.email_confirmation import unconfirmed_owner_error
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +72,12 @@ class AIReviewQueuer:
         connection = survey_connection(db, survey_config)
         self.model = connection.check_model if connection else AIService().qual_check_model
         self.rules_hash = engine.compute_llm_rules_hash(self.model)
-        # Set when the survey's own provider is paused: reviews are marked
-        # failed with its error rather than queued to fail again.
-        self.paused_error = paused_error(db, survey_config)
+        # Set when the survey's own provider is paused, or its owner hasn't
+        # confirmed their address: reviews are marked failed with the reason
+        # rather than queued, and run on a later pull.
+        self.paused_error = unconfirmed_owner_error(db, survey_config) or paused_error(
+            db, survey_config
+        )
         # On the operator's key, how many reviews may still be queued; None
         # when the survey has its own provider (no Field Compass limit).
         self.allowance_left = (

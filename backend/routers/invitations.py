@@ -77,8 +77,8 @@ async def accept_invitation(token: str, db: DbSession, current_user: CurrentUser
         raise HTTPException(
             status_code=403,
             detail=(
-                f"This invitation is for {invitation.email}, and you're signed in as "
-                f"{current_user.email}. Sign in with {invitation.email} to accept it."
+                f"This invitation is for {invitation.email}, but you're signed in as "
+                f"{current_user.email}."
             ),
         )
     invitations.accept(db, invitation, current_user)

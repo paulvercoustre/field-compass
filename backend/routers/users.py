@@ -168,9 +168,7 @@ async def request_password_reset(
             ),
         )
         logger.info(f"Password reset link issued for user: {user.user_id}")
-    return {
-        "message": "If an account uses that address, we've emailed it a link to choose a new password."
-    }
+    return {"message": "If an account uses this address, we've sent it a reset link."}
 
 
 @router.post("/auth/password-reset/confirm")
@@ -190,7 +188,7 @@ async def reset_password(request: Request, payload: PasswordResetConfirm, db: Db
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This link has expired or has already been used. Ask for a new one from the sign-in page.",
+            detail="This link has expired or was already used. Request a new one from the sign-in page.",
         )
     now = datetime.utcnow()
     user.password_hash = get_password_hash(payload.new_password)
@@ -203,9 +201,7 @@ async def reset_password(request: Request, payload: PasswordResetConfirm, db: Db
         invitations.accept_waiting(db, user)
     db.commit()
     logger.info(f"Password reset for user: {user.user_id}")
-    return {
-        "message": "Your password has been changed, and every device signed in with the old one is signed out."
-    }
+    return {"message": "Your password has been changed."}
 
 
 @router.post("/auth/verify-email")
@@ -219,7 +215,7 @@ async def verify_email(request: Request, payload: EmailVerification, db: DbSessi
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This link has expired. Sign in to have a new one sent.",
+            detail="This link has expired. Sign in to get a new one.",
         )
     if user.email_verified_at is None:
         user.email_verified_at = datetime.utcnow()

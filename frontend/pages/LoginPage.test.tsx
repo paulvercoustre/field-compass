@@ -72,7 +72,7 @@ describe('Forgotten password', () => {
   beforeEach(() => {
     auth.emailEnabled = true;
     account.requestPasswordReset.mockReset().mockResolvedValue({
-      message: "If an account uses that address, we've emailed it a link to choose a new password.",
+      message: "If an account uses this address, we've sent it a reset link.",
     });
   });
 
@@ -89,7 +89,7 @@ describe('Forgotten password', () => {
     });
     fireEvent.submit(page.getByRole('button', { name: 'Email me a link' }));
 
-    expect(await page.findByText(/we've emailed it a link/)).toBeTruthy();
+    expect(await page.findByText(/we've sent it a reset link/)).toBeTruthy();
     expect(account.requestPasswordReset).toHaveBeenCalledWith('alice@example.org');
     expect(page.queryByRole('button', { name: 'Email me a link' })).toBeNull();
   });

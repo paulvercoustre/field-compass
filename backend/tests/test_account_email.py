@@ -22,10 +22,11 @@ from database.models import (
     Base,
     EmailToken,
     SurveyAccess,
+    SurveyConfig,
     SurveyInvitation,
     User,
 )
-from services import account_emails, app_events, mailer
+from services import account_emails, app_events, email_confirmation, mailer
 from services.retention_worker import delete_finished_links
 from settings import get_settings
 from tests.sqlite_compat import sqlite_engine
@@ -266,6 +267,24 @@ class TestSending:
     def test_without_a_server_nothing_is_sent(self, no_email):
         assert mailer.send(an_email()) is False
 
+    def test_images_travel_inside_the_email(self, fake_smtp):
+        email = mailer.Email(
+            to="bob@example.org",
+            subject="Hello",
+            text="Plain words",
+            html='<img src="cid:logo@example.org">',
+            about="user 1",
+            images=(("logo@example.org", b"PNG bytes"),),
+        )
+
+        assert mailer.send(email) is True
+        message = fake_smtp.instances[0].sent[0]
+        image = next(part for part in message.walk() if part.get_content_type() == "image/png")
+        assert image["Content-ID"] == "<logo@example.org>"
+        assert image.get_content() == b"PNG bytes"
+        assert 'src="cid:logo@example.org"' in message.get_body(("html",)).get_content()
+        assert message.get_body(("plain",)).get_content().strip() == "Plain words"
+
 
 class TestMessages:
     def test_names_are_escaped_and_a_survey_name_cannot_break_the_subject(self):
@@ -288,8 +307,37 @@ class TestMessages:
         assert "<b>Eve</b>" not in email.html
         assert "&lt;b&gt;Eve&lt;/b&gt;" in email.html
         assert "/invite?token=abc" in email.text
-        assert "14 days" in email.text
-        assert "an editor" in email.text
+        assert "The invitation expires in 14 days." in email.text
+        assert "as an editor" in email.text
+
+    def test_each_email_has_a_heading_one_button_and_the_logo(self, monkeypatch):
+        monkeypatch.setenv("EMAIL_REPLY_TO", "support@example.org")
+        user = SimpleNamespace(
+            user_id="u-1", email="ann@example.org", full_name="Ann", username="ann"
+        )
+
+        email = account_emails.password_reset_email(user, "tok", timedelta(hours=1))
+
+        assert email.subject == "Reset your password"
+        assert email.text.startswith("Reset your password\n\n")
+        assert "The link expires in 1 hour and works once." in email.text
+        assert "Questions? Reply to this email." in email.text
+        assert email.html.count("/reset-password?token=tok") == 3  # button, and the link to paste
+        assert "<h1" in email.html and "Choose a new password</a>" in email.html
+        assert email.images == ((account_emails.LOGO_CID, account_emails.LOGO_PNG),)
+        assert f'src="cid:{account_emails.LOGO_CID}"' in email.html
+        assert account_emails.LOGO_PNG.startswith(b"\x89PNG")
+
+    def test_without_a_reply_address_it_does_not_ask_for_replies(self, monkeypatch):
+        monkeypatch.delenv("EMAIL_REPLY_TO", raising=False)
+        user = SimpleNamespace(
+            user_id="u-1", email="ann@example.org", full_name="Ann", username="ann"
+        )
+
+        email = account_emails.verification_email(user, "tok", timedelta(days=3))
+
+        assert "Reply to this email" not in email.text + email.html
+        assert "The link expires in 3 days." in email.text
 
     def test_durations_read_naturally(self):
         assert account_emails.duration(timedelta(hours=1)) == "1 hour"
@@ -589,7 +637,7 @@ class TestSharing:
         assert response.json()["status"] == "shared"
         assert survey_id in survey_ids(client, sign_in(client, "bob@example.com"))
         (email,) = mails_to(outbox, "bob@example.com")
-        assert email.subject == "Alice shared Household survey with you on Field Compass"
+        assert email.subject == "Alice shared Household survey with you"
         assert f"/surveys/{survey_id}/submissions" in email.text
 
     def test_sharing_again_sends_no_second_email(self, client, outbox, alice):
@@ -641,7 +689,7 @@ class TestSharing:
         response = share(client, headers, survey_id, "carol@example.org")
 
         assert response.status_code == 403
-        assert "Confirm your own email address" in response.json()["detail"]
+        assert response.json()["detail"] == "Confirm your email address before inviting people."
         assert outbox == []
 
     def test_inviting_again_updates_the_one_invitation(self, client, outbox, alice):
@@ -740,7 +788,7 @@ class TestInvitations:
             f"/api/invitations/{token}/accept", headers=sign_in(client, "mallory@example.org")
         )
         assert refused.status_code == 403
-        assert "Sign in with carol@example.org" in refused.json()["detail"]
+        assert "This invitation is for carol@example.org" in refused.json()["detail"]
 
     def test_an_existing_account_accepts_and_is_confirmed(self, client, outbox, alice):
         headers, survey_id = alice
@@ -852,6 +900,65 @@ class TestInvitations:
 # =============================================================================
 # Clean-up
 # =============================================================================
+
+
+# =============================================================================
+# AI waits for a confirmed address
+# =============================================================================
+
+
+class TestAIWaitsForAConfirmedAddress:
+    @pytest.fixture(autouse=True)
+    def _the_rule(self, email_confirmation_required):
+        pass
+
+    def asks(self, survey_id):
+        return [
+            f"/api/surveys/{survey_id}/ai-checks/rerun",
+            f"/api/surveys/{survey_id}/translations/run",
+            f"/api/surveys/{survey_id}/transcripts/run",
+            ("/api/ai/suggest-rules", {"survey_id": survey_id}),
+            ("/api/ai/generate-rule", {"survey_id": survey_id, "prompt": "Age over 100"}),
+            ("/api/ai/connections", {"label": "Mine", "api_key": "sk-0123456789abcdef"}),
+        ]
+
+    def test_asking_is_refused_until_the_address_is_confirmed(self, client, outbox):
+        register(client)
+        headers = sign_in(client)
+        survey_id = create_survey(client, headers)
+
+        for ask in self.asks(survey_id):
+            url, body = ask if isinstance(ask, tuple) else (ask, None)
+            response = client.post(url, json=body, headers=headers)
+            assert response.status_code == 403, url
+            assert response.json()["detail"] == "Confirm your email address to use AI features."
+
+        confirm(client, "alice@example.com")
+        rerun = client.post(f"/api/surveys/{survey_id}/ai-checks/rerun", headers=headers)
+        assert rerun.status_code == 200, rerun.text
+
+    def test_without_email_nothing_waits(self, client, no_email):
+        register(client)
+        headers = sign_in(client)
+        survey_id = create_survey(client, headers)
+
+        rerun = client.post(f"/api/surveys/{survey_id}/ai-checks/rerun", headers=headers)
+        assert rerun.status_code == 200, rerun.text
+
+    def test_a_pull_waits_for_the_owner(self, client, outbox):
+        register(client)
+        survey_id = create_survey(client, sign_in(client))
+        db = client.db_factory()
+        try:
+            survey = db.get(SurveyConfig, UUID(survey_id))
+            assert email_confirmation.unconfirmed_owner_error(db, survey) == (
+                email_confirmation.UNCONFIRMED_OWNER
+            )
+            confirm(client, "alice@example.com")
+            db.expire_all()
+            assert email_confirmation.unconfirmed_owner_error(db, survey) is None
+        finally:
+            db.close()
 
 
 def test_spent_links_and_finished_invitations_are_deleted(client, outbox, alice):
