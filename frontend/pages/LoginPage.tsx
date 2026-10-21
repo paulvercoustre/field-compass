@@ -18,12 +18,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ invitation }) => {
 
   // The marketing site links straight here with #register on its "Create an
   // account" buttons, so that CTA opens the registration form rather than
-  // dropping people on Sign In with an extra click to find. Any other entry
-  // opens on Sign In as before. An invitation opens on whichever its address
-  // needs: signing in to the account it has, or creating one.
+  // dropping people on Sign In with an extra click to find. The "password
+  // changed" email links here with #forgot. Any other entry opens on Sign In
+  // as before. An invitation opens on whichever its address needs: signing in
+  // to the account it has, or creating one.
   const [mode, setMode] = useState<Mode>(() => {
     if (invitation) return invitation.offer.account_exists ? 'login' : 'register';
-    return ['#register', '#signup'].includes(window.location.hash.toLowerCase()) ? 'register' : 'login';
+    const hash = window.location.hash.toLowerCase();
+    if (['#register', '#signup'].includes(hash)) return 'register';
+    return hash === '#forgot' ? 'forgot' : 'login';
   });
   const isLogin = mode === 'login';
   const [email, setEmail] = useState(invitation?.offer.email ?? '');

@@ -94,6 +94,15 @@ describe('Forgotten password', () => {
     expect(page.queryByRole('button', { name: 'Email me a link' })).toBeNull();
   });
 
+  it('opens on it from the "password changed" email', () => {
+    window.location.hash = '#forgot';
+    const page = render(<LoginPage />);
+    window.location.hash = '';
+
+    expect(page.getByRole('heading', { name: 'Reset your password' })).toBeTruthy();
+    expect(page.getByRole('button', { name: 'Email me a link' })).toBeTruthy();
+  });
+
   it('is not offered when the server cannot send email', () => {
     auth.emailEnabled = false;
     const page = render(<LoginPage />);

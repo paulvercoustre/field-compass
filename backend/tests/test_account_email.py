@@ -26,7 +26,7 @@ from database.models import (
     SurveyInvitation,
     User,
 )
-from services import account_emails, app_events, email_confirmation, mailer
+from services import account_emails, app_events, email_confirmation, email_layout, mailer
 from services.retention_worker import delete_finished_links
 from settings import get_settings
 from tests.sqlite_compat import sqlite_engine
@@ -286,10 +286,34 @@ class TestSending:
         assert message.get_body(("plain",)).get_content().strip() == "Plain words"
 
 
+def six_emails() -> dict[str, mailer.Email]:
+    # Stand-ins, not models: a model built before the first test engine
+    # keeps the Postgres column types (tests/sqlite_compat.py).
+    user = SimpleNamespace(user_id="u-1", email="ann@example.org", full_name="Ann", username="ann")
+    inviter = SimpleNamespace(full_name="Amina Diallo", username="amina")
+    survey = SimpleNamespace(survey_id="s-1", survey_name="Household survey")
+    return {
+        "verify": account_emails.verification_email(user, "tok", timedelta(days=3)),
+        "reset": account_emails.password_reset_email(user, "tok", timedelta(hours=1)),
+        "invite": account_emails.invitation_email(
+            to="ann@example.org",
+            invitation_id="inv-1",
+            inviter=inviter,
+            survey=survey,
+            permission_level="editor",
+            token="tok",
+            valid_for=timedelta(days=14),
+        ),
+        "shared": account_emails.shared_with_you_email(
+            user=user, inviter=inviter, survey=survey, permission_level="viewer"
+        ),
+        "changed": account_emails.password_changed_email(user, datetime(2026, 10, 20, 14, 3)),
+        "welcome": account_emails.welcome_email(user),
+    }
+
+
 class TestMessages:
     def test_names_are_escaped_and_a_survey_name_cannot_break_the_subject(self):
-        # Stand-ins, not models: a model built before the first test engine
-        # keeps the Postgres column types (tests/sqlite_compat.py).
         inviter = SimpleNamespace(username="eve", full_name="<b>Eve</b>")
         survey = SimpleNamespace(survey_name="Round 2\nBcc: everyone")
 
@@ -307,37 +331,57 @@ class TestMessages:
         assert "<b>Eve</b>" not in email.html
         assert "&lt;b&gt;Eve&lt;/b&gt;" in email.html
         assert "/invite?token=abc" in email.text
-        assert "The invitation expires in 14 days." in email.text
-        assert "as an editor" in email.text
+        assert "- The invitation expires in 14 days." in email.text
+        assert "Editor: Can pull from Kobo and review submissions" in email.text
 
-    def test_each_email_has_a_heading_one_button_and_the_logo(self, monkeypatch):
-        monkeypatch.setenv("EMAIL_REPLY_TO", "support@example.org")
-        user = SimpleNamespace(
-            user_id="u-1", email="ann@example.org", full_name="Ann", username="ann"
-        )
-
-        email = account_emails.password_reset_email(user, "tok", timedelta(hours=1))
-
-        assert email.subject == "Reset your password"
-        assert email.text.startswith("Reset your password\n\n")
-        assert "The link expires in 1 hour and works once." in email.text
-        assert "Questions? Reply to this email." in email.text
-        assert email.html.count("/reset-password?token=tok") == 3  # button, and the link to paste
-        assert "<h1" in email.html and "Choose a new password</a>" in email.html
-        assert email.images == ((account_emails.LOGO_CID, account_emails.LOGO_PNG),)
-        assert f'src="cid:{account_emails.LOGO_CID}"' in email.html
+    def test_every_email_has_the_same_shape(self):
+        for name, email in six_emails().items():
+            link = re.search(r"https?://\S+", email.text.split(":\n", 1)[1]).group(0)
+            assert email.text.split("\n\n")[1] == "Hey there,", name
+            assert "<h1" in email.html and "Hey there," in email.html, name
+            # The button, and the same button drawn for Outlook.
+            assert f'<a href="{link}"' in email.html, name
+            assert f'href="{link}" style="height:46px' in email.html, name
+            assert email.images == ((account_emails.LOGO_CID, account_emails.LOGO_PNG),)
+            assert f'src="cid:{account_emails.LOGO_CID}"' in email.html, name
+            assert "https://fieldcompass.org/privacy/" in email.html, name
+            assert "This email was sent to ann@example.org." in email.text, name
+            assert "You've received this email because" in email.text, name
+            # The link to paste, except in the welcome, which has no token.
+            assert ("Copy and paste this link" in email.html) == (name != "welcome"), name
         assert account_emails.LOGO_PNG.startswith(b"\x89PNG")
 
-    def test_without_a_reply_address_it_does_not_ask_for_replies(self, monkeypatch):
+    def test_subjects(self):
+        assert {name: email.subject for name, email in six_emails().items()} == {
+            "verify": "Complete your registration",
+            "reset": "Reset your Field Compass password",
+            "invite": "Amina Diallo invited you to Household survey",
+            "shared": "Amina Diallo shared Household survey with you",
+            "changed": "Your Field Compass password was changed",
+            "welcome": "Welcome to Field Compass",
+        }
+
+    def test_the_password_notice_says_when_and_offers_a_reset(self):
+        email = six_emails()["changed"]
+
+        assert "was changed on 20 October 2026 at 14:03 UTC." in email.text
+        assert re.search(r"Reset my password:\nhttps?://\S+/#forgot\n", email.text)
+
+    def test_contact_and_replies_only_with_a_reply_address(self, monkeypatch):
         monkeypatch.delenv("EMAIL_REPLY_TO", raising=False)
-        user = SimpleNamespace(
-            user_id="u-1", email="ann@example.org", full_name="Ann", username="ann"
-        )
+        for email in six_emails().values():
+            assert "Contact us" not in email.text + email.html
+            assert "Just reply" not in email.text + email.html
 
-        email = account_emails.verification_email(user, "tok", timedelta(days=3))
+        monkeypatch.setenv("EMAIL_REPLY_TO", "support@example.org")
+        emails = six_emails()
+        assert all('href="mailto:support@example.org"' in e.html for e in emails.values())
+        assert "Just reply to this email" in emails["welcome"].text
 
-        assert "Reply to this email" not in email.text + email.html
-        assert "The link expires in 3 days." in email.text
+    def test_initials(self):
+        assert email_layout.initials("Amina Diallo") == "AD"
+        assert email_layout.initials("eve") == "E"
+        assert email_layout.initials("") == "?"
 
     def test_durations_read_naturally(self):
         assert account_emails.duration(timedelta(hours=1)) == "1 hour"
@@ -356,7 +400,7 @@ class TestVerification:
         assert response.status_code == 201, response.text
         assert response.json()["email_verified"] is False
         (email,) = mails_to(outbox, "alice@example.com")
-        assert "Confirm" in email.subject
+        assert email.subject == "Complete your registration"
         token_in(email, "/verify-email")
 
     def test_the_link_confirms_the_address(self, client, outbox):
@@ -676,7 +720,7 @@ class TestSharing:
         assert body["permission_level"] == "editor"
         assert body["expired"] is False
         (email,) = mails_to(outbox, "carol@example.org")
-        assert email.subject == "Alice invited you to Household survey on Field Compass"
+        assert email.subject == "Alice invited you to Household survey"
         listed = client.get(f"/api/surveys/{survey_id}/invitations", headers=headers).json()
         assert [i["email"] for i in listed] == ["carol@example.org"]
 
@@ -900,6 +944,87 @@ class TestInvitations:
 # =============================================================================
 # Clean-up
 # =============================================================================
+
+
+# =============================================================================
+# The password notice and the welcome
+# =============================================================================
+
+
+def subjects_to(outbox, address: str) -> list[str]:
+    return [email.subject for email in mails_to(outbox, address)]
+
+
+class TestNoticesAndWelcome:
+    def test_a_reset_tells_the_owner(self, client, outbox):
+        register(client)
+        client.post("/api/auth/password-reset", json={"email": "alice@example.com"})
+        token = token_in(outbox[-1], "/reset-password")
+        outbox.clear()
+
+        response = client.post(
+            "/api/auth/password-reset/confirm", json={"token": token, "new_password": NEW_PASSWORD}
+        )
+
+        assert response.status_code == 200, response.text
+        assert subjects_to(outbox, "alice@example.com") == [
+            "Your Field Compass password was changed"
+        ]
+
+    def test_a_change_in_settings_tells_the_owner_and_a_refused_one_doesnt(self, client, outbox):
+        register(client)
+        headers = sign_in(client)
+        outbox.clear()
+
+        refused = client.put(
+            "/api/users/me/password",
+            json={"current_password": "wrong-password", "new_password": NEW_PASSWORD},
+            headers=headers,
+        )
+        assert refused.status_code == 400
+        assert outbox == []
+
+        changed = client.put(
+            "/api/users/me/password",
+            json={"current_password": GOOD_PASSWORD, "new_password": NEW_PASSWORD},
+            headers=headers,
+        )
+        assert changed.status_code == 200, changed.text
+        assert subjects_to(outbox, "alice@example.com") == [
+            "Your Field Compass password was changed"
+        ]
+
+    def test_the_first_confirmation_brings_the_welcome_only_once(self, client, outbox):
+        register(client)
+        token = token_in(outbox[0], "/verify-email")
+        outbox.clear()
+
+        for _ in range(2):
+            assert client.post("/api/auth/verify-email", json={"token": token}).status_code == 200
+
+        assert subjects_to(outbox, "alice@example.com") == ["Welcome to Field Compass"]
+
+    def test_an_invitation_sign_up_gets_no_welcome(self, client, outbox, alice):
+        headers, survey_id = alice
+        share(client, headers, survey_id, "carol@example.org")
+        token = token_in(mails_to(outbox, "carol@example.org")[0], "/invite")
+        outbox.clear()
+
+        response = register(client, "carol@example.org", "carol", invite_token=token)
+
+        assert response.json()["email_verified"] is True
+        assert outbox == []
+
+    def test_without_email_nothing_is_sent(self, client, outbox, no_email):
+        register(client)
+        response = client.put(
+            "/api/users/me/password",
+            json={"current_password": GOOD_PASSWORD, "new_password": NEW_PASSWORD},
+            headers=sign_in(client),
+        )
+
+        assert response.status_code == 200
+        assert outbox == []
 
 
 # =============================================================================
