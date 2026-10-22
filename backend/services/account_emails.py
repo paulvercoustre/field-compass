@@ -113,6 +113,12 @@ def password_reset_email(user: User, token: str, valid_for: timedelta) -> Email:
 
 def password_changed_email(user: User, when: datetime) -> Email:
     """After a reset or a change in settings: tells the owner, in case it wasn't them."""
+    # Asks for a reply only where replies reach someone (EMAIL_REPLY_TO).
+    reply = (
+        " and reply to this email so we can help secure your account"
+        if get_settings().email_reply_to
+        else ""
+    )
     return _email(
         to=user.email,
         about=f"user {user.user_id}",
@@ -129,7 +135,7 @@ def password_changed_email(user: User, when: datetime) -> Email:
                 (
                     "If you made this change, there's nothing else to do. If you didn't, ",
                     Bold("reset your password now"),
-                    " and reply to this email so we can help secure your account.",
+                    f"{reply}.",
                 ),
             ),
             action="Reset my password",

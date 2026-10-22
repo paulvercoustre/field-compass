@@ -371,12 +371,14 @@ class TestMessages:
         monkeypatch.delenv("EMAIL_REPLY_TO", raising=False)
         for email in six_emails().values():
             assert "Contact us" not in email.text + email.html
-            assert "Just reply" not in email.text + email.html
+            assert "reply to this email" not in (email.text + email.html).lower()
+        assert "If you didn't, reset your password now." in six_emails()["changed"].text
 
         monkeypatch.setenv("EMAIL_REPLY_TO", "support@example.org")
         emails = six_emails()
         assert all('href="mailto:support@example.org"' in e.html for e in emails.values())
         assert "Just reply to this email" in emails["welcome"].text
+        assert "reply to this email so we can help" in emails["changed"].text
 
     def test_initials(self):
         assert email_layout.initials("Amina Diallo") == "AD"
