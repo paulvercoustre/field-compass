@@ -5,6 +5,7 @@ import { getAuthOptions } from '../services/accountApi';
 import SessionExpiredDialog from '../components/SessionExpiredDialog';
 import { forgetSurveyId } from '../utils/selectedSurveyStorage';
 import { readSignupSource } from '../utils/signupSource';
+import type { SignInProvider } from '../services/signInApi';
 
 // User type
 interface User {
@@ -20,6 +21,10 @@ interface User {
   can_view_usage?: boolean;
   /** The account showed it reads mail at its address; until then shares to it arrive as invitations. */
   email_verified?: boolean;
+  /** False for an account that signs in only with Google or Microsoft. */
+  has_password?: boolean;
+  /** The providers it signs in with. */
+  sign_in_methods?: SignInProvider[];
   created_at: string;
   last_login_at: string | null;
   /** How the app behaves for this user; the server fills in defaults. */
@@ -55,6 +60,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   /** The server can send email: password resets, address confirmation and invitations work. */
   emailEnabled: boolean;
+  /** The providers the server lets people sign in with (Google, Microsoft). */
+  signInProviders: SignInProvider[];
   login: (email: string, password: string) => Promise<void>;
   register: (
     email: string,
@@ -115,6 +122,16 @@ const errorDetail = async (response: Response, fallback: string): Promise<string
 
 const USER_KEY = 'field_compass_user';
 
+/**
+ * Keep a new session's token, as signing in does, for the app to load when
+ * the page next opens: after Google or Microsoft hand back a sign-in.
+ */
+export const startSession = (token: string) => {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.removeItem(USER_KEY);
+  forgetSurveyId();
+};
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem(USER_KEY);
@@ -123,6 +140,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [isLoading, setIsLoading] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
+  const [signInProviders, setSignInProviders] = useState<SignInProvider[]>([]);
   // A request came back 401 while signed in: the sign-in dialog is open, and
   // this settles the requests waiting on it (true: retry them).
   const [reauthPending, setReauthPending] = useState(false);
@@ -208,10 +226,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return response;
   };
 
-  // Whether email works decides what the sign-in page and the banner offer.
+  // Whether email works, and which providers are set up, decide what the
+  // sign-in page and the banner offer.
   useEffect(() => {
     getAuthOptions()
-      .then((options) => setEmailEnabled(options.email_enabled))
+      .then((options) => {
+        setEmailEnabled(options.email_enabled);
+        setSignInProviders(options.sign_in_providers ?? []);
+      })
       .catch(() => setEmailEnabled(false));
   }, []);
 
@@ -417,6 +439,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isLoading,
         isAuthenticated: !!user && !!token,
         emailEnabled,
+        signInProviders,
         login,
         register,
         logout,
@@ -431,7 +454,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     >
       {children}
       {reauthPending && user && (
-        <SessionExpiredDialog email={user.email} onSignIn={signInAgain} onSignOut={signOutFromDialog} />
+        <SessionExpiredDialog
+          email={user.email}
+          hasPassword={user.has_password !== false}
+          providers={signInProviders.filter((p) => user.sign_in_methods?.includes(p))}
+          onSignIn={signInAgain}
+          onSignOut={signOutFromDialog}
+        />
       )}
     </AuthContext.Provider>
   );

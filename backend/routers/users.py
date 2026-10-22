@@ -59,8 +59,15 @@ router = APIRouter()
 
 @router.get("/auth/options")
 async def auth_options():
-    """What the sign-in page can offer: resetting a password needs email."""
-    return {"email_enabled": get_settings().email_enabled}
+    """
+    What the sign-in page can offer: resetting a password needs email, and
+    the buttons for Google and Microsoft show only for those set up.
+    """
+    settings = get_settings()
+    return {
+        "email_enabled": settings.email_enabled,
+        "sign_in_providers": settings.sign_in_providers,
+    }
 
 
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -620,6 +627,13 @@ async def change_password(
     """
     current_password = payload.current_password
     new_password = payload.new_password
+    if current_user.password_hash is None:
+        # Signs in only with Google or Microsoft: a password is set the way a
+        # forgotten one is reset, which proves the mailbox is theirs.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your account has no password yet. Set one with the link we email you.",
+        )
     # Verify current password
     if not verify_password(current_password, current_user.password_hash):
         raise HTTPException(

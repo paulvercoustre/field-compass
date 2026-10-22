@@ -3,9 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DPA_URL, TERMS_URL } from '../constants/links';
 import LoginPage from './LoginPage';
 
-const auth = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), emailEnabled: true }));
+const auth = vi.hoisted(() => ({
+  login: vi.fn(),
+  register: vi.fn(),
+  emailEnabled: true,
+  signInProviders: [] as string[],
+}));
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ login: auth.login, register: auth.register, emailEnabled: auth.emailEnabled, isLoading: false }),
+  useAuth: () => ({
+    login: auth.login,
+    register: auth.register,
+    emailEnabled: auth.emailEnabled,
+    signInProviders: auth.signInProviders,
+    isLoading: false,
+  }),
 }));
 const account = vi.hoisted(() => ({ requestPasswordReset: vi.fn() }));
 vi.mock('../services/accountApi', () => account);
@@ -158,5 +169,53 @@ describe('From an invitation', () => {
     const page = render(<LoginPage invitation={{ token: 'tok', offer: { ...offer, account_exists: true } }} />);
 
     expect(page.getByRole('heading', { name: 'Sign in to Field Compass' })).toBeTruthy();
+  });
+});
+
+describe('Google and Microsoft', () => {
+  afterEach(() => {
+    cleanup();
+    auth.signInProviders = [];
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('offers the providers the server has set up', () => {
+    auth.signInProviders = ['google', 'microsoft'];
+    const page = render(<LoginPage />);
+
+    const google = page.getByRole('link', { name: 'Continue with Google' });
+    expect(google.getAttribute('href')).toMatch(/\/api\/auth\/oauth\/google\/start\?next=%2F$/);
+    expect(page.getByRole('link', { name: 'Continue with Microsoft' })).toBeTruthy();
+  });
+
+  it('offers none when none is set up', () => {
+    const page = render(<LoginPage />);
+
+    expect(page.queryByRole('link', { name: /Continue with/ })).toBeNull();
+  });
+
+  it('from an invitation, comes back to it', () => {
+    auth.signInProviders = ['microsoft'];
+    const offer = {
+      email: 'carol@example.org',
+      survey_name: 'Household survey',
+      invited_by: 'Alice',
+      permission_level: 'viewer' as const,
+      status: 'open' as const,
+      account_exists: false,
+    };
+    const page = render(<LoginPage invitation={{ token: 'tok', offer }} />);
+
+    expect(page.getByRole('link', { name: 'Continue with Microsoft' }).getAttribute('href')).toContain(
+      `next=${encodeURIComponent('/invite?token=tok')}`
+    );
+  });
+
+  it('says why a sign-in came back without signing in', () => {
+    window.history.replaceState(null, '', '/?sign_in_error=account_exists');
+    const page = render(<LoginPage />);
+
+    expect(page.getByText(/An account already uses this email address/)).toBeTruthy();
+    expect(window.location.search).toBe('');
   });
 });

@@ -23,6 +23,7 @@ from routers import (
     invitations,
     kobo,
     lint,
+    oauth,
     progress,
     quality,
     submissions,
@@ -133,6 +134,7 @@ app.include_router(transcription.router, prefix="/api", tags=["transcription"])
 app.include_router(translation.router, prefix="/api", tags=["translation"])
 app.include_router(admin.router, prefix="/api", tags=["admin"])
 app.include_router(invitations.router, prefix="/api", tags=["surveys"])
+app.include_router(oauth.router, prefix="/api", tags=["users"])
 
 
 @app.get("/")

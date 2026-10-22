@@ -458,7 +458,7 @@ class TestVerification:
         assert outbox == []
 
     def test_without_email_sign_up_sends_nothing(self, client, outbox, no_email):
-        assert client.get("/api/auth/options").json() == {"email_enabled": False}
+        assert client.get("/api/auth/options").json()["email_enabled"] is False
 
         assert register(client).status_code == 201
         assert outbox == []
@@ -468,7 +468,7 @@ class TestVerification:
         )
 
     def test_options_say_when_email_works(self, client):
-        assert client.get("/api/auth/options").json() == {"email_enabled": True}
+        assert client.get("/api/auth/options").json()["email_enabled"] is True
 
 
 # =============================================================================

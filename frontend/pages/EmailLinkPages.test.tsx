@@ -1,7 +1,14 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../services/apiBase';
-import { emailLinkFrom, InvitePage, ResetPasswordPage, VerifyEmailPage } from './EmailLinkPages';
+import {
+  emailLinkFrom,
+  FinishSignUpPage,
+  InvitePage,
+  ResetPasswordPage,
+  SignedInPage,
+  VerifyEmailPage,
+} from './EmailLinkPages';
 
 const auth = vi.hoisted(() => ({
   user: null as null | { email: string },
@@ -9,8 +16,10 @@ const auth = vi.hoisted(() => ({
   login: vi.fn(),
   register: vi.fn(),
 }));
+const session = vi.hoisted(() => ({ startSession: vi.fn() }));
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ ...auth, emailEnabled: true, isLoading: false }),
+  useAuth: () => ({ ...auth, emailEnabled: true, signInProviders: [], isLoading: false }),
+  startSession: session.startSession,
 }));
 const account = vi.hoisted(() => ({
   acceptInvitation: vi.fn(),
@@ -20,6 +29,11 @@ const account = vi.hoisted(() => ({
   verifyEmail: vi.fn(),
 }));
 vi.mock('../services/accountApi', () => account);
+const signIn = vi.hoisted(() => ({ exchangeSignIn: vi.fn(), getPendingSignUp: vi.fn(), finishSignUp: vi.fn() }));
+vi.mock('../services/signInApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/signInApi')>()),
+  ...signIn,
+}));
 
 const offer = {
   email: 'carol@example.org',
@@ -41,9 +55,28 @@ describe('emailLinkFrom', () => {
     expect(emailLinkFrom({ pathname: '/verify-email', search: '?token=abc' })).toEqual({
       page: 'verify-email',
       token: 'abc',
+      next: '/',
     });
-    expect(emailLinkFrom({ pathname: '/invite/', search: '?token=x-y_z' })).toEqual({ page: 'invite', token: 'x-y_z' });
+    expect(emailLinkFrom({ pathname: '/invite/', search: '?token=x-y_z' })).toMatchObject({
+      page: 'invite',
+      token: 'x-y_z',
+    });
     expect(emailLinkFrom({ pathname: '/surveys/1/submissions', search: '' })).toBeNull();
+  });
+
+  it('reads where a sign-in goes next, never another site', () => {
+    expect(emailLinkFrom({ pathname: '/signed-in', search: '?next=%2Fsurveys%2Fs-1' })).toMatchObject({
+      page: 'signed-in',
+      next: '/surveys/s-1',
+    });
+    for (const next of ['https://evil.example.org', '//evil.example.org']) {
+      expect(emailLinkFrom({ pathname: '/finish-sign-up', search: `?next=${encodeURIComponent(next)}` })).toMatchObject(
+        {
+          page: 'finish-sign-up',
+          next: '/',
+        }
+      );
+    }
   });
 });
 
@@ -128,5 +161,59 @@ describe('An invitation', () => {
     const page = render(<InvitePage token="tok" />);
 
     expect(await page.findByText(/Ask Alice to send it again/)).toBeTruthy();
+  });
+});
+
+describe('Back from Google or Microsoft', () => {
+  it('swaps the sign-in for a session', async () => {
+    signIn.exchangeSignIn.mockResolvedValue({ access_token: 'the-token' });
+    render(<SignedInPage next="/surveys/s-1/submissions" />);
+
+    await waitFor(() => expect(session.startSession).toHaveBeenCalledWith('the-token'));
+    expect(signIn.exchangeSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when the sign-in has expired', async () => {
+    signIn.exchangeSignIn.mockRejectedValue(new ApiError('This sign-in has expired. Try again.', 401, {}));
+    const page = render(<SignedInPage next="/" />);
+
+    expect(await page.findByText('This sign-in has expired. Try again.')).toBeTruthy();
+    expect(page.getByRole('button', { name: 'Back to sign in' })).toBeTruthy();
+    expect(session.startSession).not.toHaveBeenCalled();
+  });
+
+  it('asks someone new to accept the terms, then creates the account', async () => {
+    signIn.getPendingSignUp.mockResolvedValue({
+      provider: 'microsoft',
+      provider_label: 'Microsoft',
+      email: 'bo@contoso.org',
+      name: 'Bo Lind',
+    });
+    signIn.finishSignUp.mockResolvedValue({ access_token: 'new-token' });
+    const page = render(<FinishSignUpPage next="/invite?token=inv-1" />);
+
+    expect(await page.findByText('bo@contoso.org')).toBeTruthy();
+    expect(page.getByText(/signing up with Microsoft/)).toBeTruthy();
+    expect((page.container.querySelector('#full-name') as HTMLInputElement).value).toBe('Bo Lind');
+
+    fireEvent.submit(page.getByRole('button', { name: 'Create account' }));
+    expect(await page.findByText(/Accept the terms of service/)).toBeTruthy();
+    expect(signIn.finishSignUp).not.toHaveBeenCalled();
+
+    fireEvent.click(page.getByRole('checkbox'));
+    fireEvent.submit(page.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(session.startSession).toHaveBeenCalledWith('new-token'));
+    expect(signIn.finishSignUp).toHaveBeenCalledWith(
+      expect.objectContaining({ accept_terms: true, full_name: 'Bo Lind', invite_token: 'inv-1' })
+    );
+  });
+
+  it('says so when the sign-up has expired', async () => {
+    signIn.getPendingSignUp.mockRejectedValue(
+      new ApiError('This sign-up has expired. Start again from the sign-in page.', 404, {})
+    );
+    const page = render(<FinishSignUpPage next="/" />);
+
+    expect(await page.findByText(/This sign-up has expired/)).toBeTruthy();
   });
 });
