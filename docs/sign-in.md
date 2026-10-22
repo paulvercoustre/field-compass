@@ -30,9 +30,12 @@ In the [Google Cloud console](https://console.cloud.google.com), signed in with 
 
 Many organisations, UN agencies included, let their staff approve only apps from **verified publishers**. Without step 5, those people see "Need admin approval" and must use their email and password instead. Verification costs nothing but takes some days, so start it first.
 
-In the [Microsoft Entra admin center](https://entra.microsoft.com), with a work account in a Fieldcompass.org tenant (personal Microsoft accounts can't verify a publisher; a free Azure account comes with a tenant):
+Partner Center, where publishers are verified, accepts only work accounts: a user in a Microsoft Entra tenant, with an address on `fieldcompass.org`. A personal Microsoft account won't do, whatever its address. The Azure subscription that runs the VM already came with a tenant ("Default Directory"), of which the account that opened it is administrator; use that one. The VM isn't affected.
 
-1. **Identity → Settings → Domain names → Add custom domain**: `fieldcompass.org`. Add the TXT record it shows in Cloudflare, then **Verify**.
+In the [Microsoft Entra admin center](https://entra.microsoft.com), signed in with the account that owns the Azure subscription:
+
+1. **Identity → Settings → Domain names → Add custom domain**: `fieldcompass.org`. Add the TXT record it shows in Cloudflare, then **Verify**. Add only that TXT record, not Microsoft's MX: mail keeps arriving through Cloudflare Email Routing.
+   Then **Users → New user → Create new user**: `tech@fieldcompass.org`, with the **Global Administrator** role. Sign in as it once, in a private window, to set its password and its two-step sign-in (Microsoft Authenticator). Use this account for everything below.
 2. **Applications → App registrations → New registration**:
    - name `Field Compass`;
    - supported account types: **Accounts in any organizational directory (any Microsoft Entra ID tenant, multitenant) and personal Microsoft accounts**;
