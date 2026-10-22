@@ -168,14 +168,17 @@ async def request_password_reset(
             ),
         )
         logger.info(f"Password reset link issued for user: {user.user_id}")
-    return {
-        "message": "If an account uses that address, we've emailed it a link to choose a new password."
-    }
+    return {"message": "If an account uses this address, we've sent it a reset link."}
 
 
 @router.post("/auth/password-reset/confirm")
 @limiter.limit("10/hour")
-async def reset_password(request: Request, payload: PasswordResetConfirm, db: DbSession):
+async def reset_password(
+    request: Request,
+    payload: PasswordResetConfirm,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+):
     """
     Set a new password from a reset link, and sign out every session made
     before it. The link works once, and confirms the address.
@@ -190,7 +193,7 @@ async def reset_password(request: Request, payload: PasswordResetConfirm, db: Db
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This link has expired or has already been used. Ask for a new one from the sign-in page.",
+            detail="This link has expired or was already used. Request a new one from the sign-in page.",
         )
     now = datetime.utcnow()
     user.password_hash = get_password_hash(payload.new_password)
@@ -202,29 +205,39 @@ async def reset_password(request: Request, payload: PasswordResetConfirm, db: Db
         user.email_verified_at = now
         invitations.accept_waiting(db, user)
     db.commit()
+    if get_settings().email_enabled:
+        background_tasks.add_task(mailer.send, account_emails.password_changed_email(user, now))
     logger.info(f"Password reset for user: {user.user_id}")
-    return {
-        "message": "Your password has been changed, and every device signed in with the old one is signed out."
-    }
+    return {"message": "Your password has been changed."}
 
 
 @router.post("/auth/verify-email")
 @limiter.limit("30/hour")
-async def verify_email(request: Request, payload: EmailVerification, db: DbSession):
+async def verify_email(
+    request: Request,
+    payload: EmailVerification,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+):
     """
     Confirm an address from the emailed link; no sign-in needed, as the link
     may be opened on another device. Accepts the invitations waiting for it.
+    The first confirmation brings a welcome email; opening the link again
+    doesn't.
     """
     user = email_tokens.redeem(db, payload.token, email_tokens.VERIFY_EMAIL)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This link has expired. Sign in to have a new one sent.",
+            detail="This link has expired. Sign in to get a new one.",
         )
-    if user.email_verified_at is None:
+    first_time = user.email_verified_at is None
+    if first_time:
         user.email_verified_at = datetime.utcnow()
     accepted = invitations.accept_waiting(db, user)
     db.commit()
+    if first_time and get_settings().email_enabled:
+        background_tasks.add_task(mailer.send, account_emails.welcome_email(user))
     logger.info(f"Email confirmed for user: {user.user_id}")
     return {"email": user.email, "surveys_added": len(accepted)}
 
@@ -598,6 +611,7 @@ async def change_password(
     payload: PasswordChange,
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
 ):
     """
     Change the current user's password.
@@ -620,9 +634,14 @@ async def change_password(
         )
 
     # Update password
+    now = datetime.utcnow()
     current_user.password_hash = get_password_hash(new_password)
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = now
     db.commit()
+    if get_settings().email_enabled:
+        background_tasks.add_task(
+            mailer.send, account_emails.password_changed_email(current_user, now)
+        )
 
     logger.info(f"Password changed for user: {current_user.user_id}")
 

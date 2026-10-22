@@ -19,6 +19,7 @@ from services.ai_service import ai_service, rule_error_message
 from services.ai_usage import RULE_GENERATION, RULE_SUGGESTION, usage_recorder
 from services.auth import CurrentUser
 from services.database import DbSession
+from services.email_confirmation import require_confirmed_for_ai
 from services.permissions import parse_uuid, require_survey_access
 from services.rate_limit import limiter
 
@@ -52,6 +53,7 @@ def _provider_for(db: Session, survey_config: SurveyConfig, user: User) -> Resol
     On the operator key, rule writing is limited per user per month; with the
     survey's own provider there is no Field Compass limit.
     """
+    require_confirmed_for_ai(user)
     try:
         provider = resolve_provider(db, survey_config, RULES)
     except AIError as error:

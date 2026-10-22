@@ -37,6 +37,7 @@ const describeTranslation = (translation: Translation): { tone: Tone; text: stri
       return { tone: 'muted', text: 'Translation stopped before it ran. It runs again on the next pull.' };
     default: {
       const reasons: Record<string, string> = {
+        unconfirmed: "Not translated: the survey owner hasn't confirmed their email address yet.",
         auth: "Couldn't translate: the AI provider rejected the key.",
         provider_quota: "Couldn't translate: the AI provider account is out of credit.",
         not_configured: "Couldn't translate: no AI key is set up for translation.",

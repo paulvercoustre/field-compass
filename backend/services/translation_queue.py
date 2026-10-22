@@ -52,6 +52,7 @@ from etl.translation import (
 from services.ai_allowance import Account, translation_not_run_message, translations_remaining
 from services.ai_errors import NOT_CONFIGURED
 from services.ai_providers import translation_connection, translation_paused_error
+from services.email_confirmation import unconfirmed_owner_error
 from services.transcription_languages import normalize_language
 
 logger = logging.getLogger(__name__)
@@ -101,7 +102,12 @@ class TranslationQueuer:
         self.model = (
             connection.check_model if connection else (service and service.translation_model)
         )
-        self.paused_error = translation_paused_error(db, survey_config) if self.language else None
+        self.paused_error = (
+            unconfirmed_owner_error(db, survey_config)
+            or translation_paused_error(db, survey_config)
+            if self.language
+            else None
+        )
         # On the operator's key, how many more answers may be translated this
         # month; None when the survey has its own key (no Field Compass limit).
         self.allowance_left: int | None = (

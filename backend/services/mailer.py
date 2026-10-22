@@ -36,6 +36,8 @@ class Email:
     html: str
     # Who it is about, for the log: "user <id>" or "invitation <id>".
     about: str
+    # PNGs the HTML shows by "cid:<id>", sent inside the email: (id, bytes).
+    images: tuple[tuple[str, bytes], ...] = ()
 
 
 def send(email: Email) -> bool:
@@ -82,6 +84,17 @@ def _mime(email: Email) -> EmailMessage:
         message["Reply-To"] = settings.email_reply_to
     message.set_content(email.text)
     message.add_alternative(email.html, subtype="html")
+    html = message.get_body(("html",))
+    for cid, png in email.images:
+        if html is not None:
+            html.add_related(
+                png,
+                maintype="image",
+                subtype="png",
+                cid=f"<{cid}>",
+                disposition="inline",
+                filename=f"{cid.split('@')[0]}.png",
+            )
     return message
 
 

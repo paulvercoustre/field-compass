@@ -32,6 +32,9 @@ export const describeAiCheck = (
       title: providerMessage ?? 'Not reviewed: this survey has used its included AI reviews for this month.',
     };
   }
+  if (status === 'failed' && category === 'unconfirmed') {
+    return { tone: 'warn', title: "Not reviewed: the survey owner hasn't confirmed their email address yet." };
+  }
   if (status === 'failed') {
     const reasons: Record<string, string> = {
       auth: "Couldn't review: the AI provider rejected the key.",

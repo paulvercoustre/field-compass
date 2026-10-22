@@ -4,9 +4,10 @@ import Banner from '../ui/Banner';
 import { sendVerificationEmail } from '../../services/accountApi';
 
 /**
- * Until the account's address is confirmed, surveys shared with it arrive as
- * invitations and it can't invite anyone. Says so on every page, with a way
- * to have the link sent again. Shown only when the server sends email.
+ * Asks, on every page, for the account's address to be confirmed, with a way
+ * to have the link sent again. Until it is, inviting people and the AI
+ * features are refused, saying why, when tried. Shown only when the server
+ * sends email.
  */
 const VerifyEmailBanner: React.FC = () => {
   const { user, emailEnabled, refreshUser } = useAuth();
@@ -42,10 +43,9 @@ const VerifyEmailBanner: React.FC = () => {
     <div className="flex-shrink-0 px-4 pt-3">
       <Banner tone={error ? 'error' : 'warning'}>
         <span>
-          {error ??
-            `Confirm your email address: we sent a link to ${user.email}. Until then, surveys shared with you arrive as invitations and you can't invite anyone.`}{' '}
+          {error ?? `Confirm your email address: we sent a link to ${user.email}.`}{' '}
           {state === 'sent' ? (
-            <span className="font-medium">Sent. Check your inbox.</span>
+            <span className="font-medium">Sent.</span>
           ) : (
             <button
               type="button"
@@ -53,7 +53,7 @@ const VerifyEmailBanner: React.FC = () => {
               disabled={state === 'sending'}
               className="font-medium underline underline-offset-2 hover:no-underline disabled:opacity-60"
             >
-              {state === 'sending' ? 'Sending…' : 'Send a new link'}
+              {state === 'sending' ? 'Sending…' : 'Resend'}
             </button>
           )}
         </span>

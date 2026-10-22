@@ -1,21 +1,34 @@
 """
-The emails Field Compass sends about accounts and sharing, as plain text and
-HTML. Each says what happened, the one thing to do, how long the link works,
-and what happens if it is ignored.
+The emails Field Compass sends about accounts and sharing: the words and the
+data of each. How they look, as HTML and plain text, is services/
+email_layout.py.
+
+The voice is Brevo's "Complete your registration": a heading, "Hey there,",
+a short paragraph or two with the action in bold, one button, then notes on
+how long the link works, what to do if it wasn't you, and the link to paste.
+
+The logo travels inside the email (email_logo.png, a related part), so it
+shows without the reader's mail client fetching anything.
 """
 
 from __future__ import annotations
 
-from datetime import timedelta
-from html import escape
+from dataclasses import replace
+from datetime import datetime, timedelta
+from pathlib import Path
 
 from database.models import SurveyConfig, User
+from services import email_layout
+from services.email_layout import Bold, Message, SurveyCard
 from services.mailer import Email
 from settings import get_settings
 
-ROLE_WORDS = {
-    "viewer": ("a viewer", "As a viewer you can see the submissions and reports."),
-    "editor": ("an editor", "As an editor you can also pull from Kobo and review submissions."),
+LOGO_CID = email_layout.LOGO_CID
+LOGO_PNG = Path(__file__).with_name("email_logo.png").read_bytes()
+
+ROLES = {
+    "viewer": ("Viewer", "Can see the submissions and reports"),
+    "editor": ("Editor", "Can pull from Kobo and review submissions"),
 }
 
 
@@ -42,18 +55,30 @@ def verification_email(user: User, token: str, valid_for: timedelta) -> Email:
     return _email(
         to=user.email,
         about=f"user {user.user_id}",
-        subject="Confirm your email address for Field Compass",
-        paragraphs=[
-            f"Hello {person_name(user)},",
-            f"Please confirm that {user.email} is your address. Once it is confirmed, the "
-            "people you work with can share surveys with you.",
-        ],
-        action="Confirm my email address",
-        link=app_link(f"/verify-email?token={token}"),
-        after=[
-            f"The link works for {duration(valid_for)}. If you didn't create a Field Compass "
-            "account, you can ignore this email.",
-        ],
+        message=Message(
+            subject="Complete your registration",
+            preview="Confirm your email address to finish setting up your account.",
+            heading="Complete your registration",
+            paragraphs=(
+                (
+                    "Welcome to Field Compass! Please ",
+                    Bold("confirm your email address"),
+                    " to finish setting up your account.",
+                ),
+                (
+                    "Confirming your email helps keep your account secure and unlocks all "
+                    "features of Field Compass, such as AI checks.",
+                ),
+            ),
+            action="Confirm my email",
+            link=app_link(f"/verify-email?token={token}"),
+            notes=(
+                f"The link expires in {duration(valid_for)}.",
+                "If you didn't create a Field Compass account with this email address, "
+                "you can safely ignore this message.",
+            ),
+            reason="you created a Field Compass account",
+        ),
     )
 
 
@@ -61,17 +86,101 @@ def password_reset_email(user: User, token: str, valid_for: timedelta) -> Email:
     return _email(
         to=user.email,
         about=f"user {user.user_id}",
-        subject="Reset your Field Compass password",
-        paragraphs=[
-            f"Hello {person_name(user)},",
-            f"Someone asked to reset the password of the Field Compass account for {user.email}.",
-        ],
-        action="Choose a new password",
-        link=app_link(f"/reset-password?token={token}"),
-        after=[
-            f"The link works for {duration(valid_for)}, once. If you didn't ask for this, "
-            "ignore this email: your password stays as it is.",
-        ],
+        message=Message(
+            subject="Reset your Field Compass password",
+            preview="Choose a new password for your account.",
+            heading="Reset your password",
+            paragraphs=(
+                (
+                    "We received a request to reset the password of your Field Compass account (",
+                    Bold(user.email),
+                    "). Use the button below to ",
+                    Bold("choose a new password"),
+                    ".",
+                ),
+            ),
+            action="Choose a new password",
+            link=app_link(f"/reset-password?token={token}"),
+            notes=(
+                f"The link expires in {duration(valid_for)} and can only be used once.",
+                "If you didn't ask to reset your password, you can safely ignore this "
+                "message: your password won't change.",
+            ),
+            reason="a password reset was requested for your Field Compass account",
+        ),
+    )
+
+
+def password_changed_email(user: User, when: datetime) -> Email:
+    """After a reset or a change in settings: tells the owner, in case it wasn't them."""
+    # Asks for a reply only where replies reach someone (EMAIL_REPLY_TO).
+    reply = (
+        " and reply to this email so we can help secure your account"
+        if get_settings().email_reply_to
+        else ""
+    )
+    return _email(
+        to=user.email,
+        about=f"user {user.user_id}",
+        message=Message(
+            subject="Your Field Compass password was changed",
+            preview="If you made this change, there's nothing else to do.",
+            heading="Your password was changed",
+            paragraphs=(
+                (
+                    "The password of your Field Compass account (",
+                    Bold(user.email),
+                    f") was changed on {when.day} {when:%B %Y} at {when:%H:%M} UTC.",
+                ),
+                (
+                    "If you made this change, there's nothing else to do. If you didn't, ",
+                    Bold("reset your password now"),
+                    f"{reply}.",
+                ),
+            ),
+            action="Reset my password",
+            # Opens the sign-in page on "Forgot password": nothing that signs anyone in.
+            link=app_link("/#forgot"),
+            reason="the password of your Field Compass account was changed",
+        ),
+    )
+
+
+def welcome_email(user: User) -> Email:
+    """Once, when the address is first confirmed: what to do first."""
+    notes = (
+        ("Questions or feedback? Just reply to this email: a real person reads it.",)
+        if get_settings().email_reply_to
+        else ()
+    )
+    return _email(
+        to=user.email,
+        about=f"user {user.user_id}",
+        message=Message(
+            subject="Welcome to Field Compass",
+            preview="Three steps to your first data-quality check.",
+            heading="You're all set",
+            paragraphs=(
+                (
+                    "Your email address is confirmed and all features of Field Compass are "
+                    "open to you, AI checks included. Here's how to run your first "
+                    "data-quality check:",
+                ),
+            ),
+            steps=(
+                ("Connect KoboToolbox", "Add your Kobo server and API token in Account settings."),
+                (
+                    "Add a survey",
+                    "Pick a Kobo project; Field Compass pulls its submissions and checks them.",
+                ),
+                ("Invite your team", "Share the survey with supervisors and colleagues."),
+            ),
+            action="Open Field Compass",
+            link=app_link("/"),
+            notes=notes,
+            paste_link=False,
+            reason="you confirmed your email address on Field Compass",
+        ),
     )
 
 
@@ -85,79 +194,80 @@ def invitation_email(
     token: str,
     valid_for: timedelta,
 ) -> Email:
-    role, can = ROLE_WORDS.get(permission_level, ROLE_WORDS["viewer"])
     who = person_name(inviter)
     return _email(
         to=to,
         about=f"invitation {invitation_id}",
-        subject=f"{who} invited you to {survey.survey_name} on Field Compass",
-        paragraphs=[
-            "Hello,",
-            f"{who} invited you to the survey “{survey.survey_name}” as {role}. "
-            "Field Compass checks the quality of KoboToolbox data while fieldwork is under way.",
-            can,
-        ],
-        action="Accept the invitation",
-        link=app_link(f"/invite?token={token}"),
-        after=[
-            f"The invitation works for {duration(valid_for)}. If you weren't expecting it, "
-            "you can ignore this email.",
-        ],
+        message=Message(
+            subject=f"{who} invited you to {survey.survey_name}",
+            preview="Join the survey on Field Compass.",
+            heading="You're invited to a survey",
+            paragraphs=(
+                (
+                    Bold(who),
+                    " has invited you to collaborate on a survey in Field Compass, the "
+                    "data-quality tool for KoboToolbox.",
+                ),
+            ),
+            card=_survey_card(who, survey, f"Invited by {who}", permission_level),
+            action="Accept invitation",
+            link=app_link(f"/invite?token={token}"),
+            notes=(
+                f"The invitation expires in {duration(valid_for)}.",
+                "New to Field Compass? You'll create your account in a minute when you accept.",
+                "If you weren't expecting this invitation, you can safely ignore this message.",
+            ),
+            reason=f"{who} invited you to a survey on Field Compass",
+        ),
     )
 
 
 def shared_with_you_email(
     *, user: User, inviter: User | None, survey: SurveyConfig, permission_level: str
 ) -> Email:
-    role, can = ROLE_WORDS.get(permission_level, ROLE_WORDS["viewer"])
     who = person_name(inviter)
     return _email(
         to=user.email,
         about=f"user {user.user_id}",
-        subject=f"{who} shared {survey.survey_name} with you on Field Compass",
-        paragraphs=[
-            f"Hello {person_name(user)},",
-            f"{who} shared the survey “{survey.survey_name}” with you as {role}.",
-            can,
-        ],
-        action="Open the survey",
-        link=app_link(f"/surveys/{survey.survey_id}/submissions"),
-        after=["It is also in your list of surveys whenever you sign in."],
+        message=Message(
+            subject=f"{who} shared {survey.survey_name} with you",
+            preview="It's now in your list of surveys.",
+            heading="A survey was shared with you",
+            paragraphs=(
+                (
+                    Bold(who),
+                    " has shared a survey with you on Field Compass. It's now in your list "
+                    "of surveys.",
+                ),
+            ),
+            card=_survey_card(who, survey, f"Shared by {who}", permission_level),
+            action="Open survey",
+            link=app_link(f"/surveys/{survey.survey_id}/submissions"),
+            reason=f"{who} shared a survey with your Field Compass account",
+        ),
     )
 
 
-def _email(
-    *,
-    to: str,
-    about: str,
-    subject: str,
-    paragraphs: list[str],
-    action: str,
-    link: str,
-    after: list[str],
-) -> Email:
+def _survey_card(who: str, survey: SurveyConfig, by_line: str, permission_level: str) -> SurveyCard:
+    role, note = ROLES.get(permission_level, ROLES["viewer"])
+    return SurveyCard(
+        initials=email_layout.initials(who),
+        survey=survey.survey_name,
+        by_line=by_line,
+        role=role,
+        role_note=note,
+    )
+
+
+def _email(*, to: str, about: str, message: Message) -> Email:
     # A survey name comes from Kobo and could hold a line break, which a
     # header cannot.
-    subject = " ".join(subject.split())
-    text = "\n\n".join([*paragraphs, f"{action}:\n{link}", *after, "Field Compass"])
-    body = "".join(f"<p style='margin:0 0 16px'>{escape(p)}</p>" for p in paragraphs)
-    button = (
-        f"<p style='margin:24px 0'><a href='{escape(link)}' style='display:inline-block;"
-        "background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600;"
-        f"padding:10px 18px;border-radius:8px'>{escape(action)}</a></p>"
+    message = replace(message, subject=" ".join(message.subject.split()))
+    return Email(
+        to=to,
+        subject=message.subject,
+        text=email_layout.text(message, to),
+        html=email_layout.html(message, to),
+        about=about,
+        images=((LOGO_CID, LOGO_PNG),),
     )
-    fallback = (
-        "<p style='margin:0 0 16px;color:#6b7280;font-size:13px'>If the button doesn't work, "
-        f"copy this address into your browser:<br>{escape(link)}</p>"
-    )
-    footer = "".join(
-        f"<p style='margin:0 0 16px;color:#6b7280;font-size:13px'>{escape(p)}</p>" for p in after
-    )
-    html = (
-        "<!doctype html><html><body style='margin:0;padding:24px;background:#f9fafb'>"
-        "<div style='max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;"
-        "border-radius:12px;padding:28px;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif;"
-        f"font-size:15px;line-height:1.5;color:#111827'>{body}{button}{fallback}{footer}"
-        "<p style='margin:0;color:#6b7280;font-size:13px'>Field Compass</p></div></body></html>"
-    )
-    return Email(to=to, subject=subject, text=text, html=html, about=about)

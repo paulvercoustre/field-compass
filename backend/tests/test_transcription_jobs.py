@@ -15,6 +15,7 @@ import services.kobo_sync_worker as kobo_sync_worker
 import services.transcription_queue as transcription_queue
 import services.transcription_runtime as runtime
 from database.models import AIUsage, AudioTranscript, Notification, Run, SubmissionCurrent, User
+from services import email_confirmation
 from services.ai_errors import AIError
 from services.runs import finish_if_done
 from services.transcription_client import TranscriptResult
@@ -195,6 +196,22 @@ class TestQueueing:
         test_db.commit()
         _, again = _queue(test_db, survey, submission)
         assert again == []
+
+    def test_waits_for_the_owner_to_confirm_their_address(
+        self, test_db, survey, env, owner, email_confirmation_required
+    ):
+        submission = _submission(test_db, survey)
+        queuer, rows = _queue(test_db, survey, submission)
+        assert [(r.status, r.last_error) for r in rows] == [
+            ("failed", email_confirmation.UNCONFIRMED_OWNER)
+        ]
+        assert queuer._to_send == []
+
+        # The next pull after they confirm transcribes it.
+        owner.email_verified_at = datetime.utcnow()
+        test_db.commit()
+        _, again = _queue(test_db, survey, submission)
+        assert [r.status for r in again] == ["pending"]
 
     def test_a_replaced_recording_is_queued_again(self, test_db, survey, env):
         submission = _submission(test_db, survey)

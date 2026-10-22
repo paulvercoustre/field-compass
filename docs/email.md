@@ -1,6 +1,6 @@
 # Email (Brevo)
 
-Field Compass sends four kinds of email: address confirmations, password resets, survey invitations, and notices that a survey was shared with someone. Production sends them through [Brevo](https://www.brevo.com)'s SMTP relay. The code speaks plain SMTP (`backend/services/mailer.py`), so nothing in it is specific to Brevo.
+Field Compass sends six kinds of email: address confirmations, password resets, notices that a password was changed, a welcome once the address is confirmed, survey invitations, and notices that a survey was shared with someone. Production sends them through [Brevo](https://www.brevo.com)'s SMTP relay. The code speaks plain SMTP (`backend/services/mailer.py`), so nothing in it is specific to Brevo.
 
 | Without `SMTP_HOST` | |
 |---|---|
@@ -97,7 +97,34 @@ docker compose -f docker-compose.prod.yml exec backend \
 - **Transactional → Logs** in Brevo lists it as delivered;
 - tracking is off (step 3): in the real emails below, the link points straight to `https://app.fieldcompass.org/…`, not to `brevolinks.com` or `r.mail.fieldcompass.org`, and the HTML holds no tracking image.
 
+Then send yourself all six emails with sample data, and look at them in Gmail, Outlook and on a phone: the logo shows without downloading pictures, the button keeps its shape in Outlook, nothing appears as an attachment.
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend \
+  python scripts/preview_emails.py --send you@example.org
+```
+
 Finally, go through the real thing once: sign up with a fresh address, confirm it, invite a second address, and reset a password.
+
+### 9. The sender's picture in Gmail
+
+Gmail shows the profile photo of a Google account next to emails sent from its address, when they pass DKIM. A free Google account for `no-reply@fieldcompass.org` puts the logo there:
+
+1. In Cloudflare Email Routing, forward `no-reply@fieldcompass.org` to an inbox you read, for the verification code.
+2. Create a Google account at accounts.google.com, choosing "Use your existing email" and entering `no-reply@fieldcompass.org`.
+3. Give it the Field Compass logo as its profile photo, visible to everyone.
+
+Other mail apps show the logo only through BIMI, which needs the DMARC policy at `p=quarantine` and a paid mark certificate: one for later.
+
+## The emails
+
+Six: confirm the address ("Complete your registration"), reset a password, the password was changed, welcome (after the first confirmation), an invitation, and a survey shared with an existing account. Their words and data are in `backend/services/account_emails.py`; how they look, as HTML and plain text, in `backend/services/email_layout.py`. After changing either, look at the result:
+
+```bash
+cd backend && python scripts/preview_emails.py /tmp/emails
+```
+
+It writes each email as an `.html` file to open in a browser and a `.txt` file with the plain-text version.
 
 ## Running it
 

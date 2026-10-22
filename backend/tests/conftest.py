@@ -8,7 +8,25 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from database.models import Base, SurveyConfig
+from services import email_confirmation
 from tests.sqlite_compat import sqlite_engine
+
+
+@pytest.fixture(autouse=True)
+def ai_without_confirmed_email(request, monkeypatch):
+    """
+    Accounts made by the tests have no confirmed address, and the tests run
+    in development, where email is on: AI would wait for every one of them
+    (services/email_confirmation.py). Tests that ask for
+    ``email_confirmation_required`` keep that rule; the rest go without it.
+    """
+    if "email_confirmation_required" not in request.fixturenames:
+        monkeypatch.setattr(email_confirmation, "unconfirmed", lambda user: False)
+
+
+@pytest.fixture
+def email_confirmation_required():
+    """AI waits for a confirmed address, as on a server that sends email."""
 
 
 @pytest.fixture(scope="function")

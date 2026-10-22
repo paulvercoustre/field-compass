@@ -53,17 +53,22 @@ describe('Confirming an address', () => {
     const page = render(<VerifyEmailPage token="abc" />);
 
     expect(await page.findByText(/carol@example.org is confirmed/)).toBeTruthy();
-    expect(page.getByText(/2 surveys shared with you are now in your list/)).toBeTruthy();
+    expect(page.getByText(/2 shared surveys were added to your list/)).toBeTruthy();
     expect(account.verifyEmail).toHaveBeenCalledWith('abc');
   });
 
+  it('says no more than that when no survey came with it', async () => {
+    account.verifyEmail.mockResolvedValue({ email: 'carol@example.org', surveys_added: 0 });
+    const page = render(<VerifyEmailPage token="abc" />);
+
+    expect(await page.findByText('carol@example.org is confirmed.')).toBeTruthy();
+  });
+
   it("says why when the link doesn't work", async () => {
-    account.verifyEmail.mockRejectedValue(
-      new ApiError('This link has expired. Sign in to have a new one sent.', 400, {})
-    );
+    account.verifyEmail.mockRejectedValue(new ApiError('This link has expired. Sign in to get a new one.', 400, {}));
     const page = render(<VerifyEmailPage token="old" />);
 
-    expect(await page.findByText('This link has expired. Sign in to have a new one sent.')).toBeTruthy();
+    expect(await page.findByText('This link has expired. Sign in to get a new one.')).toBeTruthy();
   });
 });
 
@@ -82,7 +87,7 @@ describe('Resetting a password', () => {
     account.confirmPasswordReset.mockResolvedValue({ message: 'ok' });
     field('confirm-new-password', 'Str0ngPassw0rd!23');
     fireEvent.submit(page.getByRole('button', { name: 'Change password' }));
-    expect(await page.findByText(/Your password has been changed/)).toBeTruthy();
+    expect(await page.findByText('Sign in with your new password.')).toBeTruthy();
     expect(account.confirmPasswordReset).toHaveBeenCalledWith('abc', 'Str0ngPassw0rd!23');
   });
 });

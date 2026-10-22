@@ -48,6 +48,7 @@ from services.ai_allowance import (
 from services.ai_providers import translation_connection, translation_paused_error
 from services.auth import CurrentUser
 from services.database import DbSession
+from services.email_confirmation import require_confirmed_for_ai
 from services.permissions import (
     OwnedSurvey,
     ViewableSurvey,
@@ -320,6 +321,7 @@ async def translate_now(
     yet, or whose last attempt can be retried. ``all``: every answer again,
     except translations Kobo has.
     """
+    require_confirmed_for_ai(current_user)
     if not translation_settings(survey.config_data).active:
         raise HTTPException(
             status_code=400,

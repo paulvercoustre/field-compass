@@ -55,6 +55,7 @@ from services.ai_usage import TRANSCRIPTION as TRANSCRIPTION_FEATURE
 from services.ai_usage import TRANSLATION as TRANSLATION_FEATURE
 from services.auth import CurrentUser, encrypt_api_key
 from services.database import DbSession
+from services.email_confirmation import require_confirmed_for_ai
 from services.permissions import OwnedSurvey
 from services.rate_limit import limiter
 from services.transcription_allowance import minutes_per_month, seconds_on_own_key
@@ -227,6 +228,7 @@ async def create_connection(
     saved, marked failing (an endpoint can be down briefly). A transcription
     key ElevenLabs refuses is not saved.
     """
+    require_confirmed_for_ai(current_user)
     if payload.kind == TRANSCRIPTION:
         key = (payload.api_key or "").strip()
         if len(key) < 20:
@@ -284,6 +286,8 @@ async def update_connection(
 ):
     """Edit a provider. Changing where or how it connects re-runs the test."""
     connection = _owned_connection(db, current_user, connection_id)
+    if payload.api_key or payload.base_url is not None or payload.check_model is not None:
+        require_confirmed_for_ai(current_user)
     changes_connection = False
 
     if connection.kind == TRANSCRIPTION:
@@ -336,6 +340,7 @@ async def test_connection(
 ):
     """Test a key again. A pass resumes a paused one."""
     connection = _owned_connection(db, current_user, connection_id)
+    require_confirmed_for_ai(current_user)
     test = _test(connection)
     db.commit()
     return _connection_out(db, connection, test)

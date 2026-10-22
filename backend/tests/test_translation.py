@@ -23,6 +23,7 @@ from etl.translation import (
     translation_input_hash,
     translation_settings,
 )
+from services import email_confirmation
 from services.ai_allowance import Account, checks_used, translations_used
 from services.ai_client import CallUsage
 from services.ai_errors import AIError
@@ -491,6 +492,21 @@ class TestAllowance:
         _consider(test_db, survey, _answered(test_db, survey))
         assert _row(test_db, "village").last_error.startswith("auth")
         assert ai["translation_tasks"].sent == []
+
+    def test_waits_for_the_owner_to_confirm_their_address(
+        self, test_db, survey, ai, owner, email_confirmation_required
+    ):
+        submission = _answered(test_db, survey)
+        _consider(test_db, survey, submission)
+        row = _row(test_db, "village")
+        assert (row.status, row.last_error) == ("failed", email_confirmation.UNCONFIRMED_OWNER)
+        assert ai["translation_tasks"].sent == []
+
+        # The next pull after they confirm translates it.
+        owner.email_verified_at = datetime.utcnow()
+        test_db.commit()
+        _consider(test_db, survey, submission)
+        assert _row(test_db, "village").status == "pending"
 
     def test_without_any_ai(self, test_db, survey, ai):
         _FakeAI.available = False

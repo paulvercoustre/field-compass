@@ -37,6 +37,7 @@ from etl.audio import (
 from services.ai_allowance import Account
 from services.ai_errors import AUTH, NOT_CONFIGURED, PROVIDER_QUOTA
 from services.ai_usage import TRANSCRIPTION
+from services.email_confirmation import unconfirmed_owner_error
 from services.transcription_allowance import seconds_remaining
 from services.transcription_keys import client_for, resolve_transcription_key
 from services.transcription_languages import normalize_language
@@ -118,7 +119,11 @@ class TranscriptionQueuer:
         client = client_for(key)
         self.available = client.available
         self.model = client.model
-        self.paused_error = key.paused_error if self.questions else None
+        self.paused_error = (
+            unconfirmed_owner_error(db, survey_config) or key.paused_error
+            if self.questions
+            else None
+        )
         self.has_allowance = (
             (
                 not key.counts_against_allowance
