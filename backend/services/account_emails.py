@@ -113,12 +113,9 @@ def password_reset_email(user: User, token: str, valid_for: timedelta) -> Email:
 
 def password_changed_email(user: User, when: datetime) -> Email:
     """After a reset or a change in settings: tells the owner, in case it wasn't them."""
-    # Asks for a reply only where replies reach someone (EMAIL_REPLY_TO).
-    reply = (
-        " and reply to this email so we can help secure your account"
-        if get_settings().email_reply_to
-        else ""
-    )
+    # Emails come from a no-reply address: name the support one, when there is one.
+    support = get_settings().email_reply_to
+    write = f" and write to {support} so we can help secure your account" if support else ""
     return _email(
         to=user.email,
         about=f"user {user.user_id}",
@@ -135,7 +132,7 @@ def password_changed_email(user: User, when: datetime) -> Email:
                 (
                     "If you made this change, there's nothing else to do. If you didn't, ",
                     Bold("reset your password now"),
-                    f"{reply}.",
+                    f"{write}.",
                 ),
             ),
             action="Reset my password",
@@ -148,11 +145,8 @@ def password_changed_email(user: User, when: datetime) -> Email:
 
 def welcome_email(user: User) -> Email:
     """Once, when the address is first confirmed: what to do first."""
-    notes = (
-        ("Questions or feedback? Just reply to this email: a real person reads it.",)
-        if get_settings().email_reply_to
-        else ()
-    )
+    support = get_settings().email_reply_to
+    notes = (f"Questions or feedback? Write to {support}.",) if support else ()
     return _email(
         to=user.email,
         about=f"user {user.user_id}",
