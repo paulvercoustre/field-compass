@@ -12,7 +12,7 @@ The code is `backend/services/sign_in.py` (the protocol) and `backend/routers/oa
 
 Google vouches for its addresses; Microsoft for personal accounts, and for work accounts only through the optional `xms_edov` claim (step 4 below). A new account whose address isn't vouched for gets the usual confirmation email.
 
-In **Settings → Sign-in methods**, people connect or remove a provider. An account without a password can get one through "Email me a link to set one"; the last way in can't be removed.
+Someone with a password links Google or Microsoft by signing in with it under the same address. **Settings → Sign-in methods**, shown only to people who sign in with one of them or have no password, lists what is linked and removes it; an account without a password gets one through "Email me a link to set one". The last way in can't be removed.
 
 The privacy notice already lists Google and Microsoft under "Not sub-processors", and what is kept: which provider, its ID for the person, and the address it gave.
 

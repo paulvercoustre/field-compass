@@ -4,7 +4,6 @@ import SignInMethodsSection from './SignInMethodsSection';
 
 const auth = vi.hoisted(() => ({
   user: null as null | Record<string, unknown>,
-  signInProviders: ['google', 'microsoft'],
   emailEnabled: true,
   refreshUser: vi.fn(),
 }));
@@ -21,7 +20,6 @@ const person = (overrides: Record<string, unknown>) => ({ email: 'ann@example.or
 describe('SignInMethodsSection', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    auth.signInProviders = ['google', 'microsoft'];
   });
   afterEach(cleanup);
 
@@ -30,8 +28,11 @@ describe('SignInMethodsSection', () => {
     api.requestPasswordReset.mockResolvedValue({ message: 'ok' });
     const page = render(<SignInMethodsSection />);
 
+    expect(page.getByText('How you sign in to Field Compass.')).toBeTruthy();
     expect((page.getByRole('button', { name: 'Remove' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(page.getByRole('link', { name: 'Connect' }).getAttribute('href')).toContain('/oauth/microsoft/start');
+    // Only what is linked: Microsoft links by signing in with it, under the same address.
+    expect(page.queryByText('Microsoft')).toBeNull();
+    expect(page.queryByRole('link')).toBeNull();
 
     fireEvent.click(page.getByRole('button', { name: 'Email me a link to set one' }));
     expect(await page.findByText("We've emailed ann@example.org a link to set a password.")).toBeTruthy();
@@ -49,8 +50,7 @@ describe('SignInMethodsSection', () => {
     expect(auth.refreshUser).toHaveBeenCalled();
   });
 
-  it('is hidden when no provider is set up or linked', () => {
-    auth.signInProviders = [];
+  it('is hidden for an account with a password and nothing linked', () => {
     auth.user = person({ has_password: true, sign_in_methods: [] });
     const page = render(<SignInMethodsSection />);
 
