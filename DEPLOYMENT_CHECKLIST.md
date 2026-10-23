@@ -38,6 +38,8 @@ Use this checklist to ensure all deployment steps are completed.
         `scripts/send_test_email.py` delivers: see [docs/email.md](docs/email.md).
         Without them there are no password resets or invitations, and
         sharing reaches existing accounts only
+  - [ ] `AI_MONTHLY_BUDGET_USD`, `USAGE_ADMIN_EMAILS` for its alerts, and the
+        OpenAI and ElevenLabs accounts' own limits: see [docs/ai-budget.md](docs/ai-budget.md)
   - [ ] `GOOGLE_CLIENT_ID`/`_SECRET` and `MICROSOFT_CLIENT_ID`/`_SECRET` if
         people may sign in with them: see [docs/sign-in.md](docs/sign-in.md).
         The Microsoft secret expires: note its date

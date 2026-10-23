@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from database.models import SurveyConfig, User
 from linter.models import survey_label_column
+from services import ai_budget
 from services.ai_allowance import rule_requests_per_user_month, rule_requests_remaining
 from services.ai_client import ResolvedProvider
 from services.ai_errors import AIError
@@ -63,6 +64,8 @@ def _provider_for(db: Session, survey_config: SurveyConfig, user: User) -> Resol
             status_code=503,
             detail="AI service is not available. Please configure OPENAI_API_KEY in the environment.",
         )
+    if provider is None and ai_budget.paused(db):
+        raise HTTPException(status_code=429, detail=ai_budget.paused_detail())
     if provider is None and rule_requests_remaining(db, user.user_id) <= 0:
         raise HTTPException(
             status_code=429,

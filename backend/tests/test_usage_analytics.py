@@ -147,6 +147,9 @@ def test_usage_figures(client, monkeypatch):
 
     assert usage["totals"]["users"] == 2
     assert usage["totals"]["surveys"] == 1
+    assert usage["ai_budget"]["spent_usd"] == 0
+    assert usage["ai_budget"]["budget_usd"] is None
+    assert usage["ai_budget"]["paused"] is False
     assert usage["last_7_days"]["signups"] == 2
     assert usage["last_7_days"]["logins"] == 1
     assert usage["last_7_days"]["active_users"] == 1

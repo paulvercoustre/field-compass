@@ -34,6 +34,7 @@ from etl.audio import (
     transcript_input_hash,
     transcription_settings,
 )
+from services import ai_budget
 from services.ai_allowance import Account
 from services.ai_errors import AUTH, NOT_CONFIGURED, PROVIDER_QUOTA
 from services.ai_usage import TRANSCRIPTION
@@ -127,7 +128,10 @@ class TranscriptionQueuer:
         self.has_allowance = (
             (
                 not key.counts_against_allowance
-                or seconds_remaining(db, Account.of(survey_config)) > 0
+                or (
+                    seconds_remaining(db, Account.of(survey_config)) > 0
+                    and not ai_budget.paused(db)
+                )
             )
             if self.questions
             else False

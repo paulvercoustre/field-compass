@@ -29,7 +29,7 @@ from database.models import (
     SurveyInvitation,
     User,
 )
-from services import app_events
+from services import ai_budget, app_events
 from services.auth import CurrentUser
 from services.database import DbSession
 from services.runs import PULL
@@ -138,6 +138,8 @@ async def get_usage(
         .filter(AudioTranscript.finished_at >= since_30, AudioTranscript.status == "success")
         .one()
     )
+
+    budget = ai_budget.current(db)
 
     # Logins and active days are only known from when app_events was added
     tracking_since = _naive_utc(db.query(func.min(AppEvent.created_at)).scalar())
@@ -258,6 +260,17 @@ async def get_usage(
             "translations": translated_30 or 0,
             "transcriptions": transcribed_30[0],
             "audio_minutes": round(float(transcribed_30[1]) / 60, 1),
+        },
+        # This calendar month on Field Compass's keys, against AI_MONTHLY_BUDGET_USD
+        "ai_budget": {
+            "month": f"{budget.month:%Y-%m}",
+            "spent_usd": round(budget.spent_micros / 1_000_000, 2),
+            "budget_usd": round(budget.limit_micros / 1_000_000, 2)
+            if budget.limit_micros
+            else None,
+            "paused": budget.paused,
+            "resumes_at": f"{budget.resumes_at.isoformat()}Z",
+            "unpriced": [{"model": item.model, "calls": item.calls} for item in budget.unpriced],
         },
         "weekly": weekly,
         "funnel": funnel,

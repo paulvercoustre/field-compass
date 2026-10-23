@@ -32,6 +32,8 @@ INVITE_ACCEPTED = "invite_accepted"
 ACCOUNT_DELETED = "account_deleted"
 # An admin opened a survey only their admin rights let them see, once a day
 STAFF_SURVEY_ACCESS = "staff_survey_access"
+# The usage admins were emailed about the monthly AI budget (services/ai_budget.py)
+AI_BUDGET_ALERT = "ai_budget_alert"
 
 # The campaign tags the marketing site forwards to the signup form. Anything
 # else in the payload is dropped, and values are cut short, so a crafted

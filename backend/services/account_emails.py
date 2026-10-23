@@ -1,6 +1,6 @@
 """
-The emails Field Compass sends about accounts and sharing: the words and the
-data of each. How they look, as HTML and plain text, is services/
+The emails Field Compass sends about accounts and sharing, and to the usage
+admins about the AI budget: the words and the data of each. How they look, as HTML and plain text, is services/
 email_layout.py.
 
 The voice is Brevo's "Complete your registration": a heading, "Hey there,",
@@ -16,12 +16,16 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from database.models import SurveyConfig, User
 from services import email_layout
 from services.email_layout import Bold, Message, SurveyCard
 from services.mailer import Email
 from settings import get_settings
+
+if TYPE_CHECKING:
+    from services import ai_budget
 
 LOGO_CID = email_layout.LOGO_CID
 LOGO_PNG = Path(__file__).with_name("email_logo.png").read_bytes()
@@ -238,6 +242,81 @@ def shared_with_you_email(
             action="Open survey",
             link=app_link(f"/surveys/{survey.survey_id}/submissions"),
             reason=f"{who} shared a survey with your Field Compass account",
+        ),
+    )
+
+
+def usd(micros: int) -> str:
+    """$150, $120.40: whole dollars without cents."""
+    dollars = micros / 1_000_000
+    return f"${dollars:,.0f}" if dollars == round(dollars) else f"${dollars:,.2f}"
+
+
+def ai_budget_email(to: str, budget: ai_budget.Budget, share: float) -> Email:
+    """
+    To a usage admin, when this month's AI spend passes ``share`` of the budget:
+    0.8 warns, 1.0 says the included AI is paused.
+    """
+    limit = budget.limit_micros or 0
+    month = f"{budget.month:%B}"
+    resumes = f"{budget.resumes_at.day} {budget.resumes_at:%B}"
+    spent = (
+        "Field Compass's AI keys have spent ",
+        Bold(f"{usd(budget.spent_micros)} of the {usd(limit)} budget"),
+        f" for {month}.",
+    )
+    raise_it = (
+        "To resume now, raise AI_MONTHLY_BUDGET_USD in the server's .env and recreate the backend."
+    )
+    if share >= 1:
+        subject = f"Field Compass's included AI is paused until {resumes}"
+        heading = "The AI budget is used up"
+        paragraphs = (
+            spent,
+            (
+                "The included AI is ",
+                Bold(f"paused for everyone until {resumes}"),
+                ": reviews, translations and transcriptions wait and run on the first pull "
+                "after, and AI rule requests are refused. Surveys on their own AI keys keep "
+                "working.",
+            ),
+            (raise_it,),
+        )
+    else:
+        percent = round((budget.share or 0) * 100)
+        subject = f"Field Compass has used {percent}% of this month's AI budget"
+        heading = f"{percent}% of the AI budget is used"
+        paragraphs = (
+            spent,
+            (
+                "When spending reaches the budget, the included AI pauses for everyone until "
+                f"{resumes}. Surveys on their own AI keys keep working.",
+            ),
+            (raise_it.replace("To resume now", "To avoid the pause"),),
+        )
+    unpriced = (
+        f"{item.model} ({item.calls} calls) has no price in the price table and counts at "
+        "the highest one. Add it to services/ai_prices.json, or the file AI_PRICES_FILE names."
+        for item in budget.unpriced
+    )
+    notes = (
+        *unpriced,
+        "These are estimates at list price. The OpenAI and ElevenLabs dashboards have the bill.",
+        "Settings → App usage shows the spend so far.",
+    )
+    return _email(
+        to=to,
+        about="the AI budget",
+        message=Message(
+            subject=subject,
+            preview=f"{usd(budget.spent_micros)} of {usd(limit)} spent in {month}.",
+            heading=heading,
+            paragraphs=paragraphs,
+            action="Open Field Compass",
+            link=app_link("/"),
+            notes=notes,
+            paste_link=False,
+            reason="your address is in USAGE_ADMIN_EMAILS on Field Compass",
         ),
     )
 

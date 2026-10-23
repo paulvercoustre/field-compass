@@ -60,6 +60,7 @@ The ones you're most likely to set:
 | `OPENAI_API_KEY` | Your own key for the included AI usage. Without it, each survey owner adds their own key. |
 | `ELEVENLABS_API_KEY` | The same, for transcription. |
 | `AI_ALLOWANCE_*`, `TRANSCRIPTION_ALLOWANCE_*` | Included usage per user per month. |
+| `AI_MONTHLY_BUDGET_USD` | What the whole service may spend on its AI keys each month; the included AI pauses for everyone once it's reached ([docs/ai-budget.md](docs/ai-budget.md)). |
 | `CORS_ORIGINS`, `SITE_ADDRESS` | Production origin and domain. |
 | `SMTP_HOST`, `SMTP_*`, `EMAIL_FROM` | Email for password resets, address confirmation and invitations, through Brevo in production ([docs/email.md](docs/email.md)). Without `SMTP_HOST`, development prints each email to the API log and production sends none. |
 | `GOOGLE_CLIENT_*`, `MICROSOFT_CLIENT_*` | "Continue with Google / Microsoft" on the sign-in page ([docs/sign-in.md](docs/sign-in.md)). Without them, email and password only. |
@@ -94,6 +95,7 @@ To set up the VM, follow [VM_DEPLOYMENT_AZURE.md](VM_DEPLOYMENT_AZURE.md). [DEPL
 
 - [`docs/email.md`](docs/email.md): setting up Brevo for the app's emails
 - [`docs/sign-in.md`](docs/sign-in.md): setting up sign-in with Google and Microsoft
+- [`docs/ai-budget.md`](docs/ai-budget.md): the monthly AI budget, its alerts, and the providers' own limits
 - [`docs/specs/`](docs/specs): design notes for the AI providers and allowances, transcription, translation and the quality dashboard
 - [`docs/code-quality-review.md`](docs/code-quality-review.md): the codebase review and what came of it
 

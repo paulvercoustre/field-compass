@@ -39,6 +39,7 @@ celery_app = Celery(
         "services.translation_worker",
         "services.kobo_sync_worker",
         "services.retention_worker",
+        "services.ai_budget_worker",
     ],
 )
 
@@ -68,6 +69,7 @@ celery_app.conf.update(
         "services.translation_worker.translate_answer_task": {"queue": "qualitative_checks"},
         # Housekeeping goes on a queue the worker reads; there is no "default" consumer.
         "services.retention_worker.delete_old_usage_records_task": {"queue": "transcriptions"},
+        "services.ai_budget_worker.send_ai_budget_alerts_task": {"queue": "transcriptions"},
     },
     # Run by the worker's embedded beat (`-B`). The sweep is an idempotent
     # UPDATE, so a second beat from a scaled-out worker only repeats it.
@@ -78,6 +80,12 @@ celery_app.conf.update(
         },
         "sweep-background-work": {
             "task": "services.transcription_worker.sweep_background_work",
+            "schedule": 300.0,
+        },
+        # Emails the usage admins at 80% and 100% of the monthly AI budget,
+        # once each: a second beat finds them already sent.
+        "send-ai-budget-alerts": {
+            "task": "services.ai_budget_worker.send_ai_budget_alerts_task",
             "schedule": 300.0,
         },
         # After the 02:00 backup. A second beat deletes nothing more.

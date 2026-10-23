@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from database.models import AIConnection, AIUsage, SurveyConfig, User
 from etl.audio import transcription_settings
 from etl.translation import translation_settings
+from services import ai_budget
 from services.ai_allowance import (
     Account,
     allowance_enabled,
@@ -571,6 +572,9 @@ async def account_ai_usage(
     return {
         "month": since.strftime("%Y-%m"),
         "resets_at": next_month_start().isoformat() + "Z",
+        # The whole service's AI budget is spent: the included usage waits
+        # for resets_at, whatever is left of the account's own.
+        "included_paused": enabled and ai_budget.paused(db),
         # What the user's account includes on Field Compass's keys each month,
         # shared by all their surveys; 0 or None when this server includes none.
         "included": {

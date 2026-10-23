@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { getUsage, Usage } from '../../services/adminApi';
+import { AIBudget, getUsage, Usage } from '../../services/adminApi';
 import { Card, CardHeader, SectionLabel } from '../ui/Card';
 import { CHART_ACCENT, SERIES_COLORS, axisProps, gridProps, tooltipProps } from '../charts/chartTheme';
 
@@ -14,6 +14,66 @@ const Stat: React.FC<{ label: string; value: React.ReactNode; hint?: string }> =
     {hint && <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
   </Card>
 );
+
+const dollars = (amount: number) => (Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`);
+
+/** This month's spend on Field Compass's keys against AI_MONTHLY_BUDGET_USD. */
+const AIBudgetCard: React.FC<{ budget: AIBudget }> = ({ budget }) => {
+  const month = new Date(`${budget.month}-01T00:00:00Z`).toLocaleString(undefined, {
+    month: 'long',
+    timeZone: 'UTC',
+  });
+  const resumes = new Date(budget.resumes_at).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  });
+  const share = budget.budget_usd ? Math.round((budget.spent_usd / budget.budget_usd) * 100) : null;
+  const bar = budget.paused ? 'bg-red-500' : share !== null && share >= 80 ? 'bg-amber-500' : 'bg-indigo-500';
+  return (
+    <Card>
+      <CardHeader
+        title={`AI budget, ${month}`}
+        description="Spent on Field Compass's AI keys by everyone, estimated at list price."
+      />
+      <p className="text-2xl font-semibold tabular-nums text-gray-900 dark:text-white">
+        {dollars(budget.spent_usd)}
+        {budget.budget_usd !== null && (
+          <span className="text-base font-normal text-gray-500 dark:text-gray-400">
+            {' '}
+            of {dollars(budget.budget_usd)} · {share}%
+          </span>
+        )}
+      </p>
+      {share !== null && (
+        <div
+          className="mt-2 h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.min(100, share)}
+          aria-label={`AI budget used in ${month}`}
+        >
+          <div className={`h-1.5 rounded-full ${bar}`} style={{ width: `${Math.min(100, share)}%` }} />
+        </div>
+      )}
+      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        {budget.budget_usd === null
+          ? 'No monthly budget: set AI_MONTHLY_BUDGET_USD to pause the included AI at a ceiling.'
+          : budget.paused
+            ? `Paused for everyone until ${resumes}. Raise AI_MONTHLY_BUDGET_USD to resume now.`
+            : `The included AI pauses for everyone if it reaches the budget, until ${resumes}. You're emailed at 80% and 100%.`}
+      </p>
+      {budget.unpriced.length > 0 && (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          Not in the price table, so counted at its highest price:{' '}
+          {budget.unpriced.map((item) => `${item.model} (${item.calls} calls)`).join(', ')}. Add them to
+          services/ai_prices.json.
+        </p>
+      )}
+    </Card>
+  );
+};
 
 const Check: React.FC<{ on: boolean }> = ({ on }) => (
   <span className={on ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-300 dark:text-gray-600'}>
@@ -130,6 +190,8 @@ const UsageTab: React.FC = () => {
           />
         </div>
       </div>
+
+      {usage.ai_budget && <AIBudgetCard budget={usage.ai_budget} />}
 
       <Card>
         <CardHeader title="Week by week" description="Monday to Sunday, last 12 weeks." />
