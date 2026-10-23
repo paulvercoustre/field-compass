@@ -306,7 +306,7 @@ def run_transcription_job(  # noqa: C901 -- split pending, see docs/code-quality
                     submission_id=row.submission_id,
                 )
             if key.counts_against_allowance and reservation is None:
-                _finish(db, row, "not_run_allowance", error=not_run_message())
+                _finish(db, row, "not_run_allowance", error=not_run_message(db))
                 _after_any(db, row, survey)
                 return {"status": "not_run_allowance"}
 

@@ -49,6 +49,7 @@ from etl.translation import (
     translation_input_hash,
     translation_settings,
 )
+from services import ai_budget
 from services.ai_allowance import Account, translation_not_run_message, translations_remaining
 from services.ai_errors import NOT_CONFIGURED
 from services.ai_providers import translation_connection, translation_paused_error
@@ -115,6 +116,13 @@ class TranslationQueuer:
             if self.language and connection is None
             else None
         )
+        # The month's AI budget is spent: nothing more on the operator's key.
+        self.not_run_message = translation_not_run_message()
+        if self.allowance_left is not None and ai_budget.paused(db):
+            self.allowance_left = 0
+            self.not_run_message = ai_budget.paused_message(
+                own_key="your own AI key for translation"
+            )
         self.stats: Counter = Counter()
         self._to_send: list[tuple[int, str, dict[str, Any]]] = []
 
@@ -301,7 +309,7 @@ class TranslationQueuer:
             self.stats["translations_paused"] += 1
         elif self.allowance_left is not None and self.allowance_left <= 0:
             row.status = NOT_RUN_ALLOWANCE
-            row.last_error = translation_not_run_message()
+            row.last_error = self.not_run_message
             row.finished_at = now
             self.stats["translations_not_run_allowance"] += 1
         else:

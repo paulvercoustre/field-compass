@@ -69,6 +69,17 @@ def cost_usd_micros(
     return round(cost)
 
 
+def highest_cost_usd_micros(input_tokens: int | None, output_tokens: int | None) -> int:
+    """
+    A call to an unpriced model, at the table's highest input and output
+    prices: what the monthly budget counts it as, so a new model is never free.
+    """
+    prices = _prices().values()
+    highest_input = max((price["input"] for price in prices), default=0)
+    highest_output = max((price["output"] for price in prices), default=0)
+    return round((input_tokens or 0) * highest_input + (output_tokens or 0) * highest_output)
+
+
 @lru_cache(maxsize=1)
 def _audio_prices() -> dict[str, dict[str, float]]:
     path = Path(get_settings().ai_prices_file or _DEFAULT_FILE)
@@ -86,3 +97,9 @@ def audio_cost_usd_micros(model: str, seconds: float | None) -> int | None:
         return None
     # USD per hour → micro-dollars per second.
     return round(float(seconds) * price["per_hour"] * 1_000_000 / 3600)
+
+
+def highest_audio_cost_usd_micros(seconds: float | None) -> int:
+    """Audio from an unpriced model, at the table's highest price per hour."""
+    highest = max((price["per_hour"] for price in _audio_prices().values()), default=0)
+    return round(float(seconds or 0) * highest * 1_000_000 / 3600)

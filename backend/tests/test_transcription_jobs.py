@@ -454,6 +454,24 @@ class TestTranscriptionJob:
         assert _FakeClient.calls == []
         assert test_db.query(AudioTranscript).one().last_error.startswith("allowance:")
 
+    def test_ai_budget_spent_sends_nothing(self, test_db, survey, env, monkeypatch):
+        monkeypatch.setenv("AI_MONTHLY_BUDGET_USD", "1")
+        test_db.add(
+            AIUsage(
+                survey_id=survey.survey_id,
+                feature="qualitative_check",
+                model="gpt-5-mini",
+                outcome="ok",
+                cost_usd_micros=1_000_000,
+            )
+        )
+        test_db.commit()
+        submission = _submission(test_db, survey)
+        _, rows = _queue(test_db, survey, submission)
+        assert _run(test_db, rows[0])["status"] == "not_run_allowance"
+        assert _FakeClient.calls == []
+        assert "included AI is paused until" in test_db.query(AudioTranscript).one().last_error
+
     def test_too_long_is_skipped(self, test_db, survey, env, monkeypatch):
         monkeypatch.setattr(runtime, "probe_duration", lambda path: 4000.0)
         submission = _submission(test_db, survey)

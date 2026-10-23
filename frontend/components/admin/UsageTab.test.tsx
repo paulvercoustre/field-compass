@@ -31,6 +31,14 @@ const usage: adminApi.Usage = {
     transcriptions: 0,
     audio_minutes: 0,
   },
+  ai_budget: {
+    month: '2026-10',
+    spent_usd: 120.4,
+    budget_usd: 150,
+    paused: false,
+    resumes_at: '2026-11-01T00:00:00Z',
+    unpriced: [{ model: 'gpt-9', calls: 12 }],
+  },
   weekly: [],
   funnel: [
     { step: 'Signed up', users: 10 },
@@ -52,5 +60,27 @@ describe('UsageTab', () => {
     expect(page.getByText('Shared a survey')).toBeTruthy();
     expect(page.getByText('4 · 40%')).toBeTruthy();
     expect(page.getByText('invite')).toBeTruthy();
+  });
+
+  it("shows this month's AI budget, and the models it can't price", async () => {
+    vi.mocked(adminApi.getUsage).mockResolvedValue(usage);
+    const page = render(<UsageTab />);
+
+    expect(await page.findByText('AI budget, October')).toBeTruthy();
+    expect(page.getByText(/of \$150 · 80%/)).toBeTruthy();
+    expect(page.getByRole('progressbar', { name: 'AI budget used in October' }).getAttribute('aria-valuenow')).toBe(
+      '80'
+    );
+    expect(page.getByText(/gpt-9 \(12 calls\)/)).toBeTruthy();
+  });
+
+  it('says when the included AI is paused', async () => {
+    vi.mocked(adminApi.getUsage).mockResolvedValue({
+      ...usage,
+      ai_budget: { ...usage.ai_budget, spent_usd: 151, paused: true, unpriced: [] },
+    });
+    const page = render(<UsageTab />);
+
+    expect(await page.findByText(/Paused for everyone until (November 1|1 November)/)).toBeTruthy();
   });
 });

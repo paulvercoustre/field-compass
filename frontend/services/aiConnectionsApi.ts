@@ -177,6 +177,8 @@ export interface UsageMeter {
 export interface AccountAIUsage {
   month: string; // "2026-10"
   resets_at: string;
+  /** Field Compass's AI budget for the month is spent: the included usage waits for resets_at. */
+  included_paused?: boolean;
   /**
    * What the account includes on Field Compass's keys each month, shared by
    * all the surveys it owns; 0 or null when this server includes none.

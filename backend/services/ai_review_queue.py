@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from database.models import AudioTranscript, SubmissionCurrent, SurveyConfig
 from etl.audio import TranscriptView, ai_audio_fields, review_data
+from services import ai_budget
 from services.ai_allowance import (
     NOT_RUN_ALLOWANCE,
     Account,
@@ -83,6 +84,9 @@ class AIReviewQueuer:
         self.allowance_left = (
             None if connection else checks_remaining(db, Account.of(survey_config))
         )
+        # The month's AI budget is spent: nothing new on the operator's key,
+        # not even a submission already counted (it would cost again).
+        self.budget_paused = connection is None and ai_budget.paused(db)
         # Submissions already counted this month: queueing one again is free.
         self.already_counted = (
             set() if connection else counted_submission_ids(db, survey_config.survey_id)
@@ -134,13 +138,15 @@ class AIReviewQueuer:
             submission.llm_run_id = self.run_id
             self.stats["llm_paused"] += 1
             return "paused"
-        if (
+        if self.budget_paused or (
             self.allowance_left is not None
             and self.allowance_left <= 0
             and submission._id not in self.already_counted
         ):
             submission.llm_check_status = NOT_RUN_ALLOWANCE
-            submission.llm_last_error = not_run_message()
+            submission.llm_last_error = (
+                ai_budget.paused_message() if self.budget_paused else not_run_message()
+            )
             submission.llm_checked_at = now
             submission.llm_run_id = self.run_id
             self.stats["llm_not_run_allowance"] += 1

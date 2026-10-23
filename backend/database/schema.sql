@@ -507,6 +507,8 @@ CREATE INDEX idx_ai_usage_survey_created ON ai_usage(survey_id, created_at);
 CREATE INDEX idx_ai_connections_owner ON ai_connections(owner_user_id);
 CREATE INDEX idx_ai_usage_user_created ON ai_usage(user_id, created_at);
 CREATE INDEX idx_ai_usage_billed_created ON ai_usage(billed_user_id, created_at);
+-- The monthly AI budget: this month's calls on Field Compass's own keys
+CREATE INDEX idx_ai_usage_operator_created ON ai_usage(created_at) WHERE connection_id IS NULL;
 
 -- Survey configs indexes
 CREATE INDEX idx_survey_configs_name ON survey_configs(survey_name);

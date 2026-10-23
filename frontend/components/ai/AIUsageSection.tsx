@@ -101,6 +101,17 @@ const AIUsageSection: React.FC<AIUsageSectionProps> = ({ usage, error, refreshKe
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Included usage, shared by all your surveys on Field Compass's keys
               </p>
+              {usage.included_paused && (
+                <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                  Field Compass's included AI is paused until{' '}
+                  {new Date(usage.resets_at).toLocaleDateString(undefined, {
+                    day: 'numeric',
+                    month: 'long',
+                    timeZone: 'UTC',
+                  })}
+                  . It's back then, or straight away with your own AI provider above.
+                </p>
+              )}
               <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {included.reviews && (
                   <IncludedMeter title="AI review">

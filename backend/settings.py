@@ -147,6 +147,9 @@ class Settings(BaseModel):
     ai_allowance_checks_per_user_month: int = Field(default=200, ge=0)
     ai_allowance_translations_per_user_month: int = Field(default=500, ge=0)
     ai_allowance_rule_requests_per_user_month: int = Field(default=30, ge=0)
+    # What the whole service may spend on the keys above each month, in USD
+    # (services/ai_budget.py). Unset: no ceiling beyond the per-account limits.
+    ai_monthly_budget_usd: float | None = Field(default=None, gt=0)
 
     # --- Transcription (ElevenLabs) -------------------------------------------
     elevenlabs_api_key: str | None = None

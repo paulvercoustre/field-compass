@@ -453,6 +453,23 @@ class TestAllowance:
         held = test_db.query(AnswerTranslation).filter_by(status="not_run_allowance").one()
         assert "included translations" in held.last_error
 
+    def test_held_back_while_the_ai_budget_is_spent(self, test_db, survey, ai, monkeypatch):
+        monkeypatch.setenv("AI_MONTHLY_BUDGET_USD", "1")
+        test_db.add(
+            AIUsage(
+                survey_id=survey.survey_id,
+                feature="qualitative_check",
+                model="gpt-test",
+                outcome="ok",
+                cost_usd_micros=1_000_000,
+            )
+        )
+        test_db.commit()
+        _consider(test_db, survey, _answered(test_db, survey, _id=1))
+        row = test_db.query(AnswerTranslation).one()
+        assert row.status == "not_run_allowance"
+        assert "included AI is paused until" in row.last_error
+
     def test_apart_from_ai_review(self, test_db, survey, ai, monkeypatch):
         monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "0")
         for feature in ("qualitative_check", "translation", "translation"):

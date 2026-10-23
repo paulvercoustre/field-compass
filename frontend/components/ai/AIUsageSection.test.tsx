@@ -52,6 +52,15 @@ const usage = (overrides: Partial<AccountAIUsage> = {}): AccountAIUsage => ({
 describe('AIUsageSection', () => {
   afterEach(cleanup);
 
+  it("says when Field Compass's AI budget for the month is spent", () => {
+    const view = render(<AIUsageSection usage={usage({ included_paused: true })} error={null} />);
+    expect(view.getByText(/included AI is paused until/).textContent).toMatch(/November 1|1 November/);
+
+    cleanup();
+    const normal = render(<AIUsageSection usage={usage()} error={null} />);
+    expect(normal.queryByText(/included AI is paused/)).toBeNull();
+  });
+
   it('shows one shared meter per feature, and each survey on the included usage or its own key', () => {
     const view = render(<AIUsageSection usage={usage()} error={null} />);
 

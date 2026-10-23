@@ -22,6 +22,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from database.models import AIUsage, SurveyConfig
+from services import ai_budget
 from services.ai_allowance import Account, month_start
 from services.ai_pricing import audio_cost_usd_micros
 from services.ai_usage import TRANSCRIPTION
@@ -82,11 +83,12 @@ def reserve(
 ) -> AIUsage | None:
     """
     Reserve ``seconds`` of the survey owner's allowance for this month, or None
-    when it would be exceeded. Commits either way (which releases the lock).
+    when it would be exceeded or the month's AI budget is spent. Commits
+    either way (which releases the lock).
     """
     account = Account.of(survey)
     _lock(db, account)
-    if seconds_used(db, account) + seconds > minutes_per_month() * 60:
+    if seconds_used(db, account) + seconds > minutes_per_month() * 60 or ai_budget.paused(db):
         db.commit()
         return None
     row = AIUsage(
@@ -132,7 +134,9 @@ def release_stale_reservations(db: Session, now: datetime | None = None) -> int:
     return count
 
 
-def not_run_message(now: datetime | None = None) -> str:
+def not_run_message(db: Session, now: datetime | None = None) -> str:
+    if ai_budget.paused(db, now):
+        return ai_budget.paused_message(now, own_key="your own ElevenLabs key")
     month = month_start(now).strftime("%B")
     return (
         f"allowance: The {minutes_per_month()} included transcription minutes for {month}, "
