@@ -33,7 +33,9 @@ from routers import (
     users,
     validation_rules,
 )
+from services import health
 from services.database import init_db
+from services.monitoring import init_sentry
 from services.rate_limit import limiter
 from settings import get_settings
 
@@ -44,6 +46,9 @@ logger = logging.getLogger(__name__)
 # Defaults to localhost for development
 # Read here, at import, so a malformed variable stops the API on startup.
 ALLOWED_ORIGINS = get_settings().allowed_origins
+
+# Before the app is made, so Sentry sees every request (services/monitoring.py).
+init_sentry("api")
 
 
 @asynccontextmanager
@@ -144,13 +149,24 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint."""
+def health_check(response: Response):
+    """The API answers and reaches its database: what deploys and CI wait for."""
     db_status = init_db()
+    if not db_status:
+        response.status_code = 503
     return {
         "status": "healthy" if db_status else "unhealthy",
         "database": "connected" if db_status else "disconnected",
     }
+
+
+@app.get("/api/health")
+def full_health_check(response: Response):
+    """For an uptime monitor: the database, Redis and the scheduled tasks (services/health.py)."""
+    result = health.check()
+    if not result.healthy:
+        response.status_code = 503
+    return result.as_dict()
 
 
 if __name__ == "__main__":

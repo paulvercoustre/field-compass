@@ -6,7 +6,7 @@ import sys
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import worker_process_init
+from celery.signals import celeryd_init, worker_process_init
 
 from settings import get_settings
 
@@ -21,6 +21,14 @@ _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def _backend_on_import_path(**_):
     if _BACKEND_DIR not in sys.path:
         sys.path.insert(0, _BACKEND_DIR)
+
+
+@celeryd_init.connect
+def _report_errors(**_):
+    """The worker reports its errors to Sentry, before it forks (services/monitoring.py)."""
+    from services.monitoring import init_sentry
+
+    init_sentry("worker")
 
 
 # Read at import, so a malformed variable stops the worker on startup.

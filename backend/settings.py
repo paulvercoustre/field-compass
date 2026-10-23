@@ -76,6 +76,12 @@ class Settings(BaseModel):
     # Sign-ins, days active, staff access and AI use older than this are deleted
     # nightly (services/retention_worker.py). The privacy notice says 24.
     usage_retention_months: int = Field(default=24, gt=0)
+    # Error tracking (services/monitoring.py): a Sentry project's DSN. Unset,
+    # nothing is sent anywhere.
+    sentry_dsn: str | None = None
+    sentry_environment: str | None = None  # ENVIRONMENT when unset
+    # The image deployed (deploy/vm/deploy.sh sets it): its tag names the release.
+    backend_image: str | None = None
 
     # --- Accounts -------------------------------------------------------------
     jwt_secret_key: str = "change-this-secret-in-production-please"

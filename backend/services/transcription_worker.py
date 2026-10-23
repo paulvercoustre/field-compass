@@ -42,11 +42,14 @@ def sweep_background_work() -> dict[str, int]:
     left by them, and finish runs whose work has all ended. Runs on beat.
     """
     from services.database import SessionLocal
+    from services.health import record_heartbeat
     from services.runs import sweep_runs
     from services.transcription_allowance import release_stale_reservations
     from services.transcription_runtime import sweep_stalled_transcripts
     from services.translation_runtime import sweep_stalled_translations
 
+    # What /api/health reads to know the scheduled tasks are running.
+    record_heartbeat()
     with SessionLocal() as db:
         transcripts = sweep_stalled_transcripts(db)
         translations = sweep_stalled_translations(db)

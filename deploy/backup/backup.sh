@@ -57,4 +57,11 @@ else
 fi
 
 date -u +%s > "${LOCAL_DIR}/.last_success"
+
+# A heartbeat monitor (docs/monitoring.md) alerts when this ping stops arriving:
+# a backup that fails before it, or stops running, is noticed.
+if [ -n "${BACKUP_HEARTBEAT_URL:-}" ]; then
+  curl --fail --silent --show-error --max-time 10 --retry 3 "$BACKUP_HEARTBEAT_URL" >/dev/null \
+    || log "WARNING: the heartbeat ping failed; the backup itself succeeded"
+fi
 log "done"
