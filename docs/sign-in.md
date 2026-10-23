@@ -28,7 +28,7 @@ In the [Google Cloud console](https://console.cloud.google.com), signed in with 
 
 ## Microsoft
 
-Many organisations, UN agencies included, let their staff approve only apps from **verified publishers**. Without step 5, those people see "Need admin approval" and must use their email and password instead. Verification costs nothing but takes some days, so start it first.
+Microsoft doesn't let people approve a new multitenant app with their work account until its publisher is **verified** (step 5); the app's Branding page warns about it. Until then, personal Microsoft accounts (Outlook, Hotmail) sign in, but work accounts see "Need admin approval" and use their email and password instead. Verification costs nothing but takes some days, so start it first.
 
 Partner Center, where publishers are verified, accepts only work accounts: a user in a Microsoft Entra tenant, with an address on `fieldcompass.org`. A personal Microsoft account won't do, whatever its address. The Azure subscription that runs the VM already came with a tenant ("Default Directory"), of which the account that opened it is administrator; use that one. The VM isn't affected.
 
@@ -45,9 +45,10 @@ In the [Microsoft Entra admin center](https://entra.microsoft.com), signed in wi
 3. **Certificates & secrets → New client secret**, expiring in 24 months. Copy its **Value** (not its ID) into the VM's `.env` and your password manager, and put its expiry date in a calendar with a month's warning: once it expires, the Microsoft button stops working.
 4. **Token configuration → Add optional claim**, token type **ID**: tick `email` and `xms_edov`, and accept adding the Microsoft Graph `email` permission. If `xms_edov` isn't in the list, add it in **Manifest** under `optionalClaims.idToken` as `{"name": "xms_edov", "essential": false}`. Without it, work accounts still sign in, but their address must be confirmed by email and can't be linked to an existing account.
 5. **Publisher verification**:
-   - **Branding & properties → Publisher domain**: `fieldcompass.org`; there, also fill in home page, terms and privacy links as for Google, and upload the logo;
-   - join the [Microsoft AI Cloud Partner Program](https://partner.microsoft.com/dashboard/account/v3/enrollment/introduction/partnership) with a `@fieldcompass.org` address, and complete its verification of Fieldcompass.org (it may ask for proof of registration). Note the **Partner ID** (the "PartnerGlobal" one);
-   - back in **Branding & properties**, **Add Partner One ID to verify publisher**. The person doing this needs to be Application Administrator in the tenant and Account Administrator in Partner Center, with two-factor sign-in.
+   - **Branding & properties → Publisher domain**: `fieldcompass.org`. There, also fill in the home page, terms (`/terms/`) and privacy (`/privacy/`) links as for Google, and upload the logo: a square PNG under 100 KB, 215 × 215 pixels;
+   - join the [Microsoft AI Cloud Partner Program](https://partner.microsoft.com/dashboard/account/v3/enrollment/introduction/partnership) as `tech@fieldcompass.org`, and complete its verification of Fieldcompass.org (a government registration certificate such as the SIRENE one, and proof that you own the domain);
+   - in **Partner Center → Account settings**, wait until the business verification shows **Verified** (a few days), then copy the **Partner ID** of type **PartnerGlobal** from **Organization profile → Identifiers → Microsoft Cloud Partners Program**;
+   - back in **Branding & properties**, **Add MPN ID to verify publisher** (the Partner ID's old name) and paste it. The person doing this needs to be Application Administrator in the tenant and Account Administrator in Partner Center, with two-factor sign-in.
 
    Once it shows the blue "verified" badge, staff of most organisations can sign in without asking their IT team.
 
@@ -80,4 +81,4 @@ Make separate development clients, so production's secrets never sit on a laptop
 
 - **The Microsoft secret expires.** Make a new one before then (step 3), put it in `MICROSOFT_CLIENT_SECRET`, recreate `backend`, then delete the old one.
 - **Turning a provider off:** empty its two variables and recreate `backend`. Its button disappears; people who signed in only with it get in with "Forgot password?", which sets a password for their account.
-- **"Need admin approval" from Microsoft:** the person's organisation doesn't let staff approve apps themselves; see the end of the Microsoft section.
+- **"Need admin approval" from Microsoft:** every work account sees it until the publisher is verified; after that, only those whose organisation doesn't let staff approve apps themselves. See the end of the Microsoft section.
