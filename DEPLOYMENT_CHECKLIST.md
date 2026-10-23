@@ -38,6 +38,8 @@ Use this checklist to ensure all deployment steps are completed.
         `scripts/send_test_email.py` delivers: see [docs/email.md](docs/email.md).
         Without them there are no password resets or invitations, and
         sharing reaches existing accounts only
+  - [ ] `SENTRY_DSN` (EU region) and `BACKUP_HEARTBEAT_URL`, and an uptime
+        monitor on `/api/health`: see [docs/monitoring.md](docs/monitoring.md)
   - [ ] `AI_MONTHLY_BUDGET_USD`, `USAGE_ADMIN_EMAILS` for its alerts, and the
         OpenAI and ElevenLabs accounts' own limits: see [docs/ai-budget.md](docs/ai-budget.md)
   - [ ] `GOOGLE_CLIENT_ID`/`_SECRET` and `MICROSOFT_CLIENT_ID`/`_SECRET` if

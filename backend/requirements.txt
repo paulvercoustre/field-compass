@@ -33,3 +33,6 @@ pyright==1.1.414
 
 # Rate limiting
 slowapi==0.1.9
+
+# Error tracking (services/monitoring.py)
+sentry-sdk==2.66.1

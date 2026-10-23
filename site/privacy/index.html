@@ -57,7 +57,7 @@
       <article class="legal__body">
         <p class="eyebrow">Legal</p>
         <h1>Privacy notice</h1>
-        <p class="legal__meta">Last updated: 22 October 2026 · <a href="#sub-processors">Sub-processors</a></p>
+        <p class="legal__meta">Last updated: 23 October 2026 · <a href="#sub-processors">Sub-processors</a></p>
 
         <p class="legal__lead">Fieldcompass.org, an NGO based in Paris, France, is responsible for the personal data of the people who use Field Compass. It processes survey data only on behalf of the organisations that collect it.</p>
 
@@ -138,6 +138,12 @@
                 <td data-label="Legal basis">Legitimate interest</td>
                 <td data-label="Kept for">Overwritten as new logs arrive: at most 50 MB per service</td>
               </tr>
+              <tr>
+                <td data-label="Data">Error reports: what failed, where in the code and when, with the log lines just before it, which can include your user ID</td>
+                <td data-label="Why">To find and fix what goes wrong</td>
+                <td data-label="Legal basis">Legitimate interest</td>
+                <td data-label="Kept for">Up to 90 days, at Sentry</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -160,7 +166,7 @@
         <p>Only our sub-processors, <a href="#sub-processors">listed below</a> with where they process data, and only to provide the service. We never sell data or use it for advertising. We do not use account or survey data to train AI models, and neither do our AI sub-processors.</p>
 
         <h2 id="transfers">Transfers outside the EU</h2>
-        <p>Field Compass is hosted in the EU: Microsoft Azure in Ireland, with backups in the Netherlands. Its emails are sent by Brevo, also from the EU.</p>
+        <p>Field Compass is hosted in the EU: Microsoft Azure in Ireland, with backups in the Netherlands. Its emails are sent by Brevo, also from the EU. Its error reports are stored by Sentry in Germany; Sentry is a US company and may access them from the United States, under the EU–US Data Privacy Framework and the European Commission's standard contractual clauses.</p>
         <p>When a survey uses AI review, translation or transcription on the allowance Field Compass provides, the answers or recordings concerned are sent to OpenAI or ElevenLabs. They may process them in the United States, under the European Commission's standard contractual clauses. A survey's owner can connect their own AI provider instead, or leave these features off.</p>
 
         <h2 id="rights">Your rights</h2>
@@ -171,12 +177,12 @@
         <p>Data is encrypted in transit and at rest, stored keys are encrypted again by Field Compass, and access is limited by role. The security annex to our <a href="/dpa/#annex-ii">data processing agreement</a> lists the measures.</p>
 
         <h2 id="changes">Changes</h2>
-        <p>We will post changes here and tell account holders about important ones in the app. Last updated: 22 October 2026.</p>
+        <p>We will post changes here and tell account holders about important ones in the app. Last updated: 23 October 2026.</p>
 
         <hr class="rule legal__break">
 
         <h2 id="sub-processors">Sub-processors</h2>
-        <p>Four companies process customers' personal data for Field Compass: Microsoft hosts everything in the EU, Brevo sends the app's emails from the EU, and OpenAI and ElevenLabs receive data only when a survey uses the AI allowance Field Compass provides.</p>
+        <p>Five companies process customers' personal data for Field Compass: Microsoft hosts everything in the EU, Brevo sends the app's emails from the EU, Sentry keeps the app's error reports in the EU, and OpenAI and ElevenLabs receive data only when a survey uses the AI allowance Field Compass provides.</p>
         <div class="legal__table">
           <table>
             <thead>
@@ -196,6 +202,13 @@
                 <td data-label="Data it receives">The recipient's address and the email itself: their name or the inviter's, the survey's name and a link. Brevo logs each email's delivery. No survey data.</td>
                 <td data-label="Where">EU: Google Cloud in Belgium, OVH in France and Germany</td>
                 <td data-label="Safeguards">Processed in the EU; Brevo's data processing agreement</td>
+              </tr>
+              <tr>
+                <td data-label="Sub-processor">Functional Software, Inc. (Sentry)</td>
+                <td data-label="What it does">Records the app's errors, so that we can find and fix them</td>
+                <td data-label="Data it receives">What failed, where in the code and when, with the log lines just before it, which can include user IDs. We leave out what was sent with the request, cookies and the data being processed, and remove email and IP addresses before sending; an error message can still occasionally quote a value. Kept up to 90 days.</td>
+                <td data-label="Where">EU: Germany (Frankfurt)</td>
+                <td data-label="Safeguards">Stored in the EU; Sentry's data processing addendum, with the EU–US Data Privacy Framework and standard contractual clauses for access from the United States</td>
               </tr>
               <tr>
                 <td data-label="Sub-processor">OpenAI Ireland Ltd</td>
