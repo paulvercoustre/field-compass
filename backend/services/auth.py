@@ -136,6 +136,9 @@ class UserResponse(BaseModel):
     is_admin: bool
     can_view_usage: bool = False
     email_verified: bool = False
+    # Whether it can sign in with a password, and the providers it can sign in with.
+    has_password: bool = True
+    sign_in_methods: list[str] = []
     created_at: datetime
     last_login_at: datetime | None
     preferences: UserPreferences = UserPreferences()
@@ -276,7 +279,8 @@ def signed_in_before_cutoff(user: User, issued_at: int | None) -> bool:
 def authenticate_user(db: Session, email: str, password: str) -> User | None:
     """Authenticate a user by email and password."""
     user = get_user_by_email(db, email)
-    if not user:
+    # An account that signs in only with Google or Microsoft has no password.
+    if not user or not user.password_hash:
         return None
     if not verify_password(password, user.password_hash):
         return None
@@ -390,6 +394,8 @@ def user_to_response(user: User) -> dict:
         "is_admin": user.is_admin,
         "can_view_usage": can_view_usage(user),
         "email_verified": user.email_verified_at is not None,
+        "has_password": user.password_hash is not None,
+        "sign_in_methods": sorted(identity.provider for identity in user.identities),
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
         "preferences": user_preferences(user).model_dump(),

@@ -1,4 +1,5 @@
 import { request } from './apiBase';
+import type { SignInProvider } from './signInApi';
 
 /**
  * Email-backed account steps: resetting a password, confirming an address,
@@ -6,8 +7,9 @@ import { request } from './apiBase';
  * two work signed out, from a link in an email.
  */
 
-/** Whether the server can send email: a password reset needs it. */
-export const getAuthOptions = () => request<{ email_enabled: boolean }>('/api/auth/options');
+/** Whether the server can send email (a password reset needs it), and the providers it signs in with. */
+export const getAuthOptions = () =>
+  request<{ email_enabled: boolean; sign_in_providers?: SignInProvider[] }>('/api/auth/options');
 
 export const requestPasswordReset = (email: string) =>
   request<{ message: string }>('/api/auth/password-reset', {

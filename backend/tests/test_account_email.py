@@ -371,14 +371,15 @@ class TestMessages:
         monkeypatch.delenv("EMAIL_REPLY_TO", raising=False)
         for email in six_emails().values():
             assert "Contact us" not in email.text + email.html
-            assert "reply to this email" not in (email.text + email.html).lower()
+            assert "write to" not in (email.text + email.html).lower()
         assert "If you didn't, reset your password now." in six_emails()["changed"].text
 
         monkeypatch.setenv("EMAIL_REPLY_TO", "support@example.org")
         emails = six_emails()
         assert all('href="mailto:support@example.org"' in e.html for e in emails.values())
-        assert "Just reply to this email" in emails["welcome"].text
-        assert "reply to this email so we can help" in emails["changed"].text
+        assert "Questions or feedback? Write to support@example.org." in emails["welcome"].text
+        assert "write to support@example.org so we can help" in emails["changed"].text
+        assert not any("reply to this email" in e.text.lower() for e in emails.values())
 
     def test_initials(self):
         assert email_layout.initials("Amina Diallo") == "AD"
@@ -457,7 +458,7 @@ class TestVerification:
         assert outbox == []
 
     def test_without_email_sign_up_sends_nothing(self, client, outbox, no_email):
-        assert client.get("/api/auth/options").json() == {"email_enabled": False}
+        assert client.get("/api/auth/options").json()["email_enabled"] is False
 
         assert register(client).status_code == 201
         assert outbox == []
@@ -467,7 +468,7 @@ class TestVerification:
         )
 
     def test_options_say_when_email_works(self, client):
-        assert client.get("/api/auth/options").json() == {"email_enabled": True}
+        assert client.get("/api/auth/options").json()["email_enabled"] is True
 
 
 # =============================================================================

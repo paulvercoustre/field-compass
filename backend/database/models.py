@@ -39,7 +39,9 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     username: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Null for an account that only signs in with Google or Microsoft
+    # (user_identities) and has not set a password.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Kobo API credentials (encrypted at rest)
     kobo_api_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -92,6 +94,10 @@ class User(Base):
         back_populates="user",
         foreign_keys="SurveyAccess.user_id",
         cascade="all, delete-orphan",
+    )
+    # The Google and Microsoft accounts it signs in with
+    identities: Mapped[list["UserIdentity"]] = relationship(
+        "UserIdentity", back_populates="user", cascade="all, delete-orphan"
     )
 
 
@@ -477,6 +483,38 @@ class EmailToken(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (Index("idx_email_tokens_user_purpose", "user_id", "purpose"),)
+
+
+class UserIdentity(Base):
+    """
+    A Google or Microsoft account someone signs in with (services/sign_in.py):
+    the provider's stable ID for them, never their password.
+    """
+
+    __tablename__ = "user_identities"
+
+    identity_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)  # google, microsoft
+    # The provider's ID for the person: Google's and Microsoft's "sub"
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The address the provider gave when it was linked
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped["User"] = relationship("User", back_populates="identities")
+
+    __table_args__ = (
+        UniqueConstraint("provider", "subject", name="uq_user_identities_provider_subject"),
+        Index("idx_user_identities_user", "user_id"),
+    )
 
 
 class SurveyInvitation(Base):

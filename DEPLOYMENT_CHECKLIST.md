@@ -38,6 +38,9 @@ Use this checklist to ensure all deployment steps are completed.
         `scripts/send_test_email.py` delivers: see [docs/email.md](docs/email.md).
         Without them there are no password resets or invitations, and
         sharing reaches existing accounts only
+  - [ ] `GOOGLE_CLIENT_ID`/`_SECRET` and `MICROSOFT_CLIENT_ID`/`_SECRET` if
+        people may sign in with them: see [docs/sign-in.md](docs/sign-in.md).
+        The Microsoft secret expires: note its date
 
 ### Deploy mechanics
 - [ ] `/usr/local/bin/field-compass-deploy` reinstalled from

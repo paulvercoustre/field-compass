@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useEffect, useRef, useState } from 'react';
+import { startSession, useAuth } from '../contexts/AuthContext';
 import { LogoTile } from '../components/ui/Logo';
 import { Spinner } from '../components/Spinner';
 import Banner from '../components/ui/Banner';
@@ -11,21 +11,30 @@ import {
   verifyEmail,
 } from '../services/accountApi';
 import LoginPage from './LoginPage';
+import { DPA_URL, PRIVACY_NOTICE_URL, TERMS_URL } from '../constants/links';
+import { exchangeSignIn, finishSignUp, getPendingSignUp, PendingSignUp, safeNext } from '../services/signInApi';
+import { readSignupSource } from '../utils/signupSource';
 
 /**
- * The pages a link in an email opens, signed in or not:
+ * The pages a link opens, signed in or not. From an email:
  *
  *   /reset-password?token=…   choose a new password
  *   /verify-email?token=…     confirm the account's address
  *   /invite?token=…           accept a survey invitation
+ *
+ * And where Google or Microsoft send people back (backend routers/oauth.py):
+ *
+ *   /signed-in?next=…         swap the sign-in for a session, then go on
+ *   /finish-sign-up?next=…    someone new accepts the terms
  */
-export type EmailLink = { page: 'reset-password' | 'verify-email' | 'invite'; token: string };
+const PAGES = ['reset-password', 'verify-email', 'invite', 'signed-in', 'finish-sign-up'] as const;
+export type EmailLink = { page: (typeof PAGES)[number]; token: string; next: string };
 
 export function emailLinkFrom(location: { pathname: string; search: string }): EmailLink | null {
-  const page = location.pathname.replace(/\/+$/, '');
-  const token = new URLSearchParams(location.search).get('token') ?? '';
-  if (page === '/reset-password' || page === '/verify-email' || page === '/invite') {
-    return { page: page.slice(1) as EmailLink['page'], token };
+  const page = location.pathname.replace(/\/+$/, '').slice(1);
+  const query = new URLSearchParams(location.search);
+  if ((PAGES as readonly string[]).includes(page)) {
+    return { page: page as EmailLink['page'], token: query.get('token') ?? '', next: safeNext(query.get('next')) };
   }
   return null;
 }
@@ -251,10 +260,151 @@ export const InvitePage: React.FC<{ token: string }> = ({ token }) => {
   return <Waiting title="Invitation" words={`Opening ${offer.survey_name}…`} />;
 };
 
-/** The page an email link opens. */
+/** Back from Google or Microsoft, signed in: swap that for a session, then go on. */
+export const SignedInPage: React.FC<{ next: string }> = ({ next }) => {
+  const [error, setError] = useState<string | null>(null);
+  // Once only: the sign-in can be swapped once.
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    exchangeSignIn()
+      .then(({ access_token }) => {
+        startSession(access_token);
+        leave(next);
+      })
+      .catch((err) => setError(message(err, "Signing in didn't work. Try again.")));
+  }, [next]);
+
+  if (error) {
+    return (
+      <Frame title="Sign-in failed">
+        <Banner tone="error">{error}</Banner>
+        <PrimaryButton onClick={() => leave()}>Back to sign in</PrimaryButton>
+      </Frame>
+    );
+  }
+  return <Waiting title="Signing in" words="Signing you in…" />;
+};
+
+/** The invitation a sign-in started from, when it did: `/invite?token=…`. */
+const inviteTokenIn = (next: string): string | undefined =>
+  next.startsWith('/invite?') ? (new URLSearchParams(next.split('?')[1]).get('token') ?? undefined) : undefined;
+
+/** Someone new, back from Google or Microsoft: accepting the terms creates the account. */
+export const FinishSignUpPage: React.FC<{ next: string }> = ({ next }) => {
+  const [pending, setPending] = useState<PendingSignUp | null>(null);
+  const [expired, setExpired] = useState<string | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    getPendingSignUp()
+      .then((offer) => {
+        setPending(offer);
+        setFullName(offer.name ?? '');
+      })
+      .catch((err) => setExpired(message(err, 'This sign-up has expired. Start again from the sign-in page.')));
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!acceptTerms) {
+      return setError('Accept the terms of service and the data processing agreement to create an account');
+    }
+    setIsSaving(true);
+    try {
+      const { access_token } = await finishSignUp({
+        accept_terms: true,
+        full_name: fullName.trim() || undefined,
+        signup_source: readSignupSource(),
+        invite_token: inviteTokenIn(next),
+      });
+      startSession(access_token);
+      leave(next);
+    } catch (err) {
+      setError(message(err, 'Could not create the account'));
+      setIsSaving(false);
+    }
+  };
+
+  if (expired) {
+    return (
+      <Frame title="Sign-up expired">
+        <Banner tone="error">{expired}</Banner>
+        <PrimaryButton onClick={() => leave()}>Back to sign in</PrimaryButton>
+      </Frame>
+    );
+  }
+  if (!pending) return <Waiting title="Create your account" words="Loading…" />;
+
+  const linkClass = 'font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300';
+  return (
+    <Frame title="Create your account">
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        You're signing up with {pending.provider_label} as{' '}
+        <strong className="font-medium text-gray-900 dark:text-white">{pending.email}</strong>.
+      </p>
+      {error && <Banner tone="error">{error}</Banner>}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="full-name" className={labelClass}>
+            Full name
+          </label>
+          <input
+            id="full-name"
+            type="text"
+            autoComplete="name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div className="flex items-start gap-2.5">
+          <input
+            id="accept-terms"
+            type="checkbox"
+            checked={acceptTerms}
+            onChange={(e) => setAcceptTerms(e.target.checked)}
+            className="mt-0.5 h-4 w-4 flex-none rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900"
+          />
+          <label htmlFor="accept-terms" className="text-sm text-gray-600 dark:text-gray-400">
+            I accept the{' '}
+            <a href={TERMS_URL} target="_blank" rel="noreferrer" className={linkClass}>
+              terms of service
+            </a>{' '}
+            and, for my organisation, the{' '}
+            <a href={DPA_URL} target="_blank" rel="noreferrer" className={linkClass}>
+              data processing agreement
+            </a>
+            .
+          </label>
+        </div>
+        <PrimaryButton type="submit" loading={isSaving}>
+          Create account
+        </PrimaryButton>
+        <p className="text-center text-xs text-gray-500 dark:text-gray-400">
+          Read how we handle your data in our{' '}
+          <a href={PRIVACY_NOTICE_URL} target="_blank" rel="noreferrer" className={linkClass}>
+            privacy notice
+          </a>
+          .
+        </p>
+      </form>
+    </Frame>
+  );
+};
+
+/** The page a link opens. */
 const EmailLinkPage: React.FC<{ link: EmailLink }> = ({ link }) => {
   if (link.page === 'reset-password') return <ResetPasswordPage token={link.token} />;
   if (link.page === 'verify-email') return <VerifyEmailPage token={link.token} />;
+  if (link.page === 'signed-in') return <SignedInPage next={link.next} />;
+  if (link.page === 'finish-sign-up') return <FinishSignUpPage next={link.next} />;
   return <InvitePage token={link.token} />;
 };
 

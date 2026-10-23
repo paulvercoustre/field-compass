@@ -7,6 +7,7 @@ import ReviewSettings from '../components/review/ReviewSettings';
 import SettingsLayout, { SettingsNavItem } from '../components/ui/SettingsLayout';
 import UsageTab from '../components/admin/UsageTab';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import SignInMethodsSection from '../components/settings/SignInMethodsSection';
 import { RequestedTab } from '../contexts/NavigationContext';
 
 type AccountTab = 'profile' | 'kobo' | 'ai' | 'reviewing' | 'notifications' | 'usage';
@@ -245,87 +246,91 @@ const UserSettingsPage: React.FC<UserSettingsPageProps> = ({ requestedTab, onTab
               </form>
             </section>
 
-            {/* Change Password Section */}
-            <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
-              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
-                Change password
-              </h2>
+            <SignInMethodsSection />
 
-              <form onSubmit={handleChangePassword} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="current-password"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
-                  >
-                    Current password
-                  </label>
-                  <input
-                    id="current-password"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    required
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                </div>
+            {/* Change Password Section: an account without one sets it from Sign-in methods */}
+            {user?.has_password !== false && (
+              <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">
+                <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white mb-4">
+                  Change password
+                </h2>
 
-                <div>
-                  <label
-                    htmlFor="new-password"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
-                  >
-                    New password
-                  </label>
-                  <input
-                    id="new-password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={8}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="At least 8 characters"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="confirm-password"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
-                  >
-                    Confirm New password
-                  </label>
-                  <input
-                    id="confirm-password"
-                    type="password"
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    required
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                </div>
-
-                {passwordError && (
-                  <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg">
-                    <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
+                <form onSubmit={handleChangePassword} className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="current-password"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                    >
+                      Current password
+                    </label>
+                    <input
+                      id="current-password"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
                   </div>
-                )}
 
-                {passwordSuccess && (
-                  <div className="p-3 text-sm bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-inset ring-emerald-600/15 dark:ring-emerald-400/20 rounded-lg">
-                    <p className="text-sm text-green-600 dark:text-green-400">{passwordSuccess}</p>
+                  <div>
+                    <label
+                      htmlFor="new-password"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                    >
+                      New password
+                    </label>
+                    <input
+                      id="new-password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="At least 8 characters"
+                    />
                   </div>
-                )}
 
-                <button
-                  type="submit"
-                  disabled={isChangingPassword}
-                  className="h-9 px-3.5 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium rounded-lg shadow-xs transition-colors"
-                >
-                  {isChangingPassword ? 'Changing...' : 'Change password'}
-                </button>
-              </form>
-            </section>
+                  <div>
+                    <label
+                      htmlFor="confirm-password"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                    >
+                      Confirm New password
+                    </label>
+                    <input
+                      id="confirm-password"
+                      type="password"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      required
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {passwordError && (
+                    <div className="p-3 text-sm bg-red-50 dark:bg-red-500/10 ring-1 ring-inset ring-red-600/15 dark:ring-red-400/20 rounded-lg">
+                      <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
+                    </div>
+                  )}
+
+                  {passwordSuccess && (
+                    <div className="p-3 text-sm bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-inset ring-emerald-600/15 dark:ring-emerald-400/20 rounded-lg">
+                      <p className="text-sm text-green-600 dark:text-green-400">{passwordSuccess}</p>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isChangingPassword}
+                    className="h-9 px-3.5 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium rounded-lg shadow-xs transition-colors"
+                  >
+                    {isChangingPassword ? 'Changing...' : 'Change password'}
+                  </button>
+                </form>
+              </section>
+            )}
 
             {/* Account Info */}
             <section className="bg-white dark:bg-gray-900 rounded-xl shadow-card border border-gray-200 dark:border-gray-800 p-6">

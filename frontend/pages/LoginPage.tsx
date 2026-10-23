@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogoTile } from '../components/ui/Logo';
 import { Spinner } from '../components/Spinner';
 import Banner from '../components/ui/Banner';
 import { DPA_URL, PRIVACY_NOTICE_URL, TERMS_URL } from '../constants/links';
 import { InvitationOffer, requestPasswordReset } from '../services/accountApi';
+import { signInErrorMessage } from '../services/signInApi';
+import ProviderButtons from '../components/auth/ProviderButtons';
 
 type Mode = 'login' | 'register' | 'forgot';
 
@@ -14,7 +16,7 @@ interface LoginPageProps {
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ invitation }) => {
-  const { login, register, emailEnabled, isLoading: authLoading } = useAuth();
+  const { login, register, emailEnabled, signInProviders, isLoading: authLoading } = useAuth();
 
   // The marketing site links straight here with #register on its "Create an
   // account" buttons, so that CTA opens the registration form rather than
@@ -35,7 +37,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ invitation }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Back from Google or Microsoft without signing in: ?sign_in_error=<reason>.
+  const [error, setError] = useState<string | null>(() =>
+    signInErrorMessage(new URLSearchParams(window.location.search).get('sign_in_error'))
+  );
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('sign_in_error')) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    }
+  }, []);
   const [resetSent, setResetSent] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -133,6 +143,21 @@ const LoginPage: React.FC<LoginPageProps> = ({ invitation }) => {
             <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
               Enter your email and we'll send you a reset link.
             </p>
+          )}
+
+          {mode !== 'forgot' && signInProviders.length > 0 && (
+            <>
+              {/* From an invitation, back to it: it opens the survey. */}
+              <ProviderButtons
+                providers={signInProviders}
+                next={invitation ? `/invite?token=${encodeURIComponent(invitation.token)}` : '/'}
+              />
+              <div className="my-5 flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500" aria-hidden="true">
+                <span className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
+                or
+                <span className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
+              </div>
+            </>
           )}
 
           {/* Form */}

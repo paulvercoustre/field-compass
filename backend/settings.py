@@ -101,6 +101,17 @@ class Settings(BaseModel):
     app_url: str | None = None
     site_address: str | None = None
 
+    # --- Signing in with Google or Microsoft ------------------------------------
+    # OpenID Connect web clients (docs/sign-in.md, services/sign_in.py). A
+    # provider is offered only when both its ID and its secret are set.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    microsoft_client_id: str | None = None
+    microsoft_client_secret: str | None = None
+    # The API's public address, where the providers send people back. The
+    # app's when unset, as in production, where Caddy serves both.
+    api_url: str | None = None
+
     # --- Background jobs ------------------------------------------------------
     celery_broker_url: str = "redis://redis:6379/0"
     celery_result_backend: str | None = None  # the broker when unset
@@ -178,6 +189,26 @@ class Settings(BaseModel):
             if candidate and candidate.startswith(("https://", "http://")):
                 return candidate.rstrip("/")
         return self.allowed_origins[0].rstrip("/")
+
+    @property
+    def sign_in_providers(self) -> list[str]:
+        """The providers people can sign in with, in the order the buttons show."""
+        clients = {
+            "google": (self.google_client_id, self.google_client_secret),
+            "microsoft": (self.microsoft_client_id, self.microsoft_client_secret),
+        }
+        return [
+            name
+            for name, (client_id, secret) in clients.items()
+            if (client_id or "").strip() and (secret or "").strip()
+        ]
+
+    @property
+    def public_api_url(self) -> str:
+        """Where the API answers from outside, without a trailing slash."""
+        if self.api_url and self.api_url.startswith(("https://", "http://")):
+            return self.api_url.rstrip("/")
+        return self.public_app_url
 
     @property
     def result_backend(self) -> str:

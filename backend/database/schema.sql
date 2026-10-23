@@ -19,7 +19,7 @@ CREATE TABLE users (
     user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) NOT NULL UNIQUE,
     username VARCHAR(100) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255),
     full_name VARCHAR(255),
     -- Kobo API credentials (encrypted at rest)
     kobo_api_token_encrypted TEXT,
@@ -43,7 +43,7 @@ COMMENT ON TABLE users IS 'User accounts with authentication and Kobo API creden
 COMMENT ON COLUMN users.user_id IS 'Primary key, auto-generated UUID';
 COMMENT ON COLUMN users.email IS 'User email address, unique, used for login';
 COMMENT ON COLUMN users.username IS 'Username, unique, used for display';
-COMMENT ON COLUMN users.password_hash IS 'Bcrypt hashed password';
+COMMENT ON COLUMN users.password_hash IS 'Bcrypt hashed password; null for an account that signs in only with Google or Microsoft';
 COMMENT ON COLUMN users.kobo_api_token_encrypted IS 'Fernet-encrypted Kobo API token';
 COMMENT ON COLUMN users.kobo_api_url IS 'Kobo API base URL (defaults to kf.kobotoolbox.org)';
 COMMENT ON COLUMN users.is_active IS 'Whether user account is active';
@@ -314,6 +314,23 @@ CREATE TABLE survey_invitations (
 COMMENT ON TABLE survey_invitations IS 'Surveys shared with an address that has no confirmed account yet; accepted signed in with that address';
 COMMENT ON COLUMN survey_invitations.sent_at IS 'When it was last emailed; sending again gives a new link';
 
+-- The Google and Microsoft accounts people sign in with: the provider's
+-- stable ID for each person, never a password.
+CREATE TABLE user_identities (
+    identity_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    provider VARCHAR(20) NOT NULL CHECK (provider IN ('google', 'microsoft')),
+    subject VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT uq_user_identities_provider_subject UNIQUE (provider, subject)
+);
+
+COMMENT ON TABLE user_identities IS 'Google and Microsoft accounts people sign in with: the provider''s ID for them, never a password';
+COMMENT ON COLUMN user_identities.subject IS 'The provider''s stable ID for the person (the sub claim)';
+COMMENT ON COLUMN user_identities.email IS 'The address the provider gave when it was linked';
+
 CREATE TABLE ai_usage (
     usage_id BIGSERIAL PRIMARY KEY,
     survey_id UUID NOT NULL REFERENCES survey_configs(survey_id) ON DELETE CASCADE,
@@ -536,6 +553,7 @@ CREATE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHER
 CREATE INDEX idx_app_events_kind_created ON app_events(kind, created_at);
 CREATE INDEX idx_email_tokens_user_purpose ON email_tokens(user_id, purpose);
 CREATE INDEX idx_survey_invitations_email ON survey_invitations(email);
+CREATE INDEX idx_user_identities_user ON user_identities(user_id);
 -- Composite index for common triage queue queries
 CREATE INDEX idx_submissions_triage ON submissions_current(qa_status, survey_id)
     WHERE qa_status = 'FLAGGED';
