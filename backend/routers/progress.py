@@ -7,13 +7,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from database.models import SubmissionCurrent
 from schemas import PerformanceData, ProgressData
 from services.database import DbSession
+from services.page_cache import cached
 from services.permissions import ViewableSurvey
 from services.progress import compute_performance, compute_progress, performance_unavailable
 from services.submission_filters import within_dates
 from services.survey_config import custom_checks, get_enumerator_field
+from services.survey_rows import survey_rows
 
 router = APIRouter()
 
@@ -33,13 +34,18 @@ def get_progress_data(survey_config: ViewableSurvey, db: DbSession):
     Every submission except Not approved counts (decided 2026-10-09); each
     count carries its Approved part, the last 7 days and the Not approved left
     out (services/progress.py), with the days of collection for the chart.
+    Worked out once for each state of the survey (services/page_cache.py).
     """
-    submissions = (
-        db.query(SubmissionCurrent)
-        .filter(SubmissionCurrent.survey_id == survey_config.survey_id)
-        .all()
+    return cached(
+        db,
+        survey_config,
+        "progress",
+        {},
+        ProgressData,
+        lambda: compute_progress(
+            survey_rows(db, survey_config.survey_id).all(), survey_config.config_data
+        ),
     )
-    return compute_progress(submissions, survey_config.config_data)
 
 
 @router.get("/performance", response_model=PerformanceData)
@@ -56,15 +62,24 @@ def get_performance_data(
     Returns the named counts and measurements (services/metrics.py) for the
     team, each enumerator, and the submissions with no enumerator recorded.
     The team is every submission, with Data quality's definitions, so the two
-    pages show the same figures.
+    pages show the same figures. Worked out once for each state of the survey
+    (services/page_cache.py).
     """
     config = survey_config.config_data
     if not get_enumerator_field(config):
         return performance_unavailable(config)
 
-    query = db.query(SubmissionCurrent).filter(
-        SubmissionCurrent.survey_id == survey_config.survey_id
+    def work_out() -> PerformanceData:
+        query = within_dates(survey_rows(db, survey_config.survey_id), start_date, end_date)
+        return compute_performance(query.all(), config)
+
+    performance = cached(
+        db,
+        survey_config,
+        "performance",
+        {"start_date": start_date, "end_date": end_date},
+        PerformanceData,
+        work_out,
     )
-    performance = compute_performance(within_dates(query, start_date, end_date).all(), config)
     performance.custom_checks = custom_checks(survey_config)
     return performance

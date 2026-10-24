@@ -3,10 +3,13 @@ Database connection and query helpers.
 Provides SQLAlchemy session management and common database operations.
 """
 
+import json
 import logging
+import re
 from collections.abc import AsyncGenerator
-from typing import Annotated
+from typing import Annotated, Any
 
+import orjson
 from fastapi import Depends
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -27,10 +30,33 @@ _POOL = (
     if DATABASE_URL.startswith("sqlite")
     else {"pool_size": 10, "max_overflow": 20, "pool_recycle": 1800}
 )
+
+# Integers longer than 64 bits come back from orjson as floats, where the
+# standard library keeps them exact. Answers from Kobo are text, so they are
+# rare: only text with a run of 19 digits takes the slow path.
+_LONG_NUMBER = re.compile(r"\d{19}")
+
+
+def _json_loads(value: str) -> Any:
+    """
+    JSON columns, read with orjson: three times faster than the standard
+    library, and the data pages read every submission of a survey
+    (docs/load-test.md). The same values either way.
+    """
+    if _LONG_NUMBER.search(value):
+        return json.loads(value)
+    try:
+        return orjson.loads(value)
+    except orjson.JSONDecodeError:
+        # Refused by orjson and read by the standard library: a lone surrogate.
+        return json.loads(value)
+
+
 engine: Engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     echo=False,  # Set to True for SQL query logging
+    json_deserializer=_json_loads,
     **_POOL,
 )
 

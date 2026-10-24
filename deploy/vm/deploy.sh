@@ -167,8 +167,26 @@ elif ! health_ok; then
   FAILURE="health check FAILED after $(( HEALTH_RETRIES * HEALTH_DELAY ))s"
 fi
 
+# Every deploy pulls a backend image and builds the frontend, and nothing
+# removed them: by October 2026 old images and build cache held 6 GB of the
+# VM's 30 GB disk. After a good deploy, remove the images no container uses and
+# the build cache, when older than three days: what runs now stays, and so does
+# a recent image to roll back to (an older one is pulled again if needed).
+# Volumes -- the database -- are never touched, and a cleanup that fails
+# doesn't fail the deploy.
+clean_up() {
+  local freed
+  freed="$(docker image prune -af --filter "until=72h" 2>&1 | tail -1)" \
+    || freed="skipped: docker image prune failed"
+  log "old images: ${freed}"
+  freed="$(docker builder prune -af --filter "until=72h" 2>&1 | tail -1)" \
+    || freed="skipped: docker builder prune failed"
+  log "old build cache: ${freed}"
+}
+
 if [ -z "$FAILURE" ]; then
   log "DEPLOY OK ${TARGET_SHA}"
+  clean_up
   exit 0
 fi
 

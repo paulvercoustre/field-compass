@@ -99,3 +99,6 @@ backend/data/audits/
 *.swp
 *.swo
 
+# The load test (docs/load-test.md): its sign-in tokens and results stay local
+/loadtest.json
+/results/
