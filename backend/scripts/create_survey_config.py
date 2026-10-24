@@ -19,7 +19,7 @@ sys.path.insert(0, ".")
 from uuid import uuid4
 
 from database.models import SurveyConfig, User
-from services.database import get_db, init_db
+from services.database import SessionLocal, init_db
 
 load_dotenv()
 
@@ -37,7 +37,7 @@ def create_survey_config(
         print("ERROR: Database connection failed")
         sys.exit(1)
 
-    db = next(get_db())
+    db = SessionLocal()
     try:
         owner = db.query(User).filter(User.email == owner_email.strip().lower()).first()
         if owner is None:

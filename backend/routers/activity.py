@@ -38,7 +38,7 @@ RECENTLY_FINISHED = timedelta(minutes=10)
 
 
 @router.get("/activity")
-async def get_activity(
+def get_activity(
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -84,7 +84,7 @@ def _run_for(db: Session, run_id: str, user: User, min_level: AccessLevel = "vie
 
 
 @router.get("/runs/{run_id}")
-async def get_run(
+def get_run(
     run_id: str,
     db: DbSession,
     current_user: CurrentUser,
@@ -93,7 +93,7 @@ async def get_run(
 
 
 @router.get("/surveys/{survey_id}/runs")
-async def get_survey_runs(
+def get_survey_runs(
     survey: ViewableSurvey,
     db: DbSession,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -110,7 +110,7 @@ async def get_survey_runs(
 
 
 @router.post("/runs/{run_id}/stop")
-async def stop_run_endpoint(
+def stop_run_endpoint(
     run_id: str,
     db: DbSession,
     current_user: CurrentUser,
@@ -136,7 +136,7 @@ async def stop_run_endpoint(
 
 
 @router.get("/notifications")
-async def get_notifications(
+def get_notifications(
     db: DbSession,
     current_user: CurrentUser,
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
@@ -162,7 +162,7 @@ class MarkRead(BaseModel):
 
 
 @router.post("/notifications/read")
-async def mark_notifications_read(
+def mark_notifications_read(
     body: MarkRead,
     db: DbSession,
     current_user: CurrentUser,

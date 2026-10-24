@@ -65,7 +65,7 @@ def _source_label(details: dict | None) -> str:
 
 
 @router.get("/admin/usage")
-async def get_usage(
+def get_usage(
     db: DbSession,
     _viewer: Annotated[User, Depends(require_usage_viewer)],
 ):

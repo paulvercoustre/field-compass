@@ -229,7 +229,7 @@ def pulls(minutes: float, every: float, new: int, edits: int) -> None:
     """New and edited submissions into random load-test surveys, one pull at a time."""
     rng = random.Random()
     ends = time.time() + minutes * 60
-    while time.time() < ends:
+    while True:
         with SessionLocal() as db:
             _ids_free(db)
             surveys = (
@@ -251,6 +251,8 @@ def pulls(minutes: float, every: float, new: int, edits: int) -> None:
                 f"edited, in {time.time() - started:.1f}s",
                 file=sys.stderr,
             )
+        if time.time() + every >= ends:
+            return
         time.sleep(every)
 
 

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database.models import SurveyConfig
-from services.database import get_db, init_db
+from services.database import SessionLocal, init_db
 
 load_dotenv()
 
@@ -24,7 +24,7 @@ def find_survey_by_asset_id(kobo_asset_id: str):
         print("ERROR: Database connection failed")
         sys.exit(1)
 
-    db = next(get_db())
+    db = SessionLocal()
     try:
         survey = db.query(SurveyConfig).filter(SurveyConfig.kobo_asset_id == kobo_asset_id).first()
 

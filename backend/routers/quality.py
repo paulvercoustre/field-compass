@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 @router.get("/quality/overview", response_model=QualityOverviewResponse)
-async def get_quality_overview(
+def get_quality_overview(
     survey_config: ViewableSurvey,
     db: DbSession,
     start_date: Annotated[str | None, Query(description="Start date filter (YYYY-MM-DD)")] = None,
@@ -65,7 +65,7 @@ async def get_quality_overview(
 
 
 @router.get("/quality/questions", response_model=QuestionsResponse)
-async def get_quality_by_question(
+def get_quality_by_question(
     survey_config: ViewableSurvey,
     db: DbSession,
     start_date: Annotated[str | None, Query(description="Start date filter (YYYY-MM-DD)")] = None,

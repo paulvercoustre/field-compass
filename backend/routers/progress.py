@@ -19,7 +19,7 @@ router = APIRouter()
 
 
 @router.get("/progress", response_model=ProgressData)
-async def get_progress_data(survey_config: ViewableSurvey, db: DbSession):
+def get_progress_data(survey_config: ViewableSurvey, db: DbSession):
     """
     Get data collection progress metrics for a specific survey.
     Requires viewer access to the survey.
@@ -43,7 +43,7 @@ async def get_progress_data(survey_config: ViewableSurvey, db: DbSession):
 
 
 @router.get("/performance", response_model=PerformanceData)
-async def get_performance_data(
+def get_performance_data(
     survey_config: ViewableSurvey,
     db: DbSession,
     start_date: Annotated[str | None, Query(description="Sent on or after (YYYY-MM-DD)")] = None,

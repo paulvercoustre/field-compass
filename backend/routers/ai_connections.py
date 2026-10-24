@@ -202,7 +202,7 @@ def _set_key(connection: AIConnection, api_key: str | None) -> None:
 
 
 @router.get("/ai/connections")
-async def list_connections(
+def list_connections(
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -218,7 +218,7 @@ async def list_connections(
 
 @router.post("/ai/connections", status_code=201)
 @limiter.limit("20/hour")
-async def create_connection(
+def create_connection(
     request: Request,
     payload: ConnectionCreate,
     db: DbSession,
@@ -278,7 +278,7 @@ async def create_connection(
 
 @router.patch("/ai/connections/{connection_id}")
 @limiter.limit("20/hour")
-async def update_connection(
+def update_connection(
     request: Request,
     connection_id: str,
     payload: ConnectionUpdate,
@@ -333,7 +333,7 @@ async def update_connection(
 
 @router.post("/ai/connections/{connection_id}/test")
 @limiter.limit("20/hour")
-async def test_connection(
+def test_connection(
     request: Request,
     connection_id: str,
     db: DbSession,
@@ -348,7 +348,7 @@ async def test_connection(
 
 
 @router.delete("/ai/connections/{connection_id}", status_code=204)
-async def delete_connection(
+def delete_connection(
     connection_id: str,
     db: DbSession,
     current_user: CurrentUser,
@@ -369,7 +369,7 @@ async def delete_connection(
 
 
 @router.put("/surveys/{survey_id}/ai-connection")
-async def set_survey_connection(
+def set_survey_connection(
     payload: SurveyConnectionUpdate,
     survey: OwnedSurvey,
     db: DbSession,
@@ -417,7 +417,7 @@ async def set_survey_connection(
 
 
 @router.get("/ai/usage")
-async def account_ai_usage(
+def account_ai_usage(
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -594,7 +594,7 @@ async def account_ai_usage(
 
 
 @router.get("/ai/usage/history")
-async def account_ai_usage_history(
+def account_ai_usage_history(
     db: DbSession,
     current_user: CurrentUser,
     metric: Literal["reviews", "translations", "minutes"] = "reviews",

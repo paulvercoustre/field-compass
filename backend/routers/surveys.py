@@ -77,7 +77,7 @@ class UpdateAccessRequest(BaseModel):
 
 
 @router.get("/surveys")
-async def get_surveys(
+def get_surveys(
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -106,7 +106,7 @@ async def get_surveys(
 
 
 @router.get("/surveys/{survey_id}")
-async def get_survey(
+def get_survey(
     survey: ViewableSurvey,
     db: DbSession,
     current_user: CurrentUser,
@@ -133,7 +133,7 @@ async def get_survey(
 
 
 @router.post("/surveys", status_code=201)
-async def create_survey(
+def create_survey(
     survey_data: SurveyCreate,
     db: DbSession,
     current_user: CurrentUser,
@@ -181,7 +181,7 @@ async def create_survey(
 
 
 @router.put("/surveys/{survey_id}")
-async def update_survey(
+def update_survey(
     survey_update: SurveyConfigUpdate,
     survey: OwnedSurvey,
     db: DbSession,
@@ -240,7 +240,7 @@ async def update_survey(
 
 
 @router.delete("/surveys/{survey_id}")
-async def delete_survey(
+def delete_survey(
     survey: OwnedSurvey,
     db: DbSession,
     current_user: CurrentUser,
@@ -289,7 +289,7 @@ async def delete_survey(
 
 
 @router.post("/surveys/{survey_id}/ai-checks/rerun")
-async def rerun_ai_checks(
+def rerun_ai_checks(
     survey: OwnedSurvey,
     db: DbSession,
     current_user: CurrentUser,
@@ -316,7 +316,7 @@ async def rerun_ai_checks(
 
 
 @router.get("/surveys/{survey_id}/access")
-async def get_survey_access(
+def get_survey_access(
     survey: OwnedSurvey,
     db: DbSession,
 ):
@@ -331,7 +331,7 @@ async def get_survey_access(
 @router.post("/surveys/{survey_id}/access")
 # Per address: a training shares one office connection between many owners.
 @limiter.limit("100/hour")
-async def share_survey(
+def share_survey(
     request: Request,
     share_request: ShareSurveyRequest,
     survey: OwnedSurvey,
@@ -482,14 +482,14 @@ def _pending_invitation(db: Session, survey: SurveyConfig, invitation_id: str) -
 
 
 @router.get("/surveys/{survey_id}/invitations")
-async def list_invitations(survey: OwnedSurvey, db: DbSession):
+def list_invitations(survey: OwnedSurvey, db: DbSession):
     """Invitations to the survey not yet accepted, expired ones included. Owner access."""
     return [_invitation_response(i) for i in invitations.pending(db, survey.survey_id)]
 
 
 @router.post("/surveys/{survey_id}/invitations/{invitation_id}/resend")
 @limiter.limit("30/hour")
-async def resend_invitation(
+def resend_invitation(
     request: Request,
     invitation_id: str,
     survey: OwnedSurvey,
@@ -509,7 +509,7 @@ async def resend_invitation(
 
 
 @router.delete("/surveys/{survey_id}/invitations/{invitation_id}", status_code=204)
-async def withdraw_invitation(
+def withdraw_invitation(
     invitation_id: str, survey: OwnedSurvey, db: DbSession, current_user: CurrentUser
 ):
     """Withdraw an invitation not yet accepted: its link stops working. Owner access."""
@@ -520,7 +520,7 @@ async def withdraw_invitation(
 
 
 @router.put("/surveys/{survey_id}/access/{user_id}")
-async def update_survey_access(
+def update_survey_access(
     user_id: str,
     update_request: UpdateAccessRequest,
     survey: OwnedSurvey,
@@ -560,7 +560,7 @@ async def update_survey_access(
 
 
 @router.delete("/surveys/{survey_id}/access/{user_id}")
-async def revoke_survey_access_endpoint(
+def revoke_survey_access_endpoint(
     user_id: str,
     survey: OwnedSurvey,
     db: DbSession,

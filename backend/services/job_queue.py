@@ -23,6 +23,14 @@ def _backend_on_import_path(**_):
         sys.path.insert(0, _BACKEND_DIR)
 
 
+@worker_process_init.connect
+def _own_database_connections(**_):
+    """A forked worker process must not use the connections pooled in its parent."""
+    from services.database import engine
+
+    engine.dispose(close=False)
+
+
 @celeryd_init.connect
 def _report_errors(**_):
     """The worker reports its errors to Sentry, before it forks (services/monitoring.py)."""

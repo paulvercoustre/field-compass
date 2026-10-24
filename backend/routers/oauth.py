@@ -90,7 +90,7 @@ def _token_for(user: User) -> dict:
 
 @router.get("/auth/oauth/{provider}/start")
 @limiter.limit("30/minute")
-async def start(request: Request, provider: str, next: str = "/"):
+def start(request: Request, provider: str, next: str = "/"):
     chosen = sign_in.provider(provider)
     if chosen is None:
         raise HTTPException(status_code=404, detail="This server doesn't offer that sign-in")
@@ -160,7 +160,7 @@ async def callback(
 
 @router.post("/auth/oauth/session", response_model=Token)
 @limiter.limit("30/minute")
-async def session(request: Request, response: Response, db: DbSession):
+def session(request: Request, response: Response, db: DbSession):
     """The app's bearer token for a sign-in that just came back from the provider."""
     claims = sign_in.unseal(request.cookies.get(sign_in.SIGNED_IN_COOKIE), "signed_in")
     _clear_cookie(response, sign_in.SIGNED_IN_COOKIE)
@@ -180,7 +180,7 @@ async def session(request: Request, response: Response, db: DbSession):
 
 
 @router.get("/auth/oauth/pending")
-async def pending(request: Request):
+def pending(request: Request):
     """Who is creating an account, for the page where they accept the terms."""
     claims = sign_in.unseal(request.cookies.get(sign_in.SIGN_UP_COOKIE), "sign_up")
     if claims is None:
@@ -198,7 +198,7 @@ async def pending(request: Request):
 
 @router.post("/auth/oauth/finish", response_model=Token, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/hour")
-async def finish(
+def finish(
     request: Request,
     payload: FinishSignUp,
     response: Response,
@@ -248,7 +248,7 @@ async def finish(
 
 
 @router.delete("/users/me/sign-in/{provider}", response_model=UserResponse)
-async def unlink(provider: str, current_user: CurrentUser, db: DbSession):
+def unlink(provider: str, current_user: CurrentUser, db: DbSession):
     """Stop signing in with a provider, as long as another way in remains."""
     identities = db.query(UserIdentity).filter(UserIdentity.user_id == current_user.user_id).all()
     identity = next((i for i in identities if i.provider == provider), None)

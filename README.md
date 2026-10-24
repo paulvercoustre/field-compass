@@ -98,6 +98,7 @@ To set up the VM, follow [VM_DEPLOYMENT_AZURE.md](VM_DEPLOYMENT_AZURE.md). [DEPL
 - [`docs/sign-in.md`](docs/sign-in.md): setting up sign-in with Google and Microsoft
 - [`docs/ai-budget.md`](docs/ai-budget.md): the monthly AI budget, its alerts, and the providers' own limits
 - [`docs/monitoring.md`](docs/monitoring.md): uptime monitoring, error tracking with Sentry, and the backup's heartbeat
+- [`docs/load-test.md`](docs/load-test.md): how the app holds up under load, and running the load test on the VM
 - [`docs/specs/`](docs/specs): design notes for the AI providers and allowances, transcription, translation and the quality dashboard
 - [`docs/code-quality-review.md`](docs/code-quality-review.md): the codebase review and what came of it
 

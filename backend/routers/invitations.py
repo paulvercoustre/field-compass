@@ -23,7 +23,7 @@ NOT_FOUND = (
 
 
 @router.get("/invitations/{token}")
-async def get_invitation(token: str, db: DbSession):
+def get_invitation(token: str, db: DbSession):
     """
     What an invitation link offers, for the page it opens; no sign-in needed.
     Whether an account uses the address decides between signing in and
@@ -49,7 +49,7 @@ async def get_invitation(token: str, db: DbSession):
 
 
 @router.post("/invitations/{token}/accept")
-async def accept_invitation(token: str, db: DbSession, current_user: CurrentUser):
+def accept_invitation(token: str, db: DbSession, current_user: CurrentUser):
     """
     Accept an invitation, signed in with the address it was sent to. Accepting
     it again, by the same account, just says where the survey is.
