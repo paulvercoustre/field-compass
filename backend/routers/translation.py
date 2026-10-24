@@ -237,7 +237,7 @@ def _payload(db: Session, survey: SurveyConfig, user: User) -> dict[str, Any]:
 
 
 @router.get("/surveys/{survey_id}/translation")
-async def get_translation_settings(
+def get_translation_settings(
     survey: ViewableSurvey,
     db: DbSession,
     current_user: CurrentUser,
@@ -258,7 +258,7 @@ class TranslationSettingsUpdate(BaseModel):
 
 
 @router.put("/surveys/{survey_id}/translation")
-async def update_translation_settings(
+def update_translation_settings(
     body: TranslationSettingsUpdate,
     survey: OwnedSurvey,
     db: DbSession,
@@ -309,7 +309,7 @@ async def update_translation_settings(
 
 
 @router.post("/surveys/{survey_id}/translations/run", status_code=202)
-async def translate_now(
+def translate_now(
     survey: OwnedSurvey,
     db: DbSession,
     current_user: CurrentUser,
@@ -350,7 +350,7 @@ async def translate_now(
 
 
 @router.post("/surveys/{survey_id}/translations/send-to-kobo", status_code=202)
-async def send_translations_to_kobo(
+def send_translations_to_kobo(
     survey: OwnedSurvey,
     db: DbSession,
     current_user: CurrentUser,
@@ -414,7 +414,7 @@ def translation_view(row: AnswerTranslation | None) -> dict[str, Any] | None:
 
 
 @router.get("/submissions/{kobo_id}/translations")
-async def get_submission_translations(
+def get_submission_translations(
     kobo_id: int,
     db: DbSession,
     current_user: CurrentUser,

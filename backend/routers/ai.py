@@ -79,7 +79,7 @@ def _provider_for(db: Session, survey_config: SurveyConfig, user: User) -> Resol
 
 @router.post("/ai/generate-rule", response_model=GeneratedRule)
 @limiter.limit("20/hour")
-async def generate_rule_from_natural_language(
+def generate_rule_from_natural_language(
     request: Request,
     payload: GenerateRuleRequest,
     db: DbSession,
@@ -189,7 +189,7 @@ async def generate_rule_from_natural_language(
 
 @router.post("/ai/suggest-rules", response_model=list[GeneratedRule])
 @limiter.limit("20/hour")
-async def suggest_validation_rules(
+def suggest_validation_rules(
     request: Request,
     payload: SuggestRulesRequest,
     db: DbSession,

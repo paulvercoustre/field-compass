@@ -58,7 +58,7 @@ router = APIRouter()
 
 
 @router.get("/auth/options")
-async def auth_options():
+def auth_options():
     """
     What the sign-in page can offer: resetting a password needs email, and
     the buttons for Google and Microsoft show only for those set up.
@@ -72,7 +72,7 @@ async def auth_options():
 
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/hour")
-async def register(
+def register(
     request: Request, user_data: UserCreate, db: DbSession, background_tasks: BackgroundTasks
 ):
     """
@@ -152,7 +152,7 @@ async def register(
 
 @router.post("/auth/password-reset", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("10/hour")
-async def request_password_reset(
+def request_password_reset(
     request: Request,
     payload: PasswordResetRequest,
     db: DbSession,
@@ -180,7 +180,7 @@ async def request_password_reset(
 
 @router.post("/auth/password-reset/confirm")
 @limiter.limit("10/hour")
-async def reset_password(
+def reset_password(
     request: Request,
     payload: PasswordResetConfirm,
     db: DbSession,
@@ -220,7 +220,7 @@ async def reset_password(
 
 @router.post("/auth/verify-email")
 @limiter.limit("30/hour")
-async def verify_email(
+def verify_email(
     request: Request,
     payload: EmailVerification,
     db: DbSession,
@@ -251,7 +251,7 @@ async def verify_email(
 
 @router.post("/users/me/verification-email")
 @limiter.limit("5/hour")
-async def send_verification_email(
+def send_verification_email(
     request: Request,
     current_user: CurrentUser,
     db: DbSession,
@@ -275,7 +275,7 @@ async def send_verification_email(
 
 @router.post("/auth/login", response_model=Token)
 @limiter.limit("10/minute")
-async def login(
+def login(
     request: Request,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: DbSession,
@@ -315,7 +315,7 @@ async def login(
 
 @router.post("/auth/login/json", response_model=Token)
 @limiter.limit("10/minute")
-async def login_json(request: Request, credentials: UserLogin, db: DbSession):
+def login_json(request: Request, credentials: UserLogin, db: DbSession):
     """
     Alternative login endpoint accepting JSON body.
     Useful for frontend applications that prefer JSON over form data.
@@ -353,7 +353,7 @@ async def login_json(request: Request, credentials: UserLogin, db: DbSession):
 
 
 @router.get("/users/me", response_model=UserResponse)
-async def get_current_user_profile(current_user: CurrentUser):
+def get_current_user_profile(current_user: CurrentUser):
     """
     Get the current authenticated user's profile.
     """
@@ -361,7 +361,7 @@ async def get_current_user_profile(current_user: CurrentUser):
 
 
 @router.put("/users/me", response_model=UserResponse)
-async def update_current_user_profile(
+def update_current_user_profile(
     user_update: UserUpdate,
     current_user: CurrentUser,
     db: DbSession,
@@ -397,7 +397,7 @@ async def update_current_user_profile(
 
 
 @router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_current_user(current_user: CurrentUser, db: DbSession):
+def delete_current_user(current_user: CurrentUser, db: DbSession):
     """
     Delete the current user's account, and every survey they own with all its
     data, for the people it was shared with too. Surveys others shared with
@@ -423,7 +423,7 @@ async def delete_current_user(current_user: CurrentUser, db: DbSession):
 
 
 @router.put("/users/me/kobo-api-key", response_model=UserResponse)
-async def set_kobo_api_key(
+def set_kobo_api_key(
     api_key_data: KoboApiKeyUpdate,
     current_user: CurrentUser,
     db: DbSession,
@@ -451,7 +451,7 @@ async def set_kobo_api_key(
 
 
 @router.delete("/users/me/kobo-api-key", response_model=UserResponse)
-async def delete_kobo_api_key(current_user: CurrentUser, db: DbSession):
+def delete_kobo_api_key(current_user: CurrentUser, db: DbSession):
     """
     Remove the Kobo API key for the current user.
     """
@@ -553,7 +553,7 @@ def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
 
 
 @router.put("/users/me/kobo-connection")
-async def set_kobo_connection(
+def set_kobo_connection(
     payload: KoboConnectionUpdate,
     current_user: CurrentUser,
     db: DbSession,
@@ -589,7 +589,7 @@ async def set_kobo_connection(
 
 
 @router.get("/users/me/kobo-api-key/test")
-async def test_kobo_api_key(current_user: CurrentUser, db: DbSession):
+def test_kobo_api_key(current_user: CurrentUser, db: DbSession):
     """
     Test the current user's Kobo API key by making a test request to the Kobo API.
 
@@ -614,7 +614,7 @@ async def test_kobo_api_key(current_user: CurrentUser, db: DbSession):
 
 
 @router.put("/users/me/password")
-async def change_password(
+def change_password(
     payload: PasswordChange,
     current_user: CurrentUser,
     db: DbSession,

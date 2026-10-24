@@ -38,7 +38,7 @@ class ValidationRuleResponse(BaseModel):
 
 
 @router.get("/surveys/{survey_id}/rules", response_model=list[ValidationRuleResponse])
-async def get_validation_rules(
+def get_validation_rules(
     survey: ViewableSurvey,
     db: DbSession,
 ):
@@ -64,7 +64,7 @@ async def get_validation_rules(
 
 
 @router.get("/surveys/{survey_id}/rules/{rule_id}", response_model=ValidationRuleResponse)
-async def get_validation_rule(
+def get_validation_rule(
     rule_id: str,
     survey: ViewableSurvey,
     db: DbSession,
@@ -96,7 +96,7 @@ async def get_validation_rule(
 
 
 @router.post("/surveys/{survey_id}/rules", status_code=201, response_model=ValidationRuleResponse)
-async def create_validation_rule(
+def create_validation_rule(
     rule_data: ValidationRuleCreateModel,
     survey: OwnedSurvey,
     db: DbSession,
@@ -146,7 +146,7 @@ async def create_validation_rule(
 
 
 @router.put("/surveys/{survey_id}/rules/{rule_id}", response_model=ValidationRuleResponse)
-async def update_validation_rule(
+def update_validation_rule(
     rule_id: str,
     rule_update: ValidationRuleUpdateModel,
     survey: OwnedSurvey,
@@ -207,7 +207,7 @@ async def update_validation_rule(
 
 
 @router.delete("/surveys/{survey_id}/rules/{rule_id}")
-async def delete_validation_rule(
+def delete_validation_rule(
     rule_id: str,
     survey: OwnedSurvey,
     db: DbSession,

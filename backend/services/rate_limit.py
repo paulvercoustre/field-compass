@@ -37,9 +37,9 @@ def _client_key(request: Request) -> str:
     return get_remote_address(request)
 
 
-# "memory://" is per-process, which is correct for the single-worker uvicorn
-# the compose files run. Point RATELIMIT_STORAGE_URI at redis (e.g.
-# redis://redis:6379/1) if you ever scale to multiple workers.
+# "memory://" is per process: right for one uvicorn process, as in
+# development. Production runs several (API_WORKERS), so docker-compose.prod.yml
+# points RATELIMIT_STORAGE_URI at Redis, where they share the counts.
 limiter = Limiter(
     key_func=_client_key,
     storage_uri=get_settings().ratelimit_storage_uri,

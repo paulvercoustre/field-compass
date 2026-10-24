@@ -162,6 +162,9 @@ services:
       # Caddy sits in front, so per-client rate limiting must read
       # X-Forwarded-For rather than the proxy's own address.
       TRUST_PROXY_HEADERS: "true"
+      # Shared by the API's processes (API_WORKERS): in memory, each would
+      # keep its own counts and every limit would multiply.
+      RATELIMIT_STORAGE_URI: ${RATELIMIT_STORAGE_URI:-redis://redis:6379/2}
       # In single-VM mode, CORS can typically be your public domain(s)
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
     depends_on:
@@ -173,7 +176,11 @@ services:
         condition: service_started
     expose:
       - "8000"
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    # API_WORKERS processes, one per CPU: a request is mostly Python work, so
+    # one process serves about one request at a time (docs/load-test.md).
+    # Connections idle 135 s, longer than Caddy keeps them (2 minutes), so
+    # the API never closes one as Caddy reuses it.
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${API_WORKERS:-2} --timeout-keep-alive 135
     networks:
       - field-compass-network
 

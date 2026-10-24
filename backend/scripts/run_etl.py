@@ -15,7 +15,7 @@ sys.path.insert(0, ".")
 import logging
 
 from etl.pipeline import ETLPipeline
-from services.database import get_db, init_db
+from services.database import SessionLocal, init_db
 
 # Configure logging
 logging.basicConfig(
@@ -53,7 +53,7 @@ def main():
             sys.exit(1)
 
     # Get database session
-    db = next(get_db())
+    db = SessionLocal()
 
     try:
         # Create pipeline

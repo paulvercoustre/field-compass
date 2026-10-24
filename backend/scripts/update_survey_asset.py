@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, ".")
 
 from database.models import SurveyConfig
-from services.database import get_db, init_db
+from services.database import SessionLocal, init_db
 
 load_dotenv()
 
@@ -29,7 +29,7 @@ def update_survey_asset(survey_id: str, kobo_asset_id: str):
         print(f"ERROR: Invalid survey_id format: {survey_id}. Must be a valid UUID.")
         sys.exit(1)
 
-    db = next(get_db())
+    db = SessionLocal()
     try:
         survey = db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_uuid).first()
 

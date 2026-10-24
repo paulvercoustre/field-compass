@@ -39,7 +39,7 @@ def _already_running(db: Session, error: RunAlreadyActive) -> JSONResponse:
 
 
 @router.post("/etl/run/{survey_id}")
-async def run_etl_pipeline(
+def run_etl_pipeline(
     survey: EditableSurvey,
     db: DbSession,
     current_user: CurrentUser,

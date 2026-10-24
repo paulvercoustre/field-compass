@@ -45,7 +45,7 @@ def _project_status(asset: dict) -> str:
 
 @router.get("/kobo/assets", response_model=list[KoboProject])
 @limiter.limit("30/minute")
-async def list_kobo_projects(
+def list_kobo_projects(
     request: Request,
     db: DbSession,
     current_user: CurrentUser,
@@ -104,7 +104,7 @@ async def list_kobo_projects(
 
 @router.get("/kobo/assets/{asset_uid}/form", response_model=SurveyFormResponse)
 @limiter.limit("30/minute")
-async def get_kobo_asset_form(
+def get_kobo_asset_form(
     request: Request,
     asset_uid: str,
     db: DbSession,

@@ -38,6 +38,8 @@ Use this checklist to ensure all deployment steps are completed.
         `scripts/send_test_email.py` delivers: see [docs/email.md](docs/email.md).
         Without them there are no password resets or invitations, and
         sharing reaches existing accounts only
+  - [ ] `API_WORKERS`: the VM's number of CPUs (2 by default); see
+        [docs/load-test.md](docs/load-test.md)
   - [ ] `SENTRY_DSN` (EU region) and `BACKUP_HEARTBEAT_URL`, and an uptime
         monitor on `/api/health`: see [docs/monitoring.md](docs/monitoring.md)
   - [ ] `AI_MONTHLY_BUDGET_USD`, `USAGE_ADMIN_EMAILS` for its alerts, and the

@@ -323,7 +323,7 @@ def get_user_by_username(db: Session, username: str) -> User | None:
 # =============================================================================
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: DbSession) -> User:
+def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: DbSession) -> User:
     """
     FastAPI dependency to get the current authenticated user.
     Raises 401 if token is invalid or user not found.
@@ -348,7 +348,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Db
     return user
 
 
-async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """
     FastAPI dependency to get the current active user.
     Raises 400 if user is inactive.

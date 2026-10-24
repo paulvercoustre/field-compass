@@ -190,7 +190,7 @@ def _settings_payload(db: Session, survey: SurveyConfig, user: User) -> dict[str
 
 
 @router.get("/surveys/{survey_id}/audio-transcription")
-async def get_transcription_settings(
+def get_transcription_settings(
     survey: ViewableSurvey,
     db: DbSession,
     current_user: CurrentUser,
@@ -216,7 +216,7 @@ class TranscriptionSettingsUpdate(BaseModel):
 
 
 @router.put("/surveys/{survey_id}/audio-transcription")
-async def update_transcription_settings(
+def update_transcription_settings(
     body: TranscriptionSettingsUpdate,
     survey: OwnedSurvey,
     db: DbSession,
@@ -308,7 +308,7 @@ def _recording_count(db: Session, survey: SurveyConfig) -> int:
 
 
 @router.get("/surveys/{survey_id}/transcripts/estimate")
-async def estimate_transcription(
+def estimate_transcription(
     survey: OwnedSurvey,
     db: DbSession,
     mode: Annotated[str, Query(pattern="^(missing|all)$")] = "missing",
@@ -358,7 +358,7 @@ async def estimate_transcription(
 
 
 @router.post("/surveys/{survey_id}/transcripts/run", status_code=202)
-async def transcribe_now(
+def transcribe_now(
     survey: OwnedSurvey,
     db: DbSession,
     current_user: CurrentUser,
@@ -408,7 +408,7 @@ async def transcribe_now(
 
 
 @router.post("/surveys/{survey_id}/transcripts/send-to-kobo", status_code=202)
-async def send_transcripts_to_kobo(
+def send_transcripts_to_kobo(
     survey: OwnedSurvey,
     db: DbSession,
     current_user: CurrentUser,
@@ -460,7 +460,7 @@ def _submission(db: Session, kobo_id: int, user: User) -> tuple[SubmissionCurren
 
 
 @router.get("/submissions/{kobo_id}/transcripts")
-async def get_submission_transcripts(
+def get_submission_transcripts(
     kobo_id: int,
     db: DbSession,
     current_user: CurrentUser,
@@ -527,7 +527,7 @@ async def get_submission_transcripts(
 
 
 @router.get("/submissions/{kobo_id}/audio")
-async def stream_submission_audio(
+def stream_submission_audio(
     kobo_id: int,
     question: Annotated[str, Query(description="The audio question's path")],
     db: DbSession,

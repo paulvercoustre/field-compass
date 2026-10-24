@@ -287,7 +287,7 @@ def _recordings_unfinished(db: Session, survey_uuid: UUIDType) -> set[int]:
 
 
 @router.get("/submissions", response_model=SubmissionListResponse)
-async def get_submissions(
+def get_submissions(
     db: DbSession,
     current_user: CurrentUser,
     params: QueueParams,
@@ -350,7 +350,7 @@ async def get_submissions(
 
 
 @router.get("/submissions/facets", response_model=SubmissionFacets)
-async def get_submission_facets(db: DbSession, current_user: CurrentUser, params: QueueParams):
+def get_submission_facets(db: DbSession, current_user: CurrentUser, params: QueueParams):
     """
     The counts behind the Submissions tabs and filter menu, for the same filters
     as the list. Each count leaves out its own filter: it is what selecting
@@ -432,7 +432,7 @@ def approve_clean_submissions(db: DbSession, current_user: CurrentUser, params: 
 
 
 @router.get("/submissions/{kobo_id}", response_model=Submission)
-async def get_submission(
+def get_submission(
     kobo_id: int,
     db: DbSession,
     current_user: CurrentUser,
@@ -462,7 +462,7 @@ async def get_submission(
 
 
 @router.get("/submissions/{kobo_id}/history", response_model=list[SubmissionHistory])
-async def get_submission_history(
+def get_submission_history(
     kobo_id: int,
     db: DbSession,
     current_user: CurrentUser,
@@ -493,7 +493,7 @@ async def get_submission_history(
 
 
 @router.get("/submissions/{kobo_id}/kobo-edit-url")
-async def get_kobo_edit_url(
+def get_kobo_edit_url(
     kobo_id: int,
     survey_id: Annotated[UUIDType, Query(description="Survey ID to get the Kobo asset ID")],
     db: DbSession,
@@ -554,7 +554,7 @@ async def get_kobo_edit_url(
 
 
 @router.patch("/submissions/{kobo_id}/validation-status", response_model=Submission)
-async def update_submission_validation_status(
+def update_submission_validation_status(
     kobo_id: int,
     status_update: ValidationStatusUpdate,
     survey_id: Annotated[UUIDType, Query(description="Survey ID to get the Kobo asset ID")],
@@ -650,7 +650,7 @@ async def update_submission_validation_status(
 
 
 @router.patch("/submissions/{kobo_id}/reviewer-notes", response_model=Submission)
-async def update_submission_reviewer_notes(
+def update_submission_reviewer_notes(
     kobo_id: int,
     notes_update: ReviewerNotesUpdate,
     survey_id: Annotated[UUIDType, Query(description="Survey ID for access control")],

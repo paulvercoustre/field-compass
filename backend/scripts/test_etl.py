@@ -16,7 +16,7 @@ import logging
 from database.models import SurveyConfig
 from etl.kobo_fetcher import create_fetcher_from_env
 from etl.pipeline import ETLPipeline
-from services.database import get_db, init_db
+from services.database import SessionLocal, init_db
 
 # Configure logging
 logging.basicConfig(
@@ -54,7 +54,7 @@ def list_surveys():
     print("Surveys in Database")
     print("=" * 60)
 
-    db = next(get_db())
+    db = SessionLocal()
     try:
         surveys = db.query(SurveyConfig).all()
 
@@ -133,7 +133,7 @@ def test_etl_pipeline(survey_id: str, limit: int = 5):
         print("❌ Database connection failed")
         return False
 
-    db = next(get_db())
+    db = SessionLocal()
     try:
         # Verify survey exists
         survey = db.query(SurveyConfig).filter(SurveyConfig.survey_id == survey_id).first()
