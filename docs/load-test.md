@@ -60,6 +60,17 @@ How much the kept answers help depends on how often a survey changes: in the tes
 
 The made-up submissions are small, about 300 characters of answers each. Real ones are often ten times that, which makes reading them slower and keeping the answers worth more.
 
+### On the production VM again, 25 October 2026
+
+With this round deployed, the same VM (2 CPUs, `API_WORKERS=2`), pulls running meanwhile, the reviewers on the same laptop:
+
+| 50 reviewers | Requests a second | Typical | Slowest 5% | Slowest 1% | Failed |
+|---|---|---|---|---|---|
+| 24 October | 14.3 | 1.5 s | 4.5 s | 5.8 s | 1 of 4,283 |
+| 25 October | 28.0 | 0.07 s | 0.36 s | 0.64 s | 0 of 8,390 |
+
+The VM now gives the 28 requests a second 50 reviewers ask for, and every target below is met: 2 CPUs are enough for the founding cohort. The times include the laptop's trip to the VM in North Europe, about 40 ms, the fastest any request took.
+
 ## Running it on the VM
 
 Do it at a quiet hour: the test uses the real server.
@@ -137,6 +148,6 @@ It deletes every account on the load-test domain, with its surveys, submissions 
 
 ## What's next
 
-- **The VM run again with this change deployed**, at 50 reviewers. If the slowest 5% stay under 1.5 s, 2 CPUs are enough for the founding cohort.
+- **Before the public launch**, run the test again at the size expected then: `seed --teams` sets how many teams, and Locust's `--users` how many reviewers. Past what 2 CPUs give, resize as described above.
 - **By question** isn't kept: it reads the submissions' edit history too, and is opened less often. It loads its submissions the lighter way.
 - **Surveys of 20,000 submissions or more.** Every route still reads a survey's submissions in Python each time its answer is worked out: that holds up at 2,000, and slows in proportion beyond. The next step there is to have the database count and page them.
