@@ -20,14 +20,18 @@ DATABASE_URL = get_settings().database_url
 
 # Connections are kept and reused, up to 30 per process: opening a new one
 # for every request cost more than most requests (docs/load-test.md). Checked
-# before use, so one the database closed is replaced, not handed out.
+# before use, so one the database closed is replaced, not handed out. SQLite
+# (the tests' database) has its own pool, which takes no size.
+_POOL = (
+    {}
+    if DATABASE_URL.startswith("sqlite")
+    else {"pool_size": 10, "max_overflow": 20, "pool_recycle": 1800}
+)
 engine: Engine = create_engine(
     DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
     pool_pre_ping=True,
-    pool_recycle=1800,
     echo=False,  # Set to True for SQL query logging
+    **_POOL,
 )
 
 # Create session factory
