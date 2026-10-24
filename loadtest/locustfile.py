@@ -97,7 +97,7 @@ class Reviewer(HttpUser):
     @task(2)
     def filter_and_search(self) -> None:
         self._background()
-        self._queue(review="all", search=random.choice(SEARCHES), page=1, page_size=50)
+        self._queue(review="all", q=random.choice(SEARCHES), page=1, page_size=50)
         self._queue(review="all", sort="enumerator", page=random.randint(2, 10), page_size=50)
 
     @task(1)

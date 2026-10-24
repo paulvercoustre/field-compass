@@ -4,7 +4,7 @@ Handles CRUD operations for survey submissions with permission checks.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID as UUIDType
@@ -42,10 +42,12 @@ from schemas import (
 )
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
+from services.page_cache import cached
 from services.permissions import AccessLevel, parse_uuid, require_survey_access
 from services.review_queue import QueueFilters, ReviewQueue
 from services.submission_filters import parse_list, parse_sampling_filters
 from services.survey_config import get_enumerator_field, get_sampling_cols
+from services.survey_rows import survey_rows, whole
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -204,8 +206,11 @@ QueueParams = Annotated[_QueueParams, Depends(_queue_params)]
 
 
 def _context_query(db: Session, survey_uuid: UUIDType, params: _QueueParams):
-    """The survey's submissions narrowed by the filters a link can carry (status, AI review, transcripts)."""
-    query = db.query(SubmissionCurrent).filter(SubmissionCurrent.survey_id == survey_uuid)
+    """
+    The survey's submissions narrowed by the filters a link can carry (status,
+    AI review, transcripts), as rows (services/survey_rows.py).
+    """
+    query = survey_rows(db, survey_uuid)
 
     if qa_statuses := parse_list(params.qa_status):
         query = query.filter(SubmissionCurrent.qa_status.in_(qa_statuses))
@@ -246,19 +251,23 @@ def _context_query(db: Session, survey_uuid: UUIDType, params: _QueueParams):
     return query
 
 
-def _review_queue(
+def _queue_survey(
     db: Session, current_user: User, params: _QueueParams, *, min_level: AccessLevel = "viewer"
-) -> tuple[SurveyConfig, ReviewQueue]:
-    """The survey's review queue under the request's filters, once the user may see it."""
+) -> SurveyConfig:
+    """The survey of the review queue, once the user may see it."""
     # survey_id is required for access control
     if not params.survey_id:
         raise HTTPException(status_code=400, detail="survey_id is required")
+    return require_survey_access(
+        db, current_user, parse_uuid(params.survey_id), min_level=min_level
+    )
 
-    survey_uuid = parse_uuid(params.survey_id)
-    survey_config = require_survey_access(db, current_user, survey_uuid, min_level=min_level)
+
+def _review_queue(db: Session, survey_config: SurveyConfig, params: _QueueParams) -> ReviewQueue:
+    """The survey's review queue under the request's filters."""
     config = survey_config.config_data or {}
-    queue = ReviewQueue(
-        _context_query(db, survey_uuid, params).all(),
+    return ReviewQueue(
+        _context_query(db, survey_config.survey_id, params).all(),
         QueueFilters(
             tab=params.review,
             issues=parse_list(params.issue),
@@ -269,7 +278,6 @@ def _review_queue(
         enumerator_field=get_enumerator_field(config),
         sampling_cols=get_sampling_cols(config),
     )
-    return survey_config, queue
 
 
 def _recordings_unfinished(db: Session, survey_uuid: UUIDType) -> set[int]:
@@ -321,31 +329,41 @@ def get_submissions(
 
     Requires authentication and access to the survey. The tabs, filters and
     defaults are described in services/review_queue.py; the response says
-    which tab and order were used.
+    which tab and order were used. Worked out once for each state of the
+    survey (services/page_cache.py).
     """
-    survey_config, queue = _review_queue(db, current_user, params)
-    orm_submissions, used_sort = queue.submissions(sort)
+    survey_config = _queue_survey(db, current_user, params)
 
-    total = len(orm_submissions)
-    start = offset if offset is not None else (page - 1) * page_size
-    paginated_submissions = orm_submissions[start : start + page_size]
+    def work_out() -> SubmissionListResponse:
+        queue = _review_queue(db, survey_config, params)
+        rows, used_sort = queue.submissions(sort)
+        start = offset if offset is not None else (page - 1) * page_size
+        shown = whole(db, rows[start : start + page_size])
 
-    summaries = _transcript_summaries(
-        db, survey_config.survey_id, [sub._id for sub in paginated_submissions]
-    )
-    submissions = []
-    for sub in paginated_submissions:
-        item = _orm_to_pydantic_submission(sub)
-        item.transcript_summary = summaries.get(sub._id)
-        submissions.append(item)
+        summaries = _transcript_summaries(db, survey_config.survey_id, [sub._id for sub in shown])
+        submissions = []
+        for sub in shown:
+            item = _orm_to_pydantic_submission(sub)
+            item.transcript_summary = summaries.get(sub._id)
+            submissions.append(item)
 
-    return SubmissionListResponse(
-        submissions=submissions,
-        total=total,
-        page=page,
-        page_size=page_size,
-        review=queue.tab,
-        sort=used_sort,
+        return SubmissionListResponse(
+            submissions=submissions,
+            total=len(rows),
+            page=page,
+            page_size=page_size,
+            review=queue.tab,
+            sort=used_sort,
+        )
+
+    page_params = {**asdict(params), "sort": sort, "page": page, "page_size": page_size}
+    return cached(
+        db,
+        survey_config,
+        "submissions",
+        {**page_params, "offset": offset},
+        SubmissionListResponse,
+        work_out,
     )
 
 
@@ -354,24 +372,32 @@ def get_submission_facets(db: DbSession, current_user: CurrentUser, params: Queu
     """
     The counts behind the Submissions tabs and filter menu, for the same filters
     as the list. Each count leaves out its own filter: it is what selecting
-    that option would show.
+    that option would show. Worked out once for each state of the survey
+    (services/page_cache.py).
     """
-    survey_config, queue = _review_queue(db, current_user, params)
-    ready, waiting = queue.clean(_recordings_unfinished(db, survey_config.survey_id))
-    return SubmissionFacets(
-        review=queue.tab,
-        tabs=TabCounts(**queue.tab_counts),
-        issues=[FacetCount(value=check, count=n) for check, n in queue.issue_counts()],
-        enumerators=[FacetCount(value=value, count=n) for value, n in queue.enumerator_counts()],
-        sampling=[
-            SamplingFacet(
-                variable=variable,
-                values=[FacetCount(value=value, count=n) for value, n in counts],
-            )
-            for variable, counts in queue.sampling_counts()
-        ],
-        clean=CleanCounts(ready=len(ready), waiting=waiting),
-    )
+    survey_config = _queue_survey(db, current_user, params)
+
+    def work_out() -> SubmissionFacets:
+        queue = _review_queue(db, survey_config, params)
+        ready, waiting = queue.clean(_recordings_unfinished(db, survey_config.survey_id))
+        return SubmissionFacets(
+            review=queue.tab,
+            tabs=TabCounts(**queue.tab_counts),
+            issues=[FacetCount(value=check, count=n) for check, n in queue.issue_counts()],
+            enumerators=[
+                FacetCount(value=value, count=n) for value, n in queue.enumerator_counts()
+            ],
+            sampling=[
+                SamplingFacet(
+                    variable=variable,
+                    values=[FacetCount(value=value, count=n) for value, n in counts],
+                )
+                for variable, counts in queue.sampling_counts()
+            ],
+            clean=CleanCounts(ready=len(ready), waiting=waiting),
+        )
+
+    return cached(db, survey_config, "facets", asdict(params), SubmissionFacets, work_out)
 
 
 def _kobo_fetcher_for(current_user: User) -> KoboFetcher:
@@ -392,7 +418,8 @@ def approve_clean_submissions(db: DbSession, current_user: CurrentUser, params: 
     waiting for an AI review or a transcript are left alone. Requires editor
     access. A plain function, so Kobo's answers don't hold up other requests.
     """
-    survey_config, queue = _review_queue(db, current_user, params, min_level="editor")
+    survey_config = _queue_survey(db, current_user, params, min_level="editor")
+    queue = _review_queue(db, survey_config, params)
     if not survey_config.kobo_asset_id:
         raise HTTPException(
             status_code=400,
@@ -402,6 +429,7 @@ def approve_clean_submissions(db: DbSession, current_user: CurrentUser, params: 
     if not ready:
         return ApproveCleanResult(approved=0, failed=0)
 
+    ready = whole(db, ready)
     fetcher = _kobo_fetcher_for(current_user)
     try:
         approved = set(

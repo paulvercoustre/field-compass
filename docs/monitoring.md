@@ -19,7 +19,7 @@ Only Sentry receives personal data, and little of it: it is on the sub-processor
 ```
 
 - `scheduled_tasks` is `stalled` when the five-minute sweep hasn't run for 15 minutes: the worker or its scheduler has stopped, and with it pulls, AI reviews and transcriptions. Just after a restart it says `starting` for up to 15 minutes, which counts as healthy.
-- `disk` fails at 90% used. On one VM a full disk is what usually stops everything: Postgres can no longer write.
+- `disk` fails at 90% used. On one VM a full disk is what usually stops everything: Postgres can no longer write. Each good deploy removes the Docker images and build cache unused for three days (`deploy/vm/deploy.sh`); before it did, they had grown to 6 GB of the VM's 30.
 
 `/health` checks less, the API and its database, because the deploy script and CI wait on it with no worker running. Point the monitor at `/api/health`.
 
