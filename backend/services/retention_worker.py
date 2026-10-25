@@ -2,7 +2,8 @@
 Deleting what Field Compass keeps only for a while.
 
 Usage records -- sign-ups, sign-ins, days active, surveys created, deleted
-and shared, staff access to surveys, AI use -- are kept for
+and shared, checks turned on, days of review, staff access to surveys, AI
+use -- are kept for
 USAGE_RETENTION_MONTHS (24 unless set), as the privacy notice says, and
 deleted by a nightly task on Celery beat. The same task deletes emailed links
 a day after they expire or are used, and survey invitations 30 days after

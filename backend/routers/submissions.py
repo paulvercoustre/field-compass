@@ -40,6 +40,7 @@ from schemas import (
     TabCounts,
     ValidationStatusUpdate,
 )
+from services import app_events
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
 from services.kobo_servers import KoboAccessError, require_survey_server, survey_server
@@ -460,6 +461,8 @@ def approve_clean_submissions(db: DbSession, current_user: CurrentUser, params: 
             # No findings and approved: what HFCEngine.determine_qa_status answers.
             sub.qa_status = "APPROVED"
             sub.updated_at = now
+    if approved:
+        app_events.record_review_decision(db, current_user, survey_config.survey_id)
     db.commit()
 
     logger.info(
@@ -632,6 +635,10 @@ def update_submission_validation_status(
     # "On Hold" answers None: no change.
     if new_qa_status is not None:
         submission.qa_status = new_qa_status
+
+    # Clearing a status is taking a decision back, not taking one
+    if status_update.validation_status is not None:
+        app_events.record_review_decision(db, current_user, survey_config.survey_id)
 
     submission.updated_at = datetime.utcnow()
     db.commit()

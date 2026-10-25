@@ -160,11 +160,26 @@ def test_usage_figures(client, monkeypatch):
     assert usage["weekly"][-1]["signups"] == 2
     assert usage["weekly"][-1]["active_users"] == 1
 
-    assert [step["users"] for step in usage["funnel"]] == [2, 0, 1, 0, 0]
-    assert {s["source"]: s["signups"] for s in usage["signup_sources_30_days"]} == {
-        "linkedin": 1,
-        "direct / unknown": 1,
+    assert {step["step"]: step["users"] for step in usage["funnel"]} == {
+        "Signed up": 2,
+        "Confirmed their email": 0,
+        "Connected Kobo": 0,
+        "Added a survey": 1,
+        "Pulled data": 0,
+        "Turned on a check": 0,
+        "Made a review decision": 0,
+        "Shared a survey": 0,
+        "Added a second survey": 0,
     }
+    by_source = {row["source"]: row for row in usage["signup_funnel_by_source"]}
+    assert set(by_source) == {"linkedin", "direct / unknown"}
+    assert by_source["linkedin"]["signups"] == 1
+    # No review decision recorded yet, so nobody's activation can be measured
+    assert usage["review_tracking_since"] is None
+    assert by_source["linkedin"]["activation_measured"] == 0
+    assert usage["activation"][-1]["signups"] == 2
+    assert usage["activation"][-1]["measured"] is False
+    assert usage["activation"][-1]["activated"] is None
 
     by_email = {row["email"]: row for row in usage["recent_signups"]}
     assert by_email["alice@example.com"]["source"] == "linkedin"
@@ -201,6 +216,9 @@ def test_invites_are_counted(client, monkeypatch):
     for period in ("last_7_days", "last_30_days"):
         assert usage[period]["invites_sent"] == 2
         assert usage[period]["invites_accepted"] == 1
-    assert usage["funnel"][-1] == {"step": "Shared a survey", "users": 1}
-    sources = {s["source"]: s["signups"] for s in usage["signup_sources_30_days"]}
+    assert {"step": "Shared a survey", "users": 1} in usage["funnel"]
+    sources = {s["source"]: s["signups"] for s in usage["signup_funnel_by_source"]}
     assert sources["invite"] == 1
+    # Joined to review, not to set up: counted apart from activation
+    assert usage["activation"][-1]["signups"] == 1
+    assert usage["activation"][-1]["invited"] == 1

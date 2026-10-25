@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { AIBudget, getUsage, Usage } from '../../services/adminApi';
+import { ActivationWeek, AIBudget, getUsage, Usage } from '../../services/adminApi';
 import { Card, CardHeader, SectionLabel } from '../ui/Card';
 import { CHART_ACCENT, SERIES_COLORS, axisProps, gridProps, tooltipProps } from '../charts/chartTheme';
 
@@ -75,15 +75,102 @@ const AIBudgetCard: React.FC<{ budget: AIBudget }> = ({ budget }) => {
   );
 };
 
-const Check: React.FC<{ on: boolean }> = ({ on }) => (
-  <span className={on ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-300 dark:text-gray-600'}>
-    {on ? '✓' : '–'}
-  </span>
-);
+const Check: React.FC<{ on: boolean | null }> = ({ on }) =>
+  on === null ? (
+    <span
+      className="text-gray-300 dark:text-gray-600"
+      title="Not measured: signed up before review decisions were recorded"
+    >
+      ?
+    </span>
+  ) : (
+    <span className={on ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-300 dark:text-gray-600'}>
+      {on ? '✓' : '–'}
+    </span>
+  );
+
+const percent = (part: number, whole: number) => (whole ? `${Math.round((part / whole) * 100)}%` : '–');
+
+const ACTIVATION_STEPS: { key: keyof ActivationWeek; label: string }[] = [
+  { key: 'connected_kobo', label: 'Kobo' },
+  { key: 'added_survey', label: 'Survey' },
+  { key: 'pulled', label: 'Pulled' },
+  { key: 'checks_on', label: 'Check on' },
+  { key: 'decided', label: 'Reviewed' },
+];
+
+/** Each signup week, how many got to each step within activation_days, newest first. */
+const ActivationCard: React.FC<{ weeks: ActivationWeek[]; days: number; since: string | null }> = ({
+  weeks,
+  days,
+  since,
+}) => {
+  const rows = weeks.filter((week) => week.signups || week.invited).reverse();
+  return (
+    <Card flush>
+      <div className="p-5 pb-0">
+        <CardHeader
+          title="Activation by signup week"
+          description={`Accounts that signed up on their own, and how many got to each step within ${days} days. Activated: a survey of theirs pulled, with a check on and a review decision. ${
+            since
+              ? `Measured from the week of the first review decision recorded, ${shortDate(since)}.`
+              : 'Measured from the first review decision recorded: none yet.'
+          }`}
+        />
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-5 pb-5 text-sm text-gray-500 dark:text-gray-400">No signups in the last 12 weeks.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 text-left text-xs font-medium text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                <th className="px-5 py-2 font-medium">Week of</th>
+                <th className="px-3 py-2 text-right font-medium">Signups</th>
+                {ACTIVATION_STEPS.map((step) => (
+                  <th key={step.key} className="px-3 py-2 text-right font-medium">
+                    {step.label}
+                  </th>
+                ))}
+                <th className="px-5 py-2 text-right font-medium">Activated</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {rows.map((week) => (
+                <tr key={week.week}>
+                  <td className="whitespace-nowrap px-5 py-2 text-gray-700 dark:text-gray-300">
+                    {shortDate(week.week)}
+                    {!week.complete && (
+                      <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">still open</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                    {week.signups}
+                    {week.invited > 0 && (
+                      <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">+{week.invited} invited</span>
+                    )}
+                  </td>
+                  {ACTIVATION_STEPS.map((step) => (
+                    <td key={step.key} className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-gray-400">
+                      {week[step.key] ?? '—'}
+                    </td>
+                  ))}
+                  <td className="whitespace-nowrap px-5 py-2 text-right tabular-nums font-medium text-gray-900 dark:text-white">
+                    {week.activated === null ? '—' : `${week.activated} · ${percent(week.activated, week.signups)}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+};
 
 /**
  * Account Settings › App usage, for the accounts in USAGE_ADMIN_EMAILS: signups, who came back, how far
- * people get, who brings others in, and where they came from.
+ * people get, who brings others in, where they came from, and how many got set up within a week.
  */
 const UsageTab: React.FC = () => {
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -150,7 +237,12 @@ const UsageTab: React.FC = () => {
 
       <div>
         <SectionLabel>Last 7 days</SectionLabel>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-7">
+          <Stat
+            label="Active surveys"
+            value={week.active_surveys ?? 0}
+            hint={`Pulled and reviewed · ${month.active_surveys ?? 0} in 30 days`}
+          />
           <Stat label="Signups" value={week.signups} hint={`${month.signups} in 30 days`} />
           <Stat label="Active users" value={week.active_users} hint={`${month.active_users} in 30 days`} />
           <Stat label="Logins" value={week.logins} hint={`${month.logins} in 30 days`} />
@@ -206,6 +298,7 @@ const UsageTab: React.FC = () => {
               <Bar dataKey="signups" name="Signups" fill={CHART_ACCENT} radius={[3, 3, 0, 0]} />
               <Bar dataKey="active_users" name="Active users" fill={SERIES_COLORS[1]} radius={[3, 3, 0, 0]} />
               <Bar dataKey="pulls" name="Pulls" fill={SERIES_COLORS[3]} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="active_surveys" name="Active surveys" fill={SERIES_COLORS[2]} radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -213,7 +306,14 @@ const UsageTab: React.FC = () => {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="How far people get" description="Every account, all time." />
+          <CardHeader
+            title="How far people get"
+            description={`Every account, all time; each step counts the accounts that have done it. ${
+              usage.review_tracking_since
+                ? `Review decisions are counted from ${shortDate(usage.review_tracking_since)}.`
+                : 'Review decisions are counted from the first one recorded.'
+            }`}
+          />
           <ul className="space-y-3">
             {usage.funnel.map((step) => {
               const share = signedUp ? Math.round((step.users / signedUp) * 100) : 0;
@@ -234,25 +334,65 @@ const UsageTab: React.FC = () => {
           </ul>
         </Card>
 
-        <Card>
-          <CardHeader
-            title="Where signups came from"
-            description="Last 30 days, from the campaign tags on links to the app."
-          />
-          {usage.signup_sources_30_days.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">No signups recorded yet.</p>
+        {/* min-w-0: a grid item is otherwise as wide as its table, past the screen on a phone */}
+        <Card flush className="min-w-0">
+          <div className="p-5 pb-0">
+            <CardHeader
+              title="Where signups came from, and how far they got"
+              description="Last 12 weeks, from the campaign tags on links to the app."
+            />
+          </div>
+          {usage.signup_funnel_by_source.length === 0 ? (
+            <p className="px-5 pb-5 text-sm text-gray-500 dark:text-gray-400">No signups recorded yet.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-              {usage.signup_sources_30_days.map((row) => (
-                <li key={row.source} className="flex justify-between py-2 text-sm">
-                  <span className="text-gray-700 dark:text-gray-300">{row.source}</span>
-                  <span className="tabular-nums text-gray-500 dark:text-gray-400">{row.signups}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-left text-xs font-medium text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                    <th className="px-5 py-2 font-medium">Source</th>
+                    <th className="px-3 py-2 text-right font-medium">Signups</th>
+                    <th className="px-3 py-2 text-right font-medium">Kobo</th>
+                    <th className="px-3 py-2 text-right font-medium">Pulled</th>
+                    <th className="px-3 py-2 text-right font-medium">Reviewed</th>
+                    <th className="px-5 py-2 text-right font-medium">Activated</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {usage.signup_funnel_by_source.map((row) => (
+                    <tr key={row.source}>
+                      <td className="px-5 py-2 text-gray-700 dark:text-gray-300">{row.source}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-gray-700 dark:text-gray-300">
+                        {row.signups}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-gray-400">
+                        {row.connected_kobo}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-gray-400">
+                        {row.pulled}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-gray-400">
+                        {row.decided}
+                      </td>
+                      <td
+                        className="whitespace-nowrap px-5 py-2 text-right tabular-nums text-gray-600 dark:text-gray-400"
+                        title="Of the signups late enough to measure"
+                      >
+                        {row.activation_measured ? `${row.activated} of ${row.activation_measured}` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       </div>
+
+      <ActivationCard
+        weeks={usage.activation ?? []}
+        days={usage.activation_days ?? 7}
+        since={usage.review_tracking_since ?? null}
+      />
 
       <Card flush>
         <div className="p-5 pb-0">
@@ -268,7 +408,10 @@ const UsageTab: React.FC = () => {
                 <th className="px-3 py-2 font-medium">Source</th>
                 <th className="px-3 py-2 text-center font-medium">Kobo</th>
                 <th className="px-3 py-2 text-center font-medium">Surveys</th>
-                <th className="px-5 py-2 text-center font-medium">Pulled</th>
+                <th className="px-3 py-2 text-center font-medium">Pulled</th>
+                <th className="px-3 py-2 text-center font-medium">Check on</th>
+                <th className="px-3 py-2 text-center font-medium">Reviewed</th>
+                <th className="px-5 py-2 text-center font-medium">Activated</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -289,8 +432,17 @@ const UsageTab: React.FC = () => {
                     <Check on={row.kobo_connected} />
                   </td>
                   <td className="px-3 py-2 text-center tabular-nums text-gray-600 dark:text-gray-400">{row.surveys}</td>
-                  <td className="px-5 py-2 text-center">
+                  <td className="px-3 py-2 text-center">
                     <Check on={row.pulled} />
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <Check on={row.checks_on} />
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <Check on={row.decided} />
+                  </td>
+                  <td className="px-5 py-2 text-center">
+                    <Check on={row.activated} />
                   </td>
                 </tr>
               ))}

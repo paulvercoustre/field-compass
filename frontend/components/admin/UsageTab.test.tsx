@@ -13,11 +13,13 @@ const period = {
   pulls: 5,
   invites_sent: 6,
   invites_accepted: 2,
+  active_surveys: 3,
 };
 
 const usage: adminApi.Usage = {
   generated_at: '2026-10-19T10:00:00Z',
   tracking_since: '2026-09-01T00:00:00Z',
+  review_tracking_since: '2026-10-26T09:00:00Z',
   totals: { users: 10, kobo_connected: 6, surveys: 4, submissions: 1200 },
   last_7_days: period,
   last_30_days: {
@@ -44,7 +46,57 @@ const usage: adminApi.Usage = {
     { step: 'Signed up', users: 10 },
     { step: 'Shared a survey', users: 4 },
   ],
-  signup_sources_30_days: [{ source: 'invite', signups: 3 }],
+  activation_days: 7,
+  activation: [
+    {
+      week: '2026-10-12',
+      signups: 4,
+      invited: 0,
+      measured: false,
+      complete: true,
+      connected_kobo: null,
+      added_survey: null,
+      pulled: null,
+      checks_on: null,
+      decided: null,
+      activated: null,
+    },
+    {
+      week: '2026-10-26',
+      signups: 8,
+      invited: 2,
+      measured: true,
+      complete: false,
+      connected_kobo: 6,
+      added_survey: 5,
+      pulled: 4,
+      checks_on: 3,
+      decided: 2,
+      activated: 2,
+    },
+  ],
+  signup_funnel_by_source: [
+    {
+      source: 'invite',
+      signups: 3,
+      connected_kobo: 0,
+      pulled: 0,
+      checks_on: 0,
+      decided: 3,
+      activation_measured: 0,
+      activated: 0,
+    },
+    {
+      source: 'kobo-forum',
+      signups: 5,
+      connected_kobo: 4,
+      pulled: 3,
+      checks_on: 2,
+      decided: 2,
+      activation_measured: 4,
+      activated: 1,
+    },
+  ],
   recent_signups: [],
 };
 
@@ -60,6 +112,26 @@ describe('UsageTab', () => {
     expect(page.getByText('Shared a survey')).toBeTruthy();
     expect(page.getByText('4 · 40%')).toBeTruthy();
     expect(page.getByText('invite')).toBeTruthy();
+  });
+
+  it('shows the North Star, and how far each source and signup week got', async () => {
+    vi.mocked(adminApi.getUsage).mockResolvedValue(usage);
+    const page = render(<UsageTab />);
+
+    expect(await page.findByText('Active surveys')).toBeTruthy();
+    expect(page.getByText('Pulled and reviewed · 3 in 30 days')).toBeTruthy();
+
+    const forum = page.getByText('kobo-forum').closest('tr') as HTMLElement;
+    expect(forum.textContent).toContain('1 of 4');
+
+    const card = page.getByText('Activation by signup week').closest('div.rounded-xl') as HTMLElement;
+    const [, newest, older] = Array.from(card.querySelectorAll('tr'));
+    expect(newest.textContent).toContain('+2 invited');
+    expect(newest.textContent).toContain('still open');
+    expect(newest.textContent).toContain('2 · 25%');
+    // Before review decisions were recorded: signups only
+    expect(older.textContent).toContain('—');
+    expect(older.textContent).not.toContain('%');
   });
 
   it("shows this month's AI budget, and the models it can't price", async () => {

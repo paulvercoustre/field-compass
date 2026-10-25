@@ -9,6 +9,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from database.models import ValidationRule
+from services import app_events
+from services.auth import CurrentUser
 from services.database import DbSession
 from services.permissions import OwnedSurvey, ViewableSurvey, parse_uuid
 
@@ -100,6 +102,7 @@ def create_validation_rule(
     rule_data: ValidationRuleCreateModel,
     survey: OwnedSurvey,
     db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Create a new validation rule for a survey.
@@ -131,6 +134,7 @@ def create_validation_rule(
     )
 
     db.add(rule)
+    app_events.record_checks_on(db, current_user, survey)
     db.commit()
     db.refresh(rule)
 
@@ -151,6 +155,7 @@ def update_validation_rule(
     rule_update: ValidationRuleUpdateModel,
     survey: OwnedSurvey,
     db: DbSession,
+    current_user: CurrentUser,
 ):
     """
     Update an existing validation rule.
@@ -191,6 +196,7 @@ def update_validation_rule(
 
     if rule_update.is_active is not None:
         rule.is_active = rule_update.is_active
+        app_events.record_checks_on(db, current_user, survey)
 
     db.commit()
     db.refresh(rule)

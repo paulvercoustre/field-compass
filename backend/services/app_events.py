@@ -14,7 +14,8 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from database.models import AppEvent, User
+from database.models import AppEvent, SurveyConfig, User, ValidationRule
+from services.survey_config import built_in_checks
 from settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,11 @@ KOBO_CONNECTED = "kobo_connected"
 SURVEY_CREATED = "survey_created"
 SURVEY_DELETED = "survey_deleted"
 SURVEY_SHARED = "survey_shared"
+# The first time a survey has a check on, built-in or a rule of its own
+CHECKS_ON = "checks_on"
+# A reviewer's first decision of the (UTC) day on a survey: approved, not
+# approved or on hold, one at a time or all the clean ones at once
+REVIEW_DECISION = "review_decision"
 # A survey shared with an address with no confirmed account, and its acceptance
 INVITE_SENT = "invite_sent"
 INVITE_ACCEPTED = "invite_accepted"
@@ -66,6 +72,51 @@ def record(
             details=details or None,
         )
     )
+
+
+def record_checks_on(db: Session, user: User, survey: SurveyConfig) -> None:
+    """
+    Record the first time a survey has a check on. Called after any change
+    that can turn one on; records nothing while the survey has none, or once
+    it has been recorded. Joins the caller's commit, like record.
+    """
+    db.flush()  # sessions don't autoflush: the query must see the rule just added or turned on
+    has_rule = (
+        db.query(ValidationRule.rule_id)
+        .filter(ValidationRule.survey_id == survey.survey_id, ValidationRule.is_active.is_(True))
+        .first()
+    )
+    if has_rule is None and not any(on for _, on in built_in_checks(survey.config_data)):
+        return
+    seen = (
+        db.query(AppEvent.event_id)
+        .filter(AppEvent.kind == CHECKS_ON, AppEvent.survey_id == survey.survey_id)
+        .first()
+    )
+    if seen is None:
+        record(db, CHECKS_ON, user=user, survey_id=survey.survey_id)
+
+
+def record_review_decision(db: Session, user: User, survey_id: UUID) -> None:
+    """
+    Record that this person decided on a submission of this survey: once a
+    (UTC) day, so a reviewer working through 500 submissions adds one row,
+    and the figures can still say which surveys were reviewed each week.
+    Joins the caller's commit, like record.
+    """
+    start_of_day = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    seen = (
+        db.query(AppEvent.event_id)
+        .filter(
+            AppEvent.kind == REVIEW_DECISION,
+            AppEvent.user_id == user.user_id,
+            AppEvent.survey_id == survey_id,
+            AppEvent.created_at >= start_of_day,
+        )
+        .first()
+    )
+    if seen is None:
+        record(db, REVIEW_DECISION, user=user, survey_id=survey_id)
 
 
 def clean_signup_source(source: dict[str, Any] | None) -> dict[str, str] | None:

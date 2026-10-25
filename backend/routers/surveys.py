@@ -174,6 +174,7 @@ def create_survey(
     db.add(survey)
     db.flush()
     app_events.record(db, app_events.SURVEY_CREATED, user=current_user, survey_id=survey.survey_id)
+    app_events.record_checks_on(db, current_user, survey)
     db.commit()
     db.refresh(survey)
 
@@ -233,6 +234,7 @@ def update_survey(
             if key not in incoming and key in (survey.config_data or {}):
                 incoming[key] = survey.config_data[key]
         survey.config_data = incoming
+        app_events.record_checks_on(db, current_user, survey)
 
     survey.updated_at = datetime.utcnow()
 

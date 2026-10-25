@@ -11,6 +11,8 @@ export interface UsagePeriod {
   /** Surveys shared with an address with no confirmed account. */
   invites_sent: number;
   invites_accepted: number;
+  /** The North Star: surveys with a pull and a review decision in the period. */
+  active_surveys: number;
 }
 
 export interface UsageLast30 extends UsagePeriod {
@@ -30,6 +32,7 @@ export interface UsageWeek {
   active_users: number;
   surveys: number;
   pulls: number;
+  active_surveys: number;
 }
 
 export interface RecentSignup {
@@ -41,6 +44,47 @@ export interface RecentSignup {
   kobo_connected: boolean;
   surveys: number;
   pulled: boolean;
+  /** A survey of theirs has a check on. */
+  checks_on: boolean;
+  /** Has decided on a submission. */
+  decided: boolean;
+  /** Within activation_days of signing up; null when it can't be measured. */
+  activated: boolean | null;
+}
+
+/**
+ * The accounts that signed up in one week on their own, and how many got to each step within
+ * activation_days. Survey steps count the account's own surveys, whoever took them. Steps are null
+ * for weeks before review decisions were recorded.
+ */
+export interface ActivationWeek {
+  week: string; // Monday, ISO date
+  signups: number;
+  /** Joined through an invitation: counted apart, they came to review. */
+  invited: number;
+  measured: boolean;
+  /** Everyone in it has had their activation_days. */
+  complete: boolean;
+  connected_kobo: number | null;
+  added_survey: number | null;
+  pulled: number | null;
+  checks_on: number | null;
+  decided: number | null;
+  /** A survey pulled, with a check on and a review decision. */
+  activated: number | null;
+}
+
+/** Signups of the last 12 weeks from one source, and how far they got. */
+export interface SourceFunnel {
+  source: string;
+  signups: number;
+  connected_kobo: number;
+  pulled: number;
+  checks_on: number;
+  decided: number;
+  /** Signups late enough for activation to be measured, and how many of them activated. */
+  activation_measured: number;
+  activated: number;
 }
 
 /** This calendar month's spend on Field Compass's AI keys, all accounts together. */
@@ -60,13 +104,17 @@ export interface AIBudget {
 export interface Usage {
   generated_at: string;
   tracking_since: string | null;
+  /** The first review decision recorded: activation is measured from its week. */
+  review_tracking_since: string | null;
   totals: { users: number; kobo_connected: number; surveys: number; submissions: number };
   last_7_days: UsagePeriod;
   last_30_days: UsageLast30;
   ai_budget: AIBudget;
   weekly: UsageWeek[];
   funnel: { step: string; users: number }[];
-  signup_sources_30_days: { source: string; signups: number }[];
+  activation_days: number;
+  activation: ActivationWeek[];
+  signup_funnel_by_source: SourceFunnel[];
   recent_signups: RecentSignup[];
 }
 

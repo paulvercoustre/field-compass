@@ -19,6 +19,7 @@ from linter.dk import dont_know_codes
 from linter.engine import run_lint
 from linter.form_source import SurveyForm, load_survey_form, schema_from_payload
 from linter.models import LintContext, language_from_label_column, survey_label_language
+from services import app_events
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
 from services.kobo_servers import on_survey_server, survey_server
@@ -197,4 +198,6 @@ def adopt_lint_rules(
         .all()
     }
     rules = adopt_findings(db, survey.survey_id, selected, is_active=payload.is_active)
+    app_events.record_checks_on(db, current_user, survey)
+    db.commit()
     return [_rule_payload(rule, created=rule.rule_name not in existing_names) for rule in rules]
