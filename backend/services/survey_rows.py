@@ -39,12 +39,15 @@ def survey_rows(db: Session, survey_id: UUID) -> Query[SubmissionCurrent]:
     return cast("Query[SubmissionCurrent]", query)
 
 
-def whole(db: Session, rows: list[SubmissionCurrent]) -> list[SubmissionCurrent]:
-    """The submissions these rows are, loaded whole, in the same order."""
+def whole(db: Session, survey_id: UUID, rows: list[SubmissionCurrent]) -> list[SubmissionCurrent]:
+    """The survey's submissions these rows are, loaded whole, in the same order."""
     ids = [row._id for row in rows]
     if not ids:
         return []
     by_id = {
-        sub._id: sub for sub in db.query(SubmissionCurrent).filter(SubmissionCurrent._id.in_(ids))
+        sub._id: sub
+        for sub in db.query(SubmissionCurrent).filter(
+            SubmissionCurrent.survey_id == survey_id, SubmissionCurrent._id.in_(ids)
+        )
     }
     return [by_id[i] for i in ids if i in by_id]

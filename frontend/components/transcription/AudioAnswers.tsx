@@ -80,7 +80,11 @@ const duration = (seconds: number | null) => {
 };
 
 /** Loads the recording only when asked: it is streamed from Kobo each time. */
-export const Player: React.FC<{ koboId: number; answer: AudioAnswer }> = ({ koboId, answer }) => {
+export const Player: React.FC<{ koboId: number; surveyId: string; answer: AudioAnswer }> = ({
+  koboId,
+  surveyId,
+  answer,
+}) => {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +113,7 @@ export const Player: React.FC<{ koboId: number; answer: AudioAnswer }> = ({ kobo
           setLoading(true);
           setError(null);
           try {
-            setUrl(await loadRecording(koboId, answer.question_path));
+            setUrl(await loadRecording(koboId, surveyId, answer.question_path));
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not load the recording.');
           } finally {
@@ -164,7 +168,11 @@ const TranscriptText: React.FC<{ transcript: Transcript }> = ({ transcript }) =>
  * A submission's audio answers with their transcripts, re-read as background
  * work moves on. Null until loaded, and when it could not be.
  */
-export const useSubmissionTranscripts = (koboId: number | null, refreshKey?: string): SubmissionTranscripts | null => {
+export const useSubmissionTranscripts = (
+  koboId: number | null,
+  surveyId: string | undefined,
+  refreshKey?: string
+): SubmissionTranscripts | null => {
   const { version } = useActivity();
   const [data, setData] = useState<SubmissionTranscripts | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
@@ -173,12 +181,12 @@ export const useSubmissionTranscripts = (koboId: number | null, refreshKey?: str
   useEffect(() => {
     setData(null);
     setLoadedFor(null);
-  }, [koboId]);
+  }, [koboId, surveyId]);
 
   useEffect(() => {
-    if (koboId == null) return undefined;
+    if (koboId == null || !surveyId) return undefined;
     let cancelled = false;
-    getSubmissionTranscripts(koboId)
+    getSubmissionTranscripts(koboId, surveyId)
       .then((result) => {
         if (cancelled) return;
         setData(result);
@@ -189,7 +197,7 @@ export const useSubmissionTranscripts = (koboId: number | null, refreshKey?: str
       cancelled = true;
     };
     // `version` changes as background work moves on.
-  }, [koboId, refreshKey, version]);
+  }, [koboId, surveyId, refreshKey, version]);
 
   return koboId != null && loadedFor === koboId ? data : null;
 };

@@ -33,6 +33,7 @@ from services.ai_errors import AUTH, NOT_CONFIGURED, PROVIDER_QUOTA, AIError
 from services.audio_files import AudioFile, prepare_for_upload, probe_duration
 from services.auth import get_user_kobo_token
 from services.database import SessionLocal
+from services.kobo_servers import on_survey_server, survey_server
 from services.runs import (
     fail_stalled_items,
     fail_stalled_kobo_sends,
@@ -76,15 +77,14 @@ def _finish(
 
 def _kobo_fetcher(db, row: AudioTranscript, survey: SurveyConfig) -> KoboFetcher | None:
     """The fetcher of whoever asked for this transcript, else the survey's owner."""
+    # The survey's own server, with the key of the first whose account is on it.
     for user_id in (row.requested_by_user_id, survey.user_id):
         if not user_id:
             continue
         user = db.query(User).filter(User.user_id == user_id).first()
         token = get_user_kobo_token(user) if user else None
-        if token:
-            return KoboFetcher(
-                api_token=token, api_url=user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-            )
+        if token and on_survey_server(survey, user):
+            return KoboFetcher(api_token=token, api_url=survey_server(survey))
     return None
 
 

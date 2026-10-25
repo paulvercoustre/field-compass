@@ -237,7 +237,7 @@ class FakeFetcher:
 @pytest.fixture
 def fake_kobo(monkeypatch):
     fetcher = FakeFetcher()
-    monkeypatch.setattr(submissions_router, "_kobo_fetcher_for", lambda user: fetcher)
+    monkeypatch.setattr(submissions_router, "_kobo_fetcher_for", lambda survey, user: fetcher)
     return fetcher
 
 
@@ -273,11 +273,14 @@ class TestApproveClean:
 
     def test_reports_what_kobo_refused(self, client, queue, monkeypatch):  # noqa: F811
         fetcher = FakeFetcher(refused={queue.clean})
-        monkeypatch.setattr(submissions_router, "_kobo_fetcher_for", lambda user: fetcher)
+        monkeypatch.setattr(submissions_router, "_kobo_fetcher_for", lambda survey, user: fetcher)
         response = client.post("/api/submissions/approve-clean", params={"survey_id": queue.survey})
         assert response.json() == {"approved": 1, "failed": 1}
         with TestingSessionLocal() as db:
-            assert db.get(SubmissionCurrent, queue.clean).kobo_validation_status is None
+            assert (
+                db.get(SubmissionCurrent, (UUID(queue.survey), queue.clean)).kobo_validation_status
+                is None
+            )
 
     def test_nothing_to_approve(self, client, survey, fake_kobo):  # noqa: F811
         response = client.post("/api/submissions/approve-clean", params={"survey_id": survey})

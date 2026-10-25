@@ -148,9 +148,10 @@ class UserResponse(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    # The Kobo server is saved with its key, once Kobo accepts both
+    # (PUT /users/me/kobo-connection), never on its own.
     username: str | None = None
     full_name: str | None = None
-    kobo_api_url: str | None = None
     # Only the preferences given change.
     preferences: UserPreferencesUpdate | None = None
 

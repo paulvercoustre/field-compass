@@ -18,6 +18,7 @@ from schemas import KoboProject, SurveyFormResponse
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
 from services.kobo_form import stored_form
+from services.kobo_servers import user_server
 from services.permissions import get_accessible_surveys
 from services.rate_limit import limiter
 
@@ -62,7 +63,7 @@ def list_kobo_projects(
             detail="Add your Kobo API key in your account settings to see your Kobo projects.",
         )
 
-    api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+    api_url = user_server(current_user)
     try:
         assets = KoboFetcher(api_token=kobo_token, api_url=api_url).list_survey_assets()
     except Exception as exc:  # any upstream failure becomes a message
@@ -135,7 +136,7 @@ def get_kobo_asset_form(
             ),
         )
 
-    api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+    api_url = user_server(current_user)
     try:
         asset = KoboFetcher(api_token=kobo_token, api_url=api_url).get_asset_info(asset_uid)
     except Exception as exc:  # any upstream failure becomes a message

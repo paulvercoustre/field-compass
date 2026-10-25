@@ -32,10 +32,11 @@ def execute_pull(
     stats, or None when the run was not runnable or failed (the run says why).
     """
     from database.models import Run, SurveyConfig, User
-    from etl.kobo_fetcher import KoboFetchError, describe_kobo_error
+    from etl.kobo_fetcher import KoboFetcher, KoboFetchError, describe_kobo_error
     from etl.pipeline import ETLPipeline
     from services.auth import get_user_kobo_token
     from services.database import SessionLocal
+    from services.kobo_servers import KoboAccessError, require_survey_server, survey_server
     from services.runs import fail_run, finish_if_done
 
     options = options or {}
@@ -58,6 +59,14 @@ def execute_pull(
         if user is None or not token:
             fail_run(db, run, "No Kobo API key: add one in Account settings, then pull again.")
             return None
+        # The survey's own server, never the one the user's account points at
+        # now: another server's data must not fill this survey.
+        try:
+            require_survey_server(survey, user)
+        except KoboAccessError as exc:
+            fail_run(db, run, str(exc))
+            return None
+        fetcher = KoboFetcher(api_token=token, api_url=survey_server(survey))
 
         start_date = None
         if options.get("start_date"):
@@ -65,8 +74,7 @@ def execute_pull(
         try:
             pipeline = ETLPipeline(
                 db,
-                kobo_api_token=token,
-                kobo_api_url=user.kobo_api_url,
+                kobo_fetcher=fetcher,
                 run=run,
                 started_by_user_id=user.user_id,
             )

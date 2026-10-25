@@ -5,8 +5,59 @@ Tests for audit log processor.
 import csv
 import os
 import tempfile
+from unittest.mock import MagicMock, patch
 
-from etl.audit_processor import get_audit_dir, process_audit_log
+import pytest
+import requests
+
+from etl.audit_processor import download_audit_log, get_audit_dir, process_audit_log
+from etl.kobo_fetcher import KoboFetcher
+
+KOBO = "https://kf.kobotoolbox.org/api/v2"
+
+
+class TestDownloads:
+    """
+    An audit log's URL and file name come from the submission, so from
+    whichever server answered the pull.
+    """
+
+    @pytest.fixture
+    def audit_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AUDIT_DIR", str(tmp_path / "audits"))
+        return tmp_path / "audits"
+
+    def test_a_uuid_that_is_a_path_writes_nothing(self, audit_dir, tmp_path):
+        fetcher = MagicMock()
+        assert download_audit_log(f"{KOBO}/audit.csv", "../../escape", fetcher) is None
+        fetcher.download_audit_log.assert_not_called()
+        assert not (tmp_path / "escape.csv").exists()
+
+    def test_the_key_goes_to_the_kobo_server_only(self, audit_dir):
+        fetcher = KoboFetcher(api_token="tok", api_url=KOBO)
+        with patch.object(fetcher.session, "get") as get:
+            path = download_audit_log("https://collector.example/audit.csv", "u-1", fetcher)
+        assert path is None
+        get.assert_not_called()
+
+    def test_a_download_cut_short_leaves_no_file(self, audit_dir):
+        fetcher = KoboFetcher(api_token="tok", api_url=KOBO)
+        response = MagicMock()
+        response.iter_content.side_effect = requests.ConnectionError("dropped")
+        with patch.object(fetcher.session, "get", return_value=response):
+            assert download_audit_log(f"{KOBO}/audit.csv", "u-1", fetcher) is None
+        # Nothing for a later pull to take for the audit log.
+        assert list(audit_dir.iterdir()) == []
+
+    def test_a_kobo_audit_log_is_downloaded_once(self, audit_dir):
+        fetcher = KoboFetcher(api_token="tok", api_url=KOBO)
+        response = MagicMock()
+        response.iter_content.return_value = [b"event,start,end,node\n"]
+        with patch.object(fetcher.session, "get", return_value=response) as get:
+            first = download_audit_log(f"{KOBO}/audit.csv", "u-1", fetcher)
+            second = download_audit_log(f"{KOBO}/audit.csv", "u-1", fetcher)
+        assert first == second == str(audit_dir / "u-1.csv")
+        assert get.call_count == 1
 
 
 class TestAuditProcessor:

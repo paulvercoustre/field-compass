@@ -52,7 +52,8 @@ export const api = {
 
   /** Sets Kobo's validation status: 'Approved', 'Not Approved', 'On Hold', or null. */
   /** A submission's edits in Kobo, newest first (utils/editHistory.ts reads them). */
-  getSubmissionHistory: (koboId: number) => request<EditRecord[]>(`/api/submissions/${koboId}/history`),
+  getSubmissionHistory: (koboId: number, surveyId: string) =>
+    request<EditRecord[]>(`/api/submissions/${koboId}/history?${new URLSearchParams({ survey_id: surveyId })}`),
 
   /** One submission of a survey, for a link to one that isn't in the list. */
   getSubmission: (koboId: number, surveyId: string) =>

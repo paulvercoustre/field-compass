@@ -21,6 +21,7 @@ from linter.form_source import SurveyForm, load_survey_form, schema_from_payload
 from linter.models import LintContext, language_from_label_column, survey_label_language
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
+from services.kobo_servers import on_survey_server, survey_server
 from services.permissions import EditableSurvey, ViewableSurvey
 
 router = APIRouter()
@@ -86,13 +87,9 @@ def _survey_form(survey: SurveyConfig, current_user: User) -> SurveyForm:
     """
     token = get_user_kobo_token(current_user)
     fetch_live: Callable[[str], Any] | None = None
-    if token:
-        api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-
-        def fetch_with_token(asset_uid: str) -> Any:
-            return KoboFetcher(api_token=token, api_url=api_url).get_asset_info(asset_uid)
-
-        fetch_live = fetch_with_token
+    # The survey's own server, with the caller's key when their account is on it.
+    if token and on_survey_server(survey, current_user):
+        fetch_live = KoboFetcher(api_token=token, api_url=survey_server(survey)).get_asset_info
 
     survey_form = load_survey_form(survey, fetch_live)
     _require_form(survey_form.schema)

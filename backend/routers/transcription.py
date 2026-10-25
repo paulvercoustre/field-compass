@@ -33,11 +33,12 @@ from services.ai_allowance import Account, month_start
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
 from services.email_confirmation import require_confirmed_for_ai
+from services.kobo_servers import KoboAccessError, require_survey_server, survey_server
 from services.permissions import (
     OwnedSurvey,
     ViewableSurvey,
     get_user_permission,
-    require_survey_access,
+    require_submission_access,
 )
 from services.runs import (
     KOBO_RESEND,
@@ -451,17 +452,10 @@ def send_transcripts_to_kobo(
     return run_summary(db, run, survey)
 
 
-def _submission(db: Session, kobo_id: int, user: User) -> tuple[SubmissionCurrent, SurveyConfig]:
-    submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
-    if submission is None:
-        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
-    survey = require_survey_access(db, user, submission.survey_id, min_level="viewer")
-    return submission, survey
-
-
 @router.get("/submissions/{kobo_id}/transcripts")
 def get_submission_transcripts(
     kobo_id: int,
+    survey_id: Annotated[UUID, Query(description="The survey the submission is in")],
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -469,7 +463,7 @@ def get_submission_transcripts(
     Every answered audio question of a submission: whether it has a
     recording to play, and its transcript and Kobo status when transcribed.
     """
-    submission, survey = _submission(db, kobo_id, current_user)
+    submission, survey = require_submission_access(db, current_user, survey_id, kobo_id)
     settings = transcription_settings(survey.config_data)
     rows = {
         row.question_path: row
@@ -529,6 +523,7 @@ def get_submission_transcripts(
 @router.get("/submissions/{kobo_id}/audio")
 def stream_submission_audio(
     kobo_id: int,
+    survey_id: Annotated[UUID, Query(description="The survey the submission is in")],
     question: Annotated[str, Query(description="The audio question's path")],
     db: DbSession,
     current_user: CurrentUser,
@@ -538,7 +533,7 @@ def stream_submission_audio(
     Play a recording: streamed from Kobo with the viewer's own Kobo key, so
     nobody hears a recording they could not open in Kobo. Never stored here.
     """
-    submission, survey = _submission(db, kobo_id, current_user)
+    submission, survey = require_submission_access(db, current_user, survey_id, kobo_id)
     token = _require_kobo_token(current_user)
     match = next((q for q in audio_questions(survey.config_data) if q.path == question), None)
     if match is None:
@@ -549,9 +544,11 @@ def stream_submission_audio(
     if attachment is None or not attachment.url or attachment.deleted:
         raise HTTPException(status_code=404, detail="This answer has no recording.")
 
-    fetcher = KoboFetcher(
-        api_token=token, api_url=current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-    )
+    try:
+        require_survey_server(survey, current_user)
+    except KoboAccessError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    fetcher = KoboFetcher(api_token=token, api_url=survey_server(survey))
     try:
         upstream = fetcher.open_attachment(attachment.url, range_header)
     except KoboFetchError as exc:

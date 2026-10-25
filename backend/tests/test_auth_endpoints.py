@@ -360,7 +360,10 @@ class TestDeleteAccount:
             )
             db.add(
                 SubmissionHistory(
-                    kobo_id=1, deprecated_uuid=str(uuid4()), data_delta={"age": [30, 31]}
+                    survey_id=survey_id,
+                    kobo_id=1,
+                    deprecated_uuid=str(uuid4()),
+                    data_delta={"age": [30, 31]},
                 )
             )
             db.commit()
