@@ -40,6 +40,13 @@ const segments = (pointer: string) =>
 
 const KINDS: Record<string, AnswerChange['kind']> = { replace: 'changed', add: 'answered', remove: 'cleared' };
 
+// The same words with other spacing, or a number sent back as text. Kobo can
+// return answers nobody touched like this after an edit; shown, they'd read
+// "X → X".
+const text = (value: unknown) =>
+  typeof value === 'string' || typeof value === 'number' ? String(value).replace(/\s+/g, ' ').trim() : undefined;
+const sameText = (before: unknown, after: unknown) => text(before) !== undefined && text(before) === text(after);
+
 export function editsOf(records: EditRecord[]): Edit[] {
   return records.map((record) => ({
     id: record.history_id,
@@ -51,7 +58,7 @@ export function editsOf(records: EditRecord[]): Edit[] {
       // "/hh_roster/0/hh_roster~1name": the name answer of the roster's first item.
       const index = parts.findIndex((part) => /^\d+$/.test(part));
       const question = parts[parts.length - 1].split('/').pop()!;
-      if (RECORDED.has(question)) return [];
+      if (RECORDED.has(question) || (kind === 'changed' && sameText(op.old, op.value))) return [];
       return [
         {
           question: /^\d+$/.test(question) ? parts[0].split('/').pop()! : question,
