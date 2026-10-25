@@ -12,7 +12,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
-from services.kobo_servers import kobo_session
+from services.kobo_servers import KoboAddressBlocked, kobo_session
 from settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,9 @@ def describe_kobo_error(exc: Exception) -> str:
         return "Kobo is limiting requests right now. Try again in a few minutes."
     if status is not None and status >= 500:
         return "Kobo had a problem answering. Try again in a few minutes."
+    for cause in (exc, exc.__cause__):
+        if isinstance(cause, KoboAddressBlocked):
+            return str(cause)
     # A fetch error wraps the requests error it came from.
     if isinstance(exc, requests.ConnectionError | requests.Timeout) or isinstance(
         exc.__cause__, requests.ConnectionError | requests.Timeout
@@ -106,6 +109,8 @@ class KoboFetcher:
                 response = self.session.get(url, params=params, timeout=30)
                 response.raise_for_status()
                 return response.json()
+            except KoboAddressBlocked:
+                raise  # the same answer every time
             except requests.exceptions.RequestException as e:
                 if attempt < max_retries - 1:
                     wait_time = 2**attempt  # Exponential backoff

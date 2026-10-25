@@ -10,10 +10,10 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
+import jwt
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from database.models import User
 from services.app_events import can_view_usage, mark_active
 from services.database import DbSession
-from settings import get_settings
+from settings import SettingsError, get_settings
 
 # =============================================================================
 # Configuration from environment
@@ -31,6 +31,15 @@ from settings import get_settings
 _settings = get_settings()
 SECRET_KEY = _settings.jwt_secret_key
 ALGORITHM = "HS256"
+
+# The default and the .env.example placeholder are in a public repository:
+# anyone could sign a token for any account with them.
+_PUBLIC_SECRETS = {"change-this-secret-in-production-please", "generate_me_openssl_rand_hex_32"}
+if SECRET_KEY in _PUBLIC_SECRETS and not _settings.is_development:
+    raise SettingsError(
+        "JWT_SECRET_KEY is not set, or is the example value: set it to a secret of its own "
+        "(openssl rand -hex 32). Only development runs without one."
+    )
 ACCESS_TOKEN_EXPIRE_MINUTES = _settings.jwt_expire_minutes  # Default: 2 hours
 
 # Encryption key for Kobo API tokens
@@ -254,7 +263,7 @@ def decode_access_token(token: str) -> TokenData | None:
             email=email,
             issued_at=issued_at if isinstance(issued_at, int) else None,
         )
-    except JWTError:
+    except jwt.PyJWTError:
         return None
 
 

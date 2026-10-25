@@ -56,7 +56,8 @@ The ones you're most likely to set:
 
 | Variable | What it does |
 |---|---|
-| `JWT_SECRET_KEY`, `ENCRYPTION_KEY` | Sign logins and encrypt stored API keys. Required. |
+| `JWT_SECRET_KEY`, `ENCRYPTION_KEY` | Sign logins and encrypt stored API keys. Required: outside development, the API won't start with the default or example JWT secret. |
+| `KOBO_ALLOW_PRIVATE_SERVERS` | Lets users connect a Kobo server on a private network or plain http, for a deployment next to its own Kobo or a local one in development. Off by default: Kobo servers must be public HTTPS addresses, as AI endpoints must (`AI_ALLOW_PRIVATE_ENDPOINTS`). |
 | `OPENAI_API_KEY` | Your own key for the included AI usage. Without it, each survey owner adds their own key. |
 | `ELEVENLABS_API_KEY` | The same, for transcription. |
 | `AI_ALLOWANCE_*`, `TRANSCRIPTION_ALLOWANCE_*` | Included usage per user per month. |

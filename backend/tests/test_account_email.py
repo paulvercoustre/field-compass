@@ -590,7 +590,7 @@ class TestPasswordReset:
 
     def token_issued(self, client, seconds_ago: int, with_iat: bool = True) -> dict[str, str]:
         """A sign-in made a while ago: tokens record when they were issued, in seconds."""
-        from jose import jwt
+        import jwt
 
         from services.auth import ALGORITHM, SECRET_KEY
 

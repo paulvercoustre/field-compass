@@ -9,10 +9,11 @@ included: it is signed with a key made here and published as the provider's.
 from datetime import datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from jose import jwk, jwt
+from jwt.algorithms import RSAAlgorithm
 
 import tests.test_account_email as accounts
 from database.models import SurveyAccess, User, UserIdentity
@@ -44,12 +45,11 @@ def keys():
         serialization.PrivateFormat.PKCS8,
         serialization.NoEncryption(),
     ).decode()
-    public_pem = (
-        private.public_key()
-        .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
-        .decode()
-    )
-    public = {**jwk.construct(public_pem, algorithm="RS256").to_dict(), "kid": "test-key"}
+    public = {
+        **RSAAlgorithm.to_jwk(private.public_key(), as_dict=True),
+        "alg": "RS256",
+        "kid": "test-key",
+    }
     return private_pem, {"keys": [public]}
 
 
@@ -416,9 +416,12 @@ def test_an_account_without_a_password(client, provider, outbox):
     go(client, provider, **GOOGLE_ANN)
     headers = bearer(client.post("/api/auth/oauth/finish", json={"accept_terms": True}))
 
-    # No password to sign in with, or to change.
+    # No password to sign in with, or to change. (An empty one isn't a
+    # password at all: the form refuses it before anything is checked.)
     response = client.post("/api/auth/login", data={"username": "ann@example.org", "password": ""})
-    assert response.status_code == 401
+    assert response.status_code == 422
+    guessed = {"username": "ann@example.org", "password": "An0therPassw0rd!45"}
+    assert client.post("/api/auth/login", data=guessed).status_code == 401
     changed = client.put(
         "/api/users/me/password",
         json={"current_password": "", "new_password": "An0therPassw0rd!45"},

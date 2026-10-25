@@ -8,12 +8,14 @@ call the database, Redis or the cloud metadata service.
 """
 
 import socket
+import time
 from types import SimpleNamespace
 
 import pytest
 import requests
 from requests.adapters import HTTPAdapter
 
+from etl.kobo_fetcher import KoboFetcher, KoboFetchError, describe_kobo_error
 from services import kobo_servers
 from services.kobo_servers import (
     DEFAULT_KOBO_API_URL,
@@ -112,6 +114,15 @@ class TestKoboSession:
     def test_a_refusal_is_a_connection_error_to_callers(self):
         # Every caller already handles requests' errors: a refused address is one.
         assert issubclass(KoboAddressBlocked, requests.RequestException)
+
+    def test_a_pull_refused_an_address_says_why_at_once(self, monkeypatch):
+        monkeypatch.setattr(kobo_servers, "resolve_host", _resolving("10.0.0.7"))
+        fetcher = KoboFetcher(api_token="t", api_url="https://kobo.internal.example/api/v2")
+        started = time.monotonic()
+        with pytest.raises(KoboFetchError) as failed:
+            fetcher.get_asset_submissions("a1")
+        assert "private or local address" in describe_kobo_error(failed.value)
+        assert time.monotonic() - started < 1  # not retried: it would be refused again
 
     def test_kobo_redirecting_to_a_private_address_is_refused(self, monkeypatch):
         """Recordings redirect to Kobo's file storage: each hop is checked, not just the first."""

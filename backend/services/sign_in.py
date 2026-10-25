@@ -33,7 +33,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
-from jose import JWTError, jwt
+import jwt
 from sqlalchemy.orm import Session
 
 from database.models import User, UserIdentity
@@ -148,7 +148,7 @@ def unseal(value: str | None, use: str) -> dict[str, Any] | None:
         return None
     try:
         claims = jwt.decode(value, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
+    except jwt.PyJWTError:
         return None
     return claims if claims.get("use") == use else None
 
@@ -269,22 +269,25 @@ async def verify_id_token(chosen: Provider, id_token: str, nonce: str) -> dict[s
     """The token's claims, once its signature, audience, expiry, issuer and nonce check out."""
     try:
         kid = jwt.get_unverified_header(id_token).get("kid")
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise SignInError("failed") from exc
     keys = await _jwks(chosen)
     if kid not in {key.get("kid") for key in keys.get("keys", [])}:
         # Providers rotate their keys: fetch again before giving up.
         keys = await _jwks(chosen, refresh=True)
+    published = next((key for key in keys.get("keys", []) if key.get("kid") == kid), None)
+    if published is None:
+        raise SignInError("failed")
     try:
         claims = jwt.decode(
             id_token,
-            keys,
-            # Only RS256, whatever the token's header claims.
+            jwt.PyJWK(published, algorithm="RS256").key,
+            # Only RS256, whatever the token's header claims. The issuer is
+            # checked below: Microsoft's names the account's tenant.
             algorithms=["RS256"],
             audience=chosen.client_id,
-            options={"verify_iss": False, "verify_at_hash": False},
         )
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise SignInError("failed") from exc
     if not _issuer_ok(chosen, claims):
         raise SignInError("failed")

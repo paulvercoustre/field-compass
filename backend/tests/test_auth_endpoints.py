@@ -17,9 +17,9 @@ nothing is stubbed but the database session.
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
-from jose import jwt
 from sqlalchemy.orm import sessionmaker
 
 from database.models import (
@@ -238,7 +238,9 @@ class TestLogin:
         ).json()["access_token"]
 
         after = datetime.utcnow()
-        expires = datetime.fromtimestamp(jwt.get_unverified_claims(token)["exp"], UTC)
+        expires = datetime.fromtimestamp(
+            jwt.decode(token, options={"verify_signature": False})["exp"], UTC
+        )
         expires = expires.replace(tzinfo=None)
         # exp is whole seconds, so it can fall up to a second short.
         assert before + timedelta(hours=2, seconds=-1) <= expires <= after + timedelta(hours=2)
