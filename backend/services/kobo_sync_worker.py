@@ -33,6 +33,7 @@ from etl.kobo_fetcher import KoboFetcher
 from services.auth import get_user_kobo_token
 from services.database import SessionLocal
 from services.job_queue import celery_app
+from services.kobo_servers import on_survey_server, survey_server
 from services.kobo_supplement import (
     KOBO_PERMISSION,
     NOT_FOUND,
@@ -57,15 +58,14 @@ PAUSE_AFTER_PERMISSION_FAILURES = 3
 def _fetcher(
     db, row: AudioTranscript | AnswerTranslation, survey: SurveyConfig
 ) -> KoboFetcher | None:
+    # The survey's own server, with the key of the first whose account is on it.
     for user_id in (row.requested_by_user_id, survey.user_id):
         if not user_id:
             continue
         user = db.query(User).filter(User.user_id == user_id).first()
         token = get_user_kobo_token(user) if user else None
-        if token:
-            return KoboFetcher(
-                api_token=token, api_url=user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-            )
+        if token and on_survey_server(survey, user):
+            return KoboFetcher(api_token=token, api_url=survey_server(survey))
     return None
 
 

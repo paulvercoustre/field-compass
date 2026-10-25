@@ -18,6 +18,7 @@ from database.models import (
     Run,
     SubmissionCurrent,
     SurveyConfig,
+    User,
 )
 from services import pull_worker
 from services.runs import run_counts, sweep_runs
@@ -169,9 +170,11 @@ class TestStartingAPull:
 
 class _FakePipeline:
     outcome: object = None
+    made_with: dict = {}
 
     def __init__(self, db, **kwargs):
         self.db = db
+        type(self).made_with = kwargs
 
     def run_pipeline(self, **kwargs):
         if isinstance(self.outcome, Exception):
@@ -219,6 +222,27 @@ class TestThePullTask:
         note = db.query(Notification).one()
         assert note.title == "Household survey: pull finished"
         assert note.body.startswith("2 new submissions, 0 need review.")
+
+    def test_the_pull_reads_the_surveys_own_server(self, db, survey, queued):
+        survey.kobo_api_url = "https://kobo.ngo.example/api/v2"
+        db.query(User).filter(
+            User.user_id == TEST_USER_ID
+        ).one().kobo_api_url = "https://kobo.ngo.example/api/v2"
+        db.commit()
+        _FakePipeline.outcome = None
+        assert pull_worker.execute_pull(queued.run_id)["fetched"] == 2
+        assert _FakePipeline.made_with["kobo_fetcher"].api_url == "https://kobo.ngo.example/api/v2"
+
+    def test_an_account_on_another_server_cannot_pull_it(self, db, survey, queued):
+        """Its data would fill the survey, whatever that server sent."""
+        survey.kobo_api_url = "https://eu.kobotoolbox.org/api/v2"
+        db.commit()
+        _FakePipeline.outcome = None
+        assert pull_worker.execute_pull(queued.run_id) is None
+        db.expire_all()
+        run = db.query(Run).one()
+        assert run.status == "failed"
+        assert "eu.kobotoolbox.org" in run.error and "kf.kobotoolbox.org" in run.error
 
     def test_kobo_refusing_says_why(self, db, queued):
         from etl.kobo_fetcher import KoboFetchError
@@ -496,7 +520,9 @@ class TestSubmissionTranscripts:
             )
         )
         db.commit()
-        body = client.get("/api/submissions/1/transcripts").json()
+        body = client.get(
+            "/api/submissions/1/transcripts", params={"survey_id": str(survey.survey_id)}
+        ).json()
         assert body["answers"][0]["label"] == "Story"
         assert body["answers"][0]["transcript"]["language_name"] == "French"
         assert body["answers"][0]["has_recording"] is False  # no attachment stored
@@ -598,7 +624,9 @@ class TestTranslationApi:
             )
         )
         db.commit()
-        body = client.get("/api/submissions/1/translations").json()
+        body = client.get(
+            "/api/submissions/1/translations", params={"survey_id": str(survey.survey_id)}
+        ).json()
         assert (body["language"], body["language_name"]) == ("eng", "English")
         assert body["answers"]["village"]["text"] == "Kabul"
         assert body["answers"]["village"]["origin"] == "ai"

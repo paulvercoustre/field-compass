@@ -208,10 +208,11 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   // when a transcript or an AI review moves on.
   const transcripts = useSubmissionTranscripts(
     submission?._id ?? null,
+    surveyId,
     submission ? `${submission.llm_check_status}:${submission.data_quality_issues.length}` : undefined
   );
   // Translations, shown under the answers they translate.
-  const translations = useSubmissionTranslations(submission?._id ?? null);
+  const translations = useSubmissionTranslations(submission?._id ?? null, surveyId);
 
   const findings = useMemo(
     () =>
@@ -366,8 +367,13 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
             </React.Fragment>
           ))}
         </p>
-        {editsOpen && submission.has_edit_history && (
-          <EditHistory submissionId={submission._id} config={surveyConfig} data={submission.submission_data ?? {}} />
+        {editsOpen && submission.has_edit_history && surveyId && (
+          <EditHistory
+            submissionId={submission._id}
+            surveyId={surveyId}
+            config={surveyConfig}
+            data={submission.submission_data ?? {}}
+          />
         )}
         {koboError && (
           <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-400">
@@ -422,12 +428,15 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
               data={submission.submission_data}
               surveyConfig={surveyConfig}
               recordings={
-                transcripts && {
-                  koboId: submission._id,
-                  answers: transcripts.answers,
-                  sendToKobo: transcripts.send_to_kobo,
-                  issues: submission.data_quality_issues,
-                }
+                transcripts && surveyId
+                  ? {
+                      koboId: submission._id,
+                      surveyId,
+                      answers: transcripts.answers,
+                      sendToKobo: transcripts.send_to_kobo,
+                      issues: submission.data_quality_issues,
+                    }
+                  : null
               }
               translations={translations}
               findings={findings}

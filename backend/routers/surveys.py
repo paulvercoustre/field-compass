@@ -18,6 +18,7 @@ from services.ai_providers import survey_connection
 from services.auth import CurrentUser, get_user_by_email
 from services.database import DbSession
 from services.email_confirmation import require_confirmed_for_ai
+from services.kobo_servers import user_server
 from services.permissions import (
     OwnedSurvey,
     ViewableSurvey,
@@ -142,20 +143,30 @@ def create_survey(
     Create a new survey configuration.
     The current user becomes the owner of the survey.
     """
-    # Check if survey name already exists
+    # Names are unique among the owner's own surveys: another account's say
+    # nothing to this one.
     existing = (
-        db.query(SurveyConfig).filter(SurveyConfig.survey_name == survey_data.survey_name).first()
+        db.query(SurveyConfig)
+        .filter(
+            SurveyConfig.user_id == current_user.user_id,
+            SurveyConfig.survey_name == survey_data.survey_name,
+        )
+        .first()
     )
 
     if existing:
         raise HTTPException(
-            status_code=400, detail=f"Survey with name '{survey_data.survey_name}' already exists"
+            status_code=400,
+            detail=f"You already have a survey named '{survey_data.survey_name}'",
         )
 
     # Create new survey with current user as owner
     survey = SurveyConfig(
         survey_name=survey_data.survey_name,
         kobo_asset_id=survey_data.kobo_asset_id,
+        # The project is on the server the owner's Kobo account is on; every
+        # pull for the survey goes there (services/kobo_servers.py).
+        kobo_api_url=user_server(current_user),
         config_data=survey_data.config_data,
         user_id=current_user.user_id,  # Set owner
     )
@@ -198,6 +209,7 @@ def update_survey(
         existing = (
             db.query(SurveyConfig)
             .filter(
+                SurveyConfig.user_id == survey.user_id,
                 SurveyConfig.survey_name == survey_update.survey_name,
                 SurveyConfig.survey_id != survey.survey_id,
             )
@@ -206,7 +218,7 @@ def update_survey(
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Survey with name '{survey_update.survey_name}' already exists",
+                detail=f"You already have a survey named '{survey_update.survey_name}'",
             )
         survey.survey_name = survey_update.survey_name
 

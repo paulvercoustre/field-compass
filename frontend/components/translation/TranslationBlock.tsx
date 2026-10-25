@@ -89,6 +89,7 @@ export const TranslationBlock: React.FC<TranslationBlockProps> = ({ translation,
  */
 export const useSubmissionTranslations = (
   koboId: number | null,
+  surveyId: string | undefined,
   refreshKey?: string
 ): SubmissionTranslations | null => {
   const { version } = useActivity();
@@ -98,12 +99,12 @@ export const useSubmissionTranslations = (
   useEffect(() => {
     setData(null);
     setLoadedFor(null);
-  }, [koboId]);
+  }, [koboId, surveyId]);
 
   useEffect(() => {
-    if (koboId == null) return undefined;
+    if (koboId == null || !surveyId) return undefined;
     let cancelled = false;
-    getSubmissionTranslations(koboId)
+    getSubmissionTranslations(koboId, surveyId)
       .then((result) => {
         if (cancelled) return;
         setData(result);
@@ -114,7 +115,7 @@ export const useSubmissionTranslations = (
       cancelled = true;
     };
     // `version` changes as background work moves on.
-  }, [koboId, refreshKey, version]);
+  }, [koboId, surveyId, refreshKey, version]);
 
   return koboId != null && loadedFor === koboId && data?.enabled ? data : null;
 };

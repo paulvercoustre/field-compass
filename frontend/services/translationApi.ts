@@ -120,8 +120,10 @@ export const translateNow = (surveyId: string, mode: 'missing' | 'all') =>
 export const sendTranslationsToKobo = (surveyId: string) =>
   request<RunSummary>(`/api/surveys/${surveyId}/translations/send-to-kobo`, { method: 'POST' });
 
-export const getSubmissionTranslations = (koboId: number) =>
-  request<SubmissionTranslations>(`/api/submissions/${koboId}/translations`);
+export const getSubmissionTranslations = (koboId: number, surveyId: string) =>
+  request<SubmissionTranslations>(
+    `/api/submissions/${koboId}/translations?${new URLSearchParams({ survey_id: surveyId })}`
+  );
 
 /** Whether a survey translates the transcripts of all the questions it transcribes. */
 export const translatesTranscripts = (settings: TranslationSettings, transcribed: string[]): boolean =>

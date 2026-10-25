@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 _PROGRESS_EVERY = 25
 
 
-def _read_audit(parsed: dict[str, Any], kobo_token: str | None) -> dict[str, Any] | None:
+def _read_audit(parsed: dict[str, Any], fetcher: KoboFetcher) -> dict[str, Any] | None:
     """
     The submission's audit log, downloaded once and read: its interview times
     go into the answers, where the duration checks read them.
@@ -44,7 +44,7 @@ def _read_audit(parsed: dict[str, Any], kobo_token: str | None) -> dict[str, Any
     logger.info(f"Processing audit log for {submission_uuid}: {audit_url}")
     try:
         audit_metrics = download_and_process_audit(
-            audit_url=audit_url, uuid=submission_uuid, kobo_token=kobo_token
+            audit_url=audit_url, uuid=submission_uuid, fetcher=fetcher
         )
     except Exception as e:  # noqa: BLE001 -- one bad audit log must not stop the pull
         logger.warning(f"Failed to process audit log for {submission_uuid}: {e}")
@@ -247,9 +247,6 @@ class ETLPipeline:
                 self.db, survey_config, run_id=run_id, user_id=self.started_by_user_id
             )
 
-            # Get Kobo API token for audit downloads
-            kobo_token = self.kobo_api_token
-
             # Step 3: Process each submission
             logger.info("Step 2: Processing submissions...")
             for index, kobo_sub in enumerate(kobo_submissions):
@@ -264,7 +261,7 @@ class ETLPipeline:
                     parsed = parse_kobo_submission(kobo_sub)
                     submission_uuid = parsed["_uuid"]
                     parsed["_id"]
-                    audit_metrics = _read_audit(parsed, kobo_token)
+                    audit_metrics = _read_audit(parsed, self.kobo_fetcher)
 
                     # Merge submission (upsert with edit detection)
                     submission, history, is_new = merge_submission(
@@ -273,6 +270,7 @@ class ETLPipeline:
                         survey_id,
                         kobo_asset_id=survey_config.kobo_asset_id,
                         kobo_data=kobo_sub,  # Pass raw Kobo data for deprecatedID detection
+                        kobo_api_url=survey_config.kobo_api_url,
                     )
 
                     _keep_question_seconds(submission, audit_metrics)

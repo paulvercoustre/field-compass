@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -53,7 +54,7 @@ from services.permissions import (
     OwnedSurvey,
     ViewableSurvey,
     get_user_permission,
-    require_survey_access,
+    require_submission_access,
 )
 from services.runs import (
     KOBO_RESEND,
@@ -416,14 +417,12 @@ def translation_view(row: AnswerTranslation | None) -> dict[str, Any] | None:
 @router.get("/submissions/{kobo_id}/translations")
 def get_submission_translations(
     kobo_id: int,
+    survey_id: Annotated[UUID, Query(description="The survey the submission is in")],
     db: DbSession,
     current_user: CurrentUser,
 ):
     """A submission's translations in the survey's language, by question path."""
-    submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
-    if submission is None:
-        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
-    survey = require_survey_access(db, current_user, submission.survey_id, min_level="viewer")
+    submission, survey = require_submission_access(db, current_user, survey_id, kobo_id)
     settings = translation_settings(survey.config_data)
     rows = (
         db.query(AnswerTranslation)

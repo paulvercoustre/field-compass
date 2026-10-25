@@ -221,10 +221,10 @@ def test_rows_read_like_submissions_and_load_whole_in_order(survey):
         assert [row.submission_data["enumerator_id"] for row in rows] == ["EN1", "EN2", "EN1"]
         with pytest.raises(AttributeError):
             rows[0].reviewer_notes = "rows are read-only"  # type: ignore[misc]
-        subs = whole(db, rows)
+        subs = whole(db, UUID(survey), rows)
         assert [sub._id for sub in subs] == [row._id for row in rows]
         assert all(isinstance(sub, SubmissionCurrent) for sub in subs)
-        assert whole(db, []) == []
+        assert whole(db, UUID(survey), []) == []
 
 
 def test_json_reads_the_same_as_the_standard_library():

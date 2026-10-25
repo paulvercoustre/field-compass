@@ -13,9 +13,11 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -109,8 +111,14 @@ class SurveyConfig(Base):
     survey_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    survey_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    # Unique among its owner's surveys only: one account's names say nothing
+    # about another's.
+    survey_name: Mapped[str] = mapped_column(String(255), nullable=False)
     kobo_asset_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # The Kobo server the project is on, as an API URL: the owner's when the
+    # survey was made. Every pull, edit link and recording comes from here,
+    # whoever asks (services/kobo_servers.py).
+    kobo_api_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     config_data: Mapped[Any] = mapped_column(JSONB, nullable=False)
     # User ownership (for multi-tenancy)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -159,6 +167,10 @@ class SurveyConfig(Base):
         "SubmissionCurrent", back_populates="survey_config"
     )
 
+    __table_args__ = (
+        UniqueConstraint("user_id", "survey_name", name="survey_configs_user_name_key"),
+    )
+
 
 class ValidationRule(Base):
     """ORM model for validation_rules table."""
@@ -192,17 +204,24 @@ class ValidationRule(Base):
 
 
 class SubmissionCurrent(Base):
-    """ORM model for submissions_current table."""
+    """
+    ORM model for submissions_current table.
+
+    A submission is its survey's: the key is the survey and Kobo's ``_id``
+    together. ``_id`` alone is a counter on one Kobo server, so another
+    server, or another survey of the same Kobo project, has the same numbers,
+    and a pull may only ever reach its own survey's rows.
+    """
 
     __tablename__ = "submissions_current"
 
-    _id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    _id: Mapped[int] = mapped_column(Integer, nullable=False)
     survey_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("survey_configs.survey_id", ondelete="RESTRICT"),
         nullable=False,
     )
-    _uuid: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    _uuid: Mapped[str] = mapped_column(String(255), nullable=False)
     _submission_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end: Mapped[datetime] = mapped_column(
         "end", DateTime(timezone=True), nullable=False
@@ -291,6 +310,11 @@ class SubmissionCurrent(Base):
         "SubmissionHistory", back_populates="submission", cascade="all, delete-orphan"
     )
 
+    __table_args__ = (
+        PrimaryKeyConstraint("survey_id", "_id", name="submissions_current_pkey"),
+        UniqueConstraint("survey_id", "_uuid", name="submissions_current_survey_uuid_key"),
+    )
+
 
 class SubmissionHistory(Base):
     """ORM model for submissions_history table."""
@@ -298,9 +322,8 @@ class SubmissionHistory(Base):
     __tablename__ = "submissions_history"
 
     history_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    kobo_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("submissions_current._id", ondelete="CASCADE"), nullable=False
-    )
+    survey_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    kobo_id: Mapped[int] = mapped_column(Integer, nullable=False)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
@@ -313,6 +336,16 @@ class SubmissionHistory(Base):
     # Relationships
     submission: Mapped["SubmissionCurrent"] = relationship(
         "SubmissionCurrent", back_populates="history"
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["survey_id", "kobo_id"],
+            ["submissions_current.survey_id", "submissions_current._id"],
+            ondelete="CASCADE",
+            name="submissions_history_submission_fkey",
+        ),
+        Index("idx_history_submission", "survey_id", "kobo_id"),
     )
 
 

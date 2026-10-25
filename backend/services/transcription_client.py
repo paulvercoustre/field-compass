@@ -119,7 +119,8 @@ class TranscriptionClient:
         duration_seconds: float | None = None,
     ) -> TranscriptResult:
         """Transcribe one recording. Raises :class:`AIError` on any failure."""
-        if not self.available:
+        api_key = self.api_key
+        if api_key is None:
             raise AIError(NOT_CONFIGURED, "Transcription is not set up (ELEVENLABS_API_KEY).")
 
         data = {
@@ -136,7 +137,7 @@ class TranscriptionClient:
             with open(audio.path, "rb") as handle:
                 response = self.session.post(
                     f"{self.base_url}/v1/speech-to-text",
-                    headers={"xi-api-key": self.api_key},
+                    headers={"xi-api-key": api_key},
                     params=params,
                     data=data,
                     files={

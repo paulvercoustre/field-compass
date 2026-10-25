@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: field_compass
     ports:
-      - "5432:5432"
+      # This machine only: the database has the default password.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
@@ -94,7 +95,8 @@ services:
     image: redis:7-alpine
     container_name: field-compass-redis
     ports:
-      - "6379:6379"
+      # This machine only: Redis has no password.
+      - "127.0.0.1:6379:6379"
     networks:
       - field-compass-network
 

@@ -296,12 +296,14 @@ class TestSurveysEndpoint:
 
             # Create history records
             history1 = SubmissionHistory(
+                survey_id=submission.survey_id,
                 kobo_id=submission._id,
                 timestamp=datetime.utcnow(),
                 deprecated_uuid="old-uuid-1",
                 data_delta=[{"op": "replace", "path": "/age", "value": 35}],
             )
             history2 = SubmissionHistory(
+                survey_id=submission.survey_id,
                 kobo_id=submission._id,
                 timestamp=datetime.utcnow(),
                 deprecated_uuid="old-uuid-2",
@@ -356,6 +358,7 @@ class TestSurveysEndpoint:
 
             # Create history for submission1
             history = SubmissionHistory(
+                survey_id=submission1.survey_id,
                 kobo_id=submission1._id,
                 timestamp=datetime.utcnow(),
                 deprecated_uuid="old-uuid-3",

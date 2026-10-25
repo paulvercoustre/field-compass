@@ -11,7 +11,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from database.models import SurveyAccess, SurveyConfig, User
+from database.models import SubmissionCurrent, SurveyAccess, SurveyConfig, User
 from services import app_events
 from services.auth import CurrentUser
 from services.database import DbSession
@@ -127,6 +127,32 @@ def require_survey_access(
         app_events.record_staff_access(db, user, survey.survey_id)
 
     return survey
+
+
+def require_submission_access(
+    db: Session,
+    user: User,
+    survey_id: UUID,
+    kobo_id: int,
+    min_level: AccessLevel = "viewer",
+) -> tuple[SubmissionCurrent, SurveyConfig]:
+    """
+    A survey's submission, by its Kobo ``_id``, once the user is known to hold
+    ``min_level`` on the survey.
+
+    The survey is always named: ``_id`` is only unique within one survey, so
+    the same number in another survey is another submission. Access is checked
+    first, so a 404 never says whether another survey has that number.
+    """
+    survey = require_survey_access(db, user, survey_id, min_level)
+    submission = (
+        db.query(SubmissionCurrent)
+        .filter(SubmissionCurrent.survey_id == survey.survey_id, SubmissionCurrent._id == kobo_id)
+        .first()
+    )
+    if submission is None:
+        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
+    return submission, survey
 
 
 def grant_survey_access(

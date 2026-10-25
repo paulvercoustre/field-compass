@@ -128,6 +128,8 @@ class Settings(BaseModel):
     kobo_api_url: str = "https://kf.kobotoolbox.org/api/v2"
     kobo_supplement_version: str | None = None
     audit_dir: str | None = None
+    # Kobo servers on private networks or plain http (services/kobo_servers.py).
+    kobo_allow_private_servers: bool = False
 
     # --- AI on the operator's key ---------------------------------------------
     openai_api_key: str | None = None

@@ -27,10 +27,9 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-    
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
@@ -71,7 +70,7 @@ jobs:
         DATABASE_URL: "sqlite:///:memory:"
     
     - name: Upload coverage to artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       if: always()
       with:
         name: coverage-report
@@ -89,10 +88,9 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
     - name: Set up Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
         node-version: '22'
         cache: 'npm'
@@ -130,16 +128,14 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-    
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
     # Only needed to publish. Pull requests never publish, and a fork PR's
     # token is read-only, so logging in there would fail for no benefit.
     - name: Log in to GitHub Container Registry
       if: github.event_name != 'pull_request'
-      uses: docker/login-action@v3
+      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
@@ -147,7 +143,7 @@ jobs:
     
     - name: Extract metadata (tags, labels)
       id: meta
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         # `type=sha,format=long` produces sha-<full 40-char commit>, and that is
@@ -169,7 +165,7 @@ jobs:
     # daemon only. Publishing a PR's image would turn untrusted contributor
     # code into a durable, pullable artifact in the registry.
     - name: Build image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
       with:
         context: ./backend
         file: ./backend/Dockerfile
@@ -184,7 +180,7 @@ jobs:
       run: docker save field-compass-backend:ci -o /tmp/backend-image.tar
     
     - name: Upload image artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: backend-image
         path: /tmp/backend-image.tar
@@ -192,7 +188,7 @@ jobs:
     
     - name: Publish image
       if: github.event_name != 'pull_request'
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
       with:
         context: ./backend
         file: ./backend/Dockerfile
@@ -233,8 +229,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-    
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
     # The image comes from the build job as an artifact, NOT from the registry.
     # The previous version pulled by tag and fell back to :latest when the tag
     # was missing -- which health-checked the CURRENT PRODUCTION image and
@@ -242,7 +237,7 @@ jobs:
     # There is deliberately no fallback here: if the artifact is missing the
     # job fails, because a green tick must mean this commit was tested.
     - name: Download image built from this commit
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
       with:
         name: backend-image
         path: /tmp
@@ -312,6 +307,7 @@ jobs:
           -p 8001:8000 \
           -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/field_compass_test" \
           -e ENVIRONMENT="test" \
+          -e JWT_SECRET_KEY="ci-health-check-only" \
           $IMAGE)
         
         echo "CONTAINER_ID=$CONTAINER_ID" >> $GITHUB_ENV

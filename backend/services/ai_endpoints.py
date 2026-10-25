@@ -31,7 +31,7 @@ def private_endpoints_allowed() -> bool:
     return get_settings().ai_allow_private_endpoints
 
 
-def _is_public(address: str) -> bool:
+def is_public_address(address: str) -> bool:
     ip = ipaddress.ip_address(address)
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
@@ -67,7 +67,7 @@ def validate_base_url(
     addresses = {str(info[4][0]) for info in infos}
     if not addresses:
         raise EndpointRejected(f"Could not find {parts.hostname}.")
-    if not allow_private and not all(_is_public(address) for address in addresses):
+    if not allow_private and not all(is_public_address(address) for address in addresses):
         raise EndpointRejected(
             f"{parts.hostname} is a private or local address. Ask the administrator "
             "to allow self-hosted endpoints."

@@ -6,13 +6,19 @@ Downloads and processes KoboToolbox audit logs to calculate active interview tim
 import csv
 import logging
 import os
-from typing import Any
-
-import requests
+import re
+from typing import TYPE_CHECKING, Any
 
 from settings import get_settings
 
+if TYPE_CHECKING:
+    from etl.kobo_fetcher import KoboFetcher
+
 logger = logging.getLogger(__name__)
+
+# What a Kobo _uuid looks like. It names the file, so nothing else may: the
+# submission comes from the Kobo server, and `../x` would write elsewhere.
+_SAFE_UUID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 # Default audit directory (relative to backend directory)
 DEFAULT_AUDIT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "audits")
@@ -31,20 +37,23 @@ def get_audit_dir() -> str:
     return audit_dir
 
 
-def download_audit_log(audit_url: str, uuid: str, kobo_token: str | None = None) -> str | None:
+def download_audit_log(audit_url: str, uuid: str, fetcher: "KoboFetcher") -> str | None:
     """
     Download a single audit log CSV file from Kobo.
 
     Args:
         audit_url: URL to the audit log CSV
         uuid: Submission UUID (used as filename)
-        kobo_token: Optional Kobo API token for authentication
+        fetcher: The pull's Kobo fetcher: its key goes to its own server only
 
     Returns:
         Path to downloaded file, or None if download failed
     """
     if not audit_url:
         logger.debug(f"No audit URL provided for {uuid}")
+        return None
+    if not _SAFE_UUID.fullmatch(uuid or ""):
+        logger.warning(f"Not a Kobo submission UUID, audit log skipped: {uuid!r}")
         return None
 
     audit_dir = get_audit_dir()
@@ -57,26 +66,9 @@ def download_audit_log(audit_url: str, uuid: str, kobo_token: str | None = None)
         logger.debug(f"Audit log already exists for {uuid}, skipping download")
         return file_path
 
-    try:
-        headers = {}
-        if kobo_token:
-            headers["Authorization"] = f"Token {kobo_token}"
-
-        response = requests.get(audit_url, headers=headers, timeout=30, stream=True)
-        response.raise_for_status()
-
-        # Write to file
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-
-        logger.debug(f"Downloaded audit log for {uuid} to {file_path}")
-        return file_path
-
-    except (requests.RequestException, OSError) as e:
-        logger.warning(f"Failed to download audit log for {uuid}: {e}")
+    if not fetcher.download_audit_log(audit_url, file_path):
         return None
+    return file_path
 
 
 # A screen with one question, and a screen with a whole field-list group.
@@ -207,7 +199,7 @@ def process_audit_log(file_path: str, uuid: str) -> dict[str, Any] | None:
 
 
 def download_and_process_audit(
-    audit_url: str | None, uuid: str, kobo_token: str | None = None
+    audit_url: str | None, uuid: str, fetcher: "KoboFetcher"
 ) -> dict[str, Any] | None:
     """
     Download and process a single audit log.
@@ -215,7 +207,7 @@ def download_and_process_audit(
     Args:
         audit_url: URL to the audit log CSV (from Kobo submission)
         uuid: Submission UUID
-        kobo_token: Optional Kobo API token
+        fetcher: The pull's Kobo fetcher
 
     Returns:
         Dictionary with metrics, or None if unavailable
@@ -224,7 +216,7 @@ def download_and_process_audit(
         return None
 
     # Download audit log
-    file_path = download_audit_log(audit_url, uuid, kobo_token)
+    file_path = download_audit_log(audit_url, uuid, fetcher)
     if not file_path:
         return None
 

@@ -2,14 +2,38 @@
 Pytest configuration and fixtures for backend tests.
 """
 
+import ipaddress
+import socket
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.orm import sessionmaker
 
 from database.models import Base, SurveyConfig
-from services import email_confirmation
+from services import email_confirmation, kobo_servers
 from tests.sqlite_compat import sqlite_engine
+
+# example.com's address: public, so the address check lets it through.
+PUBLIC_IP = "93.184.216.34"
+
+
+def resolve_publicly(host, port, **_):
+    """An address is itself and localhost is local; any other name is public."""
+    try:
+        address = str(ipaddress.ip_address(host))
+    except ValueError:
+        address = "127.0.0.1" if host == "localhost" else PUBLIC_IP
+    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, port))]
+
+
+@pytest.fixture(autouse=True)
+def kobo_hosts_resolve_publicly(monkeypatch):
+    """
+    The made-up Kobo servers the tests name (kobo.example...) resolve to a
+    public address, and no test looks a name up on the network. Tests of the
+    address check give their own resolver.
+    """
+    monkeypatch.setattr(kobo_servers, "resolve_host", resolve_publicly)
 
 
 @pytest.fixture(autouse=True)

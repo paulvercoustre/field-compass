@@ -278,8 +278,14 @@ class TestPull:
         stats = _pull(test_db, ai_survey, 3)
         assert (stats["llm_queued"], stats["llm_not_run_allowance"]) == (1, 1)
         test_db.expire_all()
-        assert test_db.get(SubmissionCurrent, second._id).llm_check_status == "pending"
-        assert test_db.get(SubmissionCurrent, 5002).llm_check_status == NOT_RUN_ALLOWANCE
+        assert (
+            test_db.get(SubmissionCurrent, (ai_survey.survey_id, second._id)).llm_check_status
+            == "pending"
+        )
+        assert (
+            test_db.get(SubmissionCurrent, (ai_survey.survey_id, 5002)).llm_check_status
+            == NOT_RUN_ALLOWANCE
+        )
 
     def test_own_provider_has_no_field_compass_limit(self, test_db, ai_survey, monkeypatch):
         monkeypatch.setenv("AI_ALLOWANCE_CHECKS_PER_USER_MONTH", "0")

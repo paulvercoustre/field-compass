@@ -42,8 +42,14 @@ from schemas import (
 )
 from services.auth import CurrentUser, get_user_kobo_token
 from services.database import DbSession
+from services.kobo_servers import KoboAccessError, require_survey_server, survey_server
 from services.page_cache import cached
-from services.permissions import AccessLevel, parse_uuid, require_survey_access
+from services.permissions import (
+    AccessLevel,
+    parse_uuid,
+    require_submission_access,
+    require_survey_access,
+)
 from services.review_queue import QueueFilters, ReviewQueue
 from services.submission_filters import parse_list, parse_sampling_filters
 from services.survey_config import get_enumerator_field, get_sampling_cols
@@ -338,7 +344,7 @@ def get_submissions(
         queue = _review_queue(db, survey_config, params)
         rows, used_sort = queue.submissions(sort)
         start = offset if offset is not None else (page - 1) * page_size
-        shown = whole(db, rows[start : start + page_size])
+        shown = whole(db, survey_config.survey_id, rows[start : start + page_size])
 
         summaries = _transcript_summaries(db, survey_config.survey_id, [sub._id for sub in shown])
         submissions = []
@@ -400,14 +406,18 @@ def get_submission_facets(db: DbSession, current_user: CurrentUser, params: Queu
     return cached(db, survey_config, "facets", asdict(params), SubmissionFacets, work_out)
 
 
-def _kobo_fetcher_for(current_user: User) -> KoboFetcher:
+def _kobo_fetcher_for(survey: SurveyConfig, current_user: User) -> KoboFetcher:
+    """The survey's Kobo server, with the user's key when their account is on it."""
     kobo_token = get_user_kobo_token(current_user)
     if not kobo_token:
         raise HTTPException(
             status_code=400, detail="You need to configure your Kobo API key in user settings"
         )
-    kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-    return KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
+    try:
+        require_survey_server(survey, current_user)
+    except KoboAccessError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return KoboFetcher(api_token=kobo_token, api_url=survey_server(survey))
 
 
 @router.post("/submissions/approve-clean", response_model=ApproveCleanResult)
@@ -429,8 +439,8 @@ def approve_clean_submissions(db: DbSession, current_user: CurrentUser, params: 
     if not ready:
         return ApproveCleanResult(approved=0, failed=0)
 
-    ready = whole(db, ready)
-    fetcher = _kobo_fetcher_for(current_user)
+    ready = whole(db, survey_config.survey_id, ready)
+    fetcher = _kobo_fetcher_for(survey_config, current_user)
     try:
         approved = set(
             fetcher.update_validation_statuses(
@@ -459,60 +469,50 @@ def approve_clean_submissions(db: DbSession, current_user: CurrentUser, params: 
     return ApproveCleanResult(approved=len(approved), failed=len(ready) - len(approved))
 
 
+# A submission is named by its survey and its Kobo _id: the same _id in
+# another survey is another submission.
+SurveyOfSubmission = Annotated[UUIDType, Query(description="The survey the submission is in")]
+
+
 @router.get("/submissions/{kobo_id}", response_model=Submission)
 def get_submission(
     kobo_id: int,
+    survey_id: SurveyOfSubmission,
     db: DbSession,
     current_user: CurrentUser,
-    survey_id: Annotated[
-        str | None,
-        Query(description="Only in this survey: what a link to a survey's submission names"),
-    ] = None,
 ):
     """
-    Get a single submission by its KoboToolbox ID (_id).
-    Requires viewer access to the survey this submission belongs to.
+    Get a single submission of a survey by its KoboToolbox ID (_id).
+    Requires viewer access to the survey.
 
     Returns the complete submission with all data and quality issues.
     """
-    query = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id)
-    if survey_id is not None:
-        query = query.filter(SubmissionCurrent.survey_id == parse_uuid(survey_id))
-    orm_submission = query.first()
-
-    if not orm_submission:
-        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
-
-    # Check user has access to the survey
-    require_survey_access(db, current_user, orm_submission.survey_id, min_level="viewer")
-
+    orm_submission, _ = require_submission_access(db, current_user, survey_id, kobo_id)
     return _orm_to_pydantic_submission(orm_submission)
 
 
 @router.get("/submissions/{kobo_id}/history", response_model=list[SubmissionHistory])
 def get_submission_history(
     kobo_id: int,
+    survey_id: SurveyOfSubmission,
     db: DbSession,
     current_user: CurrentUser,
 ):
     """
     Get edit history for a submission.
-    Requires viewer access to the survey this submission belongs to.
+    Requires viewer access to the survey.
 
     Returns all historical versions with JSON patch diffs, ordered by timestamp (newest first).
     """
-    # First verify submission exists
-    submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
-
-    # Check user has access to the survey
-    require_survey_access(db, current_user, submission.survey_id, min_level="viewer")
+    submission, _ = require_submission_access(db, current_user, survey_id, kobo_id)
 
     # Get all history records for this submission
     orm_history = (
         db.query(SubmissionHistoryORM)
-        .filter(SubmissionHistoryORM.kobo_id == kobo_id)
+        .filter(
+            SubmissionHistoryORM.survey_id == submission.survey_id,
+            SubmissionHistoryORM.kobo_id == submission._id,
+        )
         .order_by(SubmissionHistoryORM.timestamp.desc())
         .all()
     )
@@ -523,7 +523,7 @@ def get_submission_history(
 @router.get("/submissions/{kobo_id}/kobo-edit-url")
 def get_kobo_edit_url(
     kobo_id: int,
-    survey_id: Annotated[UUIDType, Query(description="Survey ID to get the Kobo asset ID")],
+    survey_id: SurveyOfSubmission,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -541,34 +541,17 @@ def get_kobo_edit_url(
     Returns:
         JSON with 'url' field containing the Enketo edit URL
     """
-    # Verify submission exists
-    submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
-
-    # Authorize against the submission's OWN survey, never the caller-supplied
-    # survey_id. _id is a global primary key across all surveys, so trusting the
-    # query parameter let a user with editor rights on ANY survey mutate
-    # submissions belonging to another one.
-    survey_id = submission.survey_id
-    # Check user has editor access to the survey
-    survey_config = require_survey_access(db, current_user, survey_id, min_level="editor")
+    # Editing submissions is an edit action.
+    _, survey_config = require_submission_access(
+        db, current_user, survey_id, kobo_id, min_level="editor"
+    )
 
     if not survey_config.kobo_asset_id:
         raise HTTPException(
             status_code=400, detail=f"Survey {survey_id} does not have a kobo_asset_id configured"
         )
 
-    # Get user's Kobo API token
-    kobo_token = get_user_kobo_token(current_user)
-    if not kobo_token:
-        raise HTTPException(
-            status_code=400,
-            detail="You need to configure your Kobo API key in user settings to get edit URLs",
-        )
-
-    kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-    fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
+    fetcher = _kobo_fetcher_for(survey_config, current_user)
     # Kobo answers {"url": "...", "version_uid": "..."}.
     endpoint = f"/assets/{survey_config.kobo_asset_id}/data/{kobo_id}/enketo/edit/"
     try:
@@ -585,7 +568,7 @@ def get_kobo_edit_url(
 def update_submission_validation_status(
     kobo_id: int,
     status_update: ValidationStatusUpdate,
-    survey_id: Annotated[UUIDType, Query(description="Survey ID to get the Kobo asset ID")],
+    survey_id: SurveyOfSubmission,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -604,30 +587,16 @@ def update_submission_validation_status(
     Returns:
         Updated submission
     """
-    # Verify submission exists
-    submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
-
-    # Authorize against the submission's OWN survey, never the caller-supplied
-    # survey_id. _id is a global primary key across all surveys, so trusting the
-    # query parameter let a user with editor rights on ANY survey mutate
-    # submissions belonging to another one.
-    survey_id = submission.survey_id
-    # Check user has editor access
-    survey_config = require_survey_access(db, current_user, survey_id, min_level="editor")
+    submission, survey_config = require_submission_access(
+        db, current_user, survey_id, kobo_id, min_level="editor"
+    )
 
     if not survey_config.kobo_asset_id:
         raise HTTPException(
             status_code=400, detail=f"Survey {survey_id} does not have a kobo_asset_id configured"
         )
 
-    # Get user's Kobo API token
-    kobo_token = get_user_kobo_token(current_user)
-    if not kobo_token:
-        raise HTTPException(
-            status_code=400, detail="You need to configure your Kobo API key in user settings"
-        )
+    fetcher = _kobo_fetcher_for(survey_config, current_user)
 
     # Validate status value
     valid_statuses = ["Approved", "Not Approved", "On Hold", None]
@@ -636,8 +605,6 @@ def update_submission_validation_status(
             status_code=400, detail=f"Invalid validation status. Must be one of: {valid_statuses}"
         )
 
-    kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
-    fetcher = KoboFetcher(api_token=kobo_token, api_url=kobo_api_url)
     try:
         fetcher.update_validation_status(
             asset_uid=survey_config.kobo_asset_id,
@@ -681,7 +648,7 @@ def update_submission_validation_status(
 def update_submission_reviewer_notes(
     kobo_id: int,
     notes_update: ReviewerNotesUpdate,
-    survey_id: Annotated[UUIDType, Query(description="Survey ID for access control")],
+    survey_id: SurveyOfSubmission,
     db: DbSession,
     current_user: CurrentUser,
 ):
@@ -697,18 +664,9 @@ def update_submission_reviewer_notes(
     Returns:
         Updated submission
     """
-    # Verify submission exists
-    submission = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == kobo_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail=f"Submission {kobo_id} not found")
-
-    # Authorize against the submission's OWN survey, never the caller-supplied
-    # survey_id. _id is a global primary key across all surveys, so trusting the
-    # query parameter let a user with editor rights on ANY survey mutate
-    # submissions belonging to another one.
-    survey_id = submission.survey_id
-    # Check user has editor access
-    require_survey_access(db, current_user, survey_id, min_level="editor")
+    submission, _ = require_submission_access(
+        db, current_user, survey_id, kobo_id, min_level="editor"
+    )
 
     submission.reviewer_notes = notes_update.reviewer_notes
     submission.updated_at = datetime.utcnow()

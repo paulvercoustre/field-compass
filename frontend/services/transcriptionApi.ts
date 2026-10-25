@@ -171,18 +171,20 @@ export const transcribeNow = (surveyId: string, mode: 'missing' | 'all') =>
 export const sendTranscriptsToKobo = (surveyId: string) =>
   request<RunSummary>(`/api/surveys/${surveyId}/transcripts/send-to-kobo`, { method: 'POST' });
 
-export const getSubmissionTranscripts = (koboId: number) =>
-  request<SubmissionTranscripts>(`/api/submissions/${koboId}/transcripts`);
+export const getSubmissionTranscripts = (koboId: number, surveyId: string) =>
+  request<SubmissionTranscripts>(
+    `/api/submissions/${koboId}/transcripts?${new URLSearchParams({ survey_id: surveyId })}`
+  );
 
 /**
  * A recording, fetched with the user's session (an <audio> element cannot
  * send the auth header itself). Returns an object URL to revoke when done.
  */
-export const loadRecording = async (koboId: number, questionPath: string): Promise<string> => {
-  const response = await apiFetch(
-    `${API_BASE_URL}/api/submissions/${koboId}/audio?question=${encodeURIComponent(questionPath)}`,
-    { headers: authHeaders() }
-  );
+export const loadRecording = async (koboId: number, surveyId: string, questionPath: string): Promise<string> => {
+  const params = new URLSearchParams({ survey_id: surveyId, question: questionPath });
+  const response = await apiFetch(`${API_BASE_URL}/api/submissions/${koboId}/audio?${params}`, {
+    headers: authHeaders(),
+  });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(typeof body?.detail === 'string' ? body.detail : 'Could not load the recording.');

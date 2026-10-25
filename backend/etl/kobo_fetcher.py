@@ -12,6 +12,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
+from services.kobo_servers import KoboAddressBlocked, kobo_session
 from settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,9 @@ def describe_kobo_error(exc: Exception) -> str:
         return "Kobo is limiting requests right now. Try again in a few minutes."
     if status is not None and status >= 500:
         return "Kobo had a problem answering. Try again in a few minutes."
+    for cause in (exc, exc.__cause__):
+        if isinstance(cause, KoboAddressBlocked):
+            return str(cause)
     # A fetch error wraps the requests error it came from.
     if isinstance(exc, requests.ConnectionError | requests.Timeout) or isinstance(
         exc.__cause__, requests.ConnectionError | requests.Timeout
@@ -78,7 +82,8 @@ class KoboFetcher:
         """
         self.api_token = api_token
         self.api_url = api_url.rstrip("/")
-        self.session = requests.Session()
+        # Reaches public addresses only, each redirect checked too.
+        self.session = kobo_session()
         self.session.headers.update(
             {"Authorization": f"Token {api_token}", "Content-Type": "application/json"}
         )
@@ -104,6 +109,8 @@ class KoboFetcher:
                 response = self.session.get(url, params=params, timeout=30)
                 response.raise_for_status()
                 return response.json()
+            except KoboAddressBlocked:
+                raise  # the same answer every time
             except requests.exceptions.RequestException as e:
                 if attempt < max_retries - 1:
                     wait_time = 2**attempt  # Exponential backoff
@@ -216,21 +223,32 @@ class KoboFetcher:
         Returns:
             True if successful, False otherwise
         """
+        absolute = urljoin(self.api_url + "/", audit_url)
+        if not self._same_server(absolute):
+            # The submission names it: only Kobo's own URLs get the key.
+            logger.warning(f"Audit log not on the Kobo server, not downloaded: {audit_url}")
+            return False
+        # Whole or not at all: a file left half-written would be read as the
+        # audit log on every later pull.
+        partial = f"{output_path}.part"
         try:
-            response = self.session.get(audit_url, timeout=30, stream=True)
+            response = self.session.get(absolute, timeout=30, stream=True)
             response.raise_for_status()
 
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-            with open(output_path, "wb") as f:
+            with open(partial, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
+            os.replace(partial, output_path)
 
             logger.debug(f"Downloaded audit log to {output_path}")
             return True
 
         except (requests.RequestException, OSError) as e:
             logger.error(f"Failed to download audit log from {audit_url}: {e}")
+            if os.path.exists(partial):
+                os.remove(partial)
             return False
 
     def _same_server(self, url: str) -> bool:

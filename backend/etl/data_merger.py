@@ -12,6 +12,7 @@ import jsonpatch
 from sqlalchemy.orm import Session
 
 from database.models import SubmissionCurrent, SubmissionHistory
+from services.kobo_servers import kobo_web_url
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,16 @@ logger = logging.getLogger(__name__)
 # change without the submission being edited, so they are refreshed on every
 # pull and never count as an edit.
 SUPPLEMENT_KEY = "_supplementalDetails"
+
+# Added to the answers by the pull, from the audit log (etl/pipeline.py), not
+# sent by Kobo: a pull that could not read the log keeps the ones stored.
+AUDIT_KEYS = ("active_interview_time", "total_duration")
+
+
+def _keeping_audit_times(old: dict[str, Any] | None, new: dict[str, Any]) -> dict[str, Any]:
+    old = old or {}
+    kept = {key: old[key] for key in AUDIT_KEYS if key in old and key not in new}
+    return {**new, **kept} if kept else new
 
 
 def _without_supplement(data: dict[str, Any] | None) -> dict[str, Any]:
@@ -250,6 +261,7 @@ def merge_submission(
     survey_id: str,
     kobo_asset_id: str | None = None,
     kobo_data: dict[str, Any] | None = None,
+    kobo_api_url: str | None = None,
 ) -> tuple[SubmissionCurrent, SubmissionHistory | None, bool]:
     """
     Merge a submission into the database (upsert with edit detection).
@@ -265,6 +277,7 @@ def merge_submission(
         survey_id: UUID of the survey configuration
         kobo_asset_id: Optional Kobo asset ID for constructing edit URL
         kobo_data: Optional raw Kobo data for checking deprecatedID
+        kobo_api_url: The survey's Kobo server, for the edit URL
 
     Returns:
         Tuple of (SubmissionCurrent, SubmissionHistory or None, is_new: bool)
@@ -280,21 +293,24 @@ def merge_submission(
     # Construct Kobo edit URL
     kobo_edit_url = None
     if kobo_asset_id:
-        kobo_edit_url = f"https://kf.kobotoolbox.org/#/forms/{kobo_asset_id}/data/table"
+        kobo_edit_url = f"{kobo_web_url(kobo_api_url)}/#/forms/{kobo_asset_id}/data/table"
 
-    # Check if submission exists (by _id only, since _id is unique across all surveys)
-    existing = db.query(SubmissionCurrent).filter(SubmissionCurrent._id == submission_id).first()
+    # Only this survey's own row: _id is a counter on one Kobo server, so
+    # another survey's row with the same _id is a different submission, and a
+    # pull must never reach it (whatever server answered the pull).
+    existing = (
+        db.query(SubmissionCurrent)
+        .filter(
+            SubmissionCurrent.survey_id == UUID(str(survey_id)),
+            SubmissionCurrent._id == submission_id,
+        )
+        .first()
+    )
 
     history_record = None
 
     if existing:
-        # If submission exists but belongs to a different survey, update the survey_id
-        # This handles cases where a submission is moved between surveys
-        if str(existing.survey_id) != survey_id:
-            logger.info(
-                f"Submission {submission_id} exists but belongs to different survey. Updating survey_id from {existing.survey_id} to {survey_id}"
-            )
-            existing.survey_id = UUID(survey_id)
+        new_data = _keeping_audit_times(existing.submission_data, new_data)
 
         # Check if this is an edit by looking for deprecatedID
         is_edited, edit_reason = is_edited_submission(kobo_data=kobo_data)
@@ -319,6 +335,7 @@ def merge_submission(
             if len(data_delta) > 0:
                 # Create history record
                 history_record = SubmissionHistory(
+                    survey_id=existing.survey_id,
                     kobo_id=submission_id,
                     timestamp=new_end,
                     deprecated_uuid=deprecated_uuid,
@@ -389,8 +406,10 @@ def merge_submission(
                     )
 
         else:
-            # No edit detected, but still update metadata if it changed
-            # This handles cases where metadata updates but no actual edit occurred
+            # No edit in Kobo, but the record is still Kobo's: take it whole,
+            # answers included, whatever changed in it (validation status,
+            # attachments, processing results). The answers stored are always
+            # the ones Kobo has now, never what an earlier pull left.
 
             # CRITICAL FIX: Reset is_edited flag if it was previously True
             # This ensures submissions that were once edited but are now unchanged get reset
@@ -401,6 +420,10 @@ def merge_submission(
                 )
 
             metadata_changed = False
+
+            if existing.submission_data != new_data:
+                existing.submission_data = new_data
+                metadata_changed = True
 
             if existing._uuid != new_uuid:
                 existing._uuid = new_uuid
@@ -421,9 +444,6 @@ def merge_submission(
 
             if existing.kobo_edit_url != kobo_edit_url:
                 existing.kobo_edit_url = kobo_edit_url
-                metadata_changed = True
-
-            if _refresh_supplement(existing, new_data):
                 metadata_changed = True
 
             # Only update updated_at if something actually changed

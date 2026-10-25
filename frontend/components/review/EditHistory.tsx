@@ -64,9 +64,10 @@ const when = (iso: string) =>
  */
 const EditHistory: React.FC<{
   submissionId: number;
+  surveyId: string;
   config: SurveyConfig | null;
   data: Record<string, unknown>;
-}> = ({ submissionId, config, data }) => {
+}> = ({ submissionId, surveyId, config, data }) => {
   const [edits, setEdits] = useState<Edit[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -75,13 +76,13 @@ const EditHistory: React.FC<{
     setEdits(null);
     setError(false);
     api
-      .getSubmissionHistory(submissionId)
+      .getSubmissionHistory(submissionId, surveyId)
       .then((records) => !cancelled && setEdits(editsOf(records)))
       .catch(() => !cancelled && setError(true));
     return () => {
       cancelled = true;
     };
-  }, [submissionId]);
+  }, [submissionId, surveyId]);
 
   return (
     <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-[13px] dark:border-amber-500/20 dark:bg-amber-500/[0.06]">

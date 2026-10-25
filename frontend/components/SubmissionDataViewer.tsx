@@ -14,6 +14,7 @@ import { TranslationBlock } from './translation/TranslationBlock';
 /** The submission's recorded answers, shown in place of their file names. */
 interface Recordings {
   koboId: number;
+  surveyId: string;
   answers: AudioAnswer[];
   sendToKobo: boolean;
   /** The submission's findings; those about a recording show under it. */
@@ -407,7 +408,7 @@ const RecordingRow: React.FC<RecordingRowProps> = ({
     </span>
     <div className="min-w-0">
       <RecordingStatus answer={answer} sendToKobo={recordings.sendToKobo} />
-      <Player koboId={recordings.koboId} answer={answer} />
+      <Player koboId={recordings.koboId} surveyId={recordings.surveyId} answer={answer} />
     </div>
     <div className="col-span-2 empty:hidden">
       <RecordingDetails

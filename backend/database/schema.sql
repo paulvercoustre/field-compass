@@ -90,6 +90,7 @@ CREATE TABLE survey_configs (
     survey_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     survey_name VARCHAR(255) NOT NULL,
     kobo_asset_id VARCHAR(255),
+    kobo_api_url VARCHAR(500),
     config_data JSONB NOT NULL,
     user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
     ai_connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
@@ -97,13 +98,14 @@ CREATE TABLE survey_configs (
     translation_connection_id UUID REFERENCES ai_connections(connection_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(survey_name)
+    CONSTRAINT survey_configs_user_name_key UNIQUE(user_id, survey_name)
 );
 
 COMMENT ON TABLE survey_configs IS 'Survey-specific configuration settings';
 COMMENT ON COLUMN survey_configs.survey_id IS 'Primary key, auto-generated UUID';
-COMMENT ON COLUMN survey_configs.survey_name IS 'Human-readable survey name';
+COMMENT ON COLUMN survey_configs.survey_name IS 'Human-readable survey name, unique among its owner''s surveys';
 COMMENT ON COLUMN survey_configs.kobo_asset_id IS 'KoboToolbox asset ID for API integration';
+COMMENT ON COLUMN survey_configs.kobo_api_url IS 'API URL of the Kobo server the project is on; every pull and Kobo call for the survey goes there';
 COMMENT ON COLUMN survey_configs.user_id IS 'Owner user ID. Deleting the account deletes its surveys (routers/users.py)';
 COMMENT ON COLUMN survey_configs.config_data IS 'JSONB containing all survey configuration: core identifiers, sampling frame, special values, PII columns, roster configs, global parameters';
 
@@ -163,11 +165,12 @@ COMMENT ON COLUMN validation_rules.is_active IS 'Whether this rule is currently 
 -- Table: submissions_current
 -- ============================================================================
 -- Primary table storing current state of all survey submissions
--- Uses _id (INTEGER) as stable primary key from KoboToolbox
+-- Keyed by survey and Kobo _id together: _id is a counter on one Kobo server,
+-- so another server, or another survey of the same project, has the same ones
 -- ============================================================================
 
 CREATE TABLE submissions_current (
-    _id INTEGER PRIMARY KEY,
+    _id INTEGER NOT NULL,
     survey_id UUID NOT NULL REFERENCES survey_configs(survey_id) ON DELETE RESTRICT,
     _uuid VARCHAR(255) NOT NULL,
     _submission_time TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -198,11 +201,12 @@ CREATE TABLE submissions_current (
     llm_run_id UUID REFERENCES runs(run_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(_uuid)
+    CONSTRAINT submissions_current_pkey PRIMARY KEY (survey_id, _id),
+    CONSTRAINT submissions_current_survey_uuid_key UNIQUE(survey_id, _uuid)
 );
 
 COMMENT ON TABLE submissions_current IS 'Current state of all survey submissions';
-COMMENT ON COLUMN submissions_current._id IS 'Primary key from KoboToolbox, stable identifier that never changes';
+COMMENT ON COLUMN submissions_current._id IS 'Submission ID from KoboToolbox; unique within the survey, not across surveys';
 COMMENT ON COLUMN submissions_current.survey_id IS 'Foreign key to survey_configs, links submission to survey configuration';
 COMMENT ON COLUMN submissions_current._uuid IS 'KoboToolbox UUID, may change on edits';
 COMMENT ON COLUMN submissions_current._submission_time IS 'Original submission timestamp from KoboToolbox';
@@ -241,16 +245,20 @@ COMMENT ON COLUMN submissions_current.llm_last_error IS 'Most recent error for q
 
 CREATE TABLE submissions_history (
     history_id SERIAL PRIMARY KEY,
-    kobo_id INTEGER NOT NULL REFERENCES submissions_current(_id) ON DELETE CASCADE,
+    survey_id UUID NOT NULL,
+    kobo_id INTEGER NOT NULL,
     timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deprecated_uuid VARCHAR(255) NOT NULL,
     data_delta JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT submissions_history_submission_fkey FOREIGN KEY (survey_id, kobo_id)
+        REFERENCES submissions_current(survey_id, _id) ON DELETE CASCADE
 );
 
 COMMENT ON TABLE submissions_history IS 'Audit log of all submission edits';
 COMMENT ON COLUMN submissions_history.history_id IS 'Primary key, auto-incrementing';
-COMMENT ON COLUMN submissions_history.kobo_id IS 'Foreign key to submissions_current._id';
+COMMENT ON COLUMN submissions_history.survey_id IS 'With kobo_id, the submission: foreign key to submissions_current(survey_id, _id)';
+COMMENT ON COLUMN submissions_history.kobo_id IS 'With survey_id, the submission: foreign key to submissions_current(survey_id, _id)';
 COMMENT ON COLUMN submissions_history.timestamp IS 'When the edit occurred (from KoboToolbox end timestamp)';
 COMMENT ON COLUMN submissions_history.deprecated_uuid IS 'Previous UUID before the edit';
 COMMENT ON COLUMN submissions_history.data_delta IS 'JSON patch array showing what changed: [{op: add|remove|replace, path, value}, ...]';
@@ -561,7 +569,7 @@ CREATE INDEX idx_submissions_triage ON submissions_current(qa_status, survey_id)
     WHERE qa_status = 'FLAGGED';
 
 -- Submissions history indexes
-CREATE INDEX idx_history_kobo_id ON submissions_history(kobo_id);
+CREATE INDEX idx_history_submission ON submissions_history(survey_id, kobo_id);
 CREATE INDEX idx_history_timestamp ON submissions_history(timestamp);
 CREATE INDEX idx_history_deprecated_uuid ON submissions_history(deprecated_uuid);
 CREATE INDEX idx_history_data_delta ON submissions_history USING GIN(data_delta);

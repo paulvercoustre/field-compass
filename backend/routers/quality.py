@@ -92,6 +92,13 @@ def get_quality_by_question(
     submissions = within_dates(query, start_date, end_date).all()
     ids = [sub._id for sub in submissions]
     history = (
-        db.query(SubmissionHistory).filter(SubmissionHistory.kobo_id.in_(ids)).all() if ids else []
+        db.query(SubmissionHistory)
+        .filter(
+            SubmissionHistory.survey_id == survey_config.survey_id,
+            SubmissionHistory.kobo_id.in_(ids),
+        )
+        .all()
+        if ids
+        else []
     )
     return by_question(submissions, survey_config, history)

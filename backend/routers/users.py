@@ -41,6 +41,7 @@ from services.auth import (
     verify_password,
 )
 from services.database import DbSession
+from services.kobo_servers import KoboServerRejected, check_kobo_server, user_server
 from services.rate_limit import limiter
 from services.survey_deletion import delete_survey_and_data
 from settings import get_settings
@@ -381,9 +382,6 @@ def update_current_user_profile(
     if user_update.full_name is not None:
         current_user.full_name = user_update.full_name
 
-    if user_update.kobo_api_url is not None:
-        current_user.kobo_api_url = user_update.kobo_api_url.strip()
-
     if user_update.preferences is not None:
         changes = user_update.preferences.model_dump(exclude_none=True)
         # A new dict, so SQLAlchemy sees the JSON column change.
@@ -487,7 +485,17 @@ def normalize_kobo_api_url(raw: str) -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="That doesn't look like a server address, e.g. https://kobo.example.org",
         )
-    return f"{parsed.scheme}://{parsed.netloc}/api/v2"
+    api_url = f"{parsed.scheme}://{parsed.netloc}/api/v2"
+    _require_callable(api_url)
+    return api_url
+
+
+def _require_callable(api_url: str) -> None:
+    """A 400 saying why, unless the server may call this address (services/kobo_servers.py)."""
+    try:
+        check_kobo_server(api_url)
+    except KoboServerRejected as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
@@ -504,8 +512,13 @@ def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
 
     try:
         # /assets/?limit=0 exists on every Kobo deployment, so it is the check.
+        # Not followed elsewhere: the address was checked, where it sends us wasn't.
         response = requests.get(
-            f"{base_url}/assets/", params={"limit": 0}, headers=headers, timeout=10
+            f"{base_url}/assets/",
+            params={"limit": 0},
+            headers=headers,
+            timeout=10,
+            allow_redirects=False,
         )
     except requests.exceptions.Timeout as exc:
         raise HTTPException(
@@ -531,6 +544,17 @@ def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"No Kobo API found at {host}. Check the server address.",
         )
+    if 300 <= response.status_code < 400:
+        # e.g. the retired kobo.humanitarianresponse.info, now eu.kobotoolbox.org
+        moved_to = urlparse(response.headers.get("Location") or "").netloc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{host} has moved to {moved_to}. Use that address instead."
+                if moved_to and moved_to != host
+                else f"No Kobo API found at {host}. Check the server address."
+            ),
+        )
     if not response.ok:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -539,7 +563,9 @@ def verify_kobo_token(api_url: str, api_token: str) -> dict | None:
 
     # Who the key belongs to is a courtesy; the key is valid either way.
     try:
-        me = requests.get(f"{base_url}/users/me/", headers=headers, timeout=5)
+        me = requests.get(
+            f"{base_url}/users/me/", headers=headers, timeout=5, allow_redirects=False
+        )
         if me.status_code == 200:
             data = me.json()
             return {
@@ -603,7 +629,8 @@ def test_kobo_api_key(current_user: CurrentUser, db: DbSession):
             detail="No Kobo API key configured. Please set your API key first.",
         )
 
-    kobo_api_url = current_user.kobo_api_url or "https://kf.kobotoolbox.org/api/v2"
+    kobo_api_url = user_server(current_user)
+    _require_callable(kobo_api_url)
     kobo_user = verify_kobo_token(kobo_api_url, api_token)
     return {"status": "success", "message": "Kobo API key is valid", "kobo_user": kobo_user}
 
