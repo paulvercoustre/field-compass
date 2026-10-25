@@ -27,4 +27,24 @@ describe('editsOf', () => {
       { question: 'hh_roster', item: 3, kind: 'answered', after: { 'hh_roster/name': 'Bo' } },
     ]);
   });
+
+  it('leaves out answers that only came back with other spacing', () => {
+    const [edit] = editsOf([
+      {
+        history_id: 2,
+        timestamp: '2026-10-25T17:00:00Z',
+        data_delta: [
+          { op: 'replace', path: '/g~1waste', value: 'No, Never', old: 'No, Never ' },
+          { op: 'replace', path: '/g~1skills', value: '- Checks.\n- Repairs.', old: '- Checks.\r\n- Repairs.\n' },
+          { op: 'replace', path: '/g~1age', value: '30', old: 30 },
+          { op: 'replace', path: '/g~1tension', value: 'No, Never ever', old: 'No, Never' },
+          { op: 'replace', path: '/g~1note', value: 'Yes', old: null },
+        ],
+      },
+    ]);
+    expect(edit.changes).toEqual([
+      { question: 'tension', kind: 'changed', before: 'No, Never', after: 'No, Never ever' },
+      { question: 'note', kind: 'changed', after: 'Yes' },
+    ]);
+  });
 });
